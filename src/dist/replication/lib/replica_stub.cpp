@@ -43,6 +43,7 @@
 #include <dsn/dist/replication/replication_app_base.h>
 #include <vector>
 #include <deque>
+#include <dsn/dist/fmt_logging.h>
 
 namespace dsn {
 namespace replication {
@@ -2155,6 +2156,90 @@ std::string replica_stub::get_replica_dir(const char *app_type, gpid id, bool cr
         _fs_manager.allocate_dir(id, app_type, ret_dir);
     }
     return ret_dir;
+}
+
+//
+// partition split
+//
+
+void replica_stub::on_exec(task_code code,
+                           gpid pid,
+                           local_execution handler,
+                           std::chrono::milliseconds delay)
+{
+    on_exec(code, pid, handler, nullptr, gpid(), delay);
+}
+
+void replica_stub::on_exec(task_code code,
+                           gpid pid,
+                           local_execution handler,
+                           local_execution missing_handler,
+                           gpid missing_handler_gpid,
+                           std::chrono::milliseconds delay)
+{
+    if (pid.get_app_id() == 0) {
+        dwarn_f("gpid app id is invalid");
+        return;
+    }
+
+    dsn::task_tracker *tracker = &_tracker;
+    int hash = 0;
+    if (get_replica(pid)) {
+        tracker = get_replica(pid).get()->tracker();
+        hash = pid.thread_hash();
+    } else if (get_replica(missing_handler_gpid)) {
+        tracker = get_replica(missing_handler_gpid).get()->tracker();
+        hash = missing_handler_gpid.thread_hash();
+    } else {
+        hash = missing_handler_gpid.thread_hash();
+    }
+
+    tasking::enqueue(
+        code,
+        tracker,
+        [=]() {
+            replica_ptr rep = get_replica(pid);
+            if (rep != nullptr) {
+                handler(rep);
+            } else {
+                dwarn_f("cannot find replica({}.{})", pid.get_app_id(), pid.get_partition_index());
+                if (missing_handler) {
+                    if (missing_handler_gpid.get_app_id() != 0) {
+                        on_exec(code, missing_handler_gpid, missing_handler);
+                    } else {
+                        missing_handler(nullptr);
+                    }
+                }
+            }
+        },
+        hash,
+        delay);
+}
+
+void replica_stub::add_split_replica(rpc_address primary_address,
+                                     app_info app,
+                                     ballot init_ballot,
+                                     gpid child_gpid,
+                                     gpid parent_gpid,
+                                     const std::string &parent_dir)
+{ // TODO(hyc): use of parent_dir
+    // get child replica instance
+    replica_ptr child_replica = get_replica(child_gpid);
+    if (child_replica == nullptr) {
+        child_replica = replica::newr(this, child_gpid, std::move(app), false);
+    }
+
+    if (child_replica != nullptr) {
+        child_replica->init_child_replica(parent_gpid, primary_address, init_ballot);
+    } else {
+        ddebug_f("Failed to create child replica ({}.{}), ignore it and wait next run",
+                 child_gpid.get_app_id(),
+                 child_gpid.get_partition_index());
+
+        // TODO(hyc): comments
+        on_exec(
+            LPC_SPLIT_PARTITION, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+    }
 }
 }
 } // namespace

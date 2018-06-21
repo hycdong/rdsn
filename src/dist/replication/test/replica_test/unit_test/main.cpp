@@ -28,6 +28,12 @@ TEST(cold_backup_context, write_metadata_file) { app->write_backup_metadata_test
 
 TEST(cold_backup_context, write_current_chkpt_file) { app->write_current_chkpt_file_test(); }
 
+TEST(split, on_add_child) { app->on_add_child_test(); }
+
+TEST(split, init_child_replica) { app->init_child_replica_test(); }
+
+TEST(split, check_child_state) { app->check_child_state_test(); }
+
 error_code replication_service_test_app::start(const std::vector<std::string> &args)
 {
     int argc = args.size();

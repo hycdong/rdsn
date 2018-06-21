@@ -27,7 +27,8 @@ struct partition_status {
     PS_ERROR = 2,
     PS_PRIMARY = 3,
     PS_SECONDARY = 4,
-    PS_POTENTIAL_SECONDARY = 5
+    PS_POTENTIAL_SECONDARY = 5,
+    PS_PARTITION_SPLIT = 6
   };
 };
 
@@ -1156,11 +1157,12 @@ inline std::ostream& operator<<(std::ostream& out, const learn_notify_response& 
 }
 
 typedef struct _group_check_request__isset {
-  _group_check_request__isset() : app(false), node(false), config(false), last_committed_decree(false) {}
+  _group_check_request__isset() : app(false), node(false), config(false), last_committed_decree(false), child_gpid(false) {}
   bool app :1;
   bool node :1;
   bool config :1;
   bool last_committed_decree :1;
+  bool child_gpid :1;
 } _group_check_request__isset;
 
 class group_check_request {
@@ -1178,6 +1180,7 @@ class group_check_request {
    ::dsn::rpc_address node;
   replica_configuration config;
   int64_t last_committed_decree;
+   ::dsn::gpid child_gpid;
 
   _group_check_request__isset __isset;
 
@@ -1189,6 +1192,8 @@ class group_check_request {
 
   void __set_last_committed_decree(const int64_t val);
 
+  void __set_child_gpid(const  ::dsn::gpid& val);
+
   bool operator == (const group_check_request & rhs) const
   {
     if (!(app == rhs.app))
@@ -1198,6 +1203,8 @@ class group_check_request {
     if (!(config == rhs.config))
       return false;
     if (!(last_committed_decree == rhs.last_committed_decree))
+      return false;
+    if (!(child_gpid == rhs.child_gpid))
       return false;
     return true;
   }

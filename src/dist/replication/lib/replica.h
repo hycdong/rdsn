@@ -53,6 +53,10 @@
 #include "prepare_list.h"
 #include "replica_context.h"
 
+class replica_split_mock;
+class replica_stub_mock;
+class replication_service_test_app;
+
 namespace dsn {
 namespace replication {
 
@@ -82,7 +86,7 @@ public:
     void reset_prepare_list_after_replay();
 
     // return false when update fails or replica is going to be closed
-    bool update_local_configuration_with_no_ballot_change(partition_status::type status);
+    virtual bool update_local_configuration_with_no_ballot_change(partition_status::type status);
     void set_inactive_state_transient(bool t);
     void check_state_completeness();
     // error_code check_and_fix_private_log_completeness();
@@ -303,12 +307,32 @@ private:
 
     std::string query_compact_state() const;
 
+    /////////////////////////////////////////////////////////////////
+    //
+    //      partition split
+    //
+    // parent replica recevie group_check and try to create a new replica instance on this stub
+    void on_add_child(const group_check_request &request);
+    // child replica initialize config and state info
+    virtual void
+    init_child_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
+    // parent replica prepare states to be copied
+    virtual void
+    prepare_copy_parent_state(const std::string &dir, gpid child_gpid, ballot child_ballot);
+
+    // child and parent heartbeart to check states
+    virtual void check_child_state();
+    virtual void check_parent_state(gpid child_gpid, ballot child_ballot);
+
 private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;
     friend class ::dsn::replication::mutation_queue;
     friend class ::dsn::replication::replica_stub;
     friend class mock_replica;
+    friend class ::replication_service_test_app;
+    friend class ::replica_split_mock;
+    friend class ::replica_stub_mock;
 
     // replica configuration, updated by update_local_configuration ONLY
     replica_configuration _config;
@@ -333,7 +357,7 @@ private:
     replica_stub *_stub;
     std::string _dir;
     replication_options *_options;
-    const app_info _app_info;
+    app_info _app_info;
     std::map<std::string, std::string> _extra_envs;
 
     // uniq timestamp generator for this replica.
@@ -353,6 +377,7 @@ private:
     primary_context _primary_states;
     secondary_context _secondary_states;
     potential_secondary_context _potential_secondary_states;
+    partition_split_context _split_states;
     // policy_name --> cold_backup_context
     std::map<std::string, cold_backup_context_ptr> _cold_backup_contexts;
 
@@ -376,6 +401,10 @@ private:
 
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true
     bool _is_initializing;       // when initializing, switching to primary need to update ballot
+
+    // partition split
+    dsn::gpid _child_gpid; // TODO(hyc): add comments
+    ballot _child_ballot;  // ballot when starting partition split
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

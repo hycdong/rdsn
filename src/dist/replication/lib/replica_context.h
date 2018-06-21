@@ -517,6 +517,25 @@ private:
 
 typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
 
+// TODO(hyc): add comments
+class partition_split_context
+{
+public:
+    bool cleanup(bool force);
+    bool is_cleaned();
+
+public:
+    gpid parent_gpid;
+    bool is_caught_up;
+    bool is_prepare_list_copied;
+
+    // heart beat beween parent and child, start when initialize child replica
+    // child replica send heart beat to parent per 5 seconds
+    // if parent state change, set child partition statu as PS_ERROR
+    ::dsn::task_ptr check_state_task;
+    ::dsn::task_ptr long_run_task;
+};
+
 //---------------inline impl----------------------------------------------------------------
 
 inline partition_status::type primary_context::get_node_status(::dsn::rpc_address addr) const

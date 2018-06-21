@@ -597,6 +597,8 @@ bool replica::is_same_ballot_status_change_allowed(partition_status::type olds,
 bool replica::update_local_configuration(const replica_configuration &config,
                                          bool same_ballot /* = false*/)
 {
+    // TODO(hyc): handle PS_SPLIT_PARTITION status
+
     dassert(config.ballot > get_ballot() || (same_ballot && config.ballot == get_ballot()),
             "invalid ballot, %" PRId64 " VS %" PRId64 "",
             config.ballot,

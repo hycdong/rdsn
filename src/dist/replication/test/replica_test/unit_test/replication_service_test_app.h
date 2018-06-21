@@ -23,4 +23,9 @@ public:
     void on_upload_chkpt_dir_test();
     void write_backup_metadata_test();
     void write_current_chkpt_file_test();
+
+    // test for replica_split
+    void on_add_child_test();
+    void init_child_replica_test();
+    void check_child_state_test();
 };

@@ -35,7 +35,8 @@ enum partition_status
     PS_ERROR,
     PS_PRIMARY,
     PS_SECONDARY,
-    PS_POTENTIAL_SECONDARY
+    PS_POTENTIAL_SECONDARY,
+    PS_PARTITION_SPLIT,
 }
 
 struct replica_configuration
@@ -151,6 +152,7 @@ struct group_check_request
     2:dsn.rpc_address       node;
     3:replica_configuration config;
     4:i64                   last_committed_decree;
+    5:dsn.gpid              child_gpid;
 }
 
 struct group_check_response

@@ -41,6 +41,7 @@
 #include <functional>
 #include <tuple>
 
+class replica_stub_mock;
 namespace dsn {
 namespace replication {
 
@@ -111,6 +112,17 @@ public:
     void on_copy_checkpoint(const replica_configuration &request, /*out*/ learn_response &response);
 
     //
+    //    functions while executing partition split
+    //
+    // create a new replica instance, called by parent replica, executed by child replica
+    void add_split_replica(dsn::rpc_address primary_address,
+                           app_info app,
+                           ballot init_ballot,
+                           gpid child_gpid,
+                           gpid parent_gpid,
+                           const std::string &parent_dir);
+
+    //
     //    local messages
     //
     void on_meta_server_connected();
@@ -130,7 +142,7 @@ public:
     //
     // common routines for inquiry
     //
-    replica_ptr get_replica(gpid id);
+    virtual replica_ptr get_replica(gpid id);
     replication_options &options() { return _options; }
     bool is_connected() const { return NS_Connected == _state; }
 
@@ -148,6 +160,24 @@ public:
     std::string exec_command_on_replica(const std::vector<std::string> &args,
                                         bool allow_empty_args,
                                         std::function<std::string(const replica_ptr &rep)> func);
+
+    typedef std::function<void(::dsn::replication::replica *rep)> local_execution;
+    void on_exec(task_code code,
+                 gpid pid,
+                 local_execution handler,
+                 std::chrono::milliseconds delay = std::chrono::milliseconds(0));
+
+    // when spliting, enqueue different task according to different situation.
+    //  - if replica(pid) exist and valid, add function hanlder into queue, replica(pid) will
+    //  execute handler.
+    //  - else add function missing_hanlder into queue, replica(missing_handler_gpid) will execute
+    //  missing_handler.
+    void on_exec(task_code code,
+                 gpid pid,
+                 local_execution handler,
+                 local_execution missing_handler,
+                 gpid missing_handler_gpid = gpid(0, 0),
+                 std::chrono::milliseconds delay = std::chrono::milliseconds(0));
 
 private:
     enum replica_node_state
@@ -201,6 +231,7 @@ private:
     friend class ::dsn::replication::test::test_checker;
     friend class ::dsn::replication::replica;
     friend class ::dsn::replication::cold_backup_context;
+    friend class ::replica_stub_mock;
 
     typedef std::unordered_map<gpid, ::dsn::task_ptr> opening_replicas;
     typedef std::unordered_map<gpid, std::tuple<task_ptr, replica_ptr, app_info, replica_info>>
