@@ -316,9 +316,30 @@ private:
     // child replica initialize config and state info
     virtual void
     init_child_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
+
     // parent replica prepare states to be copied
     virtual void
     prepare_copy_parent_state(const std::string &dir, gpid child_gpid, ballot child_ballot);
+    // child replica copy parent state(prepare list)
+    virtual void copy_parent_state(error_code ec,
+                                   learn_state lstate,
+                                   std::vector<mutation_ptr> mutation_list,
+                                   std::vector<std::string> files,
+                                   prepare_list *plist);
+    // child replica async learn parent states(data, private log, mutations in memory)
+    virtual void apply_parent_state(error_code ec,
+                                    learn_state lstate,
+                                    std::vector<mutation_ptr> mutation_list,
+                                    std::vector<std::string> files,
+                                    decree last_committed_decree);
+    // child replica async learn parent state(private log, mutations in memory)
+    virtual error_code async_learn_mutation_private_log(std::vector<mutation_ptr> mutation_list,
+                                                        std::vector<std::string> files,
+                                                        decree last_committed_decree);
+    // child catch up mutations while executing async learn task
+    virtual void child_catch_up();
+    // child catch up and notify primary parent
+    virtual void notify_primary_parent_finish_catch_up();
 
     // child and parent heartbeart to check states
     virtual void check_child_state();

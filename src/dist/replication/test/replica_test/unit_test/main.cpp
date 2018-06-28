@@ -34,6 +34,14 @@ TEST(split, init_child_replica) { app->init_child_replica_test(); }
 
 TEST(split, check_child_state) { app->check_child_state_test(); }
 
+TEST(split, prepare_copy_parent_state) { app->prepare_copy_parent_state_test(); }
+
+TEST(split, copy_parent_state) { app->copy_parent_state_test(); }
+
+TEST(split, apply_parent_state) { app->apply_parent_state_test(); }
+
+TEST(split, child_catch_up) { app->child_catch_up_test(); }
+
 error_code replication_service_test_app::start(const std::vector<std::string> &args)
 {
     int argc = args.size();

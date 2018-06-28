@@ -533,7 +533,8 @@ public:
     // child replica send heart beat to parent per 5 seconds
     // if parent state change, set child partition statu as PS_ERROR
     ::dsn::task_ptr check_state_task;
-    ::dsn::task_ptr long_run_task;
+    // child replica async learn parent states
+    ::dsn::task_ptr async_learn_task;
 };
 
 //---------------inline impl----------------------------------------------------------------

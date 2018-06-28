@@ -39,6 +39,9 @@
 #include "mutation.h"
 #include <atomic>
 
+class log_file_mock;
+class mutation_log_private_mock;
+
 namespace dsn {
 namespace replication {
 
@@ -146,6 +149,22 @@ public:
     {
         return false;
     }
+
+    // get mutation in memory, including pending and writing mutations
+    // return true if mutations is not empty, otherwise return false
+    virtual bool get_mutation_in_memory(decree start_decree,
+                                        ballot current_ballot,
+                                        std::vector<mutation_ptr> &mutations_list) const
+    {
+        return false;
+    }
+
+    // only valid for private log, get mutations in memory and private log files
+    virtual void get_mutation_log_file(gpid pid,
+                                       decree start_decree,
+                                       ballot start_ballot,
+                                       std::vector<mutation_ptr> &mutation_list,
+                                       std::vector<std::string> &files);
 
     // flush the pending buffer until all data is on disk
     // thread safe
@@ -371,6 +390,8 @@ private:
         _private_max_commit_on_disk; // the max last_committed_decree of written mutations up to now
                                      // used for limiting garbage collection of shared log, because
                                      // the ending of private log should be covered by shared log
+
+    friend class ::mutation_log_private_mock;
 };
 typedef dsn::ref_ptr<mutation_log> mutation_log_ptr;
 
@@ -451,6 +472,10 @@ public:
 
     virtual bool get_learn_state_in_memory(decree start_decree,
                                            binary_writer &writer) const override;
+
+    virtual bool get_mutation_in_memory(decree start_decree,
+                                        ballot start_ballot,
+                                        std::vector<mutation_ptr> &mutation_list) const override;
 
     virtual void flush() override;
     virtual void flush_once() override;
@@ -626,6 +651,8 @@ private:
     // for read, the value is read from file header.
     // for write, the value is set by write_file_header().
     replica_log_info_map _previous_log_max_decrees;
+
+    friend class ::log_file_mock;
 };
 }
 } // namespace

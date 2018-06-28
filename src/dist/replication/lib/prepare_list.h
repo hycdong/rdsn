@@ -55,10 +55,12 @@ public:
 
 public:
     prepare_list(decree init_decree, int max_count, mutation_committer committer);
+    prepare_list(const prepare_list &plist);
 
     decree last_committed_decree() const { return _last_committed_decree; }
     void reset(decree init_decree);
     void truncate(decree init_decree);
+    void set_committer(mutation_committer committer) { _committer = committer; }
 
     //
     // for two-phase commit

@@ -218,7 +218,6 @@ private:
     mutation_ptr _pending_mutation;
     slist<mutation> _hdr;
 };
-
 }
 } // namespace
 

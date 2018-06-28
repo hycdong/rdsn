@@ -46,6 +46,12 @@ prepare_list::prepare_list(decree init_decree, int max_count, mutation_committer
     _last_committed_decree = init_decree;
 }
 
+prepare_list::prepare_list(const prepare_list &plist) : mutation_cache(plist)
+{
+    _committer = plist._committer;
+    _last_committed_decree = plist._last_committed_decree;
+}
+
 void prepare_list::sanity_check() {}
 
 void prepare_list::reset(decree init_decree)
