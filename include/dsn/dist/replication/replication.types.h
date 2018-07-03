@@ -86,6 +86,9 @@ namespace dsn { namespace replication {
     GENERATED_TYPE_SERIALIZATION(duplication_sync_response, THRIFT)
     GENERATED_TYPE_SERIALIZATION(app_partition_split_request, THRIFT)
     GENERATED_TYPE_SERIALIZATION(app_partition_split_response, THRIFT)
-    GENERATED_TYPE_SERIALIZATION(report_partition_split_request, THRIFT)
+    GENERATED_TYPE_SERIALIZATION(notify_catch_up_request, THRIFT)
+    GENERATED_TYPE_SERIALIZATION(notify_cacth_up_response, THRIFT)
+    GENERATED_TYPE_SERIALIZATION(update_group_partition_count_request, THRIFT)
+    GENERATED_TYPE_SERIALIZATION(update_group_partition_count_response, THRIFT)
 
 } } 

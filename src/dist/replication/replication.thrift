@@ -725,11 +725,39 @@ struct app_partition_split_response
     3:i32                    partition_count;
 }
 
-// Request from replica to meta to report partition split completed successfully.
-struct report_partition_split_request
+// child -> primary parent, notify itself has caught up parent
+struct notify_catch_up_request
 {
-    1:dsn.gpid  parent;
-    2:dsn.gpid  child;
+    1:dsn.gpid          primary_parent_gpid;
+    2:dsn.gpid          child_gpid;
+    3:i64               child_ballot;
+    4:dsn.rpc_address   child_address;
+
+}
+
+struct notify_cacth_up_response
+{
+    // Possible errors:
+    // - ERR_OBJECT_NOT_FOUND: replica can not be found
+    // - ERR_INVALID_STATE: replica in not primary or ballot not match or child_gpid not match
+    1:dsn.error_code    err;
+}
+
+// primary -> all replica in group, update replicas partition count
+struct update_group_partition_count_request
+{
+    1:dsn.layer2.app_info   app;
+    2:dsn.rpc_address       target_address;
+    3:replica_configuration config;
+    4:i64                   last_committed_decree;
+}
+
+struct update_group_partition_count_response
+{
+    // Possible errors:
+    // - ERR_OBJECT_NOT_FOUND: replica can not be found
+    // - ERR_VERSION_OUTDATED: request is out-dated
+    1:dsn.error_code    err;
 }
 
 /*

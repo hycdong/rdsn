@@ -290,7 +290,13 @@ class app_partition_split_request;
 
 class app_partition_split_response;
 
-class report_partition_split_request;
+class notify_catch_up_request;
+
+class notify_cacth_up_response;
+
+class update_group_partition_count_request;
+
+class update_group_partition_count_response;
 
 typedef struct _mutation_header__isset {
   _mutation_header__isset() : pid(false), ballot(false), decree(false), log_offset(false), last_committed_decree(false), timestamp(false) {}
@@ -5107,45 +5113,57 @@ inline std::ostream& operator<<(std::ostream& out, const app_partition_split_res
   return out;
 }
 
-typedef struct _report_partition_split_request__isset {
-  _report_partition_split_request__isset() : parent(false), child(false) {}
-  bool parent :1;
-  bool child :1;
-} _report_partition_split_request__isset;
+typedef struct _notify_catch_up_request__isset {
+  _notify_catch_up_request__isset() : primary_parent_gpid(false), child_gpid(false), child_ballot(false), child_address(false) {}
+  bool primary_parent_gpid :1;
+  bool child_gpid :1;
+  bool child_ballot :1;
+  bool child_address :1;
+} _notify_catch_up_request__isset;
 
-class report_partition_split_request {
+class notify_catch_up_request {
  public:
 
-  report_partition_split_request(const report_partition_split_request&);
-  report_partition_split_request(report_partition_split_request&&);
-  report_partition_split_request& operator=(const report_partition_split_request&);
-  report_partition_split_request& operator=(report_partition_split_request&&);
-  report_partition_split_request() {
+  notify_catch_up_request(const notify_catch_up_request&);
+  notify_catch_up_request(notify_catch_up_request&&);
+  notify_catch_up_request& operator=(const notify_catch_up_request&);
+  notify_catch_up_request& operator=(notify_catch_up_request&&);
+  notify_catch_up_request() : child_ballot(0) {
   }
 
-  virtual ~report_partition_split_request() throw();
-   ::dsn::gpid parent;
-   ::dsn::gpid child;
+  virtual ~notify_catch_up_request() throw();
+   ::dsn::gpid primary_parent_gpid;
+   ::dsn::gpid child_gpid;
+  int64_t child_ballot;
+   ::dsn::rpc_address child_address;
 
-  _report_partition_split_request__isset __isset;
+  _notify_catch_up_request__isset __isset;
 
-  void __set_parent(const  ::dsn::gpid& val);
+  void __set_primary_parent_gpid(const  ::dsn::gpid& val);
 
-  void __set_child(const  ::dsn::gpid& val);
+  void __set_child_gpid(const  ::dsn::gpid& val);
 
-  bool operator == (const report_partition_split_request & rhs) const
+  void __set_child_ballot(const int64_t val);
+
+  void __set_child_address(const  ::dsn::rpc_address& val);
+
+  bool operator == (const notify_catch_up_request & rhs) const
   {
-    if (!(parent == rhs.parent))
+    if (!(primary_parent_gpid == rhs.primary_parent_gpid))
       return false;
-    if (!(child == rhs.child))
+    if (!(child_gpid == rhs.child_gpid))
+      return false;
+    if (!(child_ballot == rhs.child_ballot))
+      return false;
+    if (!(child_address == rhs.child_address))
       return false;
     return true;
   }
-  bool operator != (const report_partition_split_request &rhs) const {
+  bool operator != (const notify_catch_up_request &rhs) const {
     return !(*this == rhs);
   }
 
-  bool operator < (const report_partition_split_request & ) const;
+  bool operator < (const notify_catch_up_request & ) const;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
@@ -5153,9 +5171,171 @@ class report_partition_split_request {
   virtual void printTo(std::ostream& out) const;
 };
 
-void swap(report_partition_split_request &a, report_partition_split_request &b);
+void swap(notify_catch_up_request &a, notify_catch_up_request &b);
 
-inline std::ostream& operator<<(std::ostream& out, const report_partition_split_request& obj)
+inline std::ostream& operator<<(std::ostream& out, const notify_catch_up_request& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+typedef struct _notify_cacth_up_response__isset {
+  _notify_cacth_up_response__isset() : err(false) {}
+  bool err :1;
+} _notify_cacth_up_response__isset;
+
+class notify_cacth_up_response {
+ public:
+
+  notify_cacth_up_response(const notify_cacth_up_response&);
+  notify_cacth_up_response(notify_cacth_up_response&&);
+  notify_cacth_up_response& operator=(const notify_cacth_up_response&);
+  notify_cacth_up_response& operator=(notify_cacth_up_response&&);
+  notify_cacth_up_response() {
+  }
+
+  virtual ~notify_cacth_up_response() throw();
+   ::dsn::error_code err;
+
+  _notify_cacth_up_response__isset __isset;
+
+  void __set_err(const  ::dsn::error_code& val);
+
+  bool operator == (const notify_cacth_up_response & rhs) const
+  {
+    if (!(err == rhs.err))
+      return false;
+    return true;
+  }
+  bool operator != (const notify_cacth_up_response &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const notify_cacth_up_response & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(notify_cacth_up_response &a, notify_cacth_up_response &b);
+
+inline std::ostream& operator<<(std::ostream& out, const notify_cacth_up_response& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+typedef struct _update_group_partition_count_request__isset {
+  _update_group_partition_count_request__isset() : app(false), target_address(false), config(false), last_committed_decree(false) {}
+  bool app :1;
+  bool target_address :1;
+  bool config :1;
+  bool last_committed_decree :1;
+} _update_group_partition_count_request__isset;
+
+class update_group_partition_count_request {
+ public:
+
+  update_group_partition_count_request(const update_group_partition_count_request&);
+  update_group_partition_count_request(update_group_partition_count_request&&);
+  update_group_partition_count_request& operator=(const update_group_partition_count_request&);
+  update_group_partition_count_request& operator=(update_group_partition_count_request&&);
+  update_group_partition_count_request() : last_committed_decree(0) {
+  }
+
+  virtual ~update_group_partition_count_request() throw();
+   ::dsn::app_info app;
+   ::dsn::rpc_address target_address;
+  replica_configuration config;
+  int64_t last_committed_decree;
+
+  _update_group_partition_count_request__isset __isset;
+
+  void __set_app(const  ::dsn::app_info& val);
+
+  void __set_target_address(const  ::dsn::rpc_address& val);
+
+  void __set_config(const replica_configuration& val);
+
+  void __set_last_committed_decree(const int64_t val);
+
+  bool operator == (const update_group_partition_count_request & rhs) const
+  {
+    if (!(app == rhs.app))
+      return false;
+    if (!(target_address == rhs.target_address))
+      return false;
+    if (!(config == rhs.config))
+      return false;
+    if (!(last_committed_decree == rhs.last_committed_decree))
+      return false;
+    return true;
+  }
+  bool operator != (const update_group_partition_count_request &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const update_group_partition_count_request & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(update_group_partition_count_request &a, update_group_partition_count_request &b);
+
+inline std::ostream& operator<<(std::ostream& out, const update_group_partition_count_request& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+typedef struct _update_group_partition_count_response__isset {
+  _update_group_partition_count_response__isset() : err(false) {}
+  bool err :1;
+} _update_group_partition_count_response__isset;
+
+class update_group_partition_count_response {
+ public:
+
+  update_group_partition_count_response(const update_group_partition_count_response&);
+  update_group_partition_count_response(update_group_partition_count_response&&);
+  update_group_partition_count_response& operator=(const update_group_partition_count_response&);
+  update_group_partition_count_response& operator=(update_group_partition_count_response&&);
+  update_group_partition_count_response() {
+  }
+
+  virtual ~update_group_partition_count_response() throw();
+   ::dsn::error_code err;
+
+  _update_group_partition_count_response__isset __isset;
+
+  void __set_err(const  ::dsn::error_code& val);
+
+  bool operator == (const update_group_partition_count_response & rhs) const
+  {
+    if (!(err == rhs.err))
+      return false;
+    return true;
+  }
+  bool operator != (const update_group_partition_count_response &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const update_group_partition_count_response & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(update_group_partition_count_response &a, update_group_partition_count_response &b);
+
+inline std::ostream& operator<<(std::ostream& out, const update_group_partition_count_response& obj)
 {
   obj.printTo(out);
   return out;

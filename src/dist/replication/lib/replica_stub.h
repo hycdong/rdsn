@@ -121,6 +121,13 @@ public:
                            gpid child_gpid,
                            gpid parent_gpid,
                            const std::string &parent_dir);
+    // on primary, child notify itself has been caught up parent
+    void on_notify_primary_split_catch_up(const notify_catch_up_request &request,
+                                          notify_cacth_up_response &response);
+
+    // on primary, all child catch up, so update group partition count
+    void on_update_group_partition_count(const update_group_partition_count_request &request,
+                                         update_group_partition_count_response &response);
 
     //
     //    local messages

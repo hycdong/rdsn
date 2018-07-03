@@ -121,6 +121,8 @@ public:
     virtual void update_app_envs(const std::map<std::string, std::string> &envs) {}
     virtual void query_app_envs(/*out*/ std::map<std::string, std::string> &envs) {}
 
+    virtual void set_partition_version(uint32_t partition_version) {}
+
     virtual void mock_commit() { _last_committed_decree++; }
 
 private:
@@ -143,6 +145,7 @@ public:
     dsn::replication::replica_ptr get_replica(dsn::gpid pid); // override
 
     void set_log(mutation_log_ptr log) { _log = log; }
+    void set_address(dsn::rpc_address address) { _primary_address = address; }
 };
 
 // replica mock class
@@ -178,11 +181,30 @@ public:
                                                      std::vector<std::string> files,
                                                      decree last_committed_decree);
     void child_catch_up();
-    void notify_primary_parent_finish_catch_up();
+    void notify_primary_split_catch_up();
+    void on_notify_primary_split_catch_up(notify_catch_up_request request,
+                                          notify_cacth_up_response &response);
+    void check_sync_point(decree sync_point);
+    void update_group_partition_count(int new_partition_count);
+    void on_update_group_partition_count(update_group_partition_count_request request,
+                                         update_group_partition_count_response &response);
+    void on_update_group_partition_count_reply(
+        dsn::error_code ec,
+        std::shared_ptr<update_group_partition_count_request> request,
+        std::shared_ptr<update_group_partition_count_response> response,
+        std::shared_ptr<std::set<dsn::rpc_address>> left_replicas,
+        dsn::rpc_address finish_update_address);
+
+    void register_child_on_meta(ballot b);
 
     void check_child_state();
+
     // TODO(hyc): mock rather than override it
     bool update_local_configuration_with_no_ballot_change(partition_status::type status);
+
+    // helper functions
+    replica_configuration get_config() { return _config; }
+    void set_config(replica_configuration config) { _config = config; }
 };
 
 replica_split_mock *replica_stub_mock::generate_replica(dsn::gpid gpid,
@@ -356,9 +378,9 @@ void replica_split_mock::child_catch_up()
     }
 }
 
-void replica_split_mock::notify_primary_parent_finish_catch_up()
+void replica_split_mock::notify_primary_split_catch_up()
 {
-    auto iter = substitutes.find("notify_primary_parent_finish_catch_up");
+    auto iter = substitutes.find("notify_primary_split_catch_up");
 
     if (iter != substitutes.end()) {
         if (iter->second != nullptr) {
@@ -366,6 +388,105 @@ void replica_split_mock::notify_primary_parent_finish_catch_up()
             (*call)();
         }
     } else {
-        dsn::replication::replica::notify_primary_parent_finish_catch_up();
+        dsn::replication::replica::notify_primary_split_catch_up();
+    }
+}
+
+void replica_split_mock::on_notify_primary_split_catch_up(notify_catch_up_request request,
+                                                          notify_cacth_up_response &response)
+{
+    auto iter = substitutes.find("on_notify_primary_split_catch_up");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void(notify_catch_up_request, notify_cacth_up_response &)> *)
+                            iter->second;
+            (*call)(request, response);
+        }
+    } else {
+        dsn::replication::replica::on_notify_primary_split_catch_up(request, response);
+    }
+}
+
+void replica_split_mock::check_sync_point(decree sync_point)
+{
+    auto iter = substitutes.find("check_sync_point");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void(decree)> *)iter->second;
+            (*call)(sync_point);
+        }
+    } else {
+        dsn::replication::replica::check_sync_point(sync_point);
+    }
+}
+
+void replica_split_mock::update_group_partition_count(int new_partition_count)
+{
+    auto iter = substitutes.find("update_group_partition_count");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void(int)> *)iter->second;
+            (*call)(new_partition_count);
+        }
+    } else {
+        dsn::replication::replica::update_group_partition_count(new_partition_count);
+    }
+}
+
+void replica_split_mock::on_update_group_partition_count(
+    update_group_partition_count_request request, update_group_partition_count_response &response)
+{
+    auto iter = substitutes.find("on_update_group_partition_count");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call =
+                (std::function<void(update_group_partition_count_request,
+                                    update_group_partition_count_response &)> *)iter->second;
+            (*call)(request, response);
+        }
+    } else {
+        dsn::replication::replica::on_update_group_partition_count(request, response);
+    }
+}
+
+void replica_split_mock::on_update_group_partition_count_reply(
+    dsn::error_code ec,
+    std::shared_ptr<update_group_partition_count_request> request,
+    std::shared_ptr<update_group_partition_count_response> response,
+    std::shared_ptr<std::set<dsn::rpc_address>> left_replicas,
+    dsn::rpc_address finish_update_address)
+{
+    auto iter = substitutes.find("on_update_group_partition_count_reply");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void(dsn::error_code,
+                                            std::shared_ptr<update_group_partition_count_request>,
+                                            std::shared_ptr<update_group_partition_count_response>,
+                                            std::shared_ptr<std::set<dsn::rpc_address>>,
+                                            dsn::rpc_address)> *)iter->second;
+            (*call)(ec, request, response, left_replicas, finish_update_address);
+        }
+    } else {
+        dsn::replication::replica::on_update_group_partition_count_reply(
+            ec, request, response, left_replicas, finish_update_address);
+    }
+}
+
+void replica_split_mock::register_child_on_meta(ballot b)
+{
+    auto iter = substitutes.find("register_child_on_meta");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void(ballot)> *)iter->second;
+            (*call)(b);
+        }
+    } else {
+        dsn::replication::replica::register_child_on_meta(b);
     }
 }

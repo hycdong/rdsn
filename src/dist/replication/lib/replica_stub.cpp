@@ -1852,6 +1852,11 @@ void replica_stub::open_service()
 
     register_rpc_handler(RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
     register_rpc_handler(RPC_COLD_BACKUP, "ColdBackup", &replica_stub::on_cold_backup);
+    register_rpc_handler(
+        RPC_SPLIT_NOTIFY_CATCH_UP, "SplitNotify", &replica_stub::on_notify_primary_split_catch_up);
+    register_rpc_handler(RPC_SPLIT_UPDATE_PARTITION_COUNT,
+                         "SplitUpdatePartitionCount",
+                         &replica_stub::on_update_group_partition_count);
 
     _kill_partition_command = ::dsn::command_manager::instance().register_app_command(
         {"kill_partition"},
@@ -2239,6 +2244,29 @@ void replica_stub::add_split_replica(rpc_address primary_address,
         // TODO(hyc): comments
         on_exec(
             LPC_SPLIT_PARTITION, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+    }
+}
+
+void replica_stub::on_notify_primary_split_catch_up(const notify_catch_up_request &request,
+                                                    notify_cacth_up_response &response)
+{
+    replica_ptr replica = get_replica(request.primary_parent_gpid);
+    if (replica != nullptr) {
+        replica->on_notify_primary_split_catch_up(request, response);
+    } else {
+        response.err = ERR_OBJECT_NOT_FOUND;
+    }
+}
+
+void replica_stub::on_update_group_partition_count(
+    const update_group_partition_count_request &request,
+    update_group_partition_count_response &response)
+{
+    replica_ptr replica = get_replica(request.config.pid);
+    if (replica != nullptr) {
+        replica->on_update_group_partition_count(request, response);
+    } else {
+        response.err = ERR_OBJECT_NOT_FOUND;
     }
 }
 }

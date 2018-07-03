@@ -32,4 +32,11 @@ public:
     void copy_parent_state_test();
     void apply_parent_state_test();
     void child_catch_up_test();
+
+    void notify_primary_split_catch_up_test();
+    void on_notify_primary_split_catch_up_test();
+    void check_sync_point_test();
+    void update_group_partition_count_test();
+    void on_update_group_partition_count_test();
+    void on_update_group_partition_count_reply_test();
 };

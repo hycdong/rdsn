@@ -339,7 +339,31 @@ private:
     // child catch up mutations while executing async learn task
     virtual void child_catch_up();
     // child catch up and notify primary parent
-    virtual void notify_primary_parent_finish_catch_up();
+    virtual void notify_primary_split_catch_up();
+
+    // primary receive child catch up request
+    virtual void on_notify_primary_split_catch_up(notify_catch_up_request request,
+                                                  notify_cacth_up_response &response);
+    // primary validate sync point which should be smaller than local last_committed_decree
+    virtual void check_sync_point(decree sync_point);
+
+    // primary send update partition count request to replicas in the group
+    virtual void update_group_partition_count(int new_partition_count);
+
+    // all replicas update partition count in memory and disk
+    virtual void on_update_group_partition_count(update_group_partition_count_request request,
+                                                 update_group_partition_count_response &response);
+
+    // primary wait for all replicas update partition count
+    virtual void on_update_group_partition_count_reply(
+        error_code ec,
+        std::shared_ptr<update_group_partition_count_request> request,
+        std::shared_ptr<update_group_partition_count_response> response,
+        std::shared_ptr<std::set<dsn::rpc_address>> left_replicas,
+        rpc_address finish_update_address);
+
+    // all replicas update partition count, primary will register children on meta
+    virtual void register_child_on_meta(ballot b);
 
     // child and parent heartbeart to check states
     virtual void check_child_state();
@@ -424,8 +448,9 @@ private:
     bool _is_initializing;       // when initializing, switching to primary need to update ballot
 
     // partition split
-    dsn::gpid _child_gpid; // TODO(hyc): add comments
-    ballot _child_ballot;  // ballot when starting partition split
+    dsn::gpid _child_gpid;  // TODO(hyc): add comments, init
+    ballot _child_ballot;   // ballot when starting partition split TODO(hyc):init
+    int _partition_version; // TODO(hyc): init
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

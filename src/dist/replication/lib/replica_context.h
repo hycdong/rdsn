@@ -109,6 +109,12 @@ public:
     dsn::task_ptr checkpoint_task;
 
     uint64_t last_prepare_ts_ms;
+
+    // used during partition split, cache child address which catch up parent
+    std::set<dsn::rpc_address> child_address; // TODO(hyc): init
+
+    // used during partition split, whether read write request should send to child
+    bool is_sync_to_child; // TODO(hyc): init
 };
 
 class secondary_context
