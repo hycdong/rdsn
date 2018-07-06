@@ -587,14 +587,18 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                             process_one_partition(app);
                     }
                 } else if (ec == ERR_OBJECT_NOT_FOUND) {
-                    int init_partition_count = app->init_partition_count > 0 ? app->init_partition_count : app->partition_count;
-                    if(partition_id < init_partition_count){
-                        dwarn("partition node %s not exist on remote storage, may half create before",
-                              partition_path.c_str());
+                    int init_partition_count = app->init_partition_count > 0
+                                                   ? app->init_partition_count
+                                                   : app->partition_count;
+                    if (partition_id < init_partition_count) {
+                        dwarn(
+                            "partition node %s not exist on remote storage, may half create before",
+                            partition_path.c_str());
                         init_app_partition_node(app, partition_id, nullptr);
                     } else {
-                        dwarn("partition node %s not exist on remote storage, may half split before",
-                              partition_path.c_str());
+                        dwarn(
+                            "partition node %s not exist on remote storage, may half split before",
+                            partition_path.c_str());
 
                         zauto_write_lock l(_lock);
                         app->partitions[partition_id].ballot = invalid_ballot;
@@ -1377,12 +1381,15 @@ void server_state::update_configuration_locally(
     partition_configuration &old_cfg = app.partitions[gpid.get_partition_index()];
     partition_configuration &new_cfg = config_request->config;
 
+    // TODO(hyc): remove
+    //    std::cout << "type is " << config_request->type << std::endl;
+
     int min_2pc_count = _meta_svc->get_options().mutation_2pc_min_replica_count;
     health_status old_health_status = partition_health_status(old_cfg, min_2pc_count);
     health_status new_health_status = partition_health_status(new_cfg, min_2pc_count);
 
     if (app.is_stateful) {
-        dassert(old_cfg.ballot + 1 == new_cfg.ballot,
+        dassert(old_cfg.ballot == invalid_ballot || old_cfg.ballot + 1 == new_cfg.ballot,
                 "invalid configuration update request, old ballot %" PRId64 ", new ballot %" PRId64
                 "",
                 old_cfg.ballot,
@@ -1431,6 +1438,13 @@ void server_state::update_configuration_locally(
         case config_type::CT_ADD_SECONDARY:
         case config_type::CT_ADD_SECONDARY_FOR_LB:
             dassert(false, "invalid execution work flow");
+            break;
+        case config_type::CT_REGISTER_CHILD:
+            ns->put_partition(gpid, true);
+            for (auto &secondary : config_request->config.secondaries) {
+                auto secondary_node = get_node_state(_nodes, secondary, false);
+                secondary_node->put_partition(gpid, false);
+            }
             break;
         default:
             dassert(false, "");

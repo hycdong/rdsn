@@ -97,6 +97,7 @@ public:
 
     // test app_partition_split
     void app_partition_split_test();
+    void register_child_test();
 
     // test for bug found
     void adjust_dropped_size();

@@ -30,16 +30,26 @@
 namespace dsn {
 namespace replication {
 
-class meta_split_service{
+class meta_split_service
+{
 public:
     explicit meta_split_service(meta_service *meta);
 
+    // client -> meta to start split
     void app_partition_split(app_partition_split_rpc rpc);
+    // change partition count on remote storage
     void do_app_partition_split(std::shared_ptr<app_state> app, app_partition_split_rpc rpc);
 
+    // primary replica -> meta to register child
+    void register_child_on_meta(register_child_rpc rpc);
+
+    // meta -> remote storage to update child replica config
+    dsn::task_ptr add_child_on_remote_storage(register_child_rpc rpc);
+    void on_add_child_on_remote_storage_reply(error_code ec, register_child_rpc rpc);
+
 private:
-    meta_service* _meta_svc;
-    server_state* _state;
+    meta_service *_meta_svc;
+    server_state *_state;
 
     zrwlock_nr &app_lock() const { return _state->_lock; }
 };

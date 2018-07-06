@@ -745,7 +745,7 @@ void replication_service_test_app::update_group_partition_count_test()
         std::cout << "case1. child replica is not right one" << std::endl;
         primary_replica->_child_ballot = 0;
 
-        primary_replica->update_group_partition_count(partition_count * 2);
+        primary_replica->update_group_partition_count(partition_count * 2, true);
         primary_replica->tracker()->wait_outstanding_tasks();
         child_replica->tracker()->wait_outstanding_tasks();
         ASSERT_EQ(partition_status::PS_ERROR, child_replica->_config.status);
@@ -758,7 +758,7 @@ void replication_service_test_app::update_group_partition_count_test()
 
     {
         std::cout << "case2. succeed" << std::endl;
-        primary_replica->update_group_partition_count(partition_count * 2);
+        primary_replica->update_group_partition_count(partition_count * 2, true);
         primary_replica->tracker()->wait_outstanding_tasks();
         child_replica->tracker()->wait_outstanding_tasks();
     }
@@ -880,13 +880,15 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
     replica_addresses->insert(dsn::rpc_address("127.0.0.2", 8703));
     replica_addresses->insert(dsn::rpc_address("127.0.0.1", 8703));
 
+    substitutes["register_child_on_meta"] = nullptr;
+
     {
         std::cout << "case1. replica is not primary" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.3", 8703);
         primary_replica->_config.status = partition_status::PS_INACTIVE;
 
         primary_replica->on_update_group_partition_count_reply(
-            ec, request, response, replica_addresses, child_address);
+            ec, request, response, replica_addresses, child_address, true);
         primary_replica->tracker()->wait_outstanding_tasks();
 
         primary_replica->_config.status = partition_status::PS_PRIMARY;
@@ -898,7 +900,7 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
         request->config.ballot = 0;
 
         primary_replica->on_update_group_partition_count_reply(
-            ec, request, response, replica_addresses, child_address);
+            ec, request, response, replica_addresses, child_address, true);
         primary_replica->tracker()->wait_outstanding_tasks();
 
         request->config.ballot = BALLOT;
@@ -910,7 +912,7 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
         response->err = dsn::ERR_VERSION_OUTDATED;
 
         primary_replica->on_update_group_partition_count_reply(
-            ec, request, response, replica_addresses, child_address);
+            ec, request, response, replica_addresses, child_address, true);
 
         substitutes["on_update_group_partition_count"] = nullptr;
         substitutes["on_update_group_partition_count_reply"] = nullptr;
@@ -926,16 +928,187 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
         std::cout << "case4. not all update partition count" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.3", 8703);
         primary_replica->on_update_group_partition_count_reply(
-            ec, request, response, replica_addresses, child_address);
+            ec, request, response, replica_addresses, child_address, true);
         primary_replica->tracker()->wait_outstanding_tasks();
     }
 
     {
-        std::cout << "case5. succeed" << std::endl;
+        std::cout << "case5. succeed child group" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.1", 8703);
         replica_addresses->erase(dsn::rpc_address("127.0.0.2", 8703));
         primary_replica->on_update_group_partition_count_reply(
-            ec, request, response, replica_addresses, child_address);
+            ec, request, response, replica_addresses, child_address, true);
         primary_replica->tracker()->wait_outstanding_tasks();
     }
+
+    substitutes.erase("register_child_on_meta");
+
+    {
+        std::cout << "case6. succeed parent group" << std::endl;
+        auto child_address = dsn::rpc_address("127.0.0.1", 8705);
+        replica_addresses->insert(dsn::rpc_address("127.0.0.1", 8705));
+        primary_replica->on_update_group_partition_count_reply(
+            ec, request, response, replica_addresses, child_address, false);
+        primary_replica->tracker()->wait_outstanding_tasks();
+    }
+}
+
+void replication_service_test_app::register_child_on_meta_test()
+{
+    auto stub = new replica_stub_mock();
+    auto primary_replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
+    auto child_replica = stub->generate_replica(child_gpid, partition_status::PS_PARTITION_SPLIT);
+    stub->replicas[parent_gpid] = primary_replica;
+    stub->replicas[child_gpid] = child_replica;
+    stub->set_meta_server(dsn::rpc_address("127.0.0.1", 8705));
+
+    substitutes["on_register_child_on_meta_reply"] = nullptr;
+
+    {
+        std::cout << "case1. replica not primary" << std::endl;
+        primary_replica->_config.status = partition_status::PS_SECONDARY;
+        primary_replica->register_child_on_meta(BALLOT);
+        primary_replica->tracker()->wait_outstanding_tasks();
+        primary_replica->_config.status = partition_status::PS_PRIMARY;
+    }
+
+    {
+        std::cout << "case2. replica is reconfiguration" << std::endl;
+        dsn::task_ptr fake_reconfig_ptr = dsn::tasking::enqueue(
+            LPC_SPLIT_PARTITION,
+            primary_replica->tracker(),
+            []() { std::cout << "This is a fake reconfiguration task_ptr" << std::endl; },
+            parent_gpid.thread_hash());
+        primary_replica->_primary_states.reconfiguration_task = fake_reconfig_ptr;
+        primary_replica->register_child_on_meta(BALLOT);
+
+        substitutes["register_child_on_meta"] = nullptr;
+
+        primary_replica->tracker()->wait_outstanding_tasks();
+        primary_replica->_primary_states.reconfiguration_task = nullptr;
+
+        substitutes.erase("register_child_on_meta");
+    }
+
+    {
+        std::cout << "case3. ballot not match" << std::endl;
+        primary_replica->register_child_on_meta(0);
+        primary_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    {
+        std::cout << "case4. succeed" << std::endl;
+        primary_replica->register_child_on_meta(1);
+        primary_replica->tracker()->wait_outstanding_tasks();
+        ASSERT_EQ(partition_status::PS_INACTIVE, primary_replica->_config.status);
+
+        primary_replica->_config.status = partition_status::PS_PRIMARY;
+    }
+
+    substitutes.erase("on_register_child_on_meta_reply");
+}
+
+void replication_service_test_app::on_register_child_on_meta_reply_test()
+{
+    auto stub = new replica_stub_mock();
+    auto primary_parent = stub->generate_replica(parent_gpid, partition_status::PS_INACTIVE);
+    stub->replicas[parent_gpid] = primary_parent;
+    stub->set_connected();
+    stub->set_meta_server(dsn::rpc_address("127.0.0.1", 8706));
+    primary_parent->_child_gpid = child_gpid;
+    primary_parent->_primary_states.register_child_task = dsn::tasking::enqueue(
+        LPC_SPLIT_PARTITION,
+        primary_parent->tracker(),
+        []() { std::cout << "This is a mock register child task" << std::endl; },
+        primary_parent->get_gpid().thread_hash());
+
+    dsn::app_info app;
+    app.app_id = parent_gpid.get_app_id();
+    app.partition_count = partition_count;
+    primary_parent->_app_info = app;
+    app.partition_count *= 2;
+
+    dsn::partition_configuration parent_config;
+    parent_config.ballot = BALLOT;
+    parent_config.last_committed_decree = DECREE;
+    parent_config.pid = parent_gpid;
+
+    dsn::partition_configuration child_config = parent_config;
+    child_config.ballot++;
+    child_config.last_committed_decree = 0;
+    child_config.pid = child_gpid;
+
+    std::shared_ptr<register_child_request> request(new register_child_request);
+    request->app = app;
+    request->child_config = child_config;
+    request->parent_config = parent_config;
+
+    std::shared_ptr<register_child_response> response(new register_child_response);
+    response->err = dsn::ERR_OK;
+    response->app = app;
+    response->child_config = child_config;
+    response->parent_config = parent_config;
+
+    dsn::error_code ec = dsn::ERR_OK;
+
+    substitutes["update_group_partition_count"] = nullptr;
+
+    {
+        std::cout << "case1. wrong status" << std::endl;
+        primary_parent->_config.status = partition_status::PS_PRIMARY;
+
+        primary_parent->on_register_child_on_meta_reply(ec, request, response);
+        primary_parent->tracker()->wait_outstanding_tasks();
+        ASSERT_EQ(nullptr, primary_parent->_primary_states.register_child_task);
+        primary_parent->_config.status = partition_status::PS_INACTIVE;
+    }
+
+    {
+        std::cout << "case2. retry case" << std::endl;
+        ec = dsn::ERR_TIMEOUT;
+
+        primary_parent->on_register_child_on_meta_reply(ec, request, response);
+
+        std::function<void(dsn::error_code,
+                           std::shared_ptr<register_child_request>,
+                           std::shared_ptr<register_child_response>)>
+            mock_reply = [](dsn::error_code ec,
+                            std::shared_ptr<register_child_request> request,
+                            std::shared_ptr<register_child_response> response) {
+                std::cout << "Mock on_register_child_on_meta_reply is called" << std::endl;
+            };
+        substitutes["on_register_child_on_meta_reply"] = &mock_reply;
+
+        primary_parent->tracker()->wait_outstanding_tasks();
+
+        ec = dsn::ERR_OK;
+        substitutes.erase("on_register_child_on_meta_reply");
+    }
+
+    {
+        std::cout << "case3. child registered" << std::endl;
+        response->err = dsn::ERR_CHILD_REGISTERED;
+
+        primary_parent->on_register_child_on_meta_reply(ec, request, response);
+        primary_parent->tracker()->wait_outstanding_tasks();
+
+        ASSERT_EQ(nullptr, primary_parent->_primary_states.register_child_task);
+        ASSERT_TRUE(primary_parent->_primary_states.is_sync_to_child);
+        ASSERT_EQ(0, primary_parent->_child_gpid.get_app_id());
+
+        response->err = dsn::ERR_OK;
+    }
+
+    {
+        std::cout << "case4. succeed case" << std::endl;
+
+        primary_parent->on_register_child_on_meta_reply(ec, request, response);
+        primary_parent->tracker()->wait_outstanding_tasks();
+
+        ASSERT_EQ(nullptr, primary_parent->_primary_states.register_child_task);
+        ASSERT_TRUE(primary_parent->_primary_states.is_sync_to_child);
+        ASSERT_EQ(0, primary_parent->_child_gpid.get_app_id());
+    }
+
+    substitutes.erase("update_group_partition_count");
 }

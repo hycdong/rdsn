@@ -65,6 +65,8 @@ TEST(meta, app_envs_basic_test) { g_app->app_envs_basic_test(); }
 
 TEST(meta, app_partition_split_test) { g_app->app_partition_split_test(); }
 
+TEST(meta, register_child_test) { g_app->register_child_test(); }
+
 dsn::error_code meta_service_test_app::start(const std::vector<std::string> &args)
 {
     uint32_t seed =

@@ -224,7 +224,6 @@ void replica::prepare_copy_parent_state(const std::string &dir,
                  dir,
                  checkpoint_decree);
         copy_parent_state.to_decree_included = checkpoint_decree;
-        // TODO(hyc): consider this files must has element???
         copy_parent_state.files.push_back(dsn::utils::filesystem::path_combine(dir, "dummy"));
 
     } else {
@@ -316,7 +315,6 @@ void replica::copy_parent_state(error_code ec,
         _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
 
         // set mutation has been logged in private log
-        // TODO(hyc):consider it! shared log callback should set the mutation as logged?
         if (!mu->is_logged()) {
             mu->set_logged();
         }
@@ -379,7 +377,6 @@ void replica::apply_parent_state(error_code ec,
         }
     }
 
-    // TODO(hyc): consider why???
     // generate a checkpoint sync
     if (!is_error) {
         error = _app->sync_checkpoint();
@@ -644,16 +641,16 @@ void replica::on_notify_primary_split_catch_up(
     _primary_states.is_sync_to_child = true;
     decree sync_point = _prepare_list->max_decree() + 1;
 
-    // TODO(hyc): ???
-    //    if (!_options->empty_write_disabled) {
-    //        mutation_ptr mu = new_mutation(invalid_decree);
-    //        mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
-    //        init_prepare(mu);
-    //        dassert(sync_point == mu->data.header.decree,
-    //                "%" PRId64 " vs %" PRId64,
-    //                sync_point,
-    //                mu->data.header.decree);
-    //    };
+    // TODO(hyc): add unit test
+    if (!_options->empty_write_disabled) {
+        mutation_ptr mu = new_mutation(invalid_decree);
+        mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
+        init_prepare(mu, false);
+        dassert(sync_point == mu->data.header.decree,
+                "%" PRId64 " vs %" PRId64,
+                sync_point,
+                mu->data.header.decree);
+    };
 
     tasking::enqueue(LPC_SPLIT_PARTITION,
                      tracker(),
@@ -670,7 +667,7 @@ void replica::check_sync_point(decree sync_point) // on primary parent
 
     // if valid -> update_group_partition_count, otherwise retry
     if (_app->last_committed_decree() >= sync_point) {
-        update_group_partition_count(_app_info.partition_count * 2);
+        update_group_partition_count(_app_info.partition_count * 2, true);
     } else {
         dwarn_f(
             "{} local last_committed_decree is not caught up sync_point, please wait and retry");
@@ -682,9 +679,10 @@ void replica::check_sync_point(decree sync_point) // on primary parent
     }
 }
 
-void replica::update_group_partition_count(int new_partition_count) // on primary parent
+void replica::update_group_partition_count(int new_partition_count,
+                                           bool is_update_child) // on primary parent
 {
-    if (_child_gpid.get_app_id() == 0 || _child_ballot < get_ballot()) {
+    if (is_update_child && (_child_gpid.get_app_id() == 0 || _child_ballot < get_ballot())) {
         dwarn_f("{} receive out-date request, _child_gpid({}.{}), _child_ballot is {}, local "
                 "ballot is {}",
                 name(),
@@ -709,9 +707,14 @@ void replica::update_group_partition_count(int new_partition_count) // on primar
         group_address->insert(iter->first);
     }
 
-    ddebug_f("{} will send update_group_partition_count_request, new partition count is {}",
+    ddebug_f("{} will send update_group_partition_count_request, new partition count is {}, "
+             "is_update_child is {}",
              name(),
-             new_partition_count);
+             new_partition_count,
+             is_update_child);
+
+    gpid pid = is_update_child ? _child_gpid : get_gpid();
+    dassert(pid.get_app_id() != 0, "");
 
     for (auto &iter : _primary_states.statuses) {
         std::shared_ptr<update_group_partition_count_request> request(
@@ -719,14 +722,13 @@ void replica::update_group_partition_count(int new_partition_count) // on primar
         request->app = _app_info;
         request->app.partition_count = new_partition_count;
         request->target_address = iter.first;
-        _primary_states.get_replica_config(iter.second, request->config);
+        request->config.pid = pid;
+        request->config.ballot = get_ballot();
         request->last_committed_decree = last_committed_decree();
 
-        gpid pid = request->config.pid;
-        ddebug_f("{} send update_group_partition_count_request to replica {}.{}@{}",
+        ddebug_f("{} send update_group_partition_count_request to {} replica {}",
                  name(),
-                 pid.get_app_id(),
-                 pid.get_partition_index(),
+                 enum_to_string(iter.second),
                  iter.first.to_string());
 
         rpc::call(
@@ -740,7 +742,8 @@ void replica::update_group_partition_count(int new_partition_count) // on primar
                     request,
                     std::make_shared<update_group_partition_count_response>(std::move(response)),
                     group_address,
-                    iter.first);
+                    iter.first,
+                    is_update_child);
             },
             std::chrono::seconds(0),
             pid.thread_hash());
@@ -810,7 +813,8 @@ void replica::on_update_group_partition_count_reply(
     std::shared_ptr<update_group_partition_count_request> request,
     std::shared_ptr<update_group_partition_count_response> response,
     std::shared_ptr<std::set<dsn::rpc_address>> left_replicas,
-    rpc_address finish_update_address) // on primary parent
+    rpc_address finish_update_address,
+    bool is_update_child) // on primary parent
 {
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_f(
@@ -832,12 +836,11 @@ void replica::on_update_group_partition_count_reply(
     if (ec == ERR_OK && response->err == ERR_OK) {
         left_replicas->erase(finish_update_address);
         if (left_replicas->empty()) { // all child reply
-
             ddebug_f("{} finish update all replicas partition count", name());
-            register_child_on_meta(get_ballot());
-
+            if (is_update_child) {
+                register_child_on_meta(get_ballot());
+            }
         } else { // not all child reply
-
             ddebug_f("{}, there are still {} child not update partition count",
                      name(),
                      left_replicas->size());
@@ -850,7 +853,7 @@ void replica::on_update_group_partition_count_reply(
         tasking::enqueue(
             LPC_SPLIT_PARTITION,
             tracker(),
-            [this, request, finish_update_address, left_replicas]() {
+            [this, request, finish_update_address, left_replicas, is_update_child]() {
                 request->config.ballot = get_ballot();
                 rpc::call(finish_update_address,
                           RPC_SPLIT_UPDATE_PARTITION_COUNT,
@@ -863,17 +866,160 @@ void replica::on_update_group_partition_count_reply(
                                   std::make_shared<update_group_partition_count_response>(
                                       std::move(response)),
                                   left_replicas,
-                                  finish_update_address);
+                                  finish_update_address,
+                                  is_update_child);
                           },
                           std::chrono::seconds(1),
                           get_gpid().thread_hash());
             },
             get_gpid().thread_hash(),
             std::chrono::seconds(1));
+        return;
     }
 }
 
-void replica::register_child_on_meta(ballot b) {}
+void replica::register_child_on_meta(ballot b) // on primary parent
+{
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_f("{} is not primary, can not register child, current status is {}",
+                name(),
+                enum_to_string(status()));
+        return;
+    }
+
+    if (_primary_states.reconfiguration_task != nullptr) {
+        dinfo_f("{} is under reconfiguration, delay to register child", name());
+        _primary_states.register_child_task =
+            tasking::enqueue(LPC_SPLIT_PARTITION,
+                             tracker(),
+                             std::bind(&replica::register_child_on_meta, this, b),
+                             get_gpid().thread_hash(),
+                             std::chrono::seconds(1));
+        return;
+    }
+
+    if (b != get_ballot()) {
+        dwarn_f(
+            "{} failed to register child, may out-dated, request ballot is {}, local ballot is {}",
+            name(),
+            b,
+            get_ballot());
+        return;
+    }
+
+    _config.status = partition_status::PS_INACTIVE;
+    set_inactive_state_transient(true);
+
+    partition_configuration child_config = _primary_states.membership;
+    child_config.ballot++;
+    child_config.last_committed_decree = 0;
+    child_config.last_drops.clear();
+    child_config.pid.set_partition_index(_app_info.partition_count +
+                                         get_gpid().get_partition_index());
+
+    std::shared_ptr<register_child_request> request(new register_child_request);
+    request->app = _app_info;
+    request->child_config = child_config;
+    request->parent_config = _primary_states.membership;
+    request->primary_address = _stub->_primary_address;
+
+    rpc_address meta_address(_stub->_failure_detector->get_servers());
+    rpc::call(meta_address,
+              RPC_CM_REGISTER_CHILD_REPLICA,
+              *request,
+              tracker(),
+              [=](error_code ec, register_child_response &&response) {
+                  on_register_child_on_meta_reply(
+                      ec, request, std::make_shared<register_child_response>(std::move(response)));
+              },
+              std::chrono::seconds(0),
+              get_gpid().thread_hash());
+}
+
+void replica::on_register_child_on_meta_reply(
+    dsn::error_code ec,
+    std::shared_ptr<register_child_request> request,
+    std::shared_ptr<register_child_response> response) // on primary parent
+{
+    // TODO(hyc): consider where should add check
+    check_hashed_access();
+
+    if (partition_status::PS_INACTIVE != status() || _stub->is_connected() == false) {
+        dwarn_f("{} status wrong or stub is not connected, status is {}",
+                name(),
+                enum_to_string(status()));
+        _primary_states.register_child_task = nullptr;
+        return;
+    }
+
+    if (ec == ERR_OK) {
+        ec = response->err;
+    }
+
+    if (ec != ERR_OK) {
+        dwarn_f("{}: register child({}.{}) reply with error {}, request child ballot is {}, local "
+                "ballot is {}",
+                name(),
+                request->child_config.pid.get_app_id(),
+                request->child_config.pid.get_partition_index(),
+                ec.to_string(),
+                request->child_config.ballot,
+                get_ballot());
+
+        if (ec != ERR_INVALID_VERSION && ec != ERR_CHILD_REGISTERED) {
+            _primary_states.register_child_task = tasking::enqueue(
+                LPC_DELAY_UPDATE_CONFIG,
+                tracker(),
+                [this, request]() {
+                    rpc_address target(_stub->_failure_detector->get_servers());
+                    auto rpc_task_ptr = rpc::call(
+                        target,
+                        RPC_CM_REGISTER_CHILD_REPLICA,
+                        *request,
+                        tracker(),
+                        [=](error_code err, register_child_response &&resp) {
+                            on_register_child_on_meta_reply(
+                                err,
+                                request,
+                                std::make_shared<register_child_response>(std::move(resp)));
+                        },
+                        std::chrono::seconds(0),
+                        get_gpid().thread_hash());
+                    _primary_states.register_child_task = rpc_task_ptr;
+                },
+                get_gpid().thread_hash(),
+                std::chrono::seconds(1));
+
+            return;
+        }
+    }
+
+    ddebug_f("{}: register child({}.{}), parent ballot is {}, local ballot is {}, local status {}",
+             name(),
+             response->child_config.pid.get_app_id(),
+             response->child_config.pid.get_partition_index(),
+             response->parent_config.ballot,
+             get_ballot(),
+             enum_to_string(status()));
+
+    if (ec == ERR_OK && response->err == ERR_OK) {
+        dassert(_app_info.partition_count * 2 == response->app.partition_count,
+                "local partition count is %d, remote partition count is %d",
+                _app_info.partition_count,
+                response->app.partition_count);
+        update_group_partition_count(response->app.partition_count, false);
+
+        // TODO(hyc): make child replica become available
+    }
+
+    _primary_states.register_child_task = nullptr;
+    _primary_states.is_sync_to_child = true;
+    _child_gpid.set_app_id(0);
+
+    if (response->parent_config.ballot >= get_ballot()) {
+        update_configuration(response->parent_config);
+    }
+}
 
 } // namespace replication
 } // namespace dsn

@@ -71,6 +71,8 @@ typedef rpc_holder<configuration_update_app_env_request, configuration_update_ap
 typedef rpc_holder<app_partition_split_request, app_partition_split_response>
     app_partition_split_rpc;
 
+typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
+
 class meta_service : public serverlet<meta_service>
 {
 public:
@@ -158,6 +160,7 @@ private:
 
     // split
     void on_app_partition_split(app_partition_split_rpc rpc);
+    void on_register_child_on_meta(register_child_rpc rpc);
 
     // meta control
     void on_control_meta_level(dsn_message_t req);

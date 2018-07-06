@@ -90,5 +90,7 @@ namespace dsn { namespace replication {
     GENERATED_TYPE_SERIALIZATION(notify_cacth_up_response, THRIFT)
     GENERATED_TYPE_SERIALIZATION(update_group_partition_count_request, THRIFT)
     GENERATED_TYPE_SERIALIZATION(update_group_partition_count_response, THRIFT)
+    GENERATED_TYPE_SERIALIZATION(register_child_request, THRIFT)
+    GENERATED_TYPE_SERIALIZATION(register_child_response, THRIFT)
 
 } } 

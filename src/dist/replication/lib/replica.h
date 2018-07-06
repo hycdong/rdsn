@@ -348,7 +348,9 @@ private:
     virtual void check_sync_point(decree sync_point);
 
     // primary send update partition count request to replicas in the group
-    virtual void update_group_partition_count(int new_partition_count);
+    // if is_update_child is true meaning to update child group partition count
+    // otherwise to update parent group partition count
+    virtual void update_group_partition_count(int new_partition_count, bool is_update_child);
 
     // all replicas update partition count in memory and disk
     virtual void on_update_group_partition_count(update_group_partition_count_request request,
@@ -360,10 +362,16 @@ private:
         std::shared_ptr<update_group_partition_count_request> request,
         std::shared_ptr<update_group_partition_count_response> response,
         std::shared_ptr<std::set<dsn::rpc_address>> left_replicas,
-        rpc_address finish_update_address);
+        rpc_address finish_update_address,
+        bool is_update_child);
 
     // all replicas update partition count, primary will register children on meta
     virtual void register_child_on_meta(ballot b);
+
+    // primary receive reply for meta register child replica
+    virtual void on_register_child_on_meta_reply(dsn::error_code ec,
+                                                 std::shared_ptr<register_child_request> request,
+                                                 std::shared_ptr<register_child_response> response);
 
     // child and parent heartbeart to check states
     virtual void check_child_state();

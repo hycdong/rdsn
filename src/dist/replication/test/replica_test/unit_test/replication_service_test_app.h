@@ -39,4 +39,6 @@ public:
     void update_group_partition_count_test();
     void on_update_group_partition_count_test();
     void on_update_group_partition_count_reply_test();
+    void register_child_on_meta_test();
+    void on_register_child_on_meta_reply_test();
 };

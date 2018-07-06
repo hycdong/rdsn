@@ -115,6 +115,9 @@ public:
 
     // used during partition split, whether read write request should send to child
     bool is_sync_to_child; // TODO(hyc): init
+
+    // register child to meta ptr
+    dsn::task_ptr register_child_task; // TODO(hyc): init
 };
 
 class secondary_context
