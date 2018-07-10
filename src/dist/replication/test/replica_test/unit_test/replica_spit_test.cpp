@@ -1112,3 +1112,176 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
 
     substitutes.erase("update_group_partition_count");
 }
+
+void replication_service_test_app::check_partition_count_test()
+{
+    auto stub = new replica_stub_mock();
+    auto replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
+    stub->replicas[parent_gpid] = replica;
+
+    dsn::app_info info;
+    info.app_id = 1;
+    info.partition_count = partition_count;
+    replica->_app_info = info;
+
+    substitutes["query_child_state"] = nullptr;
+
+    {
+        std::cout << "case1. equal partition count" << std::endl;
+        replica->check_partition_count(partition_count);
+    }
+
+    {
+        std::cout << "case2. child_gpid valid" << std::endl;
+        replica->_child_gpid = child_gpid;
+        replica->check_partition_count(partition_count * 2);
+        replica->_child_gpid.set_app_id(0);
+    }
+
+    {
+        std::cout << "case3. succeed" << std::endl;
+        replica->check_partition_count(partition_count * 2);
+        ASSERT_EQ(-1, replica->_partition_version);
+    }
+
+    substitutes.erase("query_child_state");
+}
+
+void replication_service_test_app::query_child_state_test()
+{
+    auto stub = new replica_stub_mock();
+    auto replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
+    stub->replicas[parent_gpid] = replica;
+    stub->set_meta_server(dsn::rpc_address("127.0.0.1", 8710));
+
+    substitutes["on_query_child_state_reply"] = nullptr;
+
+    {
+        std::cout << "case1. replica is not primary" << std::endl;
+        replica->_config.status = partition_status::PS_PARTITION_SPLIT;
+        replica->query_child_state();
+        replica->tracker()->wait_outstanding_tasks();
+        replica->_config.status = partition_status::PS_PRIMARY;
+    }
+
+    {
+        std::cout << "case2. query_child_state_task is not nullptr" << std::endl;
+        replica->_primary_states.query_child_state_task = dsn::tasking::enqueue(
+            LPC_SPLIT_PARTITION,
+            replica->tracker(),
+            []() { std::cout << "This is mock query_child_state_task ptr" << std::endl; },
+            parent_gpid.thread_hash());
+        replica->query_child_state();
+        replica->tracker()->wait_outstanding_tasks();
+        replica->_primary_states.query_child_state_task = nullptr;
+    }
+
+    {
+        std::cout << "case3. succeed" << std::endl;
+        replica->query_child_state();
+        replica->tracker()->wait_outstanding_tasks();
+    }
+
+    substitutes.erase("on_query_child_state_reply");
+}
+
+void replication_service_test_app::on_query_child_state_reply_test()
+{
+    auto stub = new replica_stub_mock();
+    auto replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
+    replica->_app_info.partition_count = partition_count;
+    stub->replicas[parent_gpid] = replica;
+    stub->set_meta_server(dsn::rpc_address("127.0.0.1", 8710));
+
+    dsn::error_code ec = dsn::ERR_OK;
+
+    std::shared_ptr<query_child_state_request> request(new query_child_state_request);
+    request->parent_gpid = parent_gpid;
+
+    std::shared_ptr<query_child_state_response> response(new query_child_state_response);
+    response->err = dsn::ERR_OK;
+    response->ballot = invalid_ballot;
+    response->partition_count = partition_count * 2;
+
+    {
+        std::cout << "case1. replica is not primary" << std::endl;
+        replica->_config.status = partition_status::PS_PARTITION_SPLIT;
+        replica->on_query_child_state_reply(ec, request, response);
+        replica->tracker()->wait_outstanding_tasks();
+        ASSERT_EQ(nullptr, replica->_primary_states.query_child_state_task);
+        replica->_config.status = partition_status::PS_PRIMARY;
+    }
+
+    {
+        std::cout << "case2. child gpid exist" << std::endl;
+        replica->_child_gpid = child_gpid;
+        replica->on_query_child_state_reply(ec, request, response);
+        replica->tracker()->wait_outstanding_tasks();
+        ASSERT_EQ(nullptr, replica->_primary_states.query_child_state_task);
+        replica->_child_gpid.set_app_id(0);
+    }
+
+    {
+        std::cout << "case3. retry case" << std::endl;
+
+        std::function<void(dsn::error_code,
+                           std::shared_ptr<query_child_state_request>,
+                           std::shared_ptr<query_child_state_response>)>
+            mock_function = [replica](dsn::error_code err,
+                                      std::shared_ptr<query_child_state_request> req,
+                                      std::shared_ptr<query_child_state_response> resp) {
+                std::cout << "This is mock function of on_query_child_state_reply" << std::endl;
+            };
+
+        response->err = dsn::ERR_TRY_AGAIN;
+        replica->on_query_child_state_reply(ec, request, response);
+
+        substitutes["on_query_child_state_reply"] = &mock_function;
+
+        replica->tracker()->wait_outstanding_tasks();
+
+        response->err = dsn::ERR_OK;
+        substitutes.erase("on_query_child_state_reply");
+    }
+
+    {
+        std::cout << "case4. equal partition count, partition split finish" << std::endl;
+        response->ballot = 2;
+        replica->_app_info.partition_count = partition_count * 2;
+
+        replica->on_query_child_state_reply(ec, request, response);
+        replica->tracker()->wait_outstanding_tasks();
+        ASSERT_EQ(partition_count * 2 - 1, replica->_partition_version);
+
+        response->ballot = invalid_ballot;
+        replica->_app_info.partition_count = partition_count;
+    }
+
+    {
+        std::cout << "case5. ballot is valid" << std::endl;
+        response->ballot = 2;
+        substitutes["update_group_partition_count"] = nullptr;
+
+        replica->on_query_child_state_reply(ec, request, response);
+        replica->tracker()->wait_outstanding_tasks();
+
+        response->ballot = invalid_ballot;
+        substitutes.erase("update_group_partition_count");
+    }
+
+    {
+        std::cout << "case6. learner exist" << std::endl;
+
+        dsn::partition_configuration config;
+        config.max_replica_count = 3;
+        config.secondaries.push_back(dsn::rpc_address("127.0.0.2", 8710));
+        replica->_primary_states.membership = config;
+
+        replica->on_query_child_state_reply(ec, request, response);
+        replica->tracker()->wait_outstanding_tasks();
+        ASSERT_EQ(partition_count - 1, replica->_partition_version);
+
+        replica->_primary_states.membership.secondaries.push_back(
+            dsn::rpc_address("127.0.0.3", 8710));
+    }
+}

@@ -312,7 +312,7 @@ private:
     //      partition split
     //
     // parent replica recevie group_check and try to create a new replica instance on this stub
-    void on_add_child(const group_check_request &request);
+    virtual void on_add_child(const group_check_request &request);
     // child replica initialize config and state info
     virtual void
     init_child_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
@@ -367,11 +367,19 @@ private:
 
     // all replicas update partition count, primary will register children on meta
     virtual void register_child_on_meta(ballot b);
-
-    // primary receive reply for meta register child replica
     virtual void on_register_child_on_meta_reply(dsn::error_code ec,
                                                  std::shared_ptr<register_child_request> request,
                                                  std::shared_ptr<register_child_response> response);
+
+    // meta <=> replica configuration sync through on_config_sync
+    // called by primary replica to check if partition count changed and start split
+    virtual void check_partition_count(int partition_count);
+
+    // primary -> meta query child partition configuration
+    virtual void query_child_state();
+    virtual void on_query_child_state_reply(dsn::error_code ec,
+                                            std::shared_ptr<query_child_state_request> request,
+                                            std::shared_ptr<query_child_state_response> response);
 
     // child and parent heartbeart to check states
     virtual void check_child_state();

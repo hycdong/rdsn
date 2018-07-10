@@ -261,3 +261,131 @@ void meta_service_test_app::register_child_test()
         ASSERT_EQ(response.err, dsn::ERR_OK);
     }
 }
+
+void meta_service_test_app::on_query_child_state_test()
+{
+    // create a fake app
+    dsn::app_info info;
+    info.is_stateful = true;
+    info.app_id = 1;
+    info.app_type = "simple_kv";
+    info.app_name = "app";
+    info.max_replica_count = 3;
+    info.partition_count = PARTITION_COUNT;
+    info.status = dsn::app_status::AS_CREATING;
+    info.envs.clear();
+    std::shared_ptr<app_state> fake_app = app_state::create(info);
+
+    // create meta_service
+    std::shared_ptr<meta_service> meta_svc = std::make_shared<meta_service>();
+    meta_service *svc = meta_svc.get();
+    svc->_meta_opts.cluster_root = "/meta_test";
+    svc->_meta_opts.meta_state_service_type = "meta_state_service_simple";
+    svc->remote_storage_initialize();
+    svc->_split_svc = dsn::make_unique<meta_split_service>(svc);
+    meta_split_service *split_srv = svc->_split_svc.get();
+    ASSERT_NE(split_srv, nullptr);
+
+    // create server_state
+    std::string apps_root = "/meta_test/apps";
+    std::shared_ptr<server_state> ss = svc->_state;
+    ss->initialize(svc, apps_root);
+    ss->_all_apps.emplace(std::make_pair(fake_app->app_id, fake_app));
+    dsn::error_code ec = ss->sync_apps_to_remote_storage();
+    ASSERT_EQ(ec, dsn::ERR_OK);
+
+    // mock request and rpc msg
+    dsn::gpid parent_gpid(1, 1);
+    query_child_state_request request;
+    request.parent_gpid = parent_gpid;
+
+    // mock app
+    std::shared_ptr<app_state> app = ss->get_app(info.app_id);
+    int partition_count = info.partition_count;
+    app->partitions.resize(partition_count * 2);
+
+    dsn::partition_configuration parent_config;
+    parent_config.ballot = 3;
+    parent_config.pid = parent_gpid;
+    dsn::partition_configuration child_config;
+    child_config.ballot = invalid_ballot;
+    child_config.pid = dsn::gpid(info.app_id, parent_gpid.get_partition_index() + partition_count);
+    dsn::partition_configuration config = parent_config;
+    config.pid = dsn::gpid(info.app_id, parent_gpid.get_partition_index() + partition_count / 2);
+
+    app->partitions[parent_gpid.get_partition_index()] = parent_config;
+    app->partitions[child_config.pid.get_partition_index()] = child_config;
+    app->partitions[config.pid.get_partition_index()] = parent_config;
+
+    std::cout << "case1. pending_sync_task exist" << std::endl;
+    {
+        app->helpers->contexts[parent_gpid.get_partition_index()].pending_sync_task =
+            dsn::tasking::enqueue(
+                LPC_META_STATE_HIGH,
+                svc->tracker(),
+                []() { std::cout << "This is mock pending_sync_task" << std::endl; },
+                parent_gpid.thread_hash());
+
+        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::marshall(msg, request);
+        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        query_child_state_rpc rpc(recv_msg);
+        split_srv->on_query_child_state(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(dsn::ERR_TRY_AGAIN, response.err);
+
+        app->helpers->contexts[parent_gpid.get_partition_index()].pending_sync_task = nullptr;
+    }
+
+    std::cout << "case2. equal partition count, not during split or finish split" << std::endl;
+    {
+        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::marshall(msg, request);
+        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        query_child_state_rpc rpc(recv_msg);
+        split_srv->on_query_child_state(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(dsn::ERR_OK, response.err);
+        ASSERT_EQ(partition_count, response.partition_count);
+        ASSERT_EQ(3, response.ballot);
+    }
+
+    app->partition_count *= 2;
+
+    std::cout << "case3. child ballot is invalid" << std::endl;
+    {
+        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::marshall(msg, request);
+        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        query_child_state_rpc rpc(recv_msg);
+        split_srv->on_query_child_state(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(dsn::ERR_OK, response.err);
+        ASSERT_EQ(partition_count * 2, response.partition_count);
+        ASSERT_EQ(invalid_ballot, response.ballot);
+    }
+
+    std::cout << "case4. child ballot is valid" << std::endl;
+    {
+        app->partitions[child_config.pid.get_partition_index()].ballot = 4;
+
+        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::marshall(msg, request);
+        dsn_message_t recv_msg = create_corresponding_receive(msg);
+
+        query_child_state_rpc rpc(recv_msg);
+        split_srv->on_query_child_state(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(dsn::ERR_OK, response.err);
+        ASSERT_EQ(partition_count * 2, response.partition_count);
+        ASSERT_EQ(4, response.ballot);
+    }
+}

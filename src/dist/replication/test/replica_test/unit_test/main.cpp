@@ -61,6 +61,12 @@ TEST(split, register_child_on_meta) { app->register_child_on_meta_test(); }
 
 TEST(split, on_register_child_on_meta_reply) { app->on_register_child_on_meta_reply_test(); }
 
+TEST(split, check_partition_count) { app->check_partition_count_test(); }
+
+TEST(split, query_child_state) { app->query_child_state_test(); }
+
+TEST(split, on_query_child_state_reply) { app->on_query_child_state_reply_test(); }
+
 error_code replication_service_test_app::start(const std::vector<std::string> &args)
 {
     int argc = args.size();

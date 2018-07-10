@@ -40,6 +40,9 @@ public:
     // change partition count on remote storage
     void do_app_partition_split(std::shared_ptr<app_state> app, app_partition_split_rpc rpc);
 
+    // primary replica -> meta to query child partition configuration
+    void on_query_child_state(query_child_state_rpc rpc);
+
     // primary replica -> meta to register child
     void register_child_on_meta(register_child_rpc rpc);
 

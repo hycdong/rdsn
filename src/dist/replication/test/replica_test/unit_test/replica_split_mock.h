@@ -214,6 +214,13 @@ public:
 
     void check_child_state();
 
+    void check_partition_count(int partition_count);
+    void query_child_state();
+    void on_query_child_state_reply(dsn::error_code ec,
+                                    std::shared_ptr<query_child_state_request> request,
+                                    std::shared_ptr<query_child_state_response> response);
+    void on_add_child(const group_check_request &request);
+
     // TODO(hyc): mock rather than override it
     bool update_local_configuration_with_no_ballot_change(partition_status::type status);
 
@@ -526,5 +533,67 @@ void replica_split_mock::on_register_child_on_meta_reply(
         }
     } else {
         dsn::replication::replica::on_register_child_on_meta_reply(ec, request, response);
+    }
+}
+
+void replica_split_mock::check_partition_count(int partition_count)
+{
+    auto iter = substitutes.find("check_partition_count");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void(int)> *)iter->second;
+            (*call)(partition_count);
+        }
+    } else {
+        dsn::replication::replica::check_partition_count(partition_count);
+    }
+}
+
+void replica_split_mock::query_child_state()
+{
+    auto iter = substitutes.find("query_child_state");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void()> *)iter->second;
+            (*call)();
+        }
+    } else {
+        dsn::replication::replica::query_child_state();
+    }
+}
+
+void replica_split_mock::on_query_child_state_reply(
+    dsn::error_code ec,
+    std::shared_ptr<query_child_state_request> request,
+    std::shared_ptr<query_child_state_response> response)
+{
+    auto iter = substitutes.find("on_query_child_state_reply");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call =
+                (std::function<void(dsn::error_code,
+                                    std::shared_ptr<query_child_state_request>,
+                                    std::shared_ptr<query_child_state_response>)> *)iter->second;
+            (*call)(ec, request, response);
+        }
+    } else {
+        dsn::replication::replica::on_query_child_state_reply(ec, request, response);
+    }
+}
+
+void replica_split_mock::on_add_child(const group_check_request &request)
+{
+    auto iter = substitutes.find("on_add_child");
+
+    if (iter != substitutes.end()) {
+        if (iter->second != nullptr) {
+            auto call = (std::function<void(const group_check_request &)> *)iter->second;
+            (*call)(request);
+        }
+    } else {
+        dsn::replication::replica::on_add_child(request);
     }
 }
