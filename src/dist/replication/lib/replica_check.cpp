@@ -165,6 +165,8 @@ void replica::on_group_check(const group_check_request &request,
         }
         if (request.child_gpid.get_app_id() > 0) { // secondary create child replica
             on_add_child(request);
+        } else {
+            _child_gpid.set_app_id(0);
         }
         break;
     case partition_status::PS_POTENTIAL_SECONDARY:
