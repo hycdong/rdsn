@@ -58,7 +58,14 @@ void partition_resolver_simple::resolve(uint64_t partition_hash,
     if (_app_partition_count != -1) {
         idx = get_partition_index(_app_partition_count, partition_hash);
         rpc_address target;
-        if (ERR_OK == get_address(idx, target)) {
+
+        auto err = get_address(idx, target);
+        // child partition not ready, requests should be redirected to its parent
+        if (err == ERR_CHILD_NOT_READY) {
+            idx -= get_partition_count() / 2;
+            err = get_address(idx, target);
+        }
+        if (err == ERR_OK) {
             callback(resolve_result{ERR_OK, target, {_app_id, idx}});
             return;
         }
@@ -447,6 +454,7 @@ rpc_address partition_resolver_simple::get_address(const partition_configuration
 
 // ERR_OBJECT_NOT_FOUND  not in cache.
 // ERR_IO_PENDING        in cache but invalid, remove from cache.
+// ERR_CHILD_NOT_READY   child partition is not ready.
 // ERR_OK                in cache and valid
 error_code partition_resolver_simple::get_address(int partition_index, /*out*/ rpc_address &addr)
 {
@@ -456,6 +464,9 @@ error_code partition_resolver_simple::get_address(int partition_index, /*out*/ r
         auto it = _config_cache.find(partition_index);
         if (it != _config_cache.end()) {
             // config = it->second->config;
+            if (it->second->config.ballot < 0) {
+                return ERR_CHILD_NOT_READY;
+            }
             addr = get_address(it->second->config);
             if (addr.is_invalid()) {
                 return ERR_IO_PENDING;
