@@ -58,6 +58,7 @@ replica::replica(
     _options = &stub->options();
     init_state();
     _config.pid = gpid;
+    _partition_version = app.partition_count - 1;
 
     std::stringstream ss;
     ss << "private.log.size(MB)"
@@ -125,6 +126,23 @@ replica::~replica(void)
 
 void replica::on_client_read(task_code code, dsn_message_t request)
 {
+    if (_partition_version == -1) {
+        derror("%s: current partition is not available coz during partition split", name());
+        response_client_message(true, request, ERR_BUSY_SPLITTING);
+        return;
+    }
+
+    auto msg = (dsn::message_ex *)request;
+    auto partition_hash = msg->header->client.partition_hash;
+    if ((_partition_version & partition_hash) != get_gpid().get_partition_index()) {
+        derror("%s: receive request with wrong hash value, partition_version=%d, hash=%" PRId64,
+               name(),
+               _partition_version,
+               partition_hash);
+        response_client_message(true, request, ERR_PARENT_PARTITION_MISUSED);
+        return;
+    }
+
     if (status() == partition_status::PS_INACTIVE ||
         status() == partition_status::PS_POTENTIAL_SECONDARY) {
         derror("%s: invalid status: partition_status=%s", name(), enum_to_string(status()));

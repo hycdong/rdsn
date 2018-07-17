@@ -62,7 +62,7 @@ void partition_resolver_simple::resolve(uint64_t partition_hash,
         auto err = get_address(idx, target);
         // child partition not ready, requests should be redirected to its parent
         if (err == ERR_CHILD_NOT_READY) {
-            idx -= get_partition_count() / 2;
+            idx -= _app_partition_count / 2;
             err = get_address(idx, target);
         }
         if (err == ERR_OK) {
@@ -279,7 +279,9 @@ void partition_resolver_simple::query_config_reply(error_code err,
                         _app_id,
                         resp.app_id);
             }
-            if (_app_partition_count != -1 && _app_partition_count != resp.partition_count) {
+
+            if (_app_partition_count != -1 && _app_partition_count != resp.partition_count &&
+                _app_partition_count * 2 != resp.partition_count) {
                 dassert(false,
                         "partition count is changed (mostly the app was removed and created with "
                         "the same name), local Vs remote: %u vs %u ",
