@@ -335,6 +335,16 @@ void replica::execute_mutation(mutation_ptr &mu)
             dassert(_private_log != nullptr, "");
         }
         break;
+
+    case partition_status::PS_PARTITION_SPLIT:
+        if (_split_states.is_caught_up) {
+            dassert(_app->last_committed_decree() + 1 == d,
+                    "%" PRId64 " VS %" PRId64 "",
+                    _app->last_committed_decree() + 1,
+                    d);
+            err = _app->apply_mutation(mu);
+        }
+
     case partition_status::PS_ERROR:
         break;
     default:
@@ -397,7 +407,6 @@ decree replica::last_prepared_decree() const
 }
 
 bool replica::verbose_commit_log() const { return _stub->_verbose_commit_log; }
-
 void replica::close()
 {
     dassert(status() == partition_status::PS_ERROR || status() == partition_status::PS_INACTIVE,
