@@ -11,6 +11,8 @@ struct mutation_header
     4:i64                  log_offset;
     5:i64                  last_committed_decree;
     6:i64                  timestamp;
+    // only used during split, if true, this mutation should send to child to execute 2pc procedure
+    7:bool                 sync_to_child;
 }
 
 struct mutation_update

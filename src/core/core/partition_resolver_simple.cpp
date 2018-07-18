@@ -91,16 +91,27 @@ void partition_resolver_simple::on_access_failure(int partition_index, error_cod
         err != ERR_NOT_ENOUGH_MEMBER // primary won't change and we only r/w on primary in this
                                      // provider
         ) {
-        ddebug("clear partition configuration cache %d.%d due to access failure %s",
-               _app_id,
-               partition_index,
-               err.to_string());
+        if (err == ERR_PARENT_PARTITION_MISUSED) {
+            ddebug("clear all partition configuration cache due to access failure %s at %s.%s",
+                   err.to_string(),
+                   _app_id,
+                   partition_index);
+            {
+                zauto_write_lock l(_config_lock);
+                _app_partition_count = -1;
+            }
+        } else {
+            ddebug("clear partition configuration cache %d.%d due to access failure %s",
+                   _app_id,
+                   partition_index,
+                   err.to_string());
 
-        {
-            zauto_write_lock l(_config_lock);
-            auto it = _config_cache.find(partition_index);
-            if (it != _config_cache.end()) {
-                _config_cache.erase(it);
+            {
+                zauto_write_lock l(_config_lock);
+                auto it = _config_cache.find(partition_index);
+                if (it != _config_cache.end()) {
+                    _config_cache.erase(it);
+                }
             }
         }
     }

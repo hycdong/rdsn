@@ -57,6 +57,7 @@ class mutation : public ref_counter
 {
 public:
     mutation();
+    mutation(const mutation_ptr &old_mu);
     virtual ~mutation();
 
     // state inquery
@@ -77,6 +78,7 @@ public:
     {
         return _left_potential_secondary_ack_count;
     }
+    unsigned int left_child_ack_count() const { return _left_child_ack_count; }
     ::dsn::task_ptr &log_task() { return _log_task; }
     node_tasks &remote_tasks() { return _prepare_or_commit_tasks; }
     bool is_prepare_close_to_timeout(int gap_ms, int timeout_ms)
@@ -102,11 +104,13 @@ public:
     {
         return --_left_potential_secondary_ack_count;
     }
+    unsigned int decrease_left_child_ack_count() { return --_left_child_ack_count; }
     void set_left_secondary_ack_count(unsigned int count) { _left_secondary_ack_count = count; }
     void set_left_potential_secondary_ack_count(unsigned int count)
     {
         _left_potential_secondary_ack_count = count;
     }
+    void set_left_child_ack_count(unsigned int count) { _left_child_ack_count = count; }
     int clear_prepare_or_commit_tasks();
     void wait_log_task() const;
     uint64_t prepare_ts_ms() const { return _prepare_ts_ms; }
@@ -145,7 +149,8 @@ private:
         {
             unsigned int _not_logged : 1;
             unsigned int _left_secondary_ack_count : 15;
-            unsigned int _left_potential_secondary_ack_count : 16;
+            unsigned int _left_potential_secondary_ack_count : 8;
+            unsigned int _left_child_ack_count : 8;
         };
         uint32_t _private0;
     };

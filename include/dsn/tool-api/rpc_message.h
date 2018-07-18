@@ -155,6 +155,7 @@ public:
                                               uint64_t partition_hash = 0);
 
     DSN_API static message_ex *create_receive_message_with_standalone_header(const blob &data);
+    DSN_API static message_ex *create_receive_message_with_fresh_header(const message_ex &old_msg);
     DSN_API message_ex *create_response();
     DSN_API message_ex *copy(bool clone_content, bool copy_for_receive);
     DSN_API message_ex *copy_and_prepare_send(bool clone_content);

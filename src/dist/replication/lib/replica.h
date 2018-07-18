@@ -385,6 +385,19 @@ private:
     virtual void check_child_state();
     virtual void check_parent_state(gpid child_gpid, ballot child_ballot);
 
+    // parent copy mutations to child during partition split
+    void copy_mutation(mutation_ptr &mu);
+
+    // child add mutation into prepare list and private log
+    // after child copy prepare list, before child replica become active
+    void on_copy_mutation(mutation_ptr &mu);
+
+    // child replica send ack to its parent when copy mutation synchronously
+    void ack_parent(dsn::error_code ec, mutation_ptr &mu);
+
+    // parent replica handle child ack when child copy mutation synchronously
+    void on_copy_mutation_reply(dsn::error_code ec, ballot b, decree d);
+
 private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;
@@ -466,7 +479,7 @@ private:
     // partition split
     dsn::gpid _child_gpid;  // TODO(hyc): add comments, init
     ballot _child_ballot;   // ballot when starting partition split TODO(hyc):init
-    int _partition_version; // TODO(hyc): init
+    int _partition_version; // TODO(hyc): comments
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

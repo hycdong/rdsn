@@ -878,6 +878,10 @@ void replica::on_update_group_partition_count_reply(
     }
 }
 
+///
+/// register child replicas on meta
+///
+
 void replica::register_child_on_meta(ballot b) // on primary parent
 {
     if (status() != partition_status::PS_PRIMARY) {
@@ -1018,6 +1022,75 @@ void replica::on_register_child_on_meta_reply(
 
     if (response->parent_config.ballot >= get_ballot()) {
         update_configuration(response->parent_config);
+    }
+}
+
+///
+/// child replica copy mutations of parent
+///
+
+void replica::on_copy_mutation(mutation_ptr &mu) // on child
+{
+    // 1. check status - partition_split
+    if (status() != partition_status::PS_PARTITION_SPLIT) {
+        dinfo_f("{} not during partition split, status is {}, current ballot is {}, ballot of "
+                "mutation is {}, ignore copy mutaition",
+                name(),
+                enum_to_string(status()),
+                get_ballot(),
+                mu->data.header.ballot);
+
+        _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [mu](replica_ptr r) {
+            r->_child_gpid.set_app_id(0);
+            r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
+        });
+
+        return;
+    }
+
+    // 2. check status - finish copy prepare list
+    if (!_split_states.is_prepare_list_copied) {
+        dinfo_f("{} not copy prepare list from parent, ignore copy mutation");
+        return;
+    }
+
+    // 3. ballot not match
+    if (mu->data.header.ballot > get_ballot()) {
+        dwarn_f("{} local ballot is smaller than request ballot, local ballot is {}, ballot of "
+                "mutation is {}",
+                name(),
+                get_ballot(),
+                mu->data.header.ballot);
+        _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [](replica_ptr r) {
+            r->_child_gpid.set_app_id(0);
+        });
+        update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
+        return;
+    }
+
+    ddebug_f("{} start to copy mutation:{}", name(), mu->name());
+
+    // 4. prepare mu as secondary
+    mu->data.header.pid = get_gpid();
+    _prepare_list->prepare(mu, partition_status::PS_SECONDARY);
+
+    if (!mu->data.header.sync_to_child) {
+        // 5. child async copy mutation
+        if (!mu->is_logged()) {
+            mu->set_logged();
+        }
+        _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
+    } else {
+        // 6. child sync copy mutation
+        mu->log_task() = _stub->_log->append(mu,
+                                             LPC_WRITE_REPLICATION_LOG,
+                                             &_tracker,
+                                             std::bind(&replica::on_append_log_completed,
+                                                       this,
+                                                       mu,
+                                                       std::placeholders::_1,
+                                                       std::placeholders::_2),
+                                             get_gpid().thread_hash());
     }
 }
 

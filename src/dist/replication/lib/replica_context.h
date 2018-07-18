@@ -110,17 +110,21 @@ public:
 
     uint64_t last_prepare_ts_ms;
 
-    // used during partition split, cache child address which catch up parent
-    std::set<dsn::rpc_address> child_address; // TODO(hyc): init
+    // used during partition split, cache child addresses which catch up parent replica
+    std::set<dsn::rpc_address> child_address;
 
-    // used during partition split, whether read write request should send to child
-    bool is_sync_to_child; // TODO(hyc): init
+    // used during partition split, whether write request should send to child synchronously
+    // if is_sync_to_child = true, mutation should recevie prepare ack from child replica during 2pc
+    // else if _child_gpid.get_app_id() > 0, mutation should be copied to child asynchronously,
+    // child is learning data of its parent asynchronously
+    // else, current replica is not during partition split
+    bool is_sync_to_child;
 
     // replica->meta register child on meta server and remote storage
-    dsn::task_ptr register_child_task; // TODO(hyc): init
+    dsn::task_ptr register_child_task;
 
     // replica-> meta query child partition configuration
-    dsn::task_ptr query_child_state_task; // TODO(hyc): init
+    dsn::task_ptr query_child_state_task;
 };
 
 class secondary_context
