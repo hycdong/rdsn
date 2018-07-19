@@ -1292,7 +1292,7 @@ void cold_backup_context::file_upload_complete(const std::string &filename)
     _file_status[filename] = file_status::FileUploadComplete;
 }
 
-void partition_split_context::cleanup(bool force)
+bool partition_split_context::cleanup(bool force)
 {
     if (!force) {
         CLEANUP_TASK_ALWAYS(check_state_task)
@@ -1309,7 +1309,7 @@ void partition_split_context::cleanup(bool force)
     return true;
 }
 
-void partition_split_context::is_cleaned()
+bool partition_split_context::is_cleaned()
 {
     return check_state_task == nullptr && async_learn_task == nullptr;
 }
