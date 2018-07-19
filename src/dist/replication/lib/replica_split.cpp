@@ -1012,8 +1012,8 @@ void replica::on_register_child_on_meta_reply(
                 _app_info.partition_count,
                 response->app.partition_count);
         update_group_partition_count(response->app.partition_count, false);
-
-        // TODO(hyc): make child replica become available
+        // make child replica become available
+        child_partition_active(response->child_config);
     }
 
     _primary_states.register_child_task = nullptr;

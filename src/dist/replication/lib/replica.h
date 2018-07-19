@@ -398,6 +398,9 @@ private:
     // parent replica handle child ack when child copy mutation synchronously
     void on_copy_mutation_reply(dsn::error_code ec, ballot b, decree d);
 
+    // child partitions have been registered on meta, could be active
+    void child_partition_active(const partition_configuration &config);
+
 private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;

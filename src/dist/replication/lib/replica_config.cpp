@@ -111,7 +111,8 @@ void replica::assign_primary(configuration_update_request &proposal)
     }
 
     if (proposal.type == config_type::CT_UPGRADE_TO_PRIMARY &&
-        (status() != partition_status::PS_SECONDARY || _secondary_states.checkpoint_is_running)) {
+        (status() != partition_status::PS_SECONDARY || _secondary_states.checkpoint_is_running) &&
+        status() != partition_status::PS_PARTITION_SPLIT) {
         dwarn(
             "%s: invalid upgrade to primary proposal as the node is in %s or during checkpointing",
             name(),
@@ -367,6 +368,8 @@ void replica::update_configuration_on_meta_server(config_type::type type,
                 "");
         dassert(
             newConfig.primary == node, "%s VS %s", newConfig.primary.to_string(), node.to_string());
+    } else if (type != config_type::CT_REGISTER_CHILD) {
+        dassert(false, "invalid config_type, type = %s", enum_to_string(type));
     } else if (type != config_type::CT_ASSIGN_PRIMARY &&
                type != config_type::CT_UPGRADE_TO_PRIMARY) {
         dassert(status() == partition_status::PS_PRIMARY,
@@ -560,11 +563,11 @@ bool replica::update_configuration(const partition_configuration &config)
     replica_configuration rconfig;
     replica_helper::get_replica_config(config, _stub->_primary_address, rconfig);
 
+    // TODO(hyc): consider!!!
     if (rconfig.status == partition_status::PS_PRIMARY &&
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
-        // reset partition split context
-        // TODO(hyc): consider
+        _primary_states.child_address.clear();
         _child_gpid.set_app_id(0);
         _partition_version = -1;
         query_child_state();
@@ -603,7 +606,13 @@ bool replica::is_same_ballot_status_change_allowed(partition_status::type olds,
 bool replica::update_local_configuration(const replica_configuration &config,
                                          bool same_ballot /* = false*/)
 {
-    // TODO(hyc): handle PS_SPLIT_PARTITION status
+    // TODO(hyc): delete this commends
+    // this function is called by:
+    // 1. config sync from meta, local status -> meta status
+    //    split -> primary or split -> secondary
+    // 2. replica update status during config, learn or split (mostly error, inactive status)
+    //    split -> error
+    // (other transfer is invalid)
 
     dassert(config.ballot > get_ballot() || (same_ballot && config.ballot == get_ballot()),
             "invalid ballot, %" PRId64 " VS %" PRId64 "",
@@ -691,6 +700,17 @@ bool replica::update_local_configuration(const replica_configuration &config,
             }
         }
         break;
+    case partition_status::PS_PARTITION_SPLIT:
+        if (config.status == partition_status::PS_INACTIVE) {
+            dwarn("%s: status change from %s @ %" PRId64 " to %s @ %" PRId64 " is not allowed",
+                  name(),
+                  enum_to_string(old_status),
+                  old_ballot,
+                  enum_to_string(config.status),
+                  config.ballot);
+            return false;
+        }
+        break;
     default:
         break;
     }
@@ -700,6 +720,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
     _config = config;
     // we should durable the new ballot to prevent the inconsistent state
     if (_config.ballot > old_ballot) {
+        _primary_states.child_address.clear();
         dsn::error_code result = _app->update_init_info_ballot_and_decree(this);
         if (result == dsn::ERR_OK) {
             ddebug("%s: update ballot to init file from %" PRId64 " to %" PRId64 " OK",
@@ -831,6 +852,27 @@ bool replica::update_local_configuration(const replica_configuration &config,
             dassert(false, "invalid execution path");
         }
         break;
+    case partition_status::PS_PARTITION_SPLIT:
+        switch (config.status) {
+        case partition_status::PS_PRIMARY:
+            _split_states.cleanup(true);
+            init_group_check();
+            replay_prepare_list();
+            break;
+        case partition_status::PS_SECONDARY:
+            _split_states.cleanup(true);
+            break;
+        case partition_status::PS_POTENTIAL_SECONDARY:
+            dassert(false, "invalid execution path");
+            break;
+        case partition_status::PS_INACTIVE:
+            break;
+        case partition_status::PS_ERROR:
+            _split_states.cleanup(false);
+            break;
+        default:
+            dassert(false, "invalid execution path");
+        }
     case partition_status::PS_INACTIVE:
         if (config.status != partition_status::PS_PRIMARY || !_inactive_is_transient) {
             // except for case 1, we need stop uploading backup checkpoint
@@ -1188,14 +1230,18 @@ void replica::on_query_child_state_reply(error_code ec,
         add_child_request.config.ballot = get_ballot();
         _primary_states.is_sync_to_child = false;
 
-        std::cout << "haha" << std::endl;
-
         on_add_child(add_child_request); // parent create child replica
         broadcast_group_check();         // secondaries create child during group check
 
         _partition_version = _app_info.partition_count - 1;
         _app->set_partition_version(_partition_version);
     }
+}
+
+void replica::child_partition_active(const partition_configuration &config)
+{
+    _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();
+    update_configuration(config);
 }
 }
 } // namespace
