@@ -533,7 +533,6 @@ private:
 
 typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
 
-// TODO(hyc): add comments
 class partition_split_context
 {
 public:

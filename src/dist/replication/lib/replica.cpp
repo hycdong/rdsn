@@ -407,6 +407,7 @@ decree replica::last_prepared_decree() const
 }
 
 bool replica::verbose_commit_log() const { return _stub->_verbose_commit_log; }
+
 void replica::close()
 {
     dassert(status() == partition_status::PS_ERROR || status() == partition_status::PS_INACTIVE,
@@ -439,6 +440,7 @@ void replica::close()
         dassert(_secondary_states.is_cleaned(), "secondary context is not cleared");
         dassert(_potential_secondary_states.is_cleaned(),
                 "potential secondary context is not cleared");
+        dassert(_split_states.is_cleaned(), "partition split context is not cleared");
     }
 
     // for partition_status::PS_ERROR, context cleanup is done here as they may block
@@ -448,6 +450,9 @@ void replica::close()
 
         r = _potential_secondary_states.cleanup(true);
         dassert(r, "potential secondary context is not cleared");
+
+        r = _split_states.cleanup(true);
+        dassert(r, "partition split context is not cleared");
     }
 
     if (_private_log != nullptr) {

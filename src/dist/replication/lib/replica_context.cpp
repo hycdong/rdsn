@@ -1291,5 +1291,27 @@ void cold_backup_context::file_upload_complete(const std::string &filename)
     _cur_upload_file_cnt -= 1;
     _file_status[filename] = file_status::FileUploadComplete;
 }
+
+void partition_split_context::cleanup(bool force)
+{
+    if (!force) {
+        CLEANUP_TASK_ALWAYS(check_state_task)
+    } else {
+        CLEANUP_TASK(check_state_task, force)
+    }
+
+    CLEANUP_TASK(async_learn_task, force)
+
+    is_prepare_list_copied = false;
+    is_caught_up = false;
+    parent_gpid.set_app_id(0);
+
+    return true;
+}
+
+void partition_split_context::is_cleaned()
+{
+    return check_state_task == nullptr && async_learn_task == nullptr;
+}
 }
 } // end namespace
