@@ -1010,10 +1010,14 @@ void replica::on_register_child_on_meta_reply(
         dassert(_app_info.partition_count * 2 == response->app.partition_count,
                 "local partition count is %d, remote partition count is %d",
                 _app_info.partition_count,
-                response->app.partition_count);
-        update_group_partition_count(response->app.partition_count, false);
+                response->app.partition_count);       
         // make child replica become available
-        child_partition_active(response->child_config);
+        _stub->on_exec(LPC_SPLIT_PARTITION,
+                       response->child_config.pid,
+                       std::bind(&replica::child_partition_active,
+                                 std::placeholders::_1,
+                                 response->child_config));
+        update_group_partition_count(response->app.partition_count, false);
     }
 
     _primary_states.register_child_task = nullptr;
