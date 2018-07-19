@@ -824,7 +824,7 @@ void server_state::on_config_sync(dsn_message_t msg)
                 // request
                 if (cc.stage == config_status::pending_remote_sync) {
                     configuration_update_request *req = cc.pending_sync_request.get();
-                    if (req->node == request.node)
+                    if (req->node == request.node || req == nullptr)
                         return false;
                 }
 
@@ -1102,6 +1102,7 @@ void server_state::create_app(dsn_message_t msg)
             info.max_replica_count = request.options.replica_count;
             info.partition_count = request.options.partition_count;
             info.status = app_status::AS_CREATING;
+            info.init_partition_count = request.options.partition_count;
 
             app = app_state::create(info);
             app->helpers->pending_response = msg;
@@ -1381,9 +1382,6 @@ void server_state::update_configuration_locally(
     partition_configuration &old_cfg = app.partitions[gpid.get_partition_index()];
     partition_configuration &new_cfg = config_request->config;
 
-    // TODO(hyc): remove
-    //    std::cout << "type is " << config_request->type << std::endl;
-
     int min_2pc_count = _meta_svc->get_options().mutation_2pc_min_replica_count;
     health_status old_health_status = partition_health_status(old_cfg, min_2pc_count);
     health_status new_health_status = partition_health_status(new_cfg, min_2pc_count);
@@ -1583,7 +1581,6 @@ void server_state::on_update_configuration_on_remote_reply(
             dsn_msg_release_ref(cc.msg);
             cc.msg = nullptr;
         }
-
         _meta_svc->get_balancer()->reconfig({&_all_apps, &_nodes}, *config_request);
         if (config_request->type == config_type::CT_DROP_PARTITION) {
             process_one_partition(app);
@@ -2367,7 +2364,7 @@ bool server_state::check_all_partitions()
             partition_configuration &pc = app->partitions[i];
             config_context &cc = app->helpers->contexts[i];
 
-            if (cc.stage != config_status::pending_remote_sync) {
+            if (pc.ballot != invalid_ballot && cc.stage != config_status::pending_remote_sync) {
                 configuration_proposal_action action;
                 pc_status s =
                     _meta_svc->get_balancer()->cure({&_all_apps, &_nodes}, pc.pid, action);
