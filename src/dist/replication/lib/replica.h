@@ -480,9 +480,12 @@ private:
     bool _is_initializing;       // when initializing, switching to primary need to update ballot
 
     // partition split
-    dsn::gpid _child_gpid;  // TODO(hyc): add comments, init
-    ballot _child_ballot;   // ballot when starting partition split TODO(hyc):init
-    int _partition_version; // TODO(hyc): comments
+    // during partition split: _child_gpid(app_id, partition_index+partition_count)
+    // not during partition split: _child_gpid.app_id = 0
+    dsn::gpid _child_gpid;
+    ballot _child_ballot; // ballot when starting partition split
+    // _partition_version = partition_count-1, _partition_version = -1 when reject read/write
+    int _partition_version;
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

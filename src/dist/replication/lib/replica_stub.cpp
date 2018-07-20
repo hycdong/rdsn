@@ -996,6 +996,10 @@ void replica_stub::get_local_replicas(std::vector<replica_info> &replicas)
 
     for (auto &pairs : _replicas) {
         replica_ptr &rep = pairs.second;
+        if (rep->status() == partition_status::PS_PARTITION_SPLIT) {
+            dinfo("%s is during partition split", name());
+            continue;
+        }
         replica_info info;
         get_replica_info(info, rep);
         replicas.push_back(std::move(info));
@@ -1193,7 +1197,8 @@ void replica_stub::on_node_query_reply_scatter(replica_stub_ptr this_,
 void replica_stub::on_node_query_reply_scatter2(replica_stub_ptr this_, gpid id)
 {
     replica_ptr replica = get_replica(id);
-    if (replica != nullptr && replica->status() != partition_status::PS_POTENTIAL_SECONDARY) {
+    if (replica != nullptr && replica->status() != partition_status::PS_POTENTIAL_SECONDARY &&
+        replica->status() != partition_status::PS_PARTITION_SPLIT) {
         if (replica->status() == partition_status::PS_INACTIVE &&
             now_ms() - replica->create_time_milliseconds() <
                 _options.gc_memory_replica_interval_ms) {
@@ -2240,8 +2245,6 @@ void replica_stub::add_split_replica(rpc_address primary_address,
         ddebug_f("Failed to create child replica ({}.{}), ignore it and wait next run",
                  child_gpid.get_app_id(),
                  child_gpid.get_partition_index());
-
-        // TODO(hyc): comments
         on_exec(
             LPC_SPLIT_PARTITION, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
     }
