@@ -852,6 +852,17 @@ void greedy_load_balancer::greedy_balancer()
         if (app->status != app_status::AS_AVAILABLE)
             continue;
 
+        bool is_skip = false;
+        for (auto &partition : app->partitions) {
+            if (partition.ballot < 0) {
+                dinfo("app(name:%s id:%d) is splitting, skip.", app->app_name.c_str(), app->app_id);
+                is_skip = true;
+                break;
+            }
+        }
+        if (is_skip)
+            continue;
+
         bool enough_information = primary_balancer_per_app(app);
         if (!enough_information) {
             // Even if we don't have enough info for current app,
