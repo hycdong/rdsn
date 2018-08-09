@@ -153,7 +153,13 @@ public:
     replication_options &options() { return _options; }
     bool is_connected() const { return NS_Connected == _state; }
 
-    std::string get_replica_dir(const char *app_type, gpid id, bool create_new = true);
+    // TODO(hyc): add comments
+    virtual replica_ptr
+    get_replica_permit_create_new(gpid pid, app_info *app, const std::string &parent_dir);
+    std::string get_replica_dir(const char *app_type,
+                                gpid id,
+                                bool create_new = true,
+                                const std::string &parent_dir = "");
 
     //
     // helper methods

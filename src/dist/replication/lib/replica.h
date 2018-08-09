@@ -78,8 +78,11 @@ public:
     //    routines for replica stub
     //
     static replica *load(replica_stub *stub, const char *dir);
-    static replica *
-    newr(replica_stub *stub, gpid gpid, const app_info &app, bool restore_if_necessary);
+    static replica *newr(replica_stub *stub,
+                         gpid gpid,
+                         const app_info &app,
+                         bool restore_if_necessary,
+                         const std::string &parent_dir = "");
 
     // return true when the mutation is valid for the current replica
     bool replay_mutation(mutation_ptr &mu, bool is_private);

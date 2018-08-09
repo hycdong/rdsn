@@ -2147,19 +2147,26 @@ void replica_stub::close()
     }
 }
 
-std::string replica_stub::get_replica_dir(const char *app_type, gpid id, bool create_new)
+std::string replica_stub::get_replica_dir(const char *app_type,
+                                          gpid id,
+                                          bool create_new,
+                                          const std::string &parent_dir)
 {
     char buffer[256];
     sprintf(buffer, "%s.%s", id.to_string(), app_type);
     std::string ret_dir;
     for (auto &dir : _options.data_dirs) {
         std::string cur_dir = utils::filesystem::path_combine(dir, buffer);
-        if (utils::filesystem::directory_exists(cur_dir)) {
+        if (utils::filesystem::directory_exists(cur_dir) ||
+            parent_dir.substr(0, dir.size() + 1) == dir + "/") {
             if (!ret_dir.empty()) {
                 dassert(
                     false, "replica dir conflict: %s <--> %s", cur_dir.c_str(), ret_dir.c_str());
             }
             ret_dir = cur_dir;
+            if (parent_dir.substr(0, dir.size() + 1) == dir + "/") {
+                _fs_manager.add_replica(id, ret_dir);
+            }
         }
     }
     if (ret_dir.empty() && create_new) {
@@ -2192,7 +2199,7 @@ void replica_stub::on_exec(task_code code,
         return;
     }
 
-    dsn::task_tracker *tracker = &_tracker;
+    dsn::task_tracker *tracker = nullptr;
     int hash = 0;
     if (get_replica(pid)) {
         tracker = get_replica(pid).get()->tracker();
@@ -2226,19 +2233,44 @@ void replica_stub::on_exec(task_code code,
         delay);
 }
 
+replica_ptr
+replica_stub::get_replica_permit_create_new(gpid pid, app_info *app, const std::string &parent_dir)
+{
+    zauto_write_lock l(_replicas_lock);
+    auto it = _replicas.find(pid);
+    if (it != _replicas.end()) {
+        return it->second;
+    } else {
+        if (_opening_replicas.find(pid) != _opening_replicas.end()) {
+            ddebug_f("cannnot create new replica coz it is under open");
+            return nullptr;
+        } else if (_closing_replicas.find(pid) != _closing_replicas.end()) {
+            ddebug_f("cannnot create new replica coz it is under close");
+            return nullptr;
+        } else if (_closed_replicas.find(pid) != _closed_replicas.end()) {
+            ddebug_f("cannnot create new replica coz it is closed");
+            return nullptr;
+        } else {
+            replica *rep = replica::newr(this, pid, *app, false, parent_dir);
+            if (rep != nullptr) {
+                auto pr = _replicas.insert(replicas::value_type(pid, rep));
+                dassert(pr.second, "replica %s has been existed", rep->name());
+                _counter_replicas_count->increment();
+                _closed_replicas.erase(pid);
+            }
+            return rep;
+        }
+    }
+}
+
 void replica_stub::add_split_replica(rpc_address primary_address,
                                      app_info app,
                                      ballot init_ballot,
                                      gpid child_gpid,
                                      gpid parent_gpid,
                                      const std::string &parent_dir)
-{ // TODO(hyc): use of parent_dir
-    // get child replica instance
-    replica_ptr child_replica = get_replica(child_gpid);
-    if (child_replica == nullptr) {
-        child_replica = replica::newr(this, child_gpid, std::move(app), false);
-    }
-
+{
+    replica_ptr child_replica = get_replica_permit_create_new(child_gpid, &app, parent_dir);
     if (child_replica != nullptr) {
         child_replica->init_child_replica(parent_gpid, primary_address, init_ballot);
     } else {
