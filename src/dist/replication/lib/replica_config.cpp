@@ -368,7 +368,7 @@ void replica::update_configuration_on_meta_server(config_type::type type,
                 "");
         dassert(
             newConfig.primary == node, "%s VS %s", newConfig.primary.to_string(), node.to_string());
-    } else if (type != config_type::CT_REGISTER_CHILD) {
+    } else if (type == config_type::CT_REGISTER_CHILD) {
         dassert(false, "invalid config_type, type = %s", enum_to_string(type));
     } else if (type != config_type::CT_ASSIGN_PRIMARY &&
                type != config_type::CT_UPGRADE_TO_PRIMARY) {
@@ -569,7 +569,7 @@ bool replica::update_configuration(const partition_configuration &config)
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
         _primary_states.child_address.clear();
         _child_gpid.set_app_id(0);
-        _partition_version = -1;
+        // _partition_version = -1;
         query_child_state();
     }
 
@@ -873,6 +873,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
         default:
             dassert(false, "invalid execution path");
         }
+        break;
     case partition_status::PS_INACTIVE:
         if (config.status != partition_status::PS_PRIMARY || !_inactive_is_transient) {
             // except for case 1, we need stop uploading backup checkpoint
@@ -883,6 +884,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
         case partition_status::PS_PRIMARY:
             dassert(_inactive_is_transient, "must be in transient state for being primary next");
             _inactive_is_transient = false;
+
             init_group_check();
             replay_prepare_list();
             break;
@@ -1087,6 +1089,7 @@ void replica::check_partition_count(int partition_count)
                  _app_info.partition_count,
                  partition_count);
         if (_child_gpid.get_app_id() <= 0) {
+            // TODO(hyc): consider partition_version???
             _partition_version = -1;
             query_child_state();
         }
@@ -1227,6 +1230,7 @@ void replica::on_query_child_state_reply(error_code ec,
         group_check_request add_child_request;
         add_child_request.app = _app_info;
         add_child_request.child_gpid = child_gpid;
+        _primary_states.get_replica_config(status(), add_child_request.config);
         add_child_request.config.ballot = get_ballot();
         _primary_states.is_sync_to_child = false;
 

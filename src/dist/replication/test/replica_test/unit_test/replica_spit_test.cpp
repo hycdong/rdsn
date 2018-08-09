@@ -813,7 +813,6 @@ void replication_service_test_app::on_update_group_partition_count_test()
     {
         std::cout << "case2. child not catch up" << std::endl;
         update_group_partition_count_response response;
-        child_replica->_split_states.parent_gpid.set_app_id(0);
         child_replica->_split_states.is_caught_up = false;
 
         child_replica->on_update_group_partition_count(request, response);
@@ -821,7 +820,6 @@ void replication_service_test_app::on_update_group_partition_count_test()
 
         ASSERT_EQ(dsn::ERR_VERSION_OUTDATED, response.err);
 
-        child_replica->_split_states.parent_gpid.set_app_id(1);
         child_replica->_split_states.is_caught_up = true;
     }
 

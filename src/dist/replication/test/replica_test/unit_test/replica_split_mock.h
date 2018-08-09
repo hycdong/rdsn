@@ -143,6 +143,8 @@ public:
 
     dsn::replication::replica_ptr get_replica(dsn::gpid pid, bool create_if_possible);
     dsn::replication::replica_ptr get_replica(dsn::gpid pid); // override
+    dsn::replication::replica_ptr
+    get_replica_permit_create_new(dsn::gpid pid, dsn::app_info *app, const std::string &parent_dir);
 
     void set_log(mutation_log_ptr log) { _log = log; }
     void set_address(dsn::rpc_address address) { _primary_address = address; }
@@ -260,6 +262,12 @@ dsn::replication::replica_ptr replica_stub_mock::get_replica(dsn::gpid pid, bool
 }
 
 dsn::replication::replica_ptr replica_stub_mock::get_replica(dsn::gpid pid)
+{
+    return get_replica(pid, true);
+}
+
+dsn::replication::replica_ptr replica_stub_mock::get_replica_permit_create_new(
+    dsn::gpid pid, dsn::app_info *app, const std::string &parent_dir)
 {
     return get_replica(pid, true);
 }

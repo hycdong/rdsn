@@ -86,9 +86,10 @@ void meta_split_service::do_app_partition_split(std::shared_ptr<app_state> app,
 
     auto on_write_storage_complete = [app, rpc, this](error_code ec) {
         if (ec == ERR_OK) {
-            ddebug_f("app {} partition split succeed, new partition count is {}",
-                     app->app_name.c_str(),
-                     app->partition_count);
+            ddebug_f(
+                "app {} write new partition count on remote storage, new partition count is {}",
+                app->app_name.c_str(),
+                app->partition_count * 2);
 
             zauto_write_lock l(app_lock());
             app->partition_count *= 2;
@@ -228,7 +229,7 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec, reg
     dsn::gpid parent_gpid = request.parent_config.pid;
     dsn::gpid child_gpid = request.child_config.pid;
 
-    config_context parent_context = app->helpers->contexts[parent_gpid.get_partition_index()];
+    config_context &parent_context = app->helpers->contexts[parent_gpid.get_partition_index()];
 
     if (ec == ERR_TIMEOUT) { // retry register child on remote storage
         parent_context.pending_sync_task =
@@ -241,6 +242,12 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec, reg
                              0,
                              std::chrono::seconds(1));
     } else if (ec == ERR_OK) {
+        ddebug_f("gpid({}.{}) resgiter child gpid({}.{}) on remote storage succeed",
+                 parent_gpid.get_app_id(),
+                 parent_gpid.get_partition_index(),
+                 child_gpid.get_app_id(),
+                 child_gpid.get_partition_index());
+
         std::shared_ptr<configuration_update_request> update_child_request(
             new configuration_update_request);
         update_child_request->config = request.child_config;
