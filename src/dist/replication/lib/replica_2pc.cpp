@@ -113,10 +113,8 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
 
     // check whether mutation should send to its child replica
     if (_primary_states.is_sync_to_child) {
-        dinfo("%s: mutation %s should sync to child", name(), mu->name());
+        ddebug("%s: mutation %s should sync to child", name(), mu->name());
         mu->data.header.sync_to_child = true;
-        mu->set_left_child_ack_count((unsigned int)_primary_states.membership.secondaries.size() +
-                                     1);
     }
 
     // check bounded staleness
@@ -647,14 +645,37 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
 
     const std::vector<dsn_message_t> &prepare_requests = mu->prepare_requests();
     dassert(!prepare_requests.empty(), "mutation = %s", mu->name());
-    for (auto &request : prepare_requests) {
-        reply(request, resp);
-    }
 
     if (err == ERR_OK) {
-        dinfo("%s: mutation %s ack_prepare_message, err = %s", name(), mu->name(), err.to_string());
+        if (mu->is_ready_for_commit()) {
+            for (auto &request : prepare_requests) {
+                reply(request, resp);
+            }
+            dinfo("%s: mutation %s ack_prepare_message, err = %s",
+                  name(),
+                  mu->name(),
+                  err.to_string());
+        } else {
+            // wait child replica ack prepare when mutation should be sync to child
+        }
     } else {
-        dwarn("%s: mutation %s ack_prepare_message, err = %s", name(), mu->name(), err.to_string());
+        // when prepare failed during partition split, both parent and child will try to ack to
+        // primary parent, we should strict prepare only ack once
+        if (mu->is_acked()) {
+            dwarn("%s: mutation %s has been ack_prepare_message, err = %s",
+                  name(),
+                  mu->name(),
+                  err.to_string());
+        } else {
+            for (auto &request : prepare_requests) {
+                reply(request, resp);
+            }
+            mu->set_is_acked();
+            dwarn("%s: mutation %s ack_prepare_message, err = %s",
+                  name(),
+                  mu->name(),
+                  err.to_string());
+        }
     }
 }
 
@@ -682,6 +703,10 @@ void replica::cleanup_preparing_mutations(bool wait)
 void replica::copy_mutation(mutation_ptr &mu)
 {
     dassert(_child_gpid.get_app_id() > 0, "%s child_gpid is invalid", name());
+
+    if (!mu->is_split()) {
+        mu->set_is_split();
+    }
 
     mutation_ptr new_mu = new mutation(mu);
     _stub->on_exec(LPC_SPLIT_PARTITION,
@@ -727,28 +752,35 @@ void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d)
         return;
     }
 
-    ddebug_f("{} handle child({}.{}) copy mutation:{}, ballot is {}, decree is {}, error is {}",
-             name(),
-             _child_gpid.get_app_id(),
-             _child_gpid.get_partition_index(),
-             mu->name(),
-             b,
-             d,
-             ec.to_string());
+    // set child prepare mutation flag
+    if (ec == ERR_OK) {
+        mu->clear_split();
+    } else {
+        dwarn_f("{} handle child({}.{}) copy mutation:{}, ballot is {}, decree is {}, error is {}",
+                name(),
+                _child_gpid.get_app_id(),
+                _child_gpid.get_partition_index(),
+                mu->name(),
+                b,
+                d,
+                ec.to_string());
+    }
 
     // 3. handle child ack
-    if (mu->data.header.ballot >= get_ballot() && partition_status::PS_INACTIVE) {
+    if (mu->data.header.ballot >= get_ballot() && status() != partition_status::PS_INACTIVE) {
         switch (status()) {
         case partition_status::PS_PRIMARY:
-        case partition_status::PS_SECONDARY:
             if (ec != ERR_OK) {
                 handle_local_failure(ec);
-            } else {
-                dassert(mu->left_child_ack_count() > 0, "");
-                if (mu->decrease_left_child_ack_count() == 0) {
-                    do_possible_commit_on_primary(mu);
-                }
             }
+            do_possible_commit_on_primary(mu);
+            break;
+        case partition_status::PS_SECONDARY:
+        case partition_status::PS_POTENTIAL_SECONDARY:
+            if (ec != ERR_OK) {
+                handle_local_failure(ec);
+            }
+            ack_prepare_message(ec, mu);
             break;
         default:
             break;

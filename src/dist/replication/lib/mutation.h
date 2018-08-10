@@ -78,7 +78,6 @@ public:
     {
         return _left_potential_secondary_ack_count;
     }
-    unsigned int left_child_ack_count() const { return _left_child_ack_count; }
     ::dsn::task_ptr &log_task() { return _log_task; }
     node_tasks &remote_tasks() { return _prepare_or_commit_tasks; }
     bool is_prepare_close_to_timeout(int gap_ms, int timeout_ms)
@@ -88,6 +87,8 @@ public:
     uint64_t create_ts_ns() const { return _create_ts_ns; }
     ballot get_ballot() const { return data.header.ballot; }
     decree get_decree() const { return data.header.decree; }
+    bool is_split() const { return _is_split != 0; }
+    bool is_acked() const { return _is_ack != 0; }
 
     // state change
     void set_id(ballot b, decree c);
@@ -104,13 +105,11 @@ public:
     {
         return --_left_potential_secondary_ack_count;
     }
-    unsigned int decrease_left_child_ack_count() { return --_left_child_ack_count; }
     void set_left_secondary_ack_count(unsigned int count) { _left_secondary_ack_count = count; }
     void set_left_potential_secondary_ack_count(unsigned int count)
     {
         _left_potential_secondary_ack_count = count;
     }
-    void set_left_child_ack_count(unsigned int count) { _left_child_ack_count = count; }
     int clear_prepare_or_commit_tasks();
     void wait_log_task() const;
     uint64_t prepare_ts_ms() const { return _prepare_ts_ms; }
@@ -119,6 +118,15 @@ public:
     // >= 1 MB
     bool is_full() const { return _appro_data_bytes >= 1024 * 1024; }
     int appro_data_bytes() const { return _appro_data_bytes; }
+
+    // used during partition split when parent send mutations to child synchronously
+    // _is_split = 1 when child start to prepare this mutation
+    // _is_split = 0 means child finish prepare or not during partition split
+    // _is_ack is used to ensure secondary send prepare ack to primary only once when prepare failed
+    void set_is_split() { _is_split = 1; }
+    void clear_split() { _is_split = 0; }
+    void set_is_acked() { _is_ack = 1; }
+    void clear_acked() { _is_ack = 0; }
 
     // read & write mutation data
     //
@@ -149,8 +157,9 @@ private:
         {
             unsigned int _not_logged : 1;
             unsigned int _left_secondary_ack_count : 15;
-            unsigned int _left_potential_secondary_ack_count : 8;
-            unsigned int _left_child_ack_count : 8;
+            unsigned int _left_potential_secondary_ack_count : 14;
+            unsigned int _is_split : 1;
+            unsigned int _is_ack : 1;
         };
         uint32_t _private0;
     };

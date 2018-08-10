@@ -70,7 +70,7 @@ void replica::on_add_child(const group_check_request &request) // on parent
     _child_gpid = child_gpid;
     _child_ballot = get_ballot();
 
-    //TODO(hyc): consider usage of last_committed_decree
+    // TODO(hyc): consider usage of last_committed_decree
     ddebug_f("{} process add child replica({}, {}), primary is {}, ballot is {}, "
              "status is {}, last_committed_decree is {}",
              name(),
@@ -472,8 +472,7 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                 mu->set_logged();
             }
 
-            //TODO(hyc): info
-            ddebug_f("{} will prepare mutation {}, current count is {}", name(), mu->name(), count);
+            dinfo_f("{} will prepare mutation {}, current count is {}", name(), mu->name(), count);
 
             plist.prepare(mu, partition_status::PS_SECONDARY);
             ++count;
@@ -646,18 +645,9 @@ void replica::on_notify_primary_split_catch_up(
     _primary_states.child_address.clear();
     _primary_states.is_sync_to_child = true;
 
-    // TODO(hyc): consider no mutation before
-//    decree sync_point = 0;
-//    if (_app->last_committed_decree() > 0) {
-//        sync_point = _prepare_list->max_decree() + 1;
-//    }
     decree sync_point = _prepare_list->max_decree() + 1;
 
-    // TODO(hyc): add unit test
     if (!_options->empty_write_disabled) {
-        //TODO(hyc):delete
-        ddebug_f("{} will init an empty write mutation", name());
-
         mutation_ptr mu = new_mutation(invalid_decree);
         mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
         init_prepare(mu, false);
@@ -681,7 +671,6 @@ void replica::check_sync_point(decree sync_point) // on primary parent
              _app->last_committed_decree());
 
     // if valid -> update_group_partition_count, otherwise retry
-    // TODO(hyc): sync_point == 1
     if (_app->last_committed_decree() >= sync_point) {
         update_group_partition_count(_app_info.partition_count * 2, true);
     } else {
@@ -1067,11 +1056,11 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
     // 1. check status - partition_split
     if (status() != partition_status::PS_PARTITION_SPLIT) {
         ddebug_f("{} not during partition split, status is {}, current ballot is {}, ballot of "
-                "mutation is {}, ignore copy mutaition",
-                name(),
-                enum_to_string(status()),
-                get_ballot(),
-                mu->data.header.ballot);
+                 "mutation is {}, ignore copy mutaition",
+                 name(),
+                 enum_to_string(status()),
+                 get_ballot(),
+                 mu->data.header.ballot);
 
         _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [mu](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
@@ -1101,7 +1090,10 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
         return;
     }
 
-    ddebug_f("{} start to copy mutation:{}, sync_to_child:{}", name(), mu->name(), mu->data.header.sync_to_child);
+    ddebug_f("{} start to copy mutation:{}, sync_to_child:{}",
+             name(),
+             mu->name(),
+             mu->data.header.sync_to_child);
 
     // 4. prepare mu as secondary
     mu->data.header.pid = get_gpid();
@@ -1112,12 +1104,9 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
         if (!mu->is_logged()) {
             mu->set_logged();
         }
-//        _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
-        mu->log_task() = _stub->_log->append(mu,
-                                             LPC_WRITE_REPLICATION_LOG,
-                                             &_tracker,
-                                             nullptr,
-                                             get_gpid().thread_hash());
+        //        _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
+        mu->log_task() = _stub->_log->append(
+            mu, LPC_WRITE_REPLICATION_LOG, &_tracker, nullptr, get_gpid().thread_hash());
     } else {
         // 6. child sync copy mutation
         mu->log_task() = _stub->_log->append(mu,

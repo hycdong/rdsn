@@ -242,7 +242,6 @@ void mutation::write_to(binary_writer &writer, dsn_message_t /*to*/) const
                mu->data.header.pid.get_partition_index(),
                mu->data.header.ballot,
                mu->data.header.decree);
-
     return mu;
 }
 
@@ -256,6 +255,7 @@ void mutation::write_to(binary_writer &writer, dsn_message_t /*to*/) const
     writer.write_pod(header.log_offset);
     writer.write_pod(header.last_committed_decree);
     writer.write_pod(header.timestamp);
+    writer.write_pod(header.sync_to_child);
 }
 
 /*static*/ void mutation::read_mutation_header(binary_reader &reader, mutation_header &header)
@@ -298,6 +298,8 @@ void mutation::write_to(binary_writer &writer, dsn_message_t /*to*/) const
     } else {
         dassert(false, "invalid mutation log version: 0x%" PRIx64, version);
     }
+    // add sync_to_child
+    reader.read_pod(header.sync_to_child);
 }
 
 int mutation::clear_prepare_or_commit_tasks()
