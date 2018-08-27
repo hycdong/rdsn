@@ -931,6 +931,7 @@ void replica::register_child_on_meta(ballot b) // on primary parent
 
     update_local_configuration_with_no_ballot_change(partition_status::PS_INACTIVE);
     set_inactive_state_transient(true);
+    _partition_version = -1;
 
     ddebug_f(
         "{} send register child partition({}.{}) to meta, current ballot is {}, child ballot is {}",
