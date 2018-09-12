@@ -92,7 +92,7 @@ void partition_resolver_simple::on_access_failure(int partition_index, error_cod
                                      // provider
         ) {
         if (err == ERR_PARENT_PARTITION_MISUSED) {
-            ddebug("clear all partition configuration cache due to access failure %s at %s.%s",
+            ddebug("clear all partition configuration cache due to access failure %s at %d.%d",
                    err.to_string(),
                    _app_id,
                    partition_index);

@@ -50,7 +50,7 @@ void replica::on_client_write(task_code code, dsn_message_t request)
 
     if (_partition_version == -1) {
         derror("%s: current partition is not available coz during partition split", name());
-        response_client_message(false, request, ERR_BUSY_SPLITTING);
+        response_client_message(false, request, ERR_OBJECT_NOT_FOUND);
         return;
     }
 
@@ -704,7 +704,8 @@ void replica::copy_mutation(mutation_ptr &mu)
 {
     dassert(_child_gpid.get_app_id() > 0, "%s child_gpid is invalid", name());
 
-    if (!mu->is_split()) {
+    // TODO(hyc): add sync_to_child check
+    if (!mu->is_split() && mu->data.header.sync_to_child) {
         mu->set_is_split();
     }
 

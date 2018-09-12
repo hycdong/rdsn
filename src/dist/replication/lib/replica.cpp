@@ -128,7 +128,7 @@ void replica::on_client_read(task_code code, dsn_message_t request)
 {
     if (_partition_version == -1) {
         derror("%s: current partition is not available coz during partition split", name());
-        response_client_message(true, request, ERR_BUSY_SPLITTING);
+        response_client_message(true, request, ERR_OBJECT_NOT_FOUND);
         return;
     }
 

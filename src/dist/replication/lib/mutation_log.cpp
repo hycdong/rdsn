@@ -1341,13 +1341,11 @@ void mutation_log::get_mutation_log_file(gpid pid,
         }
 
         skip_next = (log->previous_log_max_decrees().size() == 0);
-
         // continue checking as this file may be a fault
         if (skip_next)
             continue;
 
         last_max_decree = log->previous_log_max_decrees().begin()->second.max_decree;
-
         // when all possible decrees are not needed
         if (last_max_decree < start_decree) {
             // skip all older logs

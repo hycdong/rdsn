@@ -2274,7 +2274,7 @@ void replica_stub::add_split_replica(rpc_address primary_address,
     if (child_replica != nullptr) {
         child_replica->init_child_replica(parent_gpid, primary_address, init_ballot);
     } else {
-        ddebug_f("Failed to create child replica ({}.{}), ignore it and wait next run",
+        dwarn_f("Failed to create child replica ({}.{}), ignore it and wait next run",
                  child_gpid.get_app_id(),
                  child_gpid.get_partition_index());
         on_exec(

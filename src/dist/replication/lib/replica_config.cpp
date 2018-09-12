@@ -569,7 +569,7 @@ bool replica::update_configuration(const partition_configuration &config)
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
         _primary_states.child_address.clear();
         _child_gpid.set_app_id(0);
-        // _partition_version = -1;
+//        _partition_version = -1;
         query_child_state();
     }
 
@@ -1089,8 +1089,8 @@ void replica::check_partition_count(int partition_count)
                  _app_info.partition_count,
                  partition_count);
         if (_child_gpid.get_app_id() <= 0) {
-            // TODO(hyc): consider partition_version???
-            _partition_version = -1;
+//             TODO(hyc): consider partition_version???
+//            _partition_version = -1;
             query_child_state();
         }
     }
@@ -1114,7 +1114,6 @@ void replica::query_child_state()
 
     std::shared_ptr<query_child_state_request> request(new query_child_state_request);
     request->parent_gpid = get_gpid();
-
     dsn::rpc_address meta_address(_stub->_failure_detector->get_servers());
     rpc::call(
         meta_address,
@@ -1200,7 +1199,7 @@ void replica::on_query_child_state_reply(error_code ec,
 
     if (response->ballot != invalid_ballot ||
         get_gpid().get_partition_index() >= partition_count / 2) {
-        dinfo_f("{} has been register its child replica or current replica is child replica, local "
+        ddebug_f("{} has registered its child replica or current replica is child replica, local "
                 "partition count is {}, remote partition count is {}, response ballot is {}",
                 name(),
                 _app_info.partition_count,
@@ -1210,7 +1209,7 @@ void replica::on_query_child_state_reply(error_code ec,
     } else if (!_primary_states.learners.empty() ||
                _primary_states.membership.secondaries.size() + 1 <
                    _primary_states.membership.max_replica_count) {
-        dinfo_f(
+        ddebug_f(
             "{} there are {} learners or not have enough secondaries(count is {}), wait next run",
             name(),
             _primary_states.learners.size(),
@@ -1218,11 +1217,10 @@ void replica::on_query_child_state_reply(error_code ec,
         _partition_version = _app_info.partition_count - 1;
         _app->set_partition_version(_partition_version);
     } else {
-
+        // add child
         gpid child_gpid(get_gpid().get_app_id(),
                         get_gpid().get_partition_index() + partition_count / 2);
-
-        ddebug_f("{} start add child({}.{})",
+        ddebug_f("{} start to add child({}.{})",
                  name(),
                  child_gpid.get_app_id(),
                  child_gpid.get_partition_index());
@@ -1244,6 +1242,9 @@ void replica::on_query_child_state_reply(error_code ec,
 
 void replica::child_partition_active(const partition_configuration &config)
 {
+    ddebug_f("{} finish partition split and become active", name());
+    // TODO(hyc): should set is false
+    _primary_states.is_sync_to_child = false;
     _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();
     update_configuration(config);
 }

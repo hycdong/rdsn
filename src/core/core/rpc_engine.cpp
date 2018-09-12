@@ -741,13 +741,16 @@ void rpc_engine::call_uri(rpc_address addr, message_ex *request, const rpc_respo
                                   // update gpid when necessary
                                   auto &hdr2 = request->header;
                                   if (hdr2->gpid.value() != result.pid.value()) {
-                                      dassert(hdr2->gpid.value() == 0, "inconsistent gpid");
-                                      hdr2->gpid = result.pid;
+                                      //dassert(hdr2->gpid.value() == 0, "inconsistent gpid");
+                                      //hdr2->gpid = result.pid;
 
+                                      // TODO(hyc): check it
                                       // update thread hash if not assigned by applications
-                                      if (hdr2->client.thread_hash == 0) {
+                                      // or hdr2->gpid changed
+                                      if (hdr2->client.thread_hash == 0 || hdr2->gpid.value() != 0) {
                                           hdr2->client.thread_hash = result.pid.thread_hash();
                                       }
+                                      hdr2->gpid = result.pid;
                                   }
 
                                   call_address(result.address, request, call);
