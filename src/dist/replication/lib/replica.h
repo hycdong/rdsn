@@ -488,7 +488,7 @@ private:
     dsn::gpid _child_gpid;
     ballot _child_ballot; // ballot when starting partition split
     // _partition_version = partition_count-1, _partition_version = -1 when reject read/write
-    int _partition_version;
+    std::atomic<int> _partition_version;
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

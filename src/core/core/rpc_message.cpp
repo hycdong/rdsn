@@ -319,7 +319,7 @@ message_ex *message_ex::create_receive_message_with_fresh_header(const message_e
         dassert(old_msg.buffers[1].has_holder(), "raw pointer is not allowed here");
         msg->buffers.emplace_back(old_msg.buffers[1]);
     } else {
-        dassert(false, "invalid buffer size %s", msg->buffers.size());
+        dassert(false, "invalid buffer size %d", msg->buffers.size());
     }
 
     msg->header->body_length = msg->buffers[1].length();

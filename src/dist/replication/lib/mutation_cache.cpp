@@ -52,7 +52,9 @@ mutation_cache::mutation_cache(const mutation_cache &cache)
     _array.clear();
     _array.reserve(cache._array.size());
     for (auto &mu : cache._array) {
-        _array.emplace_back(mu);
+        //_array.emplace_back(mu);
+        // TODO(hyc): consider
+        _array.emplace_back(mu == nullptr ? nullptr : new mutation(mu));
     }
 
     _max_count = cache._max_count;
@@ -60,7 +62,9 @@ mutation_cache::mutation_cache(const mutation_cache &cache)
     _start_idx = cache._start_idx;
     _end_idx = cache._end_idx;
     _start_decree = cache._start_decree;
-    _end_decree.store(cache._end_decree);
+    //_end_decree.store(cache._end_decree);
+    // TODO(hyc): consider
+    _end_decree.store(cache._end_decree.load());
 }
 
 mutation_cache::~mutation_cache() { _array.clear(); }

@@ -137,7 +137,7 @@ void replica::on_client_read(task_code code, dsn_message_t request)
     if ((_partition_version & partition_hash) != get_gpid().get_partition_index()) {
         derror("%s: receive request with wrong hash value, partition_version=%d, hash=%" PRId64,
                name(),
-               _partition_version,
+               _partition_version.load(),
                partition_hash);
         response_client_message(true, request, ERR_PARENT_PARTITION_MISUSED);
         return;
@@ -344,7 +344,7 @@ void replica::execute_mutation(mutation_ptr &mu)
                     d);
             err = _app->apply_mutation(mu);
         }
-
+        break;
     case partition_status::PS_ERROR:
         break;
     default:

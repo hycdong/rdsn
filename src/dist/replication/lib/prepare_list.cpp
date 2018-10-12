@@ -78,6 +78,9 @@ error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status
     decree d = mu->data.header.decree;
     dassert(d > last_committed_decree(), "%" PRId64 " VS %" PRId64 "", d, last_committed_decree());
 
+    //TODO(hyc): delete
+    ddebug("mu %s prepare as %s", mu->name(), enum_to_string(status));
+
     error_code err;
     switch (status) {
     case partition_status::PS_PRIMARY:

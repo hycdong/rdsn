@@ -1600,7 +1600,24 @@ void server_state::on_update_configuration_on_remote_reply(
                 }
             }
         }
-    } else {
+    } else if (ec == ERR_OBJECT_NOT_FOUND) { // child partition has not been registered, but drop app is called
+        dassert(config_request->type == config_type::CT_DROP_PARTITION,
+                "invalid type %s",
+                _config_type_VALUES_TO_NAMES.find(config_request->type)->second);
+        cc.pending_sync_task = nullptr;
+        cc.pending_sync_request.reset();
+        cc.stage = config_status::not_pending;
+        if (cc.msg) {
+            configuration_update_response resp;
+            resp.err = ERR_OK;
+            resp.config = config_request->config;
+            _meta_svc->reply_data(cc.msg, resp);
+            dsn_msg_release_ref(cc.msg);
+            cc.msg = nullptr;
+        }
+        process_one_partition(app);
+    }
+    else {
         dassert(false, "we can't handle this right now, err = %s", ec.to_string());
     }
 }

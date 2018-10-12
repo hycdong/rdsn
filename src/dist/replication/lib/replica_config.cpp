@@ -567,6 +567,7 @@ bool replica::update_configuration(const partition_configuration &config)
     if (rconfig.status == partition_status::PS_PRIMARY &&
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
+
         _primary_states.child_address.clear();
         _child_gpid.set_app_id(0);
 //        _partition_version = -1;
@@ -1016,6 +1017,9 @@ void replica::on_config_sync(const app_info &info, const partition_configuration
         check_partition_count(info.partition_count);
     } else {
         if (_is_initializing) {
+            //TODO(hyc): consider
+            check_partition_count(info.partition_count); // update local partition count if necessary
+
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&
                 status() == partition_status::PS_INACTIVE && _inactive_is_transient) {
@@ -1090,7 +1094,7 @@ void replica::check_partition_count(int partition_count)
                  partition_count);
         if (_child_gpid.get_app_id() <= 0) {
 //             TODO(hyc): consider partition_version???
-//            _partition_version = -1;
+            _partition_version = -1;
             query_child_state();
         }
     }
@@ -1098,6 +1102,7 @@ void replica::check_partition_count(int partition_count)
 
 void replica::query_child_state()
 {
+    //TODO(hyc): why original not check here
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_f("{} can not query child partition state, current state is not primary, but {}",
                 name(),
@@ -1132,7 +1137,8 @@ void replica::on_query_child_state_reply(error_code ec,
                                          std::shared_ptr<query_child_state_request> request,
                                          std::shared_ptr<query_child_state_response> response)
 {
-    check_hashed_access();
+    //TODO(hyc): consider
+    // check_hashed_access();
 
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_f("{} is not primary, but {}, ignore query child state reply",
@@ -1197,6 +1203,12 @@ void replica::on_query_child_state_reply(error_code ec,
         return;
     }
 
+    //TODO(hyc): consider after on_register_child_replica_on_reply
+//    dassert(_app_info.partition_count * 2 == partition_count,
+//            "%d vs %d",
+//            _app_info.partition_count,
+//            partition_count);
+
     if (response->ballot != invalid_ballot ||
         get_gpid().get_partition_index() >= partition_count / 2) {
         ddebug_f("{} has registered its child replica or current replica is child replica, local "
@@ -1228,7 +1240,8 @@ void replica::on_query_child_state_reply(error_code ec,
         group_check_request add_child_request;
         add_child_request.app = _app_info;
         add_child_request.child_gpid = child_gpid;
-        _primary_states.get_replica_config(status(), add_child_request.config);
+        // TODO(hyc): consider why original not have
+//        _primary_states.get_replica_config(status(), add_child_request.config);
         add_child_request.config.ballot = get_ballot();
         _primary_states.is_sync_to_child = false;
 
