@@ -997,7 +997,7 @@ void replica_stub::get_local_replicas(std::vector<replica_info> &replicas)
     for (auto &pairs : _replicas) {
         replica_ptr &rep = pairs.second;
         if (rep->status() == partition_status::PS_PARTITION_SPLIT) {
-            dinfo("%s is during partition split", name());
+            dinfo("%s is during partition split", rep->name());
             continue;
         }
         replica_info info;
