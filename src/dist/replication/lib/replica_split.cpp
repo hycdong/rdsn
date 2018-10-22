@@ -333,9 +333,6 @@ void replica::copy_parent_state(error_code ec,
         if (!mu->is_logged()) {
             mu->set_logged();
         }
-
-        //TODO(hyc): delete
-        ddebug_f("{} append mu {} in private and shared log", name(), mu->name() );
     }
 }
 
@@ -428,13 +425,7 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                        _options->max_mutation_count_in_prepare_list,
                        [this, &ec](mutation_ptr &mu) {
                            if (mu->data.header.decree == _app->last_committed_decree() + 1) {
-                               //TODO(hyc): delete
-                               ddebug_f("mutation {} will be applied", mu->name());
                                _app->apply_mutation(mu);
-                           }else{
-                               //TODO(hyc): delete
-                               dwarn_f("mutation {} not applied, mu decree is {}, app's last committed decree is {}",
-                                       mu->name(), mu->data.header.decree, _app->last_committed_decree());
                            }
                        });
 
@@ -443,21 +434,14 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                               [this, &plist](int log_length, mutation_ptr &mu) {
                                   decree d = mu->data.header.decree;
                                   if (d <= plist.last_committed_decree()) {
-                                      //TODO(hyc): delete
-                                      dwarn_f("{} will not replay mu {}, decree {} VS last_committed_decree {}", this->name(), mu->name(), d, plist.last_committed_decree());
                                       return false;
                                   }
 
                                   mutation_ptr origin_mu = plist.get_mutation_by_decree(d);
                                   if (origin_mu != nullptr &&
                                       origin_mu->data.header.ballot >= mu->data.header.ballot) {
-                                      //TODO(hyc):delete
-                                      dwarn_f("{} will not replay mu {}, original ballot {}, mu ballot {}", this->name(), mu->name(), origin_mu->data.header.ballot, mu->data.header.ballot);
                                       return false;
                                   }
-
-                                  //TODO(hyc): delete
-                                  ddebug_f("{} start to replay mu {}", this->name(), mu->name());
 
                                   plist.prepare(mu, partition_status::PS_SECONDARY);
                                   return true;
@@ -517,9 +501,6 @@ void replica::child_catch_up() // on child
 
     decree goal_decree = _prepare_list->last_committed_decree();
     decree local_decree = _app->last_committed_decree();
-
-    //TODO(hyc): delete
-    ddebug_f("{} try to catch up, goal decree is {}, local decree is {}", name(), goal_decree, local_decree);
 
     // there are still some mutations child not learn
     if (local_decree < goal_decree) {
@@ -1111,12 +1092,6 @@ void replica::on_register_child_on_meta_reply(
 
 void replica::on_copy_mutation(mutation_ptr &mu) // on child
 {
-    //TODO(hyc): delete
-    ddebug_f("{} start to copy mutation {}, partition count is {}", name(), mu->name(), _app_info.partition_count);
-    ddebug_f("{} status is {}", name(), enum_to_string(status()));
-    ddebug_f("{} split_states info: is_prepare_list_copied is {}, parent_gpid is {}", name(), _split_states.is_prepare_list_copied, _split_states.parent_gpid );
-    ddebug_f("{} local ballot is {}, mu ballot is {}", name(), get_ballot(), mu->data.header.ballot);
-
     // 1. check status - partition_split
     if (status() != partition_status::PS_PARTITION_SPLIT || mu->data.header.ballot > get_ballot()) {
         dwarn_f("{} not during partition split, status is {}, current ballot is {}, local ballot of "
@@ -1161,8 +1136,6 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 
     // 4. prepare mu as secondary
     mu->data.header.pid = get_gpid();
-    //TODO(hyc): delete
-    ddebug_f("{} will prepare mu {}", name(), mu->name());
     _prepare_list->prepare(mu, partition_status::PS_SECONDARY);
 
     if (!mu->data.header.sync_to_child) {

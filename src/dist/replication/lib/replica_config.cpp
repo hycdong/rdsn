@@ -567,7 +567,6 @@ bool replica::update_configuration(const partition_configuration &config)
     if (rconfig.status == partition_status::PS_PRIMARY &&
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
-
         _primary_states.child_address.clear();
         _child_gpid.set_app_id(0);
 //        _partition_version = -1;
@@ -1203,11 +1202,11 @@ void replica::on_query_child_state_reply(error_code ec,
         return;
     }
 
-    //TODO(hyc): consider after on_register_child_replica_on_reply
-//    dassert(_app_info.partition_count * 2 == partition_count,
-//            "%d vs %d",
-//            _app_info.partition_count,
-//            partition_count);
+    //TODO(hyc): consider add assert
+    dassert(_app_info.partition_count * 2 == partition_count,
+            "%d vs %d",
+            _app_info.partition_count,
+            partition_count);
 
     if (response->ballot != invalid_ballot ||
         get_gpid().get_partition_index() >= partition_count / 2) {

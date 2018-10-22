@@ -48,9 +48,6 @@ void replica::on_client_write(task_code code, dsn_message_t request)
 {
     check_hashed_access();
 
-    //TODO(hyc): delete
-    ddebug_f("{} write, _partition_version is {}", name(), _partition_version);
-
     if (_partition_version == -1) {
         derror("%s: current partition is not available coz during partition split", name());
         response_client_message(false, request, ERR_OBJECT_NOT_FOUND);
@@ -79,8 +76,7 @@ void replica::on_client_write(task_code code, dsn_message_t request)
         return;
     }
 
-    //TODO(hyc): info
-    ddebug("%s: got write request from %s", name(), dsn_msg_from_address(request).to_string());
+    dinfo("%s: got write request from %s", name(), dsn_msg_from_address(request).to_string());
     auto mu = _primary_states.write_queue.add_work(code, request, this);
     if (mu) {
         init_prepare(mu, false);
@@ -111,12 +107,6 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
 
     dlog(level,
          "%s: mutation %s init_prepare, mutation_tid=%" PRIu64,
-         name(),
-         mu->name(),
-         mu->tid());
-
-    //TODO(hyc): delete
-    ddebug("%s: mutation %s init_prepare, mutation_tid=%" PRIu64,
          name(),
          mu->name(),
          mu->tid());
@@ -153,12 +143,6 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     if (err != ERR_OK) {
         goto ErrOut;
     }
-
-    //TODO(hyc): delete
-    ddebug("%s: mutation %s local prepare, err is %s",
-         name(),
-         mu->name(),
-         err.to_string());
 
     // remote prepare
     mu->set_prepare_ts();
@@ -207,11 +191,6 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
         dassert(nullptr != mu->log_task(), "");
     }
 
-    //TODO(hyc): delete
-    ddebug("%s: finish init_prepare mutation %s",
-         name(),
-         mu->name());
-
     _primary_states.last_prepare_ts_ms = mu->prepare_ts_ms();
     return;
 
@@ -249,8 +228,7 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
                   },
                   get_gpid().thread_hash());
 
-    //TODO(hyc): info
-    ddebug("%s: mutation %s send_prepare_message to %s as %s",
+    dinfo("%s: mutation %s send_prepare_message to %s as %s",
           name(),
           mu->name(),
           addr.to_string(),
@@ -268,11 +246,7 @@ void replica::do_possible_commit_on_primary(mutation_ptr &mu)
             enum_to_string(status()));
 
     if (mu->is_ready_for_commit()) {
-        //TODO(hyc): delete
-        ddebug("%s will commit mutation %s", name(), mu->name());
-        bool flag = _prepare_list->commit(mu->data.header.decree, COMMIT_ALL_READY);
-        //TODO(hyc): delete
-        ddebug("%s commit mutation %s, flag is %d", name(), mu->name(), flag);
+        _prepare_list->commit(mu->data.header.decree, COMMIT_ALL_READY);
     }
 }
 
@@ -291,8 +265,7 @@ void replica::on_prepare(dsn_message_t request)
 
     decree decree = mu->data.header.decree;
 
-    //TODO(hyc): info
-    ddebug("%s: mutation %s on_prepare", name(), mu->name());
+    dinfo("%s: mutation %s on_prepare", name(), mu->name());
 
     dassert(mu->data.header.pid == rconfig.pid,
             "(%d.%d) VS (%d.%d)",
@@ -441,8 +414,7 @@ void replica::on_append_log_completed(mutation_ptr &mu, error_code err, size_t s
 {
     check_hashed_access();
 
-    //TODO(hyc): info
-    ddebug("%s: append shared log completed for mutation %s, size = %u, err = %s",
+    dinfo("%s: append shared log completed for mutation %s, size = %u, err = %s",
           name(),
           mu->name(),
           size,
@@ -679,15 +651,12 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
             for (auto &request : prepare_requests) {
                 reply(request, resp);
             }
-            //TODO(hyc): delete
-            ddebug("%s: mutation %s ack_prepare_message, err = %s",
+            dinfo("%s: mutation %s ack_prepare_message, err = %s",
                   name(),
                   mu->name(),
                   err.to_string());
         } else {
             // wait child replica ack prepare when mutation should be sync to child
-            //TODO(hyc): delete
-            ddebug("%s: mutation %s wait for child ack", name(), mu->name());
         }
     } else {
         // when prepare failed during partition split, both parent and child will try to ack to
@@ -748,12 +717,6 @@ void replica::copy_mutation(mutation_ptr &mu)
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
-    //TODO(hyc):delete
-    ddebug_f("{} ack parent, mutation is {}, sync_to_child is {}",
-             name(),
-             mu->name(),
-             mu->data.header.sync_to_child);
-
     if (mu->data.header.sync_to_child) {
         _stub->on_exec(LPC_SPLIT_PARTITION,
                        _split_states.parent_gpid,
@@ -790,8 +753,7 @@ void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d)
         return;
     }
 
-    //TODO(hyc): info
-    ddebug_f("{} copy mutation {} completed, error is {}", name(), mu->name(), ec.to_string());
+    dinfo_f("{} copy mutation {} completed, error is {}", name(), mu->name(), ec.to_string());
 
     // set child prepare mutation flag
     if (ec == ERR_OK) {
