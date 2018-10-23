@@ -35,6 +35,7 @@
 
 #include "partition_resolver_simple.h"
 #include <dsn/utility/utils.h>
+#include <dsn/tool-api/async_calls.h>
 
 namespace dsn {
 namespace dist {
@@ -90,6 +91,8 @@ void partition_resolver_simple::on_access_failure(int partition_index, error_cod
         &&
         err != ERR_NOT_ENOUGH_MEMBER // primary won't change and we only r/w on primary in this
                                      // provider
+        &&
+        err != ERR_OPERATION_DISABLED // operation disabled
         ) {
         if (err == ERR_PARENT_PARTITION_MISUSED) {
             ddebug("clear all partition configuration cache due to access failure %s at %d.%d",
@@ -252,7 +255,7 @@ task_ptr partition_resolver_simple::query_config(int partition_index)
 {
     dinfo(
         "%s.client: start query config, gpid = %d.%d", _app_path.c_str(), _app_id, partition_index);
-    auto msg = dsn_msg_create_request(RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX);
+    auto msg = dsn::message_ex::create_request(RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX);
 
     configuration_query_by_index_request req;
     req.app_name = _app_path;
@@ -265,14 +268,14 @@ task_ptr partition_resolver_simple::query_config(int partition_index)
         _meta_server,
         msg,
         &_tracker,
-        [this, partition_index](error_code err, dsn_message_t req, dsn_message_t resp) {
+        [this, partition_index](error_code err, dsn::message_ex *req, dsn::message_ex *resp) {
             query_config_reply(err, req, resp, partition_index);
         });
 }
 
 void partition_resolver_simple::query_config_reply(error_code err,
-                                                   dsn_message_t request,
-                                                   dsn_message_t response,
+                                                   dsn::message_ex *request,
+                                                   dsn::message_ex *response,
                                                    int partition_index)
 {
     auto client_err = ERR_OK;
@@ -417,9 +420,8 @@ void partition_resolver_simple::handle_pending_requests(std::deque<request_conte
             } else {
                 call(std::move(req), true);
             }
-        } else if (err == ERR_HANDLER_NOT_FOUND) {
-            end_request(std::move(req), err, rpc_address());
-        } else if (err == ERR_APP_NOT_EXIST) {
+        } else if (err == ERR_HANDLER_NOT_FOUND || err == ERR_APP_NOT_EXIST ||
+                   err == ERR_OPERATION_DISABLED) {
             end_request(std::move(req), err, rpc_address());
         } else {
             call(std::move(req), true);

@@ -33,7 +33,6 @@
  *     xxxx-xx-xx, author, fix bug about xxx
  */
 
-#include <dsn/tool/cli/cli.client.h>
 #include <dsn/tool-api/command_manager.h>
 #include <gtest/gtest.h>
 
@@ -57,74 +56,3 @@ void command_manager_module_init()
             return ss.str();
         });
 }
-
-/*
-TEST(core, command_manager)
-{
-    cli_client cli(rpc_address("localhost", 20101));
-
-    error_code err;
-    std::string result;
-    command rcmd;
-
-    rcmd.cmd = "help";
-    rcmd.arguments.clear();
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10));
-    ASSERT_EQ(ERR_OK, err);
-
-    rcmd.cmd = "help";
-    rcmd.arguments.clear();
-    rcmd.arguments.push_back("engine");
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10));
-    ASSERT_EQ(ERR_OK, err);
-
-    rcmd.cmd = "help";
-    rcmd.arguments.clear();
-    rcmd.arguments.push_back("unexist-cmd");
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10));
-    ASSERT_EQ(ERR_OK, err);
-    ASSERT_EQ("cannot find command 'unexist-cmd'", result);
-
-    rcmd.cmd = "engine";
-    rcmd.arguments.clear();
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10));
-    ASSERT_EQ(ERR_OK, err);
-
-    rcmd.cmd = "task-code";
-    rcmd.arguments.clear();
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10));
-    ASSERT_EQ(ERR_OK, err);
-
-    rcmd.cmd = "test-cmd";
-    rcmd.arguments.clear();
-    rcmd.arguments.push_back("this");
-    rcmd.arguments.push_back("is");
-    rcmd.arguments.push_back("test");
-    rcmd.arguments.push_back("argument");
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10));
-    ASSERT_EQ(ERR_OK, err);
-    ASSERT_EQ("test-cmd response: [this is test argument]", result);
-
-    rcmd.cmd = "unexist-cmd";
-    rcmd.arguments.clear();
-    rcmd.arguments.push_back("arg1");
-    rcmd.arguments.push_back("arg2");
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10));
-    ASSERT_EQ(ERR_OK, err);
-    ASSERT_EQ("unknown command 'unexist-cmd'", result);
-
-    rcmd.cmd = "help";
-    rcmd.arguments.clear();
-    rpc_address addr("localhost", 20109);
-    result.clear();
-    std::tie(err, result) = cli.call_sync(rcmd, std::chrono::seconds(10), 0, 0, addr);
-    ASSERT_TRUE(err == ERR_TIMEOUT || err == ERR_NETWORK_FAILURE);
-}
-*/

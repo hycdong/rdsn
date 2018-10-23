@@ -44,9 +44,15 @@
 namespace dsn {
 namespace replication {
 
-void replica::on_client_write(task_code code, dsn_message_t request)
+void replica::on_client_write(task_code code, dsn::message_ex *request)
 {
-    check_hashed_access();
+    _checker.only_one_thread_access();
+
+    task_spec *spec = task_spec::get(code);
+    if (!_options->allow_non_idempotent_write && !spec->rpc_request_is_write_idempotent) {
+        response_client_message(false, request, ERR_OPERATION_DISABLED);
+        return;
+    }
 
     if (_partition_version == -1) {
         derror("%s: current partition is not available coz during partition split", name());
@@ -76,7 +82,7 @@ void replica::on_client_write(task_code code, dsn_message_t request)
         return;
     }
 
-    dinfo("%s: got write request from %s", name(), dsn_msg_from_address(request).to_string());
+    dinfo("%s: got write request from %s", name(), request->header->from_address.to_string());
     auto mu = _primary_states.write_queue.add_work(code, request, this);
     if (mu) {
         init_prepare(mu, false);
@@ -207,8 +213,8 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
                                    int timeout_milliseconds,
                                    int64_t learn_signature)
 {
-    dsn_message_t msg =
-        dsn_msg_create_request(RPC_PREPARE, timeout_milliseconds, get_gpid().thread_hash());
+    dsn::message_ex *msg = dsn::message_ex::create_request(
+        RPC_PREPARE, timeout_milliseconds, get_gpid().thread_hash());
     replica_configuration rconfig;
     _primary_states.get_replica_config(status, rconfig, learn_signature);
 
@@ -223,7 +229,7 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
         rpc::call(addr,
                   msg,
                   &_tracker,
-                  [=](error_code err, dsn_message_t request, dsn_message_t reply) {
+                  [=](error_code err, dsn::message_ex *request, dsn::message_ex *reply) {
                       on_prepare_reply(std::make_pair(mu, rconfig.status), err, request, reply);
                   },
                   get_gpid().thread_hash());
@@ -250,9 +256,9 @@ void replica::do_possible_commit_on_primary(mutation_ptr &mu)
     }
 }
 
-void replica::on_prepare(dsn_message_t request)
+void replica::on_prepare(dsn::message_ex *request)
 {
-    check_hashed_access();
+    _checker.only_one_thread_access();
 
     replica_configuration rconfig;
     mutation_ptr mu;
@@ -412,7 +418,7 @@ void replica::on_prepare(dsn_message_t request)
 
 void replica::on_append_log_completed(mutation_ptr &mu, error_code err, size_t size)
 {
-    check_hashed_access();
+    _checker.only_one_thread_access();
 
     dinfo("%s: append shared log completed for mutation %s, size = %u, err = %s",
           name(),
@@ -474,10 +480,10 @@ void replica::on_append_log_completed(mutation_ptr &mu, error_code err, size_t s
 
 void replica::on_prepare_reply(std::pair<mutation_ptr, partition_status::type> pr,
                                error_code err,
-                               dsn_message_t request,
-                               dsn_message_t reply)
+                               dsn::message_ex *request,
+                               dsn::message_ex *reply)
 {
-    check_hashed_access();
+    _checker.only_one_thread_access();
 
     mutation_ptr mu = pr.first;
     partition_status::type target_status = pr.second;
@@ -493,7 +499,7 @@ void replica::on_prepare_reply(std::pair<mutation_ptr, partition_status::type> p
             mu->data.header.ballot,
             get_ballot());
 
-    ::dsn::rpc_address node = dsn_msg_to_address(request);
+    ::dsn::rpc_address node = request->to_address;
     partition_status::type st = _primary_states.get_node_status(node);
 
     // handle reply
@@ -643,7 +649,7 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
     resp.last_committed_decree_in_app = _app->last_committed_decree();
     resp.last_committed_decree_in_prepare_list = last_committed_decree();
 
-    const std::vector<dsn_message_t> &prepare_requests = mu->prepare_requests();
+    const std::vector<dsn::message_ex *> &prepare_requests = mu->prepare_requests();
     dassert(!prepare_requests.empty(), "mutation = %s", mu->name());
 
     if (err == ERR_OK) {

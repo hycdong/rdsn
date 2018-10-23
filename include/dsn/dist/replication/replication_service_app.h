@@ -39,6 +39,9 @@
 #include <dsn/cpp/service_app.h>
 
 namespace dsn {
+
+class http_server;
+
 namespace replication {
 
 class replication_checker;
@@ -62,12 +65,13 @@ public:
 
     virtual ::dsn::error_code stop(bool cleanup = false) override;
 
-    virtual void on_intercepted_request(dsn::gpid gpid, bool is_write, dsn_message_t msg) override;
+    virtual void on_intercepted_request(dsn::gpid gpid, bool is_write, dsn::message_ex* msg) override;
 
 private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;
     replica_stub_ptr _stub;
+    std::unique_ptr<http_server> _http_server;
 
     static const char *replica_service_app_info(int argc, char **argv);
     static void replica_service_app_info_free(const char *response);

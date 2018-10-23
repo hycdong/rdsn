@@ -54,5 +54,7 @@ struct app_info
     7:bool          is_stateful;
     8:i32           max_replica_count;
     9:i64           expire_second;
-    10:i32          init_partition_count = -1;
+    10:i64          create_second;
+    11:i64          drop_second;
+    12:i32          init_partition_count = -1;
 }

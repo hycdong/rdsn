@@ -26,6 +26,7 @@
 
 #include <dsn/cpp/rpc_holder.h>
 #include <dsn/cpp/serialization_helper/dsn.layer2_types.h>
+#include <dsn/cpp/message_utils.h>
 
 #include <gtest/gtest.h>
 
@@ -60,11 +61,12 @@ TEST(rpc_holder, construct)
     {
         configuration_query_by_index_request request;
         request.app_name = "test";
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX);
+        dsn::message_ex *msg =
+            dsn::message_ex::create_request(RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX);
         dsn::marshall(msg, request);
-        msg = dsn_msg_copy(msg, true, true);
+        dsn::message_ex *msg2 = msg->copy(true, true);
 
-        t_rpc rpc(msg);
+        t_rpc rpc(msg2);
         ASSERT_TRUE(rpc.is_initialized());
         ASSERT_EQ(rpc.request().app_name, "test");
     }
@@ -95,6 +97,26 @@ TEST(rpc_holder, mock_rpc_call)
             auto request = make_unique<configuration_query_by_index_request>();
             t_rpc rpc(std::move(request), RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX);
             rpc.call(rpc_address("127.0.0.1", 12321), nullptr, [](error_code) {});
+        }
+
+        ASSERT_EQ(mail_box.size(), 10);
+    }
+}
+
+TEST(rpc_holder, mock_rpc_reply)
+{
+    RPC_MOCKING(t_rpc)
+    {
+        auto &mail_box = t_rpc::mail_box();
+
+        for (int i = 0; i < 10; i++) {
+            configuration_query_by_index_request request;
+            request.app_name = "haha";
+            auto msg = from_thrift_request_to_received_message(
+                request, RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX);
+            auto rpc = t_rpc::auto_reply(msg);
+
+            // destruct rpc and automatically reply via mail_box
         }
 
         ASSERT_EQ(mail_box.size(), 10);

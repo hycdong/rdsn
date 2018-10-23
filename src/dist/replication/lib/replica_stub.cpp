@@ -270,7 +270,7 @@ void replica_stub::initialize(bool clear /* = false*/)
 
 void replica_stub::initialize(const replication_options &opts, bool clear /* = false*/)
 {
-    _primary_address = primary_address();
+    _primary_address = dsn_primary_address();
     ddebug("primary_address = %s", _primary_address.to_string());
 
     set_options(opts);
@@ -366,7 +366,7 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
                     ddebug("%s@%s: load replica '%s' success, <durable, commit> = <%" PRId64
                            ", %" PRId64 ">, last_prepared_decree = %" PRId64,
                            r->get_gpid().to_string(),
-                           primary_address().to_string(),
+                           dsn_primary_address().to_string(),
                            dir.c_str(),
                            r->last_durable_decree(),
                            r->last_committed_decree(),
@@ -531,13 +531,13 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
 
     // gc
     if (false == _options.gc_disabled) {
-        _gc_timer_task =
-            tasking::enqueue_timer(LPC_GARBAGE_COLLECT_LOGS_AND_REPLICAS,
-                                   &_tracker,
-                                   [this] { on_gc(); },
-                                   std::chrono::milliseconds(_options.gc_interval_ms),
-                                   0,
-                                   std::chrono::milliseconds(random32(0, _options.gc_interval_ms)));
+        _gc_timer_task = tasking::enqueue_timer(
+            LPC_GARBAGE_COLLECT_LOGS_AND_REPLICAS,
+            &_tracker,
+            [this] { on_gc(); },
+            std::chrono::milliseconds(_options.gc_interval_ms),
+            0,
+            std::chrono::milliseconds(dsn_random32(0, _options.gc_interval_ms)));
     }
 
     // disk stat
@@ -558,8 +558,14 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
         _fs_manager.add_replica(kv.first, kv.second->dir());
     }
 
+    _nfs = std::move(dsn::nfs_node::create());
+    _nfs->start();
+
+    _cli_service = std::move(dsn::cli_service::create_service());
+    _cli_service->open_service();
+
     if (_options.delay_for_fd_timeout_on_start) {
-        uint64_t now_time_ms = now_ms();
+        uint64_t now_time_ms = dsn_now_ms();
         uint64_t delay_time_ms =
             (_options.fd_grace_seconds + 3) * 1000; // for more 3 seconds than grace seconds
         if (now_time_ms < dsn_runtime_init_time_ms() + delay_time_ms) {
@@ -666,7 +672,7 @@ replica_stub::replica_life_cycle replica_stub::get_replica_life_cycle(gpid id)
     return replica_stub::RL_invalid;
 }
 
-void replica_stub::on_client_write(gpid id, dsn_message_t request)
+void replica_stub::on_client_write(gpid id, dsn::message_ex *request)
 {
     if (_deny_client) {
         // ignore and do not reply
@@ -674,13 +680,13 @@ void replica_stub::on_client_write(gpid id, dsn_message_t request)
     }
     replica_ptr rep = get_replica(id);
     if (rep != nullptr) {
-        rep->on_client_write(task_code(dsn_msg_task_code(request)), request);
+        rep->on_client_write(request->rpc_code(), request);
     } else {
         response_client_error(id, false, request, ERR_OBJECT_NOT_FOUND);
     }
 }
 
-void replica_stub::on_client_read(gpid id, dsn_message_t request)
+void replica_stub::on_client_read(gpid id, dsn::message_ex *request)
 {
     if (_deny_client) {
         // ignore and do not reply
@@ -688,7 +694,7 @@ void replica_stub::on_client_read(gpid id, dsn_message_t request)
     }
     replica_ptr rep = get_replica(id);
     if (rep != nullptr) {
-        rep->on_client_read(task_code(dsn_msg_task_code(request)), request);
+        rep->on_client_read(request->rpc_code(), request);
     } else {
         response_client_error(id, true, request, ERR_OBJECT_NOT_FOUND);
     }
@@ -844,7 +850,7 @@ void replica_stub::on_cold_backup(const backup_request &request, /*out*/ backup_
     }
 }
 
-void replica_stub::on_prepare(dsn_message_t request)
+void replica_stub::on_prepare(dsn::message_ex *request)
 {
     gpid id;
     dsn::unmarshall(request, id);
@@ -895,7 +901,7 @@ void replica_stub::on_group_check(const group_check_request &request,
     }
 }
 
-void replica_stub::on_learn(dsn_message_t msg)
+void replica_stub::on_learn(dsn::message_ex *msg)
 {
     learn_request request;
     ::dsn::unmarshall(msg, request);
@@ -1026,7 +1032,7 @@ void replica_stub::query_configuration_by_node()
         return;
     }
 
-    dsn_message_t msg = dsn_msg_create_request(RPC_CM_CONFIG_SYNC);
+    dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONFIG_SYNC);
 
     configuration_query_by_node_request req;
     req.node = _primary_address;
@@ -1041,10 +1047,13 @@ void replica_stub::query_configuration_by_node()
            (int)req.stored_replicas.size());
 
     rpc_address target(_failure_detector->get_servers());
-    _config_query_task = rpc::call(
-        target, msg, &_tracker, [this](error_code err, dsn_message_t request, dsn_message_t resp) {
-            on_node_query_reply(err, request, resp);
-        });
+    _config_query_task =
+        rpc::call(target,
+                  msg,
+                  &_tracker,
+                  [this](error_code err, dsn::message_ex *request, dsn::message_ex *resp) {
+                      on_node_query_reply(err, request, resp);
+                  });
 }
 
 void replica_stub::on_meta_server_connected()
@@ -1063,8 +1072,8 @@ void replica_stub::on_meta_server_connected()
 
 // run in THREAD_POOL_META_SERVER
 void replica_stub::on_node_query_reply(error_code err,
-                                       dsn_message_t request,
-                                       dsn_message_t response)
+                                       dsn::message_ex *request,
+                                       dsn::message_ex *response)
 {
     ddebug("query node partitions replied, err = %s", err.to_string());
 
@@ -1200,7 +1209,7 @@ void replica_stub::on_node_query_reply_scatter2(replica_stub_ptr this_, gpid id)
     if (replica != nullptr && replica->status() != partition_status::PS_POTENTIAL_SECONDARY &&
         replica->status() != partition_status::PS_PARTITION_SPLIT) {
         if (replica->status() == partition_status::PS_INACTIVE &&
-            now_ms() - replica->create_time_milliseconds() <
+            dsn_now_ms() - replica->create_time_milliseconds() <
                 _options.gc_memory_replica_interval_ms) {
             ddebug("%s: replica not exists on meta server, wait to close", replica->name());
             return;
@@ -1216,7 +1225,7 @@ void replica_stub::on_node_query_reply_scatter2(replica_stub_ptr this_, gpid id)
 void replica_stub::remove_replica_on_meta_server(const app_info &info,
                                                  const partition_configuration &config)
 {
-    dsn_message_t msg = dsn_msg_create_request(RPC_CM_UPDATE_PARTITION_CONFIGURATION);
+    dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_UPDATE_PARTITION_CONFIGURATION);
 
     std::shared_ptr<configuration_update_request> request(new configuration_update_request);
     request->info = info;
@@ -1238,7 +1247,7 @@ void replica_stub::remove_replica_on_meta_server(const app_info &info,
     rpc::call(_failure_detector->get_servers(),
               msg,
               nullptr,
-              [](error_code err, dsn_message_t, dsn_message_t) {});
+              [](error_code err, dsn::message_ex *, dsn::message_ex *) {});
 }
 
 void replica_stub::on_meta_server_disconnected()
@@ -1284,7 +1293,7 @@ void replica_stub::on_meta_server_disconnected_scatter(replica_stub_ptr this_, g
 
 void replica_stub::response_client_error(gpid id,
                                          bool is_read,
-                                         dsn_message_t request,
+                                         dsn::message_ex *request,
                                          error_code error)
 {
     if (nullptr == request) {
@@ -1296,17 +1305,17 @@ void replica_stub::response_client_error(gpid id,
               id.to_string(),
               _primary_address.to_string(),
               is_read ? "read" : "write",
-              dsn_msg_from_address(request).to_string(),
+              request->header->from_address.to_string(),
               error.to_string());
     } else {
         derror("%s@%s: reply client %s to %s, err = %s",
                id.to_string(),
                _primary_address.to_string(),
                is_read ? "read" : "write",
-               dsn_msg_from_address(request).to_string(),
+               request->header->from_address.to_string(),
                error.to_string());
     }
-    dsn_rpc_reply(dsn_msg_create_response(request), error);
+    dsn_rpc_reply(request->create_response(), error);
 }
 
 void replica_stub::init_gc_for_test()
@@ -1495,7 +1504,7 @@ void replica_stub::on_gc()
             }
         }
 
-        _counter_shared_log_size->set(_log->size() / (1024 * 1024));
+        _counter_shared_log_size->set(_log->total_size() / (1024 * 1024));
     }
 
     // statistic learning info

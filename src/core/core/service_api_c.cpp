@@ -24,46 +24,18 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     What is this file about?
- *
- * Revision history:
- *     xxxx-xx-xx, author, first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
-
 #include <dsn/service_api_c.h>
 #include <dsn/tool_api.h>
-#include <dsn/utility/enum_helper.h>
-#include <dsn/tool-api/auto_codes.h>
 #include <dsn/cpp/serialization.h>
-#include <dsn/tool-api/task_spec.h>
-#include <dsn/tool-api/zlock_provider.h>
-#include <dsn/tool-api/nfs.h>
-#include <dsn/tool-api/env_provider.h>
-#include <dsn/utility/factory_store.h>
-#include <dsn/tool-api/task.h>
-#include <dsn/utility/singleton_store.h>
-#include <dsn/utility/utils.h>
-
-#include <dsn/utility/config_api.h>
 #include <dsn/utility/filesystem.h>
-#include <dsn/utility/transient_memory.h>
 #include <dsn/tool-api/command_manager.h>
+#include <fstream>
+
 #include "service_engine.h"
 #include "rpc_engine.h"
 #include "disk_engine.h"
 #include "task_engine.h"
 #include "coredump.h"
-#include <fstream>
-
-#ifndef _WIN32
-#include <signal.h>
-#include <unistd.h>
-#else
-#include <TlHelp32.h>
-#endif
 
 //
 // global state
@@ -289,7 +261,7 @@ DSN_API void dsn_rpc_call(dsn::rpc_address server, dsn::rpc_response_task *rpc_c
     ::dsn::task::get_current_rpc()->call(msg, dsn::rpc_response_task_ptr(rpc_call));
 }
 
-DSN_API dsn_message_t dsn_rpc_call_wait(dsn::rpc_address server, dsn_message_t request)
+DSN_API dsn::message_ex *dsn_rpc_call_wait(dsn::rpc_address server, dsn::message_ex *request)
 {
     auto msg = ((::dsn::message_ex *)request);
     msg->server_address = server;
@@ -309,7 +281,7 @@ DSN_API dsn_message_t dsn_rpc_call_wait(dsn::rpc_address server, dsn_message_t r
     }
 }
 
-DSN_API void dsn_rpc_call_one_way(dsn::rpc_address server, dsn_message_t request)
+DSN_API void dsn_rpc_call_one_way(dsn::rpc_address server, dsn::message_ex *request)
 {
     auto msg = ((::dsn::message_ex *)request);
     msg->server_address = server;
@@ -317,27 +289,16 @@ DSN_API void dsn_rpc_call_one_way(dsn::rpc_address server, dsn_message_t request
     ::dsn::task::get_current_rpc()->call(msg, nullptr);
 }
 
-DSN_API void dsn_rpc_reply(dsn_message_t response, dsn::error_code err)
+DSN_API void dsn_rpc_reply(dsn::message_ex *response, dsn::error_code err)
 {
     auto msg = ((::dsn::message_ex *)response);
     ::dsn::task::get_current_rpc()->reply(msg, err);
 }
 
-DSN_API void dsn_rpc_forward(dsn_message_t request, dsn::rpc_address addr)
+DSN_API void dsn_rpc_forward(dsn::message_ex *request, dsn::rpc_address addr)
 {
     ::dsn::task::get_current_rpc()->forward((::dsn::message_ex *)(request),
                                             ::dsn::rpc_address(addr));
-}
-
-DSN_API void dsn_rpc_enqueue_response(dsn::rpc_response_task *rpc_call,
-                                      dsn::error_code err,
-                                      dsn_message_t response)
-{
-    dassert(rpc_call->spec().type == TASK_TYPE_RPC_RESPONSE,
-            "invalid task_type, type = %s",
-            enum_to_string(rpc_call->spec().type));
-    auto resp = ((::dsn::message_ex *)response);
-    rpc_call->enqueue(err, resp);
 }
 
 //------------------------------------------------------------------------------
@@ -359,13 +320,6 @@ DSN_API dsn::error_code dsn_file_close(dsn_handle_t file)
 DSN_API dsn::error_code dsn_file_flush(dsn_handle_t file)
 {
     return ::dsn::task::get_current_disk()->flush(file);
-}
-
-// native HANDLE: HANDLE for windows, int for non-windows
-DSN_API void *dsn_file_native_handle(dsn_handle_t file)
-{
-    auto dfile = (::dsn::disk_file *)file;
-    return dfile->native_handle();
 }
 
 DSN_API void
@@ -416,52 +370,6 @@ DSN_API void dsn_file_write_vector(dsn_handle_t file,
     ::dsn::task::get_current_disk()->write(cb);
 }
 
-DSN_API void dsn_file_copy_remote_directory(dsn::rpc_address remote,
-                                            const char *source_dir,
-                                            const char *dest_dir,
-                                            bool overwrite,
-                                            bool high_priority,
-                                            dsn::aio_task *cb)
-{
-    std::shared_ptr<::dsn::remote_copy_request> rci(new ::dsn::remote_copy_request());
-    rci->source = remote;
-    rci->source_dir = source_dir;
-    rci->files.clear();
-    rci->dest_dir = dest_dir;
-    rci->overwrite = overwrite;
-    rci->high_priority = high_priority;
-
-    ::dsn::task::get_current_nfs()->call(rci, cb);
-}
-
-DSN_API void dsn_file_copy_remote_files(dsn::rpc_address remote,
-                                        const char *source_dir,
-                                        const char **source_files,
-                                        const char *dest_dir,
-                                        bool overwrite,
-                                        bool high_priority,
-                                        dsn::aio_task *cb)
-{
-    std::shared_ptr<::dsn::remote_copy_request> rci(new ::dsn::remote_copy_request());
-    rci->source = remote;
-    rci->source_dir = source_dir;
-
-    rci->files.clear();
-    const char **p = source_files;
-    while (*p != nullptr && **p != '\0') {
-        rci->files.push_back(std::string(*p));
-        p++;
-
-        dinfo("copy remote file %s from %s", *(p - 1), rci->source.to_string());
-    }
-
-    rci->dest_dir = dest_dir;
-    rci->overwrite = overwrite;
-    rci->high_priority = high_priority;
-
-    ::dsn::task::get_current_nfs()->call(rci, cb);
-}
-
 //------------------------------------------------------------------------------
 //
 // env
@@ -498,74 +406,13 @@ DSN_API bool dsn_run_config(const char *config, bool sleep_after_init)
     return run(config, nullptr, sleep_after_init, name);
 }
 
-#ifdef _WIN32
-static BOOL SuspendAllThreads()
-{
-    std::map<uint32_t, HANDLE> threads;
-    uint32_t dwCurrentThreadId = ::GetCurrentThreadId();
-    uint32_t dwCurrentProcessId = ::GetCurrentProcessId();
-    HANDLE hSnapshot;
-    bool bChange = TRUE;
-
-    while (bChange) {
-        hSnapshot = ::CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-        if (hSnapshot == INVALID_HANDLE_VALUE) {
-            derror("CreateToolhelp32Snapshot failed, err = %d", ::GetLastError());
-            return FALSE;
-        }
-
-        THREADENTRY32 ti;
-        ZeroMemory(&ti, sizeof(ti));
-        ti.dwSize = sizeof(ti);
-        bChange = FALSE;
-
-        if (FALSE == ::Thread32First(hSnapshot, &ti)) {
-            derror("Thread32First failed, err = %d", ::GetLastError());
-            goto err;
-        }
-
-        do {
-            if (ti.th32OwnerProcessID == dwCurrentProcessId &&
-                ti.th32ThreadID != dwCurrentThreadId &&
-                threads.find(ti.th32ThreadID) == threads.end()) {
-                HANDLE hThread = ::OpenThread(THREAD_ALL_ACCESS, FALSE, ti.th32ThreadID);
-                if (hThread == NULL) {
-                    derror("OpenThread failed, err = %d", ::GetLastError());
-                    goto err;
-                }
-                ::SuspendThread(hThread);
-                ddebug("thread %d find and suspended ...", ti.th32ThreadID);
-                threads.insert(std::make_pair(ti.th32ThreadID, hThread));
-                bChange = TRUE;
-            }
-        } while (::Thread32Next(hSnapshot, &ti));
-
-        ::CloseHandle(hSnapshot);
-    }
-
-    return TRUE;
-
-err:
-    ::CloseHandle(hSnapshot);
-    return FALSE;
-}
-#endif
-
 NORETURN DSN_API void dsn_exit(int code)
 {
     printf("dsn exit with code %d\n", code);
     fflush(stdout);
     ::dsn::tools::sys_exit.execute(::dsn::SYS_EXIT_NORMAL);
 
-#if defined(_WIN32)
-    // TODO: do not use std::map above, coz when suspend the other threads, they may stop
-    // inside certain locks which causes deadlock
-    // SuspendAllThreads();
-    ::TerminateProcess(::GetCurrentProcess(), code);
-#else
     _exit(code);
-// kill(getpid(), SIGKILL);
-#endif
 }
 
 DSN_API bool dsn_mimic_app(const char *app_role, int index)
@@ -588,7 +435,7 @@ DSN_API bool dsn_mimic_app(const char *app_role, int index)
     for (auto &n : nodes) {
         if (n.second->spec().role_name == std::string(app_role) &&
             n.second->spec().index == index) {
-            ::dsn::task::set_tls_dsn_context(n.second, nullptr, nullptr);
+            ::dsn::task::set_tls_dsn_context(n.second, nullptr);
             return true;
         }
     }
@@ -658,11 +505,13 @@ DSN_API void dsn_run(int argc, char **argv, bool sleep_after_init)
 
 namespace dsn {
 namespace tools {
+
 bool is_engine_ready() { return dsn_all.is_engine_ready(); }
 
 tool_app *get_current_tool() { return dsn_all.tool; }
-}
-}
+
+} // namespace tools
+} // namespace dsn
 
 extern void dsn_log_init();
 extern void dsn_core_init();
@@ -682,7 +531,7 @@ bool run(const char *config_file,
         "dsn_runtime_init_time_ms = %" PRIu64 " (%s)", dsn_runtime_init_time_ms(), init_time_buf);
 
     dsn_core_init();
-    ::dsn::task::set_tls_dsn_context(nullptr, nullptr, nullptr);
+    ::dsn::task::set_tls_dsn_context(nullptr, nullptr);
 
     dsn_all.engine_ready = false;
     dsn_all.config_completed = false;
@@ -700,11 +549,7 @@ bool run(const char *config_file,
                                   "pause_on_start",
                                   false,
                                   "whether to pause at startup time for easier debugging")) {
-#if defined(_WIN32)
-        printf("\nPause for debugging (pid = %d)...\n", static_cast<int>(::GetCurrentProcessId()));
-#else
         printf("\nPause for debugging (pid = %d)...\n", static_cast<int>(getpid()));
-#endif
         getchar();
     }
 
@@ -771,12 +616,10 @@ bool run(const char *config_file,
     // init logging
     dsn_log_init();
 
-#ifndef _WIN32
     ddebug("init rdsn runtime, pid = %d, dsn_runtime_init_time_ms = %" PRIu64 " (%s)",
            (int)getpid(),
            dsn_runtime_init_time_ms(),
            init_time_buf);
-#endif
 
     // init toollets
     for (auto it = spec.toollets.begin(); it != spec.toollets.end(); ++it) {
@@ -834,14 +677,6 @@ bool run(const char *config_file,
                "app_name is not specified correctly, should be 'xxx' in [apps.xxx]\n"
                "or app_index (1-based) is greater than specified count in config file\n");
         exit(1);
-    }
-
-    if (dsn_config_get_value_bool(
-            "core",
-            "cli_remote",
-            true,
-            "whether to enable remote command line interface (using dsn.cli)")) {
-        ::dsn::command_manager::instance().start_remote_cli();
     }
 
     dsn::command_manager::instance().register_command({"config-dump"},
@@ -906,4 +741,5 @@ void service_app::get_all_service_apps(std::vector<service_app *> *apps)
         apps->push_back(const_cast<service_app *>(node->get_service_app()));
     }
 }
-}
+
+} // namespace dsn

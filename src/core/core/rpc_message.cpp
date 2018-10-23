@@ -45,156 +45,6 @@
 
 using namespace dsn::utils;
 
-DSN_API dsn_message_t dsn_msg_create_request(dsn::task_code rpc_code,
-                                             int timeout_milliseconds,
-                                             int thread_hash,
-                                             uint64_t partition_hash)
-{
-    return ::dsn::message_ex::create_request(
-        rpc_code, timeout_milliseconds, thread_hash, partition_hash);
-}
-
-DSN_API dsn_message_t dsn_msg_create_received_request(dsn::task_code rpc_code,
-                                                      dsn_msg_serialize_format serialization_type,
-                                                      void *buffer,
-                                                      int size,
-                                                      int thread_hash,
-                                                      uint64_t partition_hash)
-{
-    ::dsn::blob bb((const char *)buffer, 0, size);
-    auto msg = ::dsn::message_ex::create_receive_message_with_standalone_header(bb);
-    msg->local_rpc_code = rpc_code;
-    const char *name = rpc_code.to_string();
-    strncpy(msg->header->rpc_name, name, strlen(name));
-
-    msg->header->client.thread_hash = thread_hash;
-    msg->header->client.partition_hash = partition_hash;
-    msg->header->context.u.serialize_format = serialization_type;
-    msg->add_ref(); // released by callers explicitly using dsn_msg_release
-    return msg;
-}
-
-DSN_API dsn_message_t dsn_msg_copy(dsn_message_t msg, bool clone_content, bool copy_for_receive)
-{
-    return msg ? ((::dsn::message_ex *)msg)->copy(clone_content, copy_for_receive) : nullptr;
-}
-
-DSN_API dsn_message_t dsn_msg_create_response(dsn_message_t request)
-{
-    auto msg = ((::dsn::message_ex *)request)->create_response();
-    return msg;
-}
-
-DSN_API void dsn_msg_write_next(dsn_message_t msg, void **ptr, size_t *size, size_t min_size)
-{
-    ((::dsn::message_ex *)msg)->write_next(ptr, size, min_size);
-}
-
-DSN_API void dsn_msg_write_commit(dsn_message_t msg, size_t size)
-{
-    ((::dsn::message_ex *)msg)->write_commit(size);
-}
-
-DSN_API bool dsn_msg_read_next(dsn_message_t msg, void **ptr, size_t *size)
-{
-    return ((::dsn::message_ex *)msg)->read_next(ptr, size);
-}
-
-DSN_API void dsn_msg_read_commit(dsn_message_t msg, size_t size)
-{
-    ((::dsn::message_ex *)msg)->read_commit(size);
-}
-
-DSN_API size_t dsn_msg_body_size(dsn_message_t msg)
-{
-    return ((::dsn::message_ex *)msg)->body_size();
-}
-
-DSN_API void *dsn_msg_rw_ptr(dsn_message_t msg, size_t offset_begin)
-{
-    return ((::dsn::message_ex *)msg)->rw_ptr(offset_begin);
-}
-
-DSN_API void dsn_msg_add_ref(dsn_message_t msg) { ((::dsn::message_ex *)msg)->add_ref(); }
-
-DSN_API void dsn_msg_release_ref(dsn_message_t msg) { ((::dsn::message_ex *)msg)->release_ref(); }
-
-DSN_API dsn::rpc_address dsn_msg_from_address(dsn_message_t msg)
-{
-    return ((::dsn::message_ex *)msg)->header->from_address;
-}
-
-DSN_API dsn::rpc_address dsn_msg_to_address(dsn_message_t msg)
-{
-    return ((::dsn::message_ex *)msg)->to_address;
-}
-
-DSN_API uint64_t dsn_msg_trace_id(dsn_message_t msg)
-{
-    return ((::dsn::message_ex *)msg)->header->trace_id;
-}
-
-DSN_API dsn::task_code dsn_msg_task_code(dsn_message_t msg)
-{
-    return ((::dsn::message_ex *)msg)->rpc_code();
-}
-
-DSN_API const char *dsn_msg_rpc_name(dsn_message_t msg)
-{
-    return ((::dsn::message_ex *)msg)->header->rpc_name;
-}
-
-DSN_API void dsn_msg_set_options(dsn_message_t msg,
-                                 dsn_msg_options_t *opts,
-                                 uint32_t mask // set opt bits using DSN_MSGM_XXX
-                                 )
-{
-    auto hdr = ((::dsn::message_ex *)msg)->header;
-
-    if (mask & DSN_MSGM_TIMEOUT) {
-        hdr->client.timeout_ms = opts->timeout_ms;
-    }
-
-    if (mask & DSN_MSGM_THREAD_HASH) {
-        hdr->client.thread_hash = opts->thread_hash;
-    }
-
-    if (mask & DSN_MSGM_PARTITION_HASH) {
-        hdr->client.partition_hash = opts->partition_hash;
-    }
-
-    if (mask & DSN_MSGM_VNID) {
-        hdr->gpid = opts->gpid;
-    }
-
-    if (mask & DSN_MSGM_CONTEXT) {
-        hdr->context = opts->context;
-    }
-}
-
-DSN_API dsn_msg_serialize_format dsn_msg_get_serialize_format(dsn_message_t msg)
-{
-    auto hdr = ((::dsn::message_ex *)msg)->header;
-    return static_cast<dsn_msg_serialize_format>(hdr->context.u.serialize_format);
-}
-
-DSN_API void dsn_msg_set_serailize_format(dsn_message_t msg, dsn_msg_serialize_format fmt)
-{
-    auto hdr = ((::dsn::message_ex *)msg)->header;
-    hdr->context.u.serialize_format = fmt;
-}
-
-DSN_API void dsn_msg_get_options(dsn_message_t msg,
-                                 /*out*/ dsn_msg_options_t *opts)
-{
-    auto hdr = ((::dsn::message_ex *)msg)->header;
-    opts->timeout_ms = hdr->client.timeout_ms;
-    opts->thread_hash = hdr->client.thread_hash;
-    opts->partition_hash = hdr->client.partition_hash;
-    opts->gpid = hdr->gpid;
-    opts->context = hdr->context;
-}
-
 namespace dsn {
 
 std::atomic<uint64_t> message_ex::_id(0);
@@ -280,6 +130,26 @@ message_ex *message_ex::create_receive_message(const blob &data)
     msg->buffers.push_back(data2);
 
     // dbg_dassert(msg->header->body_length > 0, "message %s is empty!", msg->header->rpc_name);
+    return msg;
+}
+
+message_ex *message_ex::create_received_request(dsn::task_code code,
+                                                dsn_msg_serialize_format format,
+                                                void *buffer,
+                                                int size,
+                                                int thread_hash,
+                                                uint64_t partition_hash)
+{
+    ::dsn::blob bb((const char *)buffer, 0, size);
+    auto msg = ::dsn::message_ex::create_receive_message_with_standalone_header(bb);
+    msg->local_rpc_code = code;
+    const char *name = code.to_string();
+    strncpy(msg->header->rpc_name, name, strlen(name));
+
+    msg->header->client.thread_hash = thread_hash;
+    msg->header->client.partition_hash = partition_hash;
+    msg->header->context.u.serialize_format = format;
+    msg->add_ref(); // released by callers explicitly using release_ref
     return msg;
 }
 
@@ -479,13 +349,6 @@ message_ex *message_ex::create_response()
     hdr.body_length = 0;
     hdr.context.u.is_request = false;
 
-    task_spec *request_sp = task_spec::get(local_rpc_code);
-    task_spec *response_sp = task_spec::get(request_sp->rpc_paired_code);
-    msg->local_rpc_code = response_sp->code;
-    strncpy(hdr.rpc_name, response_sp->name.c_str(), sizeof(hdr.rpc_name));
-    hdr.rpc_code.local_code = msg->local_rpc_code;
-    hdr.rpc_code.local_hash = s_local_hash;
-
     // ATTENTION: the from_address may not be the primary address of this node
     // if there are more than one ports listened and the to_address is not equal to
     // the primary address.
@@ -494,8 +357,24 @@ message_ex *message_ex::create_response()
     msg->io_session = io_session;
     msg->hdr_format = hdr_format;
 
-    // join point
-    request_sp->on_rpc_create_response.execute(this, msg);
+    if (local_rpc_code != TASK_CODE_INVALID) {
+        task_spec *request_sp = task_spec::get(local_rpc_code);
+        task_spec *response_sp = task_spec::get(request_sp->rpc_paired_code);
+        msg->local_rpc_code = response_sp->code;
+        strncpy(hdr.rpc_name, response_sp->name.c_str(), sizeof(hdr.rpc_name) - 1);
+        hdr.rpc_code.local_code = msg->local_rpc_code;
+        hdr.rpc_code.local_hash = s_local_hash;
+
+        // join point
+        request_sp->on_rpc_create_response.execute(this, msg);
+    } else {
+        msg->local_rpc_code = TASK_CODE_INVALID;
+        std::string ack_rpc_name(header->rpc_name);
+        ack_rpc_name += "_ACK";
+        strncpy(hdr.rpc_name, ack_rpc_name.c_str(), sizeof(hdr.rpc_name) - 1);
+        hdr.rpc_code.local_code = TASK_CODE_INVALID;
+        hdr.rpc_code.local_hash = s_local_hash;
+    }
 
     return msg;
 }
@@ -578,22 +457,6 @@ void message_ex::write_commit(size_t size)
     *this->buffers.rbegin() = this->buffers.rbegin()->range(0, (int)this->_rw_offset);
     this->_rw_committed = true;
     this->header->body_length += (int)size;
-}
-
-void message_ex::write_append(const blob &data)
-{
-    // printf("%p %s\n", this, __FUNCTION__);
-    dassert(!this->_is_read && this->_rw_committed,
-            "there are pending msg write not committed"
-            ", please invoke dsn_msg_write_next and dsn_msg_write_commit in pairs");
-
-    int size = data.length();
-    if (size > 0) {
-        this->_rw_index++;
-        this->_rw_offset += size;
-        this->buffers.push_back(data);
-        this->header->body_length += size;
-    }
 }
 
 bool message_ex::read_next(void **ptr, size_t *size)

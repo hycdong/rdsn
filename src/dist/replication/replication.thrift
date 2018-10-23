@@ -703,9 +703,7 @@ struct duplication_sync_response
     2:map<i32, list<duplication_entry>>                dup_map;
 }
 
-
 /////////////////// split-related structs ////////////////////
-
 
 // Request to split the table. It is sent from client to meta.
 struct app_partition_split_request
@@ -735,7 +733,6 @@ struct notify_catch_up_request
     2:dsn.gpid          child_gpid;
     3:i64               child_ballot;
     4:dsn.rpc_address   child_address;
-
 }
 
 struct notify_cacth_up_response
@@ -799,6 +796,38 @@ struct query_child_state_response
     1:dsn.error_code    err;
     2:i32               partition_count;
     3:i64               ballot;
+}
+
+struct ddd_diagnose_request
+{
+    // app_id == -1 means return all partitions of all apps
+    // app_id != -1 && partition_id == -1 means return all partitions of specified app
+    // app_id != -1 && partition_id != -1 means return specified partition
+    1:dsn.gpid pid;
+}
+
+struct ddd_node_info
+{
+    1:dsn.rpc_address node;
+    2:i64             drop_time_ms;
+    3:bool            is_alive; // if the node is alive now
+    4:bool            is_collected; // if replicas has been collected from this node
+    5:i64             ballot; // collected && ballot == -1 means replica not exist on this node
+    6:i64             last_committed_decree;
+    7:i64             last_prepared_decree;
+}
+
+struct ddd_partition_info
+{
+    1:dsn.layer2.partition_configuration config;
+    2:list<ddd_node_info>                dropped;
+    3:string                             reason;
+}
+
+struct ddd_diagnose_response
+{
+    1:dsn.error_code           err;
+    2:list<ddd_partition_info> partitions;
 }
 
 /*

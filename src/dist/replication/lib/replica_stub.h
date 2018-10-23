@@ -29,17 +29,20 @@
 //
 // the replica_stub is the *singleton* entry to
 // access all replica managed in the same process
-//   replica_stub(singleton) --> replica --> replication_app
+//   replica_stub(singleton) --> replica --> replication_app_base
 //
 
-#include "../client_lib/replication_common.h"
-#include "../client_lib/fs_manager.h"
-#include "../client_lib/block_service_manager.h"
-#include "replica.h"
-#include <dsn/cpp/perf_counter_wrapper.h>
-#include <dsn/dist/failure_detector_multimaster.h>
 #include <functional>
 #include <tuple>
+#include <dsn/perf_counter/perf_counter_wrapper.h>
+#include <dsn/dist/failure_detector_multimaster.h>
+#include <dsn/dist/nfs_node.h>
+#include <dsn/dist/cli/cli.server.h>
+
+#include "dist/replication/common/replication_common.h"
+#include "dist/replication/common/fs_manager.h"
+#include "dist/replication/common/block_service_manager.h"
+#include "replica.h"
 
 class replica_stub_mock;
 namespace dsn {
@@ -81,8 +84,8 @@ public:
     //
     //    requests from clients
     //
-    void on_client_write(gpid id, dsn_message_t request);
-    void on_client_read(gpid id, dsn_message_t request);
+    void on_client_write(gpid id, dsn::message_ex *request);
+    void on_client_read(gpid id, dsn::message_ex *request);
 
     //
     //    messages from meta server
@@ -102,8 +105,8 @@ public:
     //        - commit
     //        - learn
     //
-    void on_prepare(dsn_message_t request);
-    void on_learn(dsn_message_t msg);
+    void on_prepare(dsn::message_ex *request);
+    void on_learn(dsn::message_ex *msg);
     void on_learn_completion_notification(const group_check_response &report,
                                           /*out*/ learn_notify_response &response);
     void on_add_learner(const group_check_request &request);
@@ -212,7 +215,7 @@ private:
     void initialize_start();
     void query_configuration_by_node();
     void on_meta_server_disconnected_scatter(replica_stub_ptr this_, gpid id);
-    void on_node_query_reply(error_code err, dsn_message_t request, dsn_message_t response);
+    void on_node_query_reply(error_code err, dsn::message_ex *request, dsn::message_ex *response);
     void on_node_query_reply_scatter(replica_stub_ptr this_,
                                      const configuration_update_request &config);
     void on_node_query_reply_scatter2(replica_stub_ptr this_, gpid id);
@@ -243,6 +246,7 @@ private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;
     friend class ::dsn::replication::replica;
+    friend class ::dsn::replication::potential_secondary_context;
     friend class ::dsn::replication::cold_backup_context;
     friend class ::replica_stub_mock;
 
@@ -300,6 +304,12 @@ private:
     // (in other words, current service node)
     block_service_manager _block_service_manager;
 
+    // nfs_node
+    std::unique_ptr<dsn::nfs_node> _nfs;
+
+    // cli service
+    std::unique_ptr<dsn::cli_service> _cli_service;
+
     // performance counters
     perf_counter_wrapper _counter_replicas_count;
     perf_counter_wrapper _counter_replicas_opening_count;
@@ -346,7 +356,7 @@ private:
     dsn::task_tracker _tracker;
 
 private:
-    void response_client_error(gpid id, bool is_read, dsn_message_t request, error_code error);
+    void response_client_error(gpid id, bool is_read, dsn::message_ex *request, error_code error);
 };
 //------------ inline impl ----------------------
 }

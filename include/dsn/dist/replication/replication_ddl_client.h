@@ -39,6 +39,7 @@
 #include <map>
 #include <dsn/dist/replication.h>
 #include <dsn/tool-api/task_tracker.h>
+#include <dsn/tool-api/async_calls.h>
 
 namespace dsn {
 namespace replication {
@@ -77,6 +78,8 @@ public:
     dsn::error_code
     list_nodes(const dsn::replication::node_status::type status,
                std::map<dsn::rpc_address, dsn::replication::node_status::type> &nodes);
+
+    dsn::error_code cluster_name(int64_t timeout_ms, std::string &cluster_name);
 
     dsn::error_code cluster_info(const std::string &file_name, bool resolve_ip = false);
 
@@ -169,7 +172,16 @@ public:
     dsn::error_code
     clear_app_envs(const std::string &app_name, bool clear_all, const std::string &prefix);
 
+    // execute partition split
     dsn::error_code app_partition_split(const std::string &app_name, int partition_count);
+
+    // print table to format columns as the same width.
+    // return false if column count is not the same for all rows.
+    bool print_table(const std::vector<std::vector<std::string>> &table,
+                     std::ostream &output,
+                     const std::string &column_delimiter = "   ");
+
+    dsn::error_code ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &ddd_partitions);
 
 private:
     bool static valid_app_char(int c);
@@ -177,8 +189,8 @@ private:
     void end_meta_request(const rpc_response_task_ptr &callback,
                           int retry_times,
                           error_code err,
-                          dsn_message_t request,
-                          dsn_message_t resp);
+                          dsn::message_ex *request,
+                          dsn::message_ex *resp);
 
     template <typename TRequest>
     rpc_response_task_ptr request_meta(dsn::task_code code,
@@ -186,18 +198,18 @@ private:
                                        int timeout_milliseconds = 0,
                                        int reply_thread_hash = 0)
     {
-        dsn_message_t msg = dsn_msg_create_request(code, timeout_milliseconds);
+        dsn::message_ex *msg = dsn::message_ex::create_request(code, timeout_milliseconds);
         ::dsn::marshall(msg, *req);
 
         rpc_response_task_ptr task = ::dsn::rpc::create_rpc_response_task(
             msg, nullptr, empty_rpc_handler, reply_thread_hash);
-        rpc::call(
-            _meta_server,
-            msg,
-            &_tracker,
-            [this, task](error_code err, dsn_message_t request, dsn_message_t response) mutable {
-                end_meta_request(std::move(task), 0, err, request, response);
-            });
+        rpc::call(_meta_server,
+                  msg,
+                  &_tracker,
+                  [this, task](
+                      error_code err, dsn::message_ex *request, dsn::message_ex *response) mutable {
+                      end_meta_request(std::move(task), 0, err, request, response);
+                  });
         return task;
     }
 

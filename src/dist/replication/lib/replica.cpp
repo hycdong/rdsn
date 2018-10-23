@@ -43,6 +43,7 @@ replica::replica(
       _app_info(app),
       _primary_states(
           gpid, stub->options().staleness_for_commit, stub->options().batch_write_disabled),
+      _potential_secondary_states(this),
       _cold_backup_running_count(0),
       _cold_backup_max_duration_time_ms(0),
       _cold_backup_max_upload_file_size(0),
@@ -80,7 +81,7 @@ replica::replica(
 
 void replica::update_last_checkpoint_generate_time()
 {
-    _last_checkpoint_generate_time_ms = now_ms();
+    _last_checkpoint_generate_time_ms = dsn_now_ms();
     uint64_t max_interval_ms = _options->checkpoint_max_interval_hours * 3600000UL;
     // use random trigger time to avoid flush peek
     _next_checkpoint_interval_trigger_time_ms =
@@ -106,7 +107,7 @@ void replica::init_state()
     _config.pid.set_partition_index(0);
     _config.status = partition_status::PS_INACTIVE;
     _primary_states.membership.ballot = 0;
-    _create_time_ms = now_ms();
+    _create_time_ms = dsn_now_ms();
     _last_config_change_time_ms = _create_time_ms;
     update_last_checkpoint_generate_time();
     _private_log = nullptr;
@@ -124,7 +125,7 @@ replica::~replica(void)
     dinfo("%s: replica destroyed", name());
 }
 
-void replica::on_client_read(task_code code, dsn_message_t request)
+void replica::on_client_read(task_code code, dsn::message_ex *request)
 {
     if (_partition_version == -1) {
         derror("%s: current partition is not available coz during partition split", name());
@@ -175,7 +176,7 @@ void replica::on_client_read(task_code code, dsn_message_t request)
     _app->on_request(request);
 }
 
-void replica::response_client_message(bool is_read, dsn_message_t request, error_code error)
+void replica::response_client_message(bool is_read, dsn::message_ex *request, error_code error)
 {
     if (nullptr == request) {
         return;
@@ -189,10 +190,10 @@ void replica::response_client_message(bool is_read, dsn_message_t request, error
          "%s: reply client %s to %s, err = %s",
          name(),
          is_read ? "read" : "write",
-         dsn_msg_from_address(request).to_string(),
+         request->header->from_address.to_string(),
          error.to_string());
 
-    dsn_rpc_reply(dsn_msg_create_response(request), error);
+    dsn_rpc_reply(request->create_response(), error);
 }
 
 // error_code replica::check_and_fix_private_log_completeness()

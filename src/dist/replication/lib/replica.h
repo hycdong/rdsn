@@ -43,11 +43,13 @@
 //
 
 #include <dsn/tool-api/uniq_timestamp_us.h>
+#include <dsn/tool-api/thread_access_checker.h>
 #include <dsn/cpp/serverlet.h>
-#include <dsn/cpp/perf_counter_wrapper.h>
+
+#include <dsn/perf_counter/perf_counter_wrapper.h>
 #include <dsn/dist/replication/replica_base.h>
 
-#include "dist/replication/client_lib/replication_common.h"
+#include "dist/replication/common/replication_common.h"
 #include "mutation.h"
 #include "mutation_log.h"
 #include "prepare_list.h"
@@ -100,8 +102,8 @@ public:
     //
     //    requests from clients
     //
-    void on_client_write(task_code code, dsn_message_t request);
-    void on_client_read(task_code code, dsn_message_t request);
+    void on_client_write(task_code code, dsn::message_ex *request);
+    void on_client_read(task_code code, dsn::message_ex *request);
 
     //
     //    messages and tools from/for meta server
@@ -113,8 +115,8 @@ public:
     //
     //    messages from peers (primary or secondary)
     //
-    void on_prepare(dsn_message_t request);
-    void on_learn(dsn_message_t msg, const learn_request &request);
+    void on_prepare(dsn::message_ex *request);
+    void on_learn(dsn::message_ex *msg, const learn_request &request);
     void on_learn_completion_notification(const group_check_response &report,
                                           /*out*/ learn_notify_response &response);
     void on_learn_completion_notification_reply(error_code err,
@@ -170,7 +172,7 @@ public:
 private:
     // common helpers
     void init_state();
-    void response_client_message(bool is_read, dsn_message_t request, error_code error);
+    void response_client_message(bool is_read, dsn::message_ex *request, error_code error);
     void execute_mutation(mutation_ptr &mu);
     mutation_ptr new_mutation(decree decree);
 
@@ -191,8 +193,8 @@ private:
     void on_append_log_completed(mutation_ptr &mu, error_code err, size_t size);
     void on_prepare_reply(std::pair<mutation_ptr, partition_status::type> pr,
                           error_code err,
-                          dsn_message_t request,
-                          dsn_message_t reply);
+                          dsn::message_ex *request,
+                          dsn::message_ex *reply);
     void do_possible_commit_on_primary(mutation_ptr &mu);
     void ack_prepare_message(error_code err, mutation_ptr &mu);
     void cleanup_preparing_mutations(bool wait);
@@ -234,8 +236,8 @@ private:
                                              partition_configuration &newConfig);
     void
     on_update_configuration_on_meta_server_reply(error_code err,
-                                                 dsn_message_t request,
-                                                 dsn_message_t response,
+                                                 dsn::message_ex *request,
+                                                 dsn::message_ex *response,
                                                  std::shared_ptr<configuration_update_request> req);
     void replay_prepare_list();
     bool is_same_ballot_status_change_allowed(partition_status::type olds,
@@ -494,6 +496,8 @@ private:
     perf_counter_wrapper _counter_private_log_size;
 
     dsn::task_tracker _tracker;
+    // the thread access checker
+    dsn::thread_access_checker _checker;
 };
 typedef dsn::ref_ptr<replica> replica_ptr;
 }

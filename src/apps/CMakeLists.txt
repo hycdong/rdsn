@@ -1,5 +1,2 @@
 add_subdirectory(echo)
 add_subdirectory(skv)
-add_subdirectory(nfs)
-add_subdirectory(nfs_test)
-add_subdirectory(cli)
