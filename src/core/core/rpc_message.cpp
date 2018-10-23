@@ -183,10 +183,10 @@ message_ex *message_ex::create_receive_message_with_fresh_header(const message_e
     msg->buffers.emplace_back(blob(std::move(header_holder), sizeof(message_header)));
 
     if (old_msg.buffers.size() == 1) {
-        dassert(old_msg.buffers[0].has_holder(), "raw pointer is not allowed here");
+        dassert(old_msg.buffers[0].buffer_ptr(), "raw pointer is not allowed here");
         msg->buffers.emplace_back(old_msg.buffers[0]);
     } else if (old_msg.buffers.size() == 2) {
-        dassert(old_msg.buffers[1].has_holder(), "raw pointer is not allowed here");
+        dassert(old_msg.buffers[1].buffer_ptr(), "raw pointer is not allowed here");
         msg->buffers.emplace_back(old_msg.buffers[1]);
     } else {
         dassert(false, "invalid buffer size %d", msg->buffers.size());

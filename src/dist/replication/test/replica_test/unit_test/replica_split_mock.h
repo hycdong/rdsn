@@ -109,10 +109,10 @@ public:
     }
     virtual dsn::replication::decree last_durable_decree() const { return _last_durable_decree; }
     virtual dsn::replication::decree last_flushed_decree() const { return _last_durable_decree; }
-    virtual int on_request(dsn_message_t request) { return 0; }
+    virtual int on_request(dsn::message_ex *request) { return 0; }
     virtual int on_batched_write_requests(int64_t decree,
                                           uint64_t timestamp,
-                                          dsn_message_t *requests,
+                                          dsn::message_ex **requests,
                                           int request_length)
     {
         return 0;

@@ -995,7 +995,7 @@ void replica::on_register_child_on_meta_reply(
     std::shared_ptr<register_child_response> response) // on primary parent
 {
     // TODO(hyc): consider where should add check
-    check_hashed_access();
+    _checker.only_one_thread_access();
 
     if (partition_status::PS_INACTIVE != status() || _stub->is_connected() == false) {
         dwarn_f("{} status wrong or stub is not connected, status is {}",

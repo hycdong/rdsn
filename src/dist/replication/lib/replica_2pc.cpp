@@ -741,7 +741,7 @@ void replica::ack_parent(error_code ec, mutation_ptr &mu)
 
 void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d)
 {
-    check_hashed_access();
+    _checker.only_one_thread_access();
 
     // 1. check mutation
     auto mu = _prepare_list->get_mutation_by_decree(d);

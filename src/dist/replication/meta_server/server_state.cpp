@@ -1615,7 +1615,7 @@ void server_state::on_update_configuration_on_remote_reply(
             resp.err = ERR_OK;
             resp.config = config_request->config;
             _meta_svc->reply_data(cc.msg, resp);
-            dsn_msg_release_ref(cc.msg);
+            cc.msg->release_ref();
             cc.msg = nullptr;
         }
         process_one_partition(app);

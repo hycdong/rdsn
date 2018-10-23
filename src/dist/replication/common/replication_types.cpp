@@ -11784,52 +11784,6 @@ void duplication_sync_response::printTo(std::ostream& out) const {
   out << ")";
 }
 
-void swap(duplication_sync_response &a, duplication_sync_response &b)
-{
-    using ::std::swap;
-    swap(a.err, b.err);
-    swap(a.dup_map, b.dup_map);
-    swap(a.__isset, b.__isset);
-}
-
-duplication_sync_response::duplication_sync_response(const duplication_sync_response &other535)
-{
-    err = other535.err;
-    dup_map = other535.dup_map;
-    __isset = other535.__isset;
-}
-duplication_sync_response::duplication_sync_response(duplication_sync_response &&other536)
-{
-    err = std::move(other536.err);
-    dup_map = std::move(other536.dup_map);
-    __isset = std::move(other536.__isset);
-}
-duplication_sync_response &duplication_sync_response::
-operator=(const duplication_sync_response &other537)
-{
-    err = other537.err;
-    dup_map = other537.dup_map;
-    __isset = other537.__isset;
-    return *this;
-}
-duplication_sync_response &duplication_sync_response::
-operator=(duplication_sync_response &&other538)
-{
-    err = std::move(other538.err);
-    dup_map = std::move(other538.dup_map);
-    __isset = std::move(other538.__isset);
-    return *this;
-}
-void duplication_sync_response::printTo(std::ostream &out) const
-{
-    using ::apache::thrift::to_string;
-    out << "duplication_sync_response(";
-    out << "err=" << to_string(err);
-    out << ", "
-        << "dup_map=" << to_string(dup_map);
-    out << ")";
-}
-
 ddd_diagnose_request::~ddd_diagnose_request() throw() {}
 
 void ddd_diagnose_request::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
@@ -13773,5 +13727,6 @@ void query_child_state_response::printTo(std::ostream& out) const {
   out << ", " << "partition_count=" << to_string(partition_count);
   out << ", " << "ballot=" << to_string(ballot);
   out << ")";
+}
 }
 } // namespace

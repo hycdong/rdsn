@@ -47,9 +47,9 @@ void meta_service_test_app::app_partition_split_test()
         request.app_name = fake_app->app_name;
         request.new_partition_count = PARTITION_COUNT;
 
-        dsn_message_t binary_req = dsn_msg_create_request(RPC_CM_APP_PARTITION_SPLIT);
+        dsn::message_ex *binary_req = dsn::message_ex::create_request(RPC_CM_APP_PARTITION_SPLIT);
         dsn::marshall(binary_req, request);
-        dsn_message_t recv_msg = create_corresponding_receive(binary_req);
+        dsn::message_ex *recv_msg = create_corresponding_receive(binary_req);
         app_partition_split_rpc rpc(recv_msg); // don't need reply
 
         svc->_split_svc = dsn::make_unique<meta_split_service>(svc);
@@ -70,9 +70,9 @@ void meta_service_test_app::app_partition_split_test()
         request.app_name = "table_not_exist";
         request.new_partition_count = PARTITION_COUNT * 2;
 
-        dsn_message_t binary_req = dsn_msg_create_request(RPC_CM_APP_PARTITION_SPLIT);
+        dsn::message_ex *binary_req = dsn::message_ex::create_request(RPC_CM_APP_PARTITION_SPLIT);
         dsn::marshall(binary_req, request);
-        dsn_message_t recv_msg = create_corresponding_receive(binary_req);
+        dsn::message_ex *recv_msg = create_corresponding_receive(binary_req);
         app_partition_split_rpc rpc(recv_msg); // don't need reply
 
         svc->_split_svc = dsn::make_unique<meta_split_service>(svc);
@@ -93,9 +93,9 @@ void meta_service_test_app::app_partition_split_test()
         request.app_name = fake_app->app_name;
         request.new_partition_count = PARTITION_COUNT * 2;
 
-        dsn_message_t binary_req = dsn_msg_create_request(RPC_CM_APP_PARTITION_SPLIT);
+        dsn::message_ex *binary_req = dsn::message_ex::create_request(RPC_CM_APP_PARTITION_SPLIT);
         dsn::marshall(binary_req, request);
-        dsn_message_t recv_msg = create_corresponding_receive(binary_req);
+        dsn::message_ex *recv_msg = create_corresponding_receive(binary_req);
         app_partition_split_rpc rpc(recv_msg); // don't need reply
 
         svc->_split_svc = dsn::make_unique<meta_split_service>(svc);
@@ -199,9 +199,9 @@ void meta_service_test_app::register_child_test()
     {
         request.parent_config.ballot = 1;
 
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_REGISTER_CHILD_REPLICA);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_REGISTER_CHILD_REPLICA);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
 
         register_child_rpc rpc(recv_msg);
         split_srv->register_child_on_meta(rpc);
@@ -217,9 +217,9 @@ void meta_service_test_app::register_child_test()
     {
         app->partitions[9].ballot = 2;
 
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_REGISTER_CHILD_REPLICA);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_REGISTER_CHILD_REPLICA);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
 
         register_child_rpc rpc(recv_msg);
         split_srv->register_child_on_meta(rpc);
@@ -235,9 +235,9 @@ void meta_service_test_app::register_child_test()
     {
         app->helpers->contexts[parent_index].stage = config_status::pending_remote_sync;
 
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_REGISTER_CHILD_REPLICA);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_REGISTER_CHILD_REPLICA);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
 
         register_child_rpc rpc(recv_msg);
         split_srv->register_child_on_meta(rpc);
@@ -248,9 +248,9 @@ void meta_service_test_app::register_child_test()
 
     std::cout << "case4. succeed" << std::endl;
     {
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_REGISTER_CHILD_REPLICA);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_REGISTER_CHILD_REPLICA);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
 
         register_child_rpc rpc(recv_msg);
         split_srv->register_child_on_meta(rpc);
@@ -326,9 +326,9 @@ void meta_service_test_app::on_query_child_state_test()
                 []() { std::cout << "This is mock pending_sync_task" << std::endl; },
                 parent_gpid.thread_hash());
 
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_QUERY_CHILD_STATE);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
         query_child_state_rpc rpc(recv_msg);
         split_srv->on_query_child_state(rpc);
         svc->tracker()->wait_outstanding_tasks();
@@ -341,9 +341,9 @@ void meta_service_test_app::on_query_child_state_test()
 
     std::cout << "case2. equal partition count, not during split or finish split" << std::endl;
     {
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_QUERY_CHILD_STATE);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
         query_child_state_rpc rpc(recv_msg);
         split_srv->on_query_child_state(rpc);
         svc->tracker()->wait_outstanding_tasks();
@@ -358,9 +358,9 @@ void meta_service_test_app::on_query_child_state_test()
 
     std::cout << "case3. child ballot is invalid" << std::endl;
     {
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_QUERY_CHILD_STATE);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
         query_child_state_rpc rpc(recv_msg);
         split_srv->on_query_child_state(rpc);
         svc->tracker()->wait_outstanding_tasks();
@@ -375,9 +375,9 @@ void meta_service_test_app::on_query_child_state_test()
     {
         app->partitions[child_config.pid.get_partition_index()].ballot = 4;
 
-        dsn_message_t msg = dsn_msg_create_request(RPC_CM_QUERY_CHILD_STATE);
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_QUERY_CHILD_STATE);
         dsn::marshall(msg, request);
-        dsn_message_t recv_msg = create_corresponding_receive(msg);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
 
         query_child_state_rpc rpc(recv_msg);
         split_srv->on_query_child_state(rpc);
