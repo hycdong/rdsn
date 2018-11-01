@@ -24,14 +24,7 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     What is this file about?
- *
- * Revision history:
- *     xxxx-xx-xx, author, first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
+#include <dsn/utility/rand.h>
 
 #include "asio_net_provider.h"
 #include "asio_rpc_session.h"
@@ -45,6 +38,17 @@ asio_network_provider::asio_network_provider(rpc_engine *srv, network *inner_pro
     _acceptor = nullptr;
 }
 
+asio_network_provider::~asio_network_provider()
+{
+    if (_acceptor) {
+        _acceptor->close();
+    }
+    _io_service.stop();
+    for (auto &w : _workers) {
+        w->join();
+    }
+}
+
 error_code asio_network_provider::start(rpc_channel channel, int port, bool client_only)
 {
     if (_acceptor != nullptr)
@@ -56,7 +60,7 @@ error_code asio_network_provider::start(rpc_channel channel, int port, bool clie
                                          1,
                                          "thread number for io service (timer and boost network)");
     for (int i = 0; i < io_service_worker_count; i++) {
-        _workers.push_back(std::shared_ptr<std::thread>(new std::thread([this, i]() {
+        _workers.push_back(std::make_shared<std::thread>([this, i]() {
             task::set_tls_dsn_context(node(), nullptr);
 
             const char *name = ::dsn::tools::get_service_node_name(node());
@@ -65,8 +69,12 @@ error_code asio_network_provider::start(rpc_channel channel, int port, bool clie
             task_worker::set_name(buffer);
 
             boost::asio::io_service::work work(_io_service);
-            _io_service.run();
-        })));
+            boost::system::error_code ec;
+            _io_service.run(ec);
+            if (ec) {
+                dassert(false, "boost::asio::io_service run failed: err(%s)", ec.message().data());
+            }
+        }));
     }
 
     _acceptor = nullptr;
@@ -125,21 +133,26 @@ void asio_network_provider::do_accept()
 
     _acceptor->async_accept(*socket, [this, socket](boost::system::error_code ec) {
         if (!ec) {
-            auto ip = socket->remote_endpoint().address().to_v4().to_ulong();
-            auto port = socket->remote_endpoint().port();
-            ::dsn::rpc_address client_addr(ip, port);
+            auto remote = socket->remote_endpoint(ec);
+            if (ec) {
+                derror("failed to get the remote endpoint: %s", ec.message().data());
+            } else {
+                auto ip = remote.address().to_v4().to_ulong();
+                auto port = remote.port();
+                ::dsn::rpc_address client_addr(ip, port);
 
-            message_parser_ptr null_parser;
-            rpc_session_ptr s =
-                new asio_rpc_session(*this,
-                                     client_addr,
-                                     (std::shared_ptr<boost::asio::ip::tcp::socket> &)socket,
-                                     null_parser,
-                                     false);
-            on_server_session_accepted(s);
+                message_parser_ptr null_parser;
+                rpc_session_ptr s =
+                    new asio_rpc_session(*this,
+                                         client_addr,
+                                         (std::shared_ptr<boost::asio::ip::tcp::socket> &)socket,
+                                         null_parser,
+                                         false);
+                on_server_session_accepted(s);
 
-            // we should start read immediately after the rpc session is completely created.
-            s->start_read_next();
+                // we should start read immediately after the rpc session is completely created.
+                s->start_read_next();
+            }
         }
 
         do_accept();
@@ -200,6 +213,11 @@ asio_udp_provider::~asio_udp_provider()
     }
     delete[] _parsers;
     _parsers = nullptr;
+
+    _io_service.stop();
+    for (auto &w : _workers) {
+        w->join();
+    }
 }
 
 message_parser *asio_udp_provider::get_message_parser(network_header_format hdr_format)
@@ -293,8 +311,8 @@ error_code asio_udp_provider::start(rpc_channel channel, int port, bool client_o
             // refactored
             _address.assign_ipv4(get_local_ipv4(),
                                  std::numeric_limits<uint16_t>::max() -
-                                     dsn_random64(std::numeric_limits<uint64_t>::min(),
-                                                  std::numeric_limits<uint64_t>::max()) %
+                                     rand::next_u64(std::numeric_limits<uint64_t>::min(),
+                                                    std::numeric_limits<uint64_t>::max()) %
                                          5000);
             ::boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address_v4::any(),
                                                       _address.port());
@@ -339,7 +357,7 @@ error_code asio_udp_provider::start(rpc_channel channel, int port, bool client_o
     }
 
     for (int i = 0; i < io_service_worker_count; i++) {
-        _workers.push_back(std::shared_ptr<std::thread>(new std::thread([this, i]() {
+        _workers.push_back(std::make_shared<std::thread>([this, i]() {
             task::set_tls_dsn_context(node(), nullptr);
 
             const char *name = ::dsn::tools::get_service_node_name(node());
@@ -348,13 +366,17 @@ error_code asio_udp_provider::start(rpc_channel channel, int port, bool client_o
             task_worker::set_name(buffer);
 
             boost::asio::io_service::work work(_io_service);
-            _io_service.run();
-        })));
+            boost::system::error_code ec;
+            _io_service.run(ec);
+            if (ec) {
+                dassert(false, "boost::asio::io_service run failed: err(%s)", ec.message().data());
+            }
+        }));
     }
 
     do_receive();
 
     return ERR_OK;
 }
-}
-}
+} // namespace tools
+} // namespace dsn

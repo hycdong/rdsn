@@ -41,31 +41,30 @@
 #include <dsn/utility/synchronize.h>
 #include <gtest/gtest.h>
 #include <thread>
-#include "../core/service_engine.h"
-#include "../tools/simulator/task_engine.sim.h"
-#include "../tools/simulator/scheduler.h"
+#include "core/core/service_engine.h"
+#include "core/tools/simulator/task_engine.sim.h"
+#include "core/tools/simulator/scheduler.h"
 
 TEST(tools_simulator, dsn_semaphore)
 {
     if (dsn::task::get_current_worker() == nullptr)
         return;
-    if (dsn::service_engine::fast_instance().spec().semaphore_factory_name !=
+    if (dsn::service_engine::instance().spec().semaphore_factory_name !=
         "dsn::tools::sim_semaphore_provider")
         return;
-    dsn_handle_t s = dsn_semaphore_create(2);
-    dsn_semaphore_wait(s);
-    ASSERT_TRUE(dsn_semaphore_wait_timeout(s, 10));
-    ASSERT_FALSE(dsn_semaphore_wait_timeout(s, 0));
-    dsn_semaphore_signal(s, 1);
-    dsn_semaphore_wait(s);
-    dsn_semaphore_destroy(s);
+    dsn::zsemaphore s(2);
+    s.wait();
+    ASSERT_TRUE(s.wait(10));
+    ASSERT_FALSE(s.wait(0));
+    s.signal(1);
+    s.wait();
 }
 
 TEST(tools_simulator, dsn_lock_nr)
 {
     if (dsn::task::get_current_worker() == nullptr)
         return;
-    if (dsn::service_engine::fast_instance().spec().lock_nr_factory_name !=
+    if (dsn::service_engine::instance().spec().lock_nr_factory_name !=
         "dsn::tools::sim_lock_nr_provider")
         return;
 
@@ -81,8 +80,7 @@ TEST(tools_simulator, dsn_lock)
 {
     if (dsn::task::get_current_worker() == nullptr)
         return;
-    if (dsn::service_engine::fast_instance().spec().lock_factory_name !=
-        "dsn::tools::sim_lock_provider")
+    if (dsn::service_engine::instance().spec().lock_factory_name != "dsn::tools::sim_lock_provider")
         return;
 
     dsn::tools::sim_lock_provider *s = new dsn::tools::sim_lock_provider(nullptr);
@@ -102,7 +100,7 @@ TEST(tools_simulator, scheduler)
 {
     if (dsn::task::get_current_worker() == nullptr)
         return;
-    if (dsn::service_engine::fast_instance().spec().tool != "simulator")
+    if (dsn::service_engine::instance().spec().tool != "simulator")
         return;
 
     dsn::tools::sim_worker_state *s =

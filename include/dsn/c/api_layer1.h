@@ -277,63 +277,6 @@ typedef struct
 } dsn_file_buffer_t;
 
 /*!
- open file
-
- \param file_name filename of the file.
- \param flag      flags such as O_RDONLY | O_BINARY used by ::open
- \param pmode     permission mode used by ::open
-
- \return file handle
- */
-extern DSN_API dsn_handle_t dsn_file_open(const char *file_name, int flag, int pmode);
-
-/*! close the file handle */
-extern DSN_API dsn::error_code dsn_file_close(dsn_handle_t file);
-
-/*! flush the buffer of the given file */
-extern DSN_API dsn::error_code dsn_file_flush(dsn_handle_t file);
-
-/*!
- read file asynchronously
-
- \param file   file handle
- \param buffer read buffer
- \param count  byte size of the read buffer
- \param offset offset in the file to start reading
- \param cb     callback aio task to be executed on completion
- */
-extern DSN_API void
-dsn_file_read(dsn_handle_t file, char *buffer, int count, uint64_t offset, dsn::aio_task *cb);
-
-/*!
- write file asynchronously
-
- \param file   file handle
- \param buffer write buffer
- \param count  byte size of the to-be-written content
- \param offset offset in the file to start write
- \param cb     callback aio task to be executed on completion
- */
-extern DSN_API void dsn_file_write(
-    dsn_handle_t file, const char *buffer, int count, uint64_t offset, dsn::aio_task *cb);
-
-/*!
- write file asynchronously with vector buffers
-
- \param file          file handle
- \param buffers       write buffers
- \param buffer_count  number of write buffers
- \param offset        offset in the file to start write
- \param cb            callback aio task to be executed on completion
- */
-extern DSN_API void dsn_file_write_vector(dsn_handle_t file,
-                                          const dsn_file_buffer_t *buffers,
-                                          int buffer_count,
-                                          uint64_t offset,
-                                          dsn::aio_task *cb);
-/*@}*/
-
-/*!
 @defgroup env Environment
 
 Non-deterministic Environment Input
@@ -342,75 +285,11 @@ Note developers can easily plugin their own implementation to
 replace the underneath implementation of these primitives.
 @{
 */
-extern DSN_API uint64_t dsn_runtime_init_time_ms();
 extern DSN_API uint64_t dsn_now_ns();
-
-/*! return [min, max] */
-extern DSN_API uint64_t dsn_random64(uint64_t min, uint64_t max);
 
 __inline uint64_t dsn_now_us() { return dsn_now_ns() / 1000; }
 __inline uint64_t dsn_now_ms() { return dsn_now_ns() / 1000000; }
 
-/*! return [min, max] */
-__inline uint32_t dsn_random32(uint32_t min, uint32_t max)
-{
-    return (uint32_t)(dsn_random64(min, max));
-}
-
-__inline double dsn_probability() { return (double)(dsn_random64(0, 1000000000)) / 1000000000.0; }
-
-/*@}*/
-
-/*!
-@defgroup sync Thread Synchornization
-
-Thread Synchornization Primitives
-
-Note developers can easily plugin their own implementation to
-replace the underneath implementation of these primitives.
-@{
-*/
-
-/*!
-@defgroup sync-exlock Exlusive Locks
-Exlusive Locks
-@{
-*/
-
-/*! create a recursive? or not exlusive lock*/
-extern DSN_API dsn_handle_t dsn_exlock_create(bool recursive);
-extern DSN_API void dsn_exlock_destroy(dsn_handle_t l);
-extern DSN_API void dsn_exlock_lock(dsn_handle_t l);
-extern DSN_API bool dsn_exlock_try_lock(dsn_handle_t l);
-extern DSN_API void dsn_exlock_unlock(dsn_handle_t l);
-/*@}*/
-
-/*!
-@defgroup sync-rwlock Non-recursive Read-Write Locks
-Non-recursive Read-Write Locks
-@{
-*/
-extern DSN_API dsn_handle_t dsn_rwlock_nr_create();
-extern DSN_API void dsn_rwlock_nr_destroy(dsn_handle_t l);
-extern DSN_API void dsn_rwlock_nr_lock_read(dsn_handle_t l);
-extern DSN_API void dsn_rwlock_nr_unlock_read(dsn_handle_t l);
-extern DSN_API bool dsn_rwlock_nr_try_lock_read(dsn_handle_t l);
-extern DSN_API void dsn_rwlock_nr_lock_write(dsn_handle_t l);
-extern DSN_API void dsn_rwlock_nr_unlock_write(dsn_handle_t l);
-extern DSN_API bool dsn_rwlock_nr_try_lock_write(dsn_handle_t l);
-/*@}*/
-
-/*!
-@defgroup sync-sema Semaphore
-Semaphore
-@{
-*/
-/*! create a semaphore with initial count equals to inital_count */
-extern DSN_API dsn_handle_t dsn_semaphore_create(int initial_count);
-extern DSN_API void dsn_semaphore_destroy(dsn_handle_t s);
-extern DSN_API void dsn_semaphore_signal(dsn_handle_t s, int count);
-extern DSN_API void dsn_semaphore_wait(dsn_handle_t s);
-extern DSN_API bool dsn_semaphore_wait_timeout(dsn_handle_t s, int timeout_milliseconds);
 /*@}*/
 
 /*@}*/

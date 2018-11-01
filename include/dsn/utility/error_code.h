@@ -1,12 +1,10 @@
 #pragma once
 
 #include <dsn/utility/customizable_id.h>
-
-#ifdef DSN_USE_THRIFT_SERIALIZATION
 #include <thrift/protocol/TProtocol.h>
-#endif
 
 namespace dsn {
+
 class error_code
 {
 public:
@@ -24,10 +22,9 @@ public:
 
     constexpr operator int() const { return _internal_code; }
 
-#ifdef DSN_USE_THRIFT_SERIALIZATION
+    // for serialization in thrift format
     uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
     uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-#endif
 
     static int max();
     static bool is_exist(const char *name);
@@ -119,4 +116,5 @@ DEFINE_ERR_CODE(ERR_ZOOKEEPER_OPERATION)
 DEFINE_ERR_CODE(ERR_CHILD_REGISTERED)
 DEFINE_ERR_CODE(ERR_CHILD_NOT_READY)
 DEFINE_ERR_CODE(ERR_PARENT_PARTITION_MISUSED)
-}
+
+} // namespace dsn

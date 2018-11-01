@@ -35,12 +35,12 @@
 
 #include "partition_resolver_simple.h"
 #include <dsn/utility/utils.h>
+#include <dsn/utility/rand.h>
 #include <dsn/tool-api/async_calls.h>
 
 namespace dsn {
 namespace dist {
 //------------------------------------------------------------------------------------
-using namespace service;
 
 partition_resolver_simple::partition_resolver_simple(rpc_address meta_server, const char *app_path)
     : partition_resolver(meta_server, app_path),
@@ -439,7 +439,7 @@ rpc_address partition_resolver_simple::get_address(const partition_configuration
         if (config.last_drops.size() == 0) {
             return rpc_address();
         } else {
-            return config.last_drops[dsn_random32(0, config.last_drops.size() - 1)];
+            return config.last_drops[rand::next_u32(0, config.last_drops.size() - 1)];
         }
     }
 

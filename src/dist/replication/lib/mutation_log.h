@@ -35,9 +35,10 @@
 
 #pragma once
 
-#include "../common/replication_common.h"
+#include "dist/replication/common/replication_common.h"
 #include "mutation.h"
 #include <atomic>
+#include <dsn/tool-api/zlocks.h>
 
 class log_file_mock;
 class mutation_log_private_mock;
@@ -636,7 +637,7 @@ public:
 
 private:
     // make private, user should create log_file through open_read() or open_write()
-    log_file(const char *path, dsn_handle_t handle, int index, int64_t start_offset, bool is_read);
+    log_file(const char *path, disk_file *handle, int index, int64_t start_offset, bool is_read);
 
 private:
     uint32_t _crc32;
@@ -645,7 +646,7 @@ private:
         _end_offset; // end offset in the global space: end_offset = start_offset + file_size
     class file_streamer;
     std::unique_ptr<file_streamer> _stream;
-    dsn_handle_t _handle;      // file handle
+    disk_file *_handle;        // file handle
     bool _is_read;             // if opened for read or write
     std::string _path;         // file path
     int _index;                // file index

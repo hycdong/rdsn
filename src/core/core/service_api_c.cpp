@@ -28,6 +28,7 @@
 #include <dsn/tool_api.h>
 #include <dsn/cpp/serialization.h>
 #include <dsn/utility/filesystem.h>
+#include <dsn/utility/process_utils.h>
 #include <dsn/tool-api/command_manager.h>
 #include <fstream>
 
@@ -45,7 +46,7 @@ static struct _all_info_
     unsigned int magic;
     bool engine_ready;
     bool config_completed;
-    ::dsn::tools::tool_app *tool;
+    std::unique_ptr<::dsn::tools::tool_app> tool;
     ::dsn::service_engine *engine;
     std::vector<::dsn::task_spec *> task_specs;
 
@@ -70,160 +71,6 @@ DSN_API void dsn_coredump()
 {
     ::dsn::utils::coredump::write();
     ::abort();
-}
-
-//------------------------------------------------------------------------------
-//
-// synchronization - concurrent access and coordination among threads
-//
-//------------------------------------------------------------------------------
-DSN_API dsn_handle_t dsn_exlock_create(bool recursive)
-{
-    if (recursive) {
-        ::dsn::lock_provider *last = ::dsn::utils::factory_store<::dsn::lock_provider>::create(
-            ::dsn::service_engine::fast_instance().spec().lock_factory_name.c_str(),
-            ::dsn::PROVIDER_TYPE_MAIN,
-            nullptr);
-
-        // TODO: perf opt by saving the func ptrs somewhere
-        for (auto &s : ::dsn::service_engine::fast_instance().spec().lock_aspects) {
-            last = ::dsn::utils::factory_store<::dsn::lock_provider>::create(
-                s.c_str(), ::dsn::PROVIDER_TYPE_ASPECT, last);
-        }
-
-        return (dsn_handle_t) dynamic_cast<::dsn::ilock *>(last);
-    } else {
-        ::dsn::lock_nr_provider *last =
-            ::dsn::utils::factory_store<::dsn::lock_nr_provider>::create(
-                ::dsn::service_engine::fast_instance().spec().lock_nr_factory_name.c_str(),
-                ::dsn::PROVIDER_TYPE_MAIN,
-                nullptr);
-
-        // TODO: perf opt by saving the func ptrs somewhere
-        for (auto &s : ::dsn::service_engine::fast_instance().spec().lock_nr_aspects) {
-            last = ::dsn::utils::factory_store<::dsn::lock_nr_provider>::create(
-                s.c_str(), ::dsn::PROVIDER_TYPE_ASPECT, last);
-        }
-
-        return (dsn_handle_t) dynamic_cast<::dsn::ilock *>(last);
-    }
-}
-
-DSN_API void dsn_exlock_destroy(dsn_handle_t l) { delete (::dsn::ilock *)(l); }
-
-DSN_API void dsn_exlock_lock(dsn_handle_t l)
-{
-    ((::dsn::ilock *)(l))->lock();
-    ::dsn::lock_checker::zlock_exclusive_count++;
-}
-
-DSN_API bool dsn_exlock_try_lock(dsn_handle_t l)
-{
-    auto r = ((::dsn::ilock *)(l))->try_lock();
-    if (r) {
-        ::dsn::lock_checker::zlock_exclusive_count++;
-    }
-    return r;
-}
-
-DSN_API void dsn_exlock_unlock(dsn_handle_t l)
-{
-    ::dsn::lock_checker::zlock_exclusive_count--;
-    ((::dsn::ilock *)(l))->unlock();
-}
-
-// non-recursive rwlock
-DSN_API dsn_handle_t dsn_rwlock_nr_create()
-{
-    ::dsn::rwlock_nr_provider *last =
-        ::dsn::utils::factory_store<::dsn::rwlock_nr_provider>::create(
-            ::dsn::service_engine::fast_instance().spec().rwlock_nr_factory_name.c_str(),
-            ::dsn::PROVIDER_TYPE_MAIN,
-            nullptr);
-
-    // TODO: perf opt by saving the func ptrs somewhere
-    for (auto &s : ::dsn::service_engine::fast_instance().spec().rwlock_nr_aspects) {
-        last = ::dsn::utils::factory_store<::dsn::rwlock_nr_provider>::create(
-            s.c_str(), ::dsn::PROVIDER_TYPE_ASPECT, last);
-    }
-    return (dsn_handle_t)(last);
-}
-
-DSN_API void dsn_rwlock_nr_destroy(dsn_handle_t l) { delete (::dsn::rwlock_nr_provider *)(l); }
-
-DSN_API void dsn_rwlock_nr_lock_read(dsn_handle_t l)
-{
-    ((::dsn::rwlock_nr_provider *)(l))->lock_read();
-    ::dsn::lock_checker::zlock_shared_count++;
-}
-
-DSN_API void dsn_rwlock_nr_unlock_read(dsn_handle_t l)
-{
-    ::dsn::lock_checker::zlock_shared_count--;
-    ((::dsn::rwlock_nr_provider *)(l))->unlock_read();
-}
-
-DSN_API bool dsn_rwlock_nr_try_lock_read(dsn_handle_t l)
-{
-    auto r = ((::dsn::rwlock_nr_provider *)(l))->try_lock_read();
-    if (r)
-        ::dsn::lock_checker::zlock_shared_count++;
-    return r;
-}
-
-DSN_API void dsn_rwlock_nr_lock_write(dsn_handle_t l)
-{
-    ((::dsn::rwlock_nr_provider *)(l))->lock_write();
-    ::dsn::lock_checker::zlock_exclusive_count++;
-}
-
-DSN_API void dsn_rwlock_nr_unlock_write(dsn_handle_t l)
-{
-    ::dsn::lock_checker::zlock_exclusive_count--;
-    ((::dsn::rwlock_nr_provider *)(l))->unlock_write();
-}
-
-DSN_API bool dsn_rwlock_nr_try_lock_write(dsn_handle_t l)
-{
-    auto r = ((::dsn::rwlock_nr_provider *)(l))->try_lock_write();
-    if (r)
-        ::dsn::lock_checker::zlock_exclusive_count++;
-    return r;
-}
-
-DSN_API dsn_handle_t dsn_semaphore_create(int initial_count)
-{
-    ::dsn::semaphore_provider *last =
-        ::dsn::utils::factory_store<::dsn::semaphore_provider>::create(
-            ::dsn::service_engine::fast_instance().spec().semaphore_factory_name.c_str(),
-            ::dsn::PROVIDER_TYPE_MAIN,
-            initial_count,
-            nullptr);
-
-    // TODO: perf opt by saving the func ptrs somewhere
-    for (auto &s : ::dsn::service_engine::fast_instance().spec().semaphore_aspects) {
-        last = ::dsn::utils::factory_store<::dsn::semaphore_provider>::create(
-            s.c_str(), ::dsn::PROVIDER_TYPE_ASPECT, initial_count, last);
-    }
-    return (dsn_handle_t)(last);
-}
-
-DSN_API void dsn_semaphore_destroy(dsn_handle_t s) { delete (::dsn::semaphore_provider *)(s); }
-
-DSN_API void dsn_semaphore_signal(dsn_handle_t s, int count)
-{
-    ((::dsn::semaphore_provider *)(s))->signal(count);
-}
-
-DSN_API void dsn_semaphore_wait(dsn_handle_t s)
-{
-    ::dsn::lock_checker::check_wait_safety();
-    ((::dsn::semaphore_provider *)(s))->wait();
-}
-
-DSN_API bool dsn_semaphore_wait_timeout(dsn_handle_t s, int timeout_milliseconds)
-{
-    return ((::dsn::semaphore_provider *)(s))->wait(timeout_milliseconds);
 }
 
 //------------------------------------------------------------------------------
@@ -303,75 +150,6 @@ DSN_API void dsn_rpc_forward(dsn::message_ex *request, dsn::rpc_address addr)
 
 //------------------------------------------------------------------------------
 //
-// file operations
-//
-//------------------------------------------------------------------------------
-
-DSN_API dsn_handle_t dsn_file_open(const char *file_name, int flag, int pmode)
-{
-    return ::dsn::task::get_current_disk()->open(file_name, flag, pmode);
-}
-
-DSN_API dsn::error_code dsn_file_close(dsn_handle_t file)
-{
-    return ::dsn::task::get_current_disk()->close(file);
-}
-
-DSN_API dsn::error_code dsn_file_flush(dsn_handle_t file)
-{
-    return ::dsn::task::get_current_disk()->flush(file);
-}
-
-DSN_API void
-dsn_file_read(dsn_handle_t file, char *buffer, int count, uint64_t offset, dsn::aio_task *cb)
-{
-    cb->aio()->buffer = buffer;
-    cb->aio()->buffer_size = count;
-    cb->aio()->engine = nullptr;
-    cb->aio()->file = file;
-    cb->aio()->file_offset = offset;
-    cb->aio()->type = ::dsn::AIO_Read;
-
-    ::dsn::task::get_current_disk()->read(cb);
-}
-
-DSN_API void
-dsn_file_write(dsn_handle_t file, const char *buffer, int count, uint64_t offset, dsn::aio_task *cb)
-{
-    cb->aio()->buffer = (char *)buffer;
-    cb->aio()->buffer_size = count;
-    cb->aio()->engine = nullptr;
-    cb->aio()->file = file;
-    cb->aio()->file_offset = offset;
-    cb->aio()->type = ::dsn::AIO_Write;
-
-    ::dsn::task::get_current_disk()->write(cb);
-}
-
-DSN_API void dsn_file_write_vector(dsn_handle_t file,
-                                   const dsn_file_buffer_t *buffers,
-                                   int buffer_count,
-                                   uint64_t offset,
-                                   dsn::aio_task *cb)
-{
-    cb->aio()->buffer = nullptr;
-    cb->aio()->buffer_size = 0;
-    cb->aio()->engine = nullptr;
-    cb->aio()->file = file;
-    cb->aio()->file_offset = offset;
-    cb->aio()->type = ::dsn::AIO_Write;
-    for (int i = 0; i < buffer_count; i++) {
-        if (buffers[i].size > 0) {
-            cb->_unmerged_write_buffers.push_back(buffers[i]);
-            cb->aio()->buffer_size += buffers[i].size;
-        }
-    }
-
-    ::dsn::task::get_current_disk()->write(cb);
-}
-
-//------------------------------------------------------------------------------
-//
 // env
 //
 //------------------------------------------------------------------------------
@@ -380,14 +158,6 @@ DSN_API uint64_t dsn_now_ns()
     // return ::dsn::task::get_current_env()->now_ns();
     return ::dsn::service_engine::instance().env()->now_ns();
 }
-
-DSN_API uint64_t dsn_random64(uint64_t min, uint64_t max) // [min, max]
-{
-    return ::dsn::service_engine::instance().env()->random64(min, max);
-}
-
-static uint64_t s_runtime_init_time_ms;
-DSN_API uint64_t dsn_runtime_init_time_ms() { return s_runtime_init_time_ms; }
 
 //------------------------------------------------------------------------------
 //
@@ -435,7 +205,7 @@ DSN_API bool dsn_mimic_app(const char *app_role, int index)
     for (auto &n : nodes) {
         if (n.second->spec().role_name == std::string(app_role) &&
             n.second->spec().index == index) {
-            ::dsn::task::set_tls_dsn_context(n.second, nullptr);
+            ::dsn::task::set_tls_dsn_context(n.second.get(), nullptr);
             return true;
         }
     }
@@ -508,7 +278,7 @@ namespace tools {
 
 bool is_engine_ready() { return dsn_all.is_engine_ready(); }
 
-tool_app *get_current_tool() { return dsn_all.tool; }
+tool_app *get_current_tool() { return dsn_all.tool.get(); }
 
 } // namespace tools
 } // namespace dsn
@@ -516,20 +286,21 @@ tool_app *get_current_tool() { return dsn_all.tool; }
 extern void dsn_log_init();
 extern void dsn_core_init();
 
+inline void dsn_global_init()
+{
+    // ensure perf_counters is destructed after service_engine,
+    // because service_engine relies on the former to monitor
+    // task queues length.
+    dsn::perf_counters::instance();
+    dsn::service_engine::instance();
+}
+
 bool run(const char *config_file,
          const char *config_arguments,
          bool sleep_after_init,
          std::string &app_list)
 {
-    s_runtime_init_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::high_resolution_clock::now().time_since_epoch())
-                                 .count();
-
-    char init_time_buf[32];
-    dsn::utils::time_ms_to_string(dsn_runtime_init_time_ms(), init_time_buf);
-    ddebug(
-        "dsn_runtime_init_time_ms = %" PRIu64 " (%s)", dsn_runtime_init_time_ms(), init_time_buf);
-
+    dsn_global_init();
     dsn_core_init();
     ::dsn::task::set_tls_dsn_context(nullptr, nullptr);
 
@@ -592,8 +363,8 @@ bool run(const char *config_file,
     dsn::utils::filesystem::create_directory(spec.dir_log);
 
     // init tools
-    dsn_all.tool = ::dsn::utils::factory_store<::dsn::tools::tool_app>::create(
-        spec.tool.c_str(), ::dsn::PROVIDER_TYPE_MAIN, spec.tool.c_str());
+    dsn_all.tool.reset(::dsn::utils::factory_store<::dsn::tools::tool_app>::create(
+        spec.tool.c_str(), ::dsn::PROVIDER_TYPE_MAIN, spec.tool.c_str()));
     dsn_all.tool->install(spec);
 
     // init app specs
@@ -611,15 +382,15 @@ bool run(const char *config_file,
     ::dsn::tls_trans_mem_init(tls_trans_memory_KB * 1024);
 
     // prepare minimum necessary
-    ::dsn::service_engine::fast_instance().init_before_toollets(spec);
+    ::dsn::service_engine::instance().init_before_toollets(spec);
 
     // init logging
     dsn_log_init();
 
-    ddebug("init rdsn runtime, pid = %d, dsn_runtime_init_time_ms = %" PRIu64 " (%s)",
-           (int)getpid(),
-           dsn_runtime_init_time_ms(),
-           init_time_buf);
+    ddebug("process(%ld) start: %" PRIu64 ", date: %s",
+           getpid(),
+           dsn::utils::process_start_millis(),
+           dsn::utils::process_start_date_time_mills());
 
     // init toollets
     for (auto it = spec.toollets.begin(); it != spec.toollets.end(); ++it) {
@@ -635,7 +406,7 @@ bool run(const char *config_file,
     // TODO: register sys_exit execution
 
     // init runtime
-    ::dsn::service_engine::fast_instance().init_after_toollets();
+    ::dsn::service_engine::instance().init_after_toollets();
 
     dsn_all.engine_ready = true;
 
@@ -668,11 +439,11 @@ bool run(const char *config_file,
         }
 
         if (create_it) {
-            ::dsn::service_engine::fast_instance().start_node(sp);
+            ::dsn::service_engine::instance().start_node(sp);
         }
     }
 
-    if (::dsn::service_engine::fast_instance().get_all_nodes().size() == 0) {
+    if (::dsn::service_engine::instance().get_all_nodes().size() == 0) {
         printf("no app are created, usually because \n"
                "app_name is not specified correctly, should be 'xxx' in [apps.xxx]\n"
                "or app_index (1-based) is greater than specified count in config file\n");
@@ -737,7 +508,7 @@ void service_app::get_all_service_apps(std::vector<service_app *> *apps)
 {
     const service_nodes_by_app_id &nodes = dsn_all.engine->get_all_nodes();
     for (const auto &kv : nodes) {
-        const service_node *node = kv.second;
+        const service_node *node = kv.second.get();
         apps->push_back(const_cast<service_app *>(node->get_service_app()));
     }
 }

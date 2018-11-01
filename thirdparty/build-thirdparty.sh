@@ -92,23 +92,6 @@ else
     echo "skip build gperftools"
 fi
 
-## build protobuf
-#if [ ! -d $TP_OUTPUT/include/google/protobuf ]; then
-#    mkdir -p $TP_BUILD/protobuf
-#    cd $TP_BUILD/protobuf
-#    cmake $TP_SRC/protobuf-3.5.0/cmake -Dprotobuf_BUILD_TESTS=OFF \
-#        -DCMAKE_INSTALL_PREFIX=$TP_OUTPUT \
-#        -DCMAKE_INSTALL_LIBDIR=$TP_OUTPUT/lib \
-#        -DCMAKE_BUILD_TYPE=release
-
-#    make -j8 && make install
-#    res=$?
-#    cd $TP_DIR
-#    exit_if_fail "protobuf" $res
-#else
-#    echo "skip build protobuf"
-#fi
-
 # build rapidjson
 if [ ! -d $TP_OUTPUT/include/rapidjson ]; then
     cp -R $TP_SRC/rapidjson-1.1.0/include/rapidjson $TP_OUTPUT/include
@@ -265,7 +248,7 @@ fi
 
 # build s2geometry
 if [ ! -d $TP_OUTPUT/include/s2 ]; then
-    cd $TP_SRC/s2geometry-master
+    cd $TP_SRC/s2geometry-0239455c1e260d6d2c843649385b4fb9f5b28dba
     mkdir -p build && cd build
     cmake .. -DGTEST_INCLUDE=$TP_OUTPUT/include -DCMAKE_INSTALL_PREFIX=$TP_OUTPUT
     make -j8 && make install

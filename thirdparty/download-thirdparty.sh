@@ -122,12 +122,6 @@ check_and_download "gperftools-2.7.tar.gz"\
     "gperftools-2.7"
 exit_if_fail $?
 
-## protobuf
-#check_and_download "protobuf-v3.5.0.tar.gz"\
-#    "https://codeload.github.com/google/protobuf/tar.gz/v3.5.0"\
-#    "d95db321e1a9901fffc51ed8994afd36"
-#exit_if_fail $?
-
 #rapidjson
 check_and_download "rapidjson-v1.1.0.tar.gz"\
     "https://codeload.github.com/Tencent/rapidjson/tar.gz/v1.1.0"\
@@ -203,16 +197,16 @@ check_and_download "gflags-2.2.1.zip"\
 exit_if_fail $?
 
 # s2geometry
-check_and_download "s2geometry-master.zip"\
-    "https://github.com/google/s2geometry/archive/master.zip"\
-    "afda53fb79131248d414e10f5246f4ed"\
-    "s2geometry-master"
+check_and_download "s2geometry-0239455c1e260d6d2c843649385b4fb9f5b28dba.zip"\
+    "https://github.com/google/s2geometry/archive/0239455c1e260d6d2c843649385b4fb9f5b28dba.zip"\
+    "bfa5f1c08f535a72fb2c92ec16332c64"\
+    "s2geometry-0239455c1e260d6d2c843649385b4fb9f5b28dba"
 ret_code=$?
 if [ $ret_code -eq 2 ]; then
     exit 2
 elif [ $ret_code -eq 0 ]; then
     echo "make patch to s2geometry"
-    cd s2geometry-master
+    cd s2geometry-0239455c1e260d6d2c843649385b4fb9f5b28dba
     patch -p1 < ../../fix_s2_for_pegasus.patch
     if [ $? != 0 ]; then
         echo "ERROR: patch fix_s2_for_pegasus.patch for s2geometry failed"

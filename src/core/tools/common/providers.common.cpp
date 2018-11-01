@@ -36,7 +36,6 @@
 #include "asio_net_provider.h"
 #include <dsn/tool/providers.common.h>
 #include "lockp.std.h"
-#include "native_aio_provider.win.h"
 #include "native_aio_provider.posix.h"
 #include "native_aio_provider.linux.h"
 #include "simple_task_queue.h"
@@ -55,10 +54,9 @@ void register_common_providers()
     register_component_provider<task_worker>("dsn::task_worker");
     register_component_provider<screen_logger>("dsn::tools::screen_logger");
     register_component_provider<simple_logger>("dsn::tools::simple_logger");
-    register_component_provider<std_lock_provider>("dsn::tools::std_lock_provider");
-    register_component_provider<std_lock_nr_provider>("dsn::tools::std_lock_nr_provider");
-    register_component_provider<std_rwlock_nr_provider>("dsn::tools::std_rwlock_nr_provider");
-    register_component_provider<std_semaphore_provider>("dsn::tools::std_semaphore_provider");
+
+    register_std_lock_providers();
+
     register_component_provider<asio_network_provider>("dsn::tools::asio_network_provider");
     register_component_provider<asio_udp_provider>("dsn::tools::asio_udp_provider");
     register_component_provider<sim_network_provider>("dsn::tools::sim_network_provider");
@@ -69,14 +67,8 @@ void register_common_providers()
     register_message_header_parser<thrift_message_parser>(NET_HDR_THRIFT, {"THFT"});
     register_message_header_parser<raw_message_parser>(NET_HDR_RAW, {"_RAW"});
 
-#if defined(_WIN32)
-    register_component_provider<native_win_aio_provider>("dsn::tools::native_aio_provider");
-#elif defined(__linux__)
     register_component_provider<native_linux_aio_provider>("dsn::tools::native_aio_provider");
     register_component_provider<native_posix_aio_provider>("dsn::tools::posix_aio_provider");
-#else
-    register_component_provider<native_posix_aio_provider>("dsn::tools::native_aio_provider");
-#endif
     register_component_provider<empty_aio_provider>("dsn::tools::empty_aio_provider");
 }
 }

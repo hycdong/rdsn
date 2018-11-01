@@ -35,12 +35,14 @@
 
 #include <dsn/service_api_c.h>
 #include <dsn/tool_api.h>
-#include <dsn/tool-api/task.h>
+#include <dsn/tool-api/file_io.h>
 #include <dsn/tool-api/auto_codes.h>
+#include <dsn/tool-api/zlocks.h>
 #include <dsn/utility/utils.h>
 #include <dsn/utility/filesystem.h>
 #include <gtest/gtest.h>
 #include <thread>
+#include <dsn/utility/rand.h>
 #include "core/core/service_engine.h"
 
 using namespace dsn;
@@ -146,59 +148,52 @@ TEST(core, dsn_config)
 
 TEST(core, dsn_exlock)
 {
-    if (dsn::service_engine::fast_instance().spec().semaphore_factory_name ==
+    if (dsn::service_engine::instance().spec().semaphore_factory_name ==
         "dsn::tools::sim_semaphore_provider")
         return;
     {
-        dsn_handle_t l = dsn_exlock_create(false);
-        ASSERT_NE(nullptr, l);
-        ASSERT_TRUE(dsn_exlock_try_lock(l));
-        dsn_exlock_unlock(l);
-        dsn_exlock_lock(l);
-        dsn_exlock_unlock(l);
-        dsn_exlock_destroy(l);
+        dsn::zlock l(false);
+        ASSERT_TRUE(l.try_lock());
+        l.unlock();
+        l.lock();
+        l.unlock();
     }
     {
-        dsn_handle_t l = dsn_exlock_create(true);
-        ASSERT_NE(nullptr, l);
-        ASSERT_TRUE(dsn_exlock_try_lock(l));
-        ASSERT_TRUE(dsn_exlock_try_lock(l));
-        dsn_exlock_unlock(l);
-        dsn_exlock_unlock(l);
-        dsn_exlock_lock(l);
-        dsn_exlock_lock(l);
-        dsn_exlock_unlock(l);
-        dsn_exlock_unlock(l);
-        dsn_exlock_destroy(l);
+        dsn::zlock l(true);
+        ASSERT_TRUE(l.try_lock());
+        ASSERT_TRUE(l.try_lock());
+        l.unlock();
+        l.unlock();
+        l.lock();
+        l.lock();
+        l.unlock();
+        l.unlock();
     }
 }
 
 TEST(core, dsn_rwlock)
 {
-    if (dsn::service_engine::fast_instance().spec().semaphore_factory_name ==
+    if (dsn::service_engine::instance().spec().semaphore_factory_name ==
         "dsn::tools::sim_semaphore_provider")
         return;
-    dsn_handle_t l = dsn_rwlock_nr_create();
-    ASSERT_NE(nullptr, l);
-    dsn_rwlock_nr_lock_read(l);
-    dsn_rwlock_nr_unlock_read(l);
-    dsn_rwlock_nr_lock_write(l);
-    dsn_rwlock_nr_unlock_write(l);
-    dsn_rwlock_nr_destroy(l);
+    dsn::zrwlock_nr l;
+    l.lock_read();
+    l.unlock_read();
+    l.lock_write();
+    l.unlock_write();
 }
 
 TEST(core, dsn_semaphore)
 {
-    if (dsn::service_engine::fast_instance().spec().semaphore_factory_name ==
+    if (dsn::service_engine::instance().spec().semaphore_factory_name ==
         "dsn::tools::sim_semaphore_provider")
         return;
-    dsn_handle_t s = dsn_semaphore_create(2);
-    dsn_semaphore_wait(s);
-    ASSERT_TRUE(dsn_semaphore_wait_timeout(s, 10));
-    ASSERT_FALSE(dsn_semaphore_wait_timeout(s, 10));
-    dsn_semaphore_signal(s, 1);
-    dsn_semaphore_wait(s);
-    dsn_semaphore_destroy(s);
+    dsn::zsemaphore s(2);
+    s.wait();
+    ASSERT_TRUE(s.wait(10));
+    ASSERT_FALSE(s.wait(10));
+    s.signal(1);
+    s.wait();
 }
 
 DEFINE_TASK_CODE_AIO(LPC_AIO_TEST_READ, TASK_PRIORITY_COMMON, THREAD_POOL_DEFAULT)
@@ -218,23 +213,32 @@ TEST(core, dsn_file)
     ASSERT_TRUE(utils::filesystem::file_size("command.txt", fin_size));
     ASSERT_LT(0, fin_size);
 
-    dsn_handle_t fin = dsn_file_open("command.txt", O_RDONLY, 0);
+    dsn::disk_file *fin = file::open("command.txt", O_RDONLY, 0);
     ASSERT_NE(nullptr, fin);
-    dsn_handle_t fout = dsn_file_open("command.copy.txt", O_RDWR | O_CREAT | O_TRUNC, 0666);
+    dsn::disk_file *fout = file::open("command.copy.txt", O_RDWR | O_CREAT | O_TRUNC, 0666);
     ASSERT_NE(nullptr, fout);
     char buffer[1024];
     uint64_t offset = 0;
     while (true) {
         aio_result rin;
-        dsn::aio_task_ptr tin = new dsn::aio_task(LPC_AIO_TEST_READ,
-                                                  [&rin](dsn::error_code err, size_t sz) {
-                                                      rin.err = err;
-                                                      rin.sz = sz;
-                                                  },
-                                                  0);
+        aio_task_ptr tin = file::read(fin,
+                                      buffer,
+                                      1024,
+                                      offset,
+                                      LPC_AIO_TEST_READ,
+                                      nullptr,
+                                      [&rin](dsn::error_code err, size_t sz) {
+                                          rin.err = err;
+                                          rin.sz = sz;
+                                      },
+                                      0);
         ASSERT_NE(nullptr, tin);
-        ASSERT_EQ(1, tin->get_count());
-        dsn_file_read(fin, buffer, 1024, offset, tin);
+
+        if (dsn::tools::get_current_tool()->name() != "simulator") {
+            // 1 for tin, 1 for disk_engine
+            ASSERT_EQ(2, tin->get_count());
+        }
+
         tin->wait();
         ASSERT_EQ(rin.err, tin->error());
         if (rin.err != ERR_OK) {
@@ -249,14 +253,18 @@ TEST(core, dsn_file)
         }
 
         aio_result rout;
-        dsn::aio_task_ptr tout = new dsn::aio_task(LPC_AIO_TEST_WRITE,
-                                                   [&rout](dsn::error_code err, size_t sz) {
-                                                       rout.err = err;
-                                                       rout.sz = sz;
-                                                   },
-                                                   0);
+        aio_task_ptr tout = file::write(fout,
+                                        buffer,
+                                        rin.sz,
+                                        offset,
+                                        LPC_AIO_TEST_WRITE,
+                                        nullptr,
+                                        [&rout](dsn::error_code err, size_t sz) {
+                                            rout.err = err;
+                                            rout.sz = sz;
+                                        },
+                                        0);
         ASSERT_NE(nullptr, tout);
-        dsn_file_write(fout, buffer, rin.sz, offset, tout);
         tout->wait();
         ASSERT_EQ(ERR_OK, rout.err);
         ASSERT_EQ(ERR_OK, tout->error());
@@ -267,14 +275,14 @@ TEST(core, dsn_file)
             ASSERT_EQ(1, tout->get_count());
         }
 
-        ASSERT_EQ(ERR_OK, dsn_file_flush(fout));
+        ASSERT_EQ(ERR_OK, file::flush(fout));
 
         offset += rin.sz;
     }
 
     ASSERT_EQ((uint64_t)fin_size, offset);
-    ASSERT_EQ(ERR_OK, dsn_file_close(fout));
-    ASSERT_EQ(ERR_OK, dsn_file_close(fin));
+    ASSERT_EQ(ERR_OK, file::close(fout));
+    ASSERT_EQ(ERR_OK, file::close(fin));
 
     ASSERT_TRUE(utils::filesystem::file_size("command.copy.txt", fout_size));
     ASSERT_EQ(fin_size, fout_size);
@@ -282,13 +290,13 @@ TEST(core, dsn_file)
 
 TEST(core, dsn_env)
 {
-    if (dsn::service_engine::fast_instance().spec().tool == "simulator")
+    if (dsn::service_engine::instance().spec().tool == "simulator")
         return;
     uint64_t now1 = dsn_now_ns();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     uint64_t now2 = dsn_now_ns();
     ASSERT_LE(now1 + 1000000, now2);
-    uint64_t r = dsn_random64(100, 200);
+    uint64_t r = rand::next_u64(100, 200);
     ASSERT_LE(100, r);
     ASSERT_GE(200, r);
 }

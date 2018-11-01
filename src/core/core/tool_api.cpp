@@ -80,26 +80,26 @@ tool_app::tool_app(const char *name) : tool_base(name) {}
 
 void tool_app::start_all_apps()
 {
-    auto apps = service_engine::fast_instance().get_all_nodes();
+    auto apps = service_engine::instance().get_all_nodes();
     for (auto &kv : apps) {
-        task *t = new service_control_task(kv.second, true);
-        t->set_delay(1000 * kv.second->spec().delay_seconds);
+        task *t = new service_control_task(kv.second.get(), true);
+        t->set_delay(1000 * kv.second.get()->spec().delay_seconds);
         t->enqueue();
     }
 }
 
 void tool_app::stop_all_apps(bool cleanup)
 {
-    auto apps = service_engine::fast_instance().get_all_nodes();
+    auto apps = service_engine::instance().get_all_nodes();
     for (auto &kv : apps) {
-        task *t = new service_control_task(kv.second, false, cleanup);
+        task *t = new service_control_task(kv.second.get(), false, cleanup);
         t->enqueue();
     }
 }
 
-const service_spec &tool_app::get_service_spec() { return service_engine::fast_instance().spec(); }
+const service_spec &tool_app::get_service_spec() { return service_engine::instance().spec(); }
 
-const service_spec &spec() { return service_engine::fast_instance().spec(); }
+const service_spec &spec() { return service_engine::instance().spec(); }
 
 const char *get_service_node_name(service_node *node) { return node->full_name(); }
 
@@ -142,34 +142,6 @@ bool register_component_provider(const char *name,
                                  ::dsn::provider_type type)
 {
     return dsn::utils::factory_store<admission_controller>::register_factory(name, f, type);
-}
-
-bool register_component_provider(const char *name,
-                                 lock_provider::factory f,
-                                 ::dsn::provider_type type)
-{
-    return dsn::utils::factory_store<lock_provider>::register_factory(name, f, type);
-}
-
-bool register_component_provider(const char *name,
-                                 lock_nr_provider::factory f,
-                                 ::dsn::provider_type type)
-{
-    return dsn::utils::factory_store<lock_nr_provider>::register_factory(name, f, type);
-}
-
-bool register_component_provider(const char *name,
-                                 rwlock_nr_provider::factory f,
-                                 ::dsn::provider_type type)
-{
-    return dsn::utils::factory_store<rwlock_nr_provider>::register_factory(name, f, type);
-}
-
-bool register_component_provider(const char *name,
-                                 semaphore_provider::factory f,
-                                 ::dsn::provider_type type)
-{
-    return dsn::utils::factory_store<semaphore_provider>::register_factory(name, f, type);
 }
 
 bool register_component_provider(const char *name, network::factory f, ::dsn::provider_type type)

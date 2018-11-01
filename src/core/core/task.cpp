@@ -37,8 +37,10 @@
 #include <dsn/service_api_c.h>
 #include <dsn/tool-api/task.h>
 #include <dsn/tool-api/env_provider.h>
+#include <dsn/tool-api/zlocks.h>
 #include <dsn/utility/utils.h>
 #include <dsn/utility/synchronize.h>
+#include <dsn/utility/rand.h>
 #include <dsn/tool/node_scoper.h>
 
 #include "task_engine.h"
@@ -74,7 +76,7 @@ __thread uint16_t tls_dsn_lower32_task_id_mask = 0;
         tls_dsn.current_task = nullptr;
         tls_dsn.rpc = node->rpc();
         tls_dsn.disk = node->disk();
-        tls_dsn.env = service_engine::fast_instance().env();
+        tls_dsn.env = service_engine::instance().env();
     }
 
     tls_dsn.node_pool_thread_ids = (node ? ((uint64_t)(uint8_t)node->id()) : 0)
@@ -238,9 +240,38 @@ bool task::signal_waiters()
     return false;
 }
 
+static void check_wait_task(task *waitee)
+{
+    lock_checker::check_wait_safety();
+
+    // not in worker thread
+    if (task::get_current_worker() == nullptr)
+        return;
+
+    // caller and callee don't share the same thread pool,
+    if (waitee->spec().type != TASK_TYPE_RPC_RESPONSE &&
+        (waitee->spec().pool_code != task::get_current_worker()->pool_spec().pool_code))
+        return;
+
+    // callee is empty
+    if (waitee->is_empty())
+        return;
+
+    // there are enough concurrency
+    if (!task::get_current_worker()->pool_spec().partitioned &&
+        task::get_current_worker()->pool_spec().worker_count > 1)
+        return;
+
+    dwarn("task %s waits for another task %s sharing the same thread pool "
+          "- will lead to deadlocks easily (e.g., when worker_count = 1 or when the pool "
+          "is partitioned)",
+          task::get_current_task()->spec().code.to_string(),
+          waitee->spec().code.to_string());
+}
+
 bool task::wait_on_cancel()
 {
-    lock_checker::check_wait_task(this);
+    check_wait_task(this);
     return wait(TIME_MS_MAX);
 }
 
@@ -431,7 +462,7 @@ void timer_task::enqueue()
 {
     // enable timer randomization to avoid lots of timers execution simultaneously
     if (delay_milliseconds() == 0 && spec().randomize_timer_delay_if_zero) {
-        set_delay(dsn_random32(0, _interval_milliseconds));
+        set_delay(rand::next_u32(0, _interval_milliseconds));
     }
 
     return task::enqueue();

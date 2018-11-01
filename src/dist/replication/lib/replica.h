@@ -69,8 +69,6 @@ namespace test {
 class test_checker;
 }
 
-using namespace ::dsn::service;
-
 class replica : public serverlet<replica>, public ref_counter, public replica_base
 {
 public:

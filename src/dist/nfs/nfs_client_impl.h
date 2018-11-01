@@ -36,10 +36,10 @@
 #include <vector>
 #include <deque>
 #include <dsn/tool-api/task_tracker.h>
+#include <dsn/tool-api/zlocks.h>
 #include <dsn/perf_counter/perf_counter_wrapper.h>
 #include <dsn/dist/nfs_node.h>
 
-#include "nfs.types.h"
 #include "nfs_client.h"
 
 namespace dsn {
@@ -122,14 +122,14 @@ public:
 
     struct file_wrapper : public ::dsn::ref_counter
     {
-        dsn_handle_t file_handle;
+        disk_file *file_handle;
 
         file_wrapper() { file_handle = nullptr; }
         ~file_wrapper()
         {
             if (file_handle != nullptr) {
-                auto err = dsn_file_close(file_handle);
-                dassert(err == ERR_OK, "dsn_file_close failed, err = %s", err.to_string());
+                auto err = file::close(file_handle);
+                dassert(err == ERR_OK, "file::close failed, err = %s", err.to_string());
             }
         }
     };

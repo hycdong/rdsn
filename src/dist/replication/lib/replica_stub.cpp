@@ -39,6 +39,7 @@
 #include "mutation.h"
 #include <dsn/cpp/json_helper.h>
 #include <dsn/utility/filesystem.h>
+#include <dsn/utility/rand.h>
 #include <dsn/tool-api/command_manager.h>
 #include <dsn/dist/replication/replication_app_base.h>
 #include <vector>
@@ -47,8 +48,6 @@
 
 namespace dsn {
 namespace replication {
-
-using namespace dsn::service;
 
 bool replica_stub::s_not_exit_on_log_failure = false;
 
@@ -537,7 +536,7 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
             [this] { on_gc(); },
             std::chrono::milliseconds(_options.gc_interval_ms),
             0,
-            std::chrono::milliseconds(dsn_random32(0, _options.gc_interval_ms)));
+            std::chrono::milliseconds(rand::next_u32(0, _options.gc_interval_ms)));
     }
 
     // disk stat
@@ -568,8 +567,8 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
         uint64_t now_time_ms = dsn_now_ms();
         uint64_t delay_time_ms =
             (_options.fd_grace_seconds + 3) * 1000; // for more 3 seconds than grace seconds
-        if (now_time_ms < dsn_runtime_init_time_ms() + delay_time_ms) {
-            uint64_t delay = dsn_runtime_init_time_ms() + delay_time_ms - now_time_ms;
+        if (now_time_ms < dsn::utils::process_start_millis() + delay_time_ms) {
+            uint64_t delay = dsn::utils::process_start_millis() + delay_time_ms - now_time_ms;
             ddebug("delay for %" PRIu64 "ms to make failure detector timeout", delay);
             tasking::enqueue(LPC_REPLICA_SERVER_DELAY_START,
                              &_tracker,
@@ -1473,7 +1472,7 @@ void replica_stub::on_gc()
                     kv.second.rep->tracker(),
                     std::bind(&replica_stub::trigger_checkpoint, this, kv.second.rep, true),
                     kv.first.thread_hash(),
-                    std::chrono::milliseconds(dsn_random32(0, _options.gc_interval_ms / 2)));
+                    std::chrono::milliseconds(rand::next_u32(0, _options.gc_interval_ms / 2)));
             }
         } else if (reserved_log_count > _options.log_shared_file_count_limit) {
             std::ostringstream oss;
@@ -1499,7 +1498,7 @@ void replica_stub::on_gc()
                         find->second.rep->tracker(),
                         std::bind(&replica_stub::trigger_checkpoint, this, find->second.rep, true),
                         id.thread_hash(),
-                        std::chrono::milliseconds(dsn_random32(0, _options.gc_interval_ms / 2)));
+                        std::chrono::milliseconds(rand::next_u32(0, _options.gc_interval_ms / 2)));
                 }
             }
         }
@@ -2011,7 +2010,7 @@ replica_stub::exec_command_on_replica(const std::vector<std::string> &args,
     }
 
     std::vector<task_ptr> tasks;
-    ::dsn::service::zlock results_lock;
+    ::dsn::zlock results_lock;
     std::map<gpid, std::pair<partition_status::type, std::string>> results; // id => status,result
     for (auto &kv : choosed_rs) {
         replica_ptr rep = kv.second;
@@ -2023,7 +2022,7 @@ replica_stub::exec_command_on_replica(const std::vector<std::string> &args,
                                                 status != partition_status::PS_SECONDARY)
                                                 return;
                                             std::string result = func(rep);
-                                            ::dsn::service::zauto_lock l(results_lock);
+                                            ::dsn::zauto_lock l(results_lock);
                                             auto &value = results[rep->get_gpid()];
                                             value.first = status;
                                             value.second = result;
