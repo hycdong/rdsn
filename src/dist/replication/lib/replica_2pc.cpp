@@ -710,13 +710,16 @@ void replica::copy_mutation(mutation_ptr &mu)
 {
     dassert(_child_gpid.get_app_id() > 0, "%s child_gpid is invalid", name());
 
+    task_code code = LPC_SPLIT_PARTITION;
     // TODO(hyc): add sync_to_child check
     if (!mu->is_split() && mu->data.header.sync_to_child) {
+        code = LPC_SPLIT_PARTITION_PREPARE;
         mu->set_is_split();
     }
 
     mutation_ptr new_mu = new mutation(mu);
-    _stub->on_exec(LPC_SPLIT_PARTITION,
+    std::string name = mu->name();
+    _stub->on_exec(code,
                    _child_gpid,
                    std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
 }
@@ -724,7 +727,7 @@ void replica::copy_mutation(mutation_ptr &mu)
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
     if (mu->data.header.sync_to_child) {
-        _stub->on_exec(LPC_SPLIT_PARTITION,
+        _stub->on_exec(LPC_SPLIT_PARTITION_PREPARE,
                        _split_states.parent_gpid,
                        std::bind(&replica::on_copy_mutation_reply,
                                  std::placeholders::_1,
@@ -759,7 +762,7 @@ void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d)
         return;
     }
 
-    dinfo_f("{} copy mutation {} completed, error is {}", name(), mu->name(), ec.to_string());
+    ddebug_f("{} copy mutation {} completed, error is {}", name(), mu->name(), ec.to_string());
 
     // set child prepare mutation flag
     if (ec == ERR_OK) {
