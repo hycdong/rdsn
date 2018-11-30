@@ -189,7 +189,7 @@ void replication_service_test_app::prepare_copy_parent_state_test()
     parent_replica->_private_log = private_log_mock;
 
     // mock prepare list
-    prepare_list *plist_mock = new prepare_list(0, 10, nullptr);
+    prepare_list *plist_mock = new prepare_list(parent_replica, 0, 10, nullptr);
     for (int i = 0; i < 10; ++i) {
         mutation_ptr mu = new mutation();
         mu->data.header.decree = i;
@@ -258,7 +258,7 @@ void replication_service_test_app::copy_parent_state_test()
 
     // mock prepare list and mutation_list
     std::vector<mutation_ptr> mutation_list;
-    prepare_list *plist_mock = new prepare_list(0, 10, nullptr);
+    prepare_list *plist_mock = new prepare_list(parent_replica, 0, 10, nullptr);
     for (int i = 0; i < 10; ++i) {
         mutation_ptr mu = new mutation();
         mu->data.header.decree = i;
@@ -306,7 +306,6 @@ void replication_service_test_app::copy_parent_state_test()
         child_replica->copy_parent_state(ec, lstate, mutation_list, files, plist_mock);
         child_replica->tracker()->wait_outstanding_tasks();
 
-        ASSERT_EQ(plist_mock, child_replica->_prepare_list);
         ASSERT_EQ(true, child_replica->_split_states.is_prepare_list_copied);
         ASSERT_NE(nullptr, child_replica->_split_states.async_learn_task);
     }
@@ -344,7 +343,7 @@ void replication_service_test_app::apply_parent_state_test()
 
     // mock prepare list and mutation_list
     std::vector<mutation_ptr> mutation_list;
-    prepare_list *plist_mock = new prepare_list(0, 10, nullptr);
+    prepare_list *plist_mock = new prepare_list(child_replica, 0, 10, nullptr);
 
     for (int i = 0; i < 10; ++i) {
         mutation_ptr mu = new mutation();
@@ -369,7 +368,8 @@ void replication_service_test_app::apply_parent_state_test()
                             decree last_committed_decree,
                             bool is_mock_failure) {
 
-                prepare_list plist(child_replica->_app->last_committed_decree(),
+                prepare_list plist(child_replica,
+                                   child_replica->_app->last_committed_decree(),
                                    child_replica->_options->max_mutation_count_in_prepare_list,
                                    [child_replica](mutation_ptr mu) {
                                        if (mu->data.header.decree ==
@@ -475,8 +475,8 @@ void replication_service_test_app::child_catch_up_test()
     stub->set_log(log_mock);
 
     // mock prepare list
-    prepare_list *plist = new prepare_list(0, 10, nullptr);
-    prepare_list *plist2 = new prepare_list(6, 10, nullptr);
+    prepare_list *plist = new prepare_list(child_replica, 0, 10, nullptr);
+    prepare_list *plist2 = new prepare_list(child_replica, 6, 10, nullptr);
     for (int i = 0; i < 10; ++i) {
         mutation_ptr mu = new mutation();
         mu->data.header.decree = i;

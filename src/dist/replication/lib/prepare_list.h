@@ -24,18 +24,11 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     What is this file about?
- *
- * Revision history:
- *     xxxx-xx-xx, author, first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
-
 #pragma once
 
 #include "mutation_cache.h"
+
+#include <dsn/dist/replication/replica_base.h>
 
 namespace dsn {
 namespace replication {
@@ -48,14 +41,14 @@ enum commit_type
     // - only valid when partition_status::PS_SECONDARY or partition_status::PS_PRIMARY
 };
 
-class prepare_list : public mutation_cache
+class prepare_list : public mutation_cache, private replica_base
 {
 public:
     typedef std::function<void(mutation_ptr &)> mutation_committer;
 
 public:
-    prepare_list(decree init_decree, int max_count, mutation_committer committer);
-    prepare_list(const prepare_list &plist);
+    prepare_list(replica_base *r, decree init_decree, int max_count, mutation_committer committer);
+    prepare_list(replica_base *r, const prepare_list &plist);
 
     decree last_committed_decree() const { return _last_committed_decree; }
     void reset(decree init_decree);

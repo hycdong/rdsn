@@ -39,14 +39,14 @@
 namespace dsn {
 namespace replication {
 
-prepare_list::prepare_list(decree init_decree, int max_count, mutation_committer committer)
-    : mutation_cache(init_decree, max_count)
+prepare_list::prepare_list(replica_base *r, decree init_decree, int max_count, mutation_committer committer)
+    : mutation_cache(init_decree, max_count), replica_base(r)
 {
     _committer = committer;
     _last_committed_decree = init_decree;
 }
 
-prepare_list::prepare_list(const prepare_list &plist) : mutation_cache(plist)
+prepare_list::prepare_list(replica_base *r, const prepare_list &plist) : mutation_cache(plist), replica_base(r)
 {
     _committer = plist._committer;
     _last_committed_decree = plist._last_committed_decree;
@@ -150,9 +150,13 @@ bool prepare_list::commit(decree d, commit_type ct)
     case COMMIT_TO_DECREE_HARD: {
         for (decree d0 = last_committed_decree() + 1; d0 <= d; d0++) {
             mutation_ptr mu = get_mutation_by_decree(d0);
-            dassert(mu != nullptr && (mu->is_logged()) && mu->data.header.ballot >= last_bt,
-                    "mutation %" PRId64 " is missing in prepare list",
-                    d0);
+//            dassert(mu != nullptr && (mu->is_logged()) && mu->data.header.ballot >= last_bt,
+//                    "mutation %" PRId64 " is missing in prepare list",
+//                    d0);
+            //TODO(hyc): for debug - recover as original
+            dassert(mu != nullptr, "mutation %" PRId64 " is nullptr",d0);
+            dassert(mu->is_logged(), "mutation %s is not logged", mu->name());
+            dassert(mu->data.header.ballot >= last_bt, "ballot %s is smaller", mu->name());
 
             _last_committed_decree++;
             last_bt = mu->data.header.ballot;
