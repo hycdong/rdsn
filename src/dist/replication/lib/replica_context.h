@@ -549,6 +549,8 @@ public:
     gpid parent_gpid;
     bool is_caught_up;
     bool is_prepare_list_copied;
+    // mutation list should copy to child replica but prepare list is not ready
+    std::vector<mutation_ptr> child_temp_mutation_list;
 
     // heart beat beween parent and child, start when initialize child replica
     // child replica send heart beat to parent per 5 seconds

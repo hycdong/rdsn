@@ -2209,14 +2209,9 @@ void replica_stub::on_exec(task_code code,
 
     dsn::task_tracker *tracker = nullptr;
     int hash = 0;
-    if (get_replica(pid)) {
+    if (get_replica(pid) != nullptr) {
         tracker = get_replica(pid).get()->tracker();
         hash = pid.thread_hash();
-    } else if (get_replica(missing_handler_gpid)) {
-        tracker = get_replica(missing_handler_gpid).get()->tracker();
-        hash = missing_handler_gpid.thread_hash();
-    } else {
-        hash = missing_handler_gpid.thread_hash();
     }
 
     tasking::enqueue(
@@ -2234,6 +2229,8 @@ void replica_stub::on_exec(task_code code,
                     } else {
                         missing_handler(nullptr);
                     }
+                }else{
+                    ddebug_f("missing_handler is nullptr, will return");
                 }
             }
         },
@@ -2255,10 +2252,13 @@ replica_stub::get_replica_permit_create_new(gpid pid, app_info *app, const std::
         } else if (_closing_replicas.find(pid) != _closing_replicas.end()) {
             ddebug_f("cannnot create new replica coz it is under close");
             return nullptr;
-        } else if (_closed_replicas.find(pid) != _closed_replicas.end()) {
-            ddebug_f("cannnot create new replica coz it is closed");
-            return nullptr;
-        } else {
+        }
+        //TODO(hyc): consider - split won't succeed if child replica closed
+//        else if (_closed_replicas.find(pid) != _closed_replicas.end()) {
+//            ddebug_f("cannnot create new replica coz it is closed");
+//            return nullptr;
+//        }
+        else {
             replica *rep = replica::newr(this, pid, *app, false, parent_dir);
             if (rep != nullptr) {
                 auto pr = _replicas.insert(replicas::value_type(pid, rep));

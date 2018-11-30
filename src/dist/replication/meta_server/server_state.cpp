@@ -825,7 +825,7 @@ void server_state::on_config_sync(dsn::message_ex *msg)
                 // request
                 if (cc.stage == config_status::pending_remote_sync) {
                     configuration_update_request *req = cc.pending_sync_request.get();
-                    if (req->node == request.node || req == nullptr)
+                    if (req == nullptr || req->node == request.node)
                         return false;
                 }
 
