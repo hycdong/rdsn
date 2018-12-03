@@ -55,7 +55,7 @@ void replica::on_add_child(const group_check_request &request) // on parent
 
     gpid child_gpid = request.child_gpid;
     if (_child_gpid == child_gpid) {
-        dwarn_f("child replica already exist, child gpid is ({},{}), "
+        dwarn_f("child replica already exist, child gpid is ({}.{}), "
                 "this replica {} may be spliting, ignore",
                 child_gpid.get_app_id(),
                 child_gpid.get_partition_index(),
@@ -109,7 +109,7 @@ void replica::init_child_replica(gpid parent_gpid,
                 enum_to_string(status()));
 
         _stub->on_exec(
-            LPC_SPLIT_PARTITION, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+            LPC_SPLIT_PARTITION_ERROR, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
         return;
     }
 
@@ -412,7 +412,7 @@ void replica::apply_parent_state(error_code ec,
     _split_states.async_learn_task = nullptr;
     if (error != ERR_OK) {
         update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
-        _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [](replica *r) {
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [](replica *r) {
             r->_child_gpid.set_app_id(0);
         });
     } else {
@@ -619,7 +619,7 @@ void replica::notify_primary_split_catch_up() // on child
         } else if (ec != ERR_OK || response.err != ERR_OK) {
             error_code err = (ec == ERR_OK) ? response.err : ec;
             derror_f("{} failed to notify primary catch up, error is {}", name(), err.to_string());
-            _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [](replica_ptr r) {
+            _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
                 r->_child_gpid.set_app_id(0);
             });
             update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
@@ -823,7 +823,7 @@ void replica::on_update_group_partition_count(
             get_ballot());
 
         update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
-        _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [](replica_ptr r) {
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
         });
 
@@ -1144,7 +1144,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                  mu->data.header.ballot,
                 mu->name());
 
-        _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [mu](replica_ptr r) {
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [mu](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });
@@ -1167,7 +1167,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                 get_ballot(),
                 mu->data.header.ballot,
                 mu->name());
-        _stub->on_exec(LPC_SPLIT_PARTITION, _split_states.parent_gpid, [mu](replica_ptr r) {
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [mu](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });

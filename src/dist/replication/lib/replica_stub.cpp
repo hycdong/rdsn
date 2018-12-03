@@ -2286,7 +2286,7 @@ void replica_stub::add_split_replica(rpc_address primary_address,
                  child_gpid.get_app_id(),
                  child_gpid.get_partition_index());
         on_exec(
-            LPC_SPLIT_PARTITION, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+            LPC_SPLIT_PARTITION_ERROR, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
     }
 }
 
