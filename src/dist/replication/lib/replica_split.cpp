@@ -587,8 +587,8 @@ void replica::child_catch_up() // on child
              name(),
              _split_states.parent_gpid.get_app_id(),
              _split_states.parent_gpid.get_partition_index(),
-             goal_decree,
-             local_decree);
+             _prepare_list->last_committed_decree(),
+             _app->last_committed_decree());
 
     _split_states.is_caught_up = true;
 
