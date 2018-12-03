@@ -48,6 +48,13 @@ void replica::on_client_write(task_code code, dsn::message_ex *request)
 {
     _checker.only_one_thread_access();
 
+    if (_deny_client_write) {
+        // Do not relay any message to the peer client to let it timeout, it's OK coz some users
+        // may retry immediately when they got a not success code which will make the server side
+        // pressure more and more heavy.
+        return;
+    }
+
     task_spec *spec = task_spec::get(code);
     if (!_options->allow_non_idempotent_write && !spec->rpc_request_is_write_idempotent) {
         response_client_message(false, request, ERR_OPERATION_DISABLED);
@@ -185,6 +192,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
                 "invalid log offset, offset = %" PRId64,
                 mu->data.header.log_offset);
         dassert(mu->log_task() == nullptr, "");
+        int64_t pending_size;
         mu->log_task() = _stub->_log->append(mu,
                                              LPC_WRITE_REPLICATION_LOG,
                                              &_tracker,
@@ -193,8 +201,23 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
                                                        mu,
                                                        std::placeholders::_1,
                                                        std::placeholders::_2),
-                                             get_gpid().thread_hash());
+                                             get_gpid().thread_hash(),
+                                             &pending_size);
         dassert(nullptr != mu->log_task(), "");
+        if (_options->log_shared_pending_size_throttling_threshold_kb > 0 &&
+            _options->log_shared_pending_size_throttling_delay_ms > 0 &&
+            pending_size >= _options->log_shared_pending_size_throttling_threshold_kb * 1024) {
+            int delay_ms = _options->log_shared_pending_size_throttling_delay_ms;
+            for (dsn::message_ex *r : mu->client_requests) {
+                if (r && r->io_session->delay_recv(delay_ms)) {
+                    dwarn("too large pending shared log (%" PRId64 "), "
+                          "delay traffic from %s for %d milliseconds",
+                          pending_size,
+                          r->header->from_address.to_string(),
+                          delay_ms);
+                }
+            }
+        }
     }
 
     _primary_states.last_prepare_ts_ms = mu->prepare_ts_ms();

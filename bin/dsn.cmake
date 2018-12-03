@@ -208,6 +208,11 @@ function(dsn_setup_compiler_flags)
     # We want access to the PRI* print format macros.
     add_definitions(-D__STDC_FORMAT_MACROS)
 
+    # -fno-omit-frame-pointer
+    #   use frame pointers to allow simple stack frame walking for backtraces.
+    #   This has a small perf hit but worth it for the ability to profile in production
+    add_definitions(-fno-omit-frame-pointer)
+
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y" CACHE STRING "" FORCE)
 
     #  -Wall: Enable all warnings.
@@ -268,6 +273,11 @@ endmacro(ms_setup_boost)
 # find necessary system libs
 function(dsn_setup_system_libs)
     find_package(Threads REQUIRED)
+
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS ON)
+        message(STATUS "FIND_LIBRARY_USE_LIB64_PATHS = ON")
+    endif()
 
     set(DSN_SYSTEM_LIBS "")
 

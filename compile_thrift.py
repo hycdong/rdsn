@@ -64,10 +64,6 @@ thrift_description = [
         },
     },
     {
-        "name": "simple_kv",
-        "path": "src/dist/replication/test/simple_kv"
-    },
-    {
         "name": "nfs",
         "path": "src/dist/nfs",
         "include_fix": {
@@ -79,7 +75,7 @@ thrift_description = [
     },
     {
         "name": "simple_kv",
-        "path": "src/apps/skv"
+        "path": "src/dist/replication/storage_engine/simple_kv"
     },
     {
         "name": "cli",

@@ -526,8 +526,8 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                  _app->last_committed_decree());
     }
 
-    bool flag = plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
-    ddebug_f("{} commit to decree {}, flag is {}", name(), last_committed_decree, flag);
+    plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
+    ddebug_f("{} commit to decree {}", name(), last_committed_decree);
 
     return ec;
 }

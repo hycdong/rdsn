@@ -41,6 +41,11 @@ enum commit_type
     // - only valid when partition_status::PS_SECONDARY or partition_status::PS_PRIMARY
 };
 
+// prepare_list origins from the concept of `prepared list` in PacificA.
+// It stores an continuous and ordered list of mutations.
+// The prefix of the prepared list up to a `committed point` is regarded as committed.
+// The prepare_list only stores the most updated part (the uncommitted suffix) of prepared list,
+// say, the committed prefix will be truncated automatically.
 class prepare_list : public mutation_cache, private replica_base
 {
 public:
@@ -59,14 +64,12 @@ public:
     // for two-phase commit
     //
     error_code prepare(mutation_ptr &mu, partition_status::type status); // unordered prepare
-    bool commit(decree decree, commit_type ct);                          // ordered commit
-
-private:
-    void sanity_check();
+    void commit(decree decree, commit_type ct);                          // ordered commit
 
 private:
     decree _last_committed_decree;
     mutation_committer _committer;
 };
-}
-} // namespace
+
+} // namespace replication
+} // namespace dsn

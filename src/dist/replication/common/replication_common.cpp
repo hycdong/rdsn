@@ -92,6 +92,8 @@ replication_options::replication_options()
     log_shared_file_count_limit = 100;
     log_shared_batch_buffer_kb = 0;
     log_shared_force_flush = false;
+    log_shared_pending_size_throttling_threshold_kb = 0;
+    log_shared_pending_size_throttling_delay_ms = 0;
 
     config_sync_disabled = false;
     config_sync_interval_ms = 30000;
@@ -440,6 +442,16 @@ void replication_options::initialize()
                                   "log_shared_force_flush",
                                   log_shared_force_flush,
                                   "when write shared log, whether to flush file after write done");
+    log_shared_pending_size_throttling_threshold_kb =
+        (int)dsn_config_get_value_uint64("replication",
+                                         "log_shared_pending_size_throttling_threshold_kb",
+                                         log_shared_pending_size_throttling_threshold_kb,
+                                         "log_shared_pending_size_throttling_threshold_kb");
+    log_shared_pending_size_throttling_delay_ms =
+        (int)dsn_config_get_value_uint64("replication",
+                                         "log_shared_pending_size_throttling_delay_ms",
+                                         log_shared_pending_size_throttling_delay_ms,
+                                         "log_shared_pending_size_throttling_delay_ms");
 
     config_sync_disabled = dsn_config_get_value_bool(
         "replication",
@@ -555,6 +567,8 @@ const std::string backup_restore_constant::APP_NAME("restore.app_name");
 const std::string backup_restore_constant::APP_ID("restore.app_id");
 const std::string backup_restore_constant::BACKUP_ID("restore.backup_id");
 const std::string backup_restore_constant::SKIP_BAD_PARTITION("restore.skip_bad_partition");
+
+const std::string replica_envs::DENY_CLIENT_WRITE("replica.deny_client_write");
 
 namespace cold_backup {
 std::string get_policy_path(const std::string &root, const std::string &policy_name)

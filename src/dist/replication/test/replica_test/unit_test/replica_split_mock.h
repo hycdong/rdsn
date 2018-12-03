@@ -41,7 +41,8 @@ public:
                                    dsn::task_code callback_code,
                                    dsn::task_tracker *tracker,
                                    dsn::aio_handler &&callback,
-                                   int hash = 0) override
+                                   int hash = 0,
+                                   int64_t *pending_size = nullptr) override
     {
         mu_list.push_back(mu);
         return nullptr;

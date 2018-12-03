@@ -1,21 +1,21 @@
 #pragma once
-#include "simple_kv.code.definition.h"
-#include "simple_kv_types.h"
 #include <iostream>
 #include <dsn/utility/optional.h>
 #include <dsn/tool-api/async_calls.h>
+#include "dist/replication/storage_engine/simple_kv/simple_kv.code.definition.h"
+#include "dist/replication/storage_engine/simple_kv/simple_kv_types.h"
 
 namespace dsn {
 namespace replication {
 namespace application {
-class simple_kv_client2
+class simple_kv_client
 {
 public:
-    simple_kv_client2(::dsn::rpc_address server) { _server = server; }
+    simple_kv_client(::dsn::rpc_address server) { _server = server; }
 
-    simple_kv_client2() {}
+    simple_kv_client() {}
 
-    virtual ~simple_kv_client2() {}
+    virtual ~simple_kv_client() {}
 
     // ---------- call RPC_SIMPLE_KV_SIMPLE_KV_READ ------------
     // - synchronous

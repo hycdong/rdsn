@@ -133,7 +133,6 @@ public:
     //
     //  routine for testing purpose only
     //
-    void send_group_check_once_for_test(int delay_milliseconds);
     void inject_error(error_code err);
 
     //
@@ -149,10 +148,7 @@ public:
     decree last_durable_decree() const;
     decree last_flushed_decree() const;
     const std::string &dir() const { return _dir; }
-    bool group_configuration(/*out*/ partition_configuration &config) const;
     uint64_t create_time_milliseconds() const { return _create_time_ms; }
-    uint64_t last_config_change_time_milliseconds() const { return _last_config_change_time_ms; }
-    uint64_t last_checkpoint_generate_time_ms() const { return _last_checkpoint_generate_time_ms; }
     const char *name() const { return replica_name(); }
     mutation_log_ptr private_log() const { return _private_log; }
     const replication_options *options() const { return _options; }
@@ -243,6 +239,7 @@ private:
 
     // return false when update fails or replica is going to be closed
     bool update_app_envs(const std::map<std::string, std::string> &envs);
+    void update_app_envs_internal(const std::map<std::string, std::string> &envs);
     bool query_app_envs(/*out*/ std::map<std::string, std::string> &envs);
     bool update_configuration(const partition_configuration &config);
     bool update_local_configuration(const replica_configuration &config, bool same_ballot = false);
@@ -481,6 +478,7 @@ private:
 
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true
     bool _is_initializing;       // when initializing, switching to primary need to update ballot
+    volatile bool _deny_client_write = false;
 
     // partition split
     // during partition split: _child_gpid(app_id, partition_index+partition_count)
