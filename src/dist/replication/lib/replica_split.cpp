@@ -122,6 +122,9 @@ void replica::init_child_replica(gpid parent_gpid,
     _split_states.parent_gpid = parent_gpid;
     _split_states.is_caught_up = false;
     _split_states.is_prepare_list_copied = false;
+    _split_states.splitting_start_ts_ns = dsn_now_ns();
+    //TODO(hyc): pref-counter - delete
+    ddebug_f("splitting_start_ts_ns is {}", _split_states.splitting_start_ts_ns);
 
     // heartbeat
     _split_states.check_state_task = tasking::enqueue(LPC_SPLIT_PARTITION,

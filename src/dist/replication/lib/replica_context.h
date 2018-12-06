@@ -542,13 +542,28 @@ typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
 class partition_split_context
 {
 public:
+    partition_split_context()
+        : is_prepare_list_copied(false), is_caught_up(false), splitting_start_ts_ns(0)
+    {
+    }
     bool cleanup(bool force);
     bool is_cleaned();
+    uint64_t duration_ms() const
+    {
+        return splitting_start_ts_ns > 0 ? (dsn_now_ns() - splitting_start_ts_ns) / 1000000 : 0;
+    }
 
 public:
     gpid parent_gpid;
-    bool is_caught_up;
     bool is_prepare_list_copied;
+    bool is_caught_up;
+
+    // TODO(hyc): perf-counter
+    uint64_t splitting_start_ts_ns;
+    // uint64_t splitting_copy_file_count;
+    // uint64_t splitting_copy_file_size;
+    // uint64_t splitting_copy_buffer_size;
+
     // mutation list should copy to child replica but prepare list is not ready
     std::vector<mutation_ptr> child_temp_mutation_list;
 

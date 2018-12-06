@@ -354,6 +354,9 @@ private:
     perf_counter_wrapper _counter_cold_backup_max_duration_time_ms;
     perf_counter_wrapper _counter_cold_backup_max_upload_file_size;
 
+    perf_counter_wrapper _counter_replicas_splitting_count;
+    perf_counter_wrapper _counter_replicas_splitting_max_duration_time_ms;
+
     dsn::task_tracker _tracker;
 
 private:

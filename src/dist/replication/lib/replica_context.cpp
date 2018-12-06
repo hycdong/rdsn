@@ -1306,6 +1306,7 @@ bool partition_split_context::cleanup(bool force)
 
     CLEANUP_TASK(async_learn_task, force)
 
+    splitting_start_ts_ns = 0;
     is_prepare_list_copied = false;
     is_caught_up = false;
     parent_gpid.set_app_id(0);

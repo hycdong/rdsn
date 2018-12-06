@@ -263,6 +263,15 @@ void replica_stub::install_perf_counters()
         "cold.backup.max.upload.file.size",
         COUNTER_TYPE_NUMBER,
         "current cold backup max upload file size");
+    _counter_replicas_splitting_count.init_app_counter("eon.replica_stub",
+                                                       "replicas.splitting.count",
+                                                       COUNTER_TYPE_NUMBER,
+                                                       "current partition splitting count");
+    _counter_replicas_splitting_max_duration_time_ms.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.max.duration.time(ms)",
+        COUNTER_TYPE_NUMBER,
+        "current partition splitting max duration time(ms)");
 }
 
 void replica_stub::initialize(bool clear /* = false*/)
@@ -1515,13 +1524,15 @@ void replica_stub::on_gc()
         _counter_shared_log_size->set(_log->total_size() / (1024 * 1024));
     }
 
-    // statistic learning info
+    // statistic learning info, cold backup info and partition split info
     uint64_t learning_count = 0;
     uint64_t learning_max_duration_time_ms = 0;
     uint64_t learning_max_copy_file_size = 0;
     uint64_t cold_backup_running_count = 0;
     uint64_t cold_backup_max_duration_time_ms = 0;
     uint64_t cold_backup_max_upload_file_size = 0;
+    uint64_t splitting_count = 0;
+    uint64_t splitting_max_duration_time_ms = 0;
     for (auto &kv : rs) {
         replica_ptr &rep = kv.second.rep;
         if (rep->status() == partition_status::PS_POTENTIAL_SECONDARY) {
@@ -1532,6 +1543,7 @@ void replica_stub::on_gc()
                 std::max(learning_max_copy_file_size,
                          rep->_potential_secondary_states.learning_copy_file_size);
         }
+
         if (rep->status() == partition_status::PS_PRIMARY ||
             rep->status() == partition_status::PS_SECONDARY) {
             cold_backup_running_count += rep->_cold_backup_running_count.load();
@@ -1539,6 +1551,14 @@ void replica_stub::on_gc()
                 cold_backup_max_duration_time_ms, rep->_cold_backup_max_duration_time_ms.load());
             cold_backup_max_upload_file_size = std::max(
                 cold_backup_max_upload_file_size, rep->_cold_backup_max_upload_file_size.load());
+        }
+
+        // TODO(hyc): perf-counter
+        // splitting_max_copy_file_size, rep->_split_states.copy_file_size
+        if (rep->status() == partition_status::PS_PARTITION_SPLIT) {
+            splitting_count++;
+            splitting_max_duration_time_ms =
+                std::max(splitting_max_duration_time_ms, rep->_split_states.duration_ms());
         }
     }
 
@@ -1548,6 +1568,8 @@ void replica_stub::on_gc()
     _counter_cold_backup_running_count->set(cold_backup_running_count);
     _counter_cold_backup_max_duration_time_ms->set(cold_backup_max_duration_time_ms);
     _counter_cold_backup_max_upload_file_size->set(cold_backup_max_upload_file_size);
+    _counter_replicas_splitting_count->set(splitting_count);
+    _counter_replicas_splitting_max_duration_time_ms->set(splitting_max_duration_time_ms);
 
     ddebug("finish to garbage collection, time_used_ns = %" PRIu64, dsn_now_ns() - start);
 }
@@ -2238,7 +2260,7 @@ void replica_stub::on_exec(task_code code,
                     } else {
                         missing_handler(nullptr);
                     }
-                }else{
+                } else {
                     ddebug_f("missing_handler is nullptr, will return");
                 }
             }
@@ -2262,11 +2284,11 @@ replica_stub::get_replica_permit_create_new(gpid pid, app_info *app, const std::
             ddebug_f("cannnot create new replica coz it is under close");
             return nullptr;
         }
-        //TODO(hyc): consider - split won't succeed if child replica closed
-//        else if (_closed_replicas.find(pid) != _closed_replicas.end()) {
-//            ddebug_f("cannnot create new replica coz it is closed");
-//            return nullptr;
-//        }
+        // TODO(hyc): consider - split won't succeed if child replica closed
+        //        else if (_closed_replicas.find(pid) != _closed_replicas.end()) {
+        //            ddebug_f("cannnot create new replica coz it is closed");
+        //            return nullptr;
+        //        }
         else {
             replica *rep = replica::newr(this, pid, *app, false, parent_dir);
             if (rep != nullptr) {
@@ -2292,10 +2314,11 @@ void replica_stub::add_split_replica(rpc_address primary_address,
         child_replica->init_child_replica(parent_gpid, primary_address, init_ballot);
     } else {
         dwarn_f("Failed to create child replica ({}.{}), ignore it and wait next run",
-                 child_gpid.get_app_id(),
-                 child_gpid.get_partition_index());
-        on_exec(
-            LPC_SPLIT_PARTITION_ERROR, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+                child_gpid.get_app_id(),
+                child_gpid.get_partition_index());
+        on_exec(LPC_SPLIT_PARTITION_ERROR, parent_gpid, [](replica_ptr r) {
+            r->_child_gpid.set_app_id(0);
+        });
     }
 }
 
