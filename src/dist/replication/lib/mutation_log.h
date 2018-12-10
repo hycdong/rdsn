@@ -167,7 +167,8 @@ public:
                                        decree start_decree,
                                        ballot start_ballot,
                                        std::vector<mutation_ptr> &mutation_list,
-                                       std::vector<std::string> &files);
+                                       std::vector<std::string> &files,
+                                       uint64_t &total_file_size);
 
     // flush the pending buffer until all data is on disk
     // thread safe

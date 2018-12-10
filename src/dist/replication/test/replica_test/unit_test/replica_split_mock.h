@@ -185,14 +185,17 @@ public:
                            learn_state lstate,
                            std::vector<mutation_ptr> mutation_list,
                            std::vector<std::string> files,
+                           uint64_t total_file_size,
                            prepare_list *plist);
     void apply_parent_state(dsn::error_code ec,
                             learn_state lstate,
                             std::vector<mutation_ptr> mutation_list,
                             std::vector<std::string> files,
+                            uint64_t total_file_size,
                             decree last_committed_decree);
     dsn::error_code async_learn_mutation_private_log(std::vector<mutation_ptr> mutation_list,
                                                      std::vector<std::string> files,
+                                                     uint64_t total_file_size,
                                                      decree last_committed_decree);
     void child_catch_up();
     void notify_primary_split_catch_up();
@@ -330,6 +333,7 @@ void replica_split_mock::copy_parent_state(dsn::error_code ec,
                                            learn_state lstate,
                                            std::vector<mutation_ptr> mutation_list,
                                            std::vector<std::string> files,
+                                           uint64_t total_file_size,
                                            prepare_list *plist)
 {
     auto iter = substitutes.find("copy_parent_state");
@@ -340,11 +344,13 @@ void replica_split_mock::copy_parent_state(dsn::error_code ec,
                                             learn_state,
                                             std::vector<mutation_ptr>,
                                             std::vector<std::string>,
+                                            uint64_t,
                                             prepare_list *)> *)iter->second;
-            (*call)(ec, lstate, mutation_list, files, plist);
+            (*call)(ec, lstate, mutation_list, files, total_file_size, plist);
         }
     } else {
-        dsn::replication::replica::copy_parent_state(ec, lstate, mutation_list, files, plist);
+        dsn::replication::replica::copy_parent_state(
+            ec, lstate, mutation_list, files, total_file_size, plist);
     }
 }
 
@@ -352,6 +358,7 @@ void replica_split_mock::apply_parent_state(dsn::error_code ec,
                                             learn_state lstate,
                                             std::vector<mutation_ptr> mutation_list,
                                             std::vector<std::string> files,
+                                            uint64_t total_file_size,
                                             decree last_committed_decree)
 {
     auto iter = substitutes.find("apply_parent_state");
@@ -362,18 +369,20 @@ void replica_split_mock::apply_parent_state(dsn::error_code ec,
                                             learn_state,
                                             std::vector<mutation_ptr>,
                                             std::vector<std::string>,
+                                            uint64_t,
                                             decree)> *)iter->second;
-            (*call)(ec, lstate, mutation_list, files, last_committed_decree);
+            (*call)(ec, lstate, mutation_list, files, total_file_size, last_committed_decree);
         }
     } else {
         dsn::replication::replica::apply_parent_state(
-            ec, lstate, mutation_list, files, last_committed_decree);
+            ec, lstate, mutation_list, files, total_file_size, last_committed_decree);
     }
 }
 
 dsn::error_code
 replica_split_mock::async_learn_mutation_private_log(std::vector<mutation_ptr> mutation_list,
                                                      std::vector<std::string> files,
+                                                     uint64_t total_file_size,
                                                      decree last_committed_decree)
 {
     dsn::error_code ec = dsn::ERR_OK;
@@ -383,14 +392,15 @@ replica_split_mock::async_learn_mutation_private_log(std::vector<mutation_ptr> m
 
     if (iter != substitutes.end()) {
         if (iter->second != nullptr) {
-            auto call = (std::function<dsn::error_code(
-                             std::vector<mutation_ptr>, std::vector<std::string>, decree, bool)> *)
-                            iter->second;
-            ec = (*call)(mutation_list, files, last_committed_decree, flag);
+            auto call =
+                (std::function<dsn::error_code(
+                     std::vector<mutation_ptr>, std::vector<std::string>, uint64_t, decree, bool)>
+                     *)iter->second;
+            ec = (*call)(mutation_list, files, total_file_size, last_committed_decree, flag);
         }
     } else {
         ec = dsn::replication::replica::async_learn_mutation_private_log(
-            mutation_list, files, last_committed_decree);
+            mutation_list, files, total_file_size, last_committed_decree);
     }
     return ec;
 }

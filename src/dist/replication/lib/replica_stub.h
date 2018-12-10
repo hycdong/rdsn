@@ -356,6 +356,14 @@ private:
 
     perf_counter_wrapper _counter_replicas_splitting_count;
     perf_counter_wrapper _counter_replicas_splitting_max_duration_time_ms;
+    perf_counter_wrapper _counter_replicas_splitting_max_async_learn_time_ms;
+    perf_counter_wrapper _counter_replicas_splitting_max_copy_file_size;
+    perf_counter_wrapper _counter_replicas_splitting_recent_start_count;
+    perf_counter_wrapper _counter_replicas_splitting_recent_copy_file_count;
+    perf_counter_wrapper _counter_replicas_splitting_recent_copy_file_size;
+    perf_counter_wrapper _counter_replicas_splitting_recent_copy_mutation_count;
+    perf_counter_wrapper _counter_replicas_splitting_recent_split_fail_count;
+    perf_counter_wrapper _counter_replicas_splitting_recent_split_succ_count;
 
     dsn::task_tracker _tracker;
 

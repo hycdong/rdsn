@@ -1270,6 +1270,7 @@ void replica::on_query_child_state_reply(error_code ec,
 void replica::child_partition_active(const partition_configuration &config)
 {
     ddebug_f("{} finish partition split and become active", name());
+    _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
     // TODO(hyc): should set is false
     _primary_states.is_sync_to_child = false;
     _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();

@@ -263,6 +263,7 @@ void replica_stub::install_perf_counters()
         "cold.backup.max.upload.file.size",
         COUNTER_TYPE_NUMBER,
         "current cold backup max upload file size");
+
     _counter_replicas_splitting_count.init_app_counter("eon.replica_stub",
                                                        "replicas.splitting.count",
                                                        COUNTER_TYPE_NUMBER,
@@ -272,6 +273,46 @@ void replica_stub::install_perf_counters()
         "replicas.splitting.max.duration.time(ms)",
         COUNTER_TYPE_NUMBER,
         "current partition splitting max duration time(ms)");
+    _counter_replicas_splitting_max_async_learn_time_ms.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.max.async.learn.time(ms)",
+        COUNTER_TYPE_NUMBER,
+        "current partition splitting max async learn time(ms)");
+    _counter_replicas_splitting_max_copy_file_size.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.max.copy.file.size",
+        COUNTER_TYPE_NUMBER,
+        "current splitting max copy file size");
+    _counter_replicas_splitting_recent_start_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.start.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "current splitting start count in the recent period");
+    _counter_replicas_splitting_recent_copy_file_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.copy.file.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting copy file count in the recent period");
+    _counter_replicas_splitting_recent_copy_file_size.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.copy.file.size",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting copy file size in the recent period");
+    _counter_replicas_splitting_recent_copy_mutation_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.copy.mutation.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting copy mutation count in the recent period");
+    _counter_replicas_splitting_recent_split_succ_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.split.succ.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting succeed count in the recent period");
+    _counter_replicas_splitting_recent_split_fail_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.split.fail.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting fail count in the recent period");
 }
 
 void replica_stub::initialize(bool clear /* = false*/)
@@ -1533,6 +1574,8 @@ void replica_stub::on_gc()
     uint64_t cold_backup_max_upload_file_size = 0;
     uint64_t splitting_count = 0;
     uint64_t splitting_max_duration_time_ms = 0;
+    uint64_t splitting_max_async_learn_time_ms = 0;
+    uint64_t splitting_max_copy_file_size = 0;
     for (auto &kv : rs) {
         replica_ptr &rep = kv.second.rep;
         if (rep->status() == partition_status::PS_POTENTIAL_SECONDARY) {
@@ -1553,12 +1596,21 @@ void replica_stub::on_gc()
                 cold_backup_max_upload_file_size, rep->_cold_backup_max_upload_file_size.load());
         }
 
-        // TODO(hyc): perf-counter
         // splitting_max_copy_file_size, rep->_split_states.copy_file_size
         if (rep->status() == partition_status::PS_PARTITION_SPLIT) {
             splitting_count++;
             splitting_max_duration_time_ms =
-                std::max(splitting_max_duration_time_ms, rep->_split_states.duration_ms());
+                std::max(splitting_max_duration_time_ms, rep->_split_states.total_ms());
+            splitting_max_async_learn_time_ms =
+                std::max(splitting_max_async_learn_time_ms, rep->_split_states.async_learn_ms());
+            splitting_max_copy_file_size = std::max(splitting_max_copy_file_size, rep->_split_states.splitting_copy_file_size);
+            //TODO(hyc): delete
+//            ddebug("splitting count is %" PRIu64 ", max splitting time is %" PRIu64 "ns, max splitting async learn "
+//                   "time is %" PRIu64 "ns, max copy file size is %" PRIu64,
+//                   splitting_count,
+//                   splitting_max_duration_time_ms,
+//                   splitting_max_async_learn_time_ms,
+//                   splitting_max_copy_file_size);
         }
     }
 
@@ -1570,6 +1622,8 @@ void replica_stub::on_gc()
     _counter_cold_backup_max_upload_file_size->set(cold_backup_max_upload_file_size);
     _counter_replicas_splitting_count->set(splitting_count);
     _counter_replicas_splitting_max_duration_time_ms->set(splitting_max_duration_time_ms);
+    _counter_replicas_splitting_max_async_learn_time_ms->set(splitting_max_async_learn_time_ms);
+    _counter_replicas_splitting_max_copy_file_size->set(splitting_max_copy_file_size);
 
     ddebug("finish to garbage collection, time_used_ns = %" PRIu64, dsn_now_ns() - start);
 }
@@ -2311,6 +2365,7 @@ void replica_stub::add_split_replica(rpc_address primary_address,
 {
     replica_ptr child_replica = get_replica_permit_create_new(child_gpid, &app, parent_dir);
     if (child_replica != nullptr) {
+        ddebug_f("Succeed to create child replica ({}.{})", child_gpid.get_app_id(), child_gpid.get_partition_index());
         child_replica->init_child_replica(parent_gpid, primary_address, init_ballot);
     } else {
         dwarn_f("Failed to create child replica ({}.{}), ignore it and wait next run",

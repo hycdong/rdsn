@@ -255,6 +255,7 @@ void replication_service_test_app::copy_parent_state_test()
     // mock files
     std::vector<std::string> files;
     files.push_back("log.1.0.txt");
+    uint64_t total_file_size = 0;
 
     // mock prepare list and mutation_list
     std::vector<mutation_ptr> mutation_list;
@@ -281,7 +282,8 @@ void replication_service_test_app::copy_parent_state_test()
         std::cout << "case1. failed - invalid child state" << std::endl;
         child_replica->_config.status = partition_status::PS_SECONDARY;
 
-        child_replica->copy_parent_state(ec, lstate, mutation_list, files, plist_mock);
+        child_replica->copy_parent_state(
+            ec, lstate, mutation_list, files, total_file_size, plist_mock);
         child_replica->tracker()->wait_outstanding_tasks();
 
         child_replica->_config.status = partition_status::PS_PARTITION_SPLIT;
@@ -292,7 +294,8 @@ void replication_service_test_app::copy_parent_state_test()
         ec = dsn::ERR_GET_LEARN_STATE_FAILED;
         substitutes["prepare_copy_parent_state"] = nullptr;
 
-        child_replica->copy_parent_state(ec, lstate, mutation_list, files, plist_mock);
+        child_replica->copy_parent_state(
+            ec, lstate, mutation_list, files, total_file_size, plist_mock);
         parent_replica->tracker()->wait_outstanding_tasks();
         child_replica->tracker()->wait_outstanding_tasks();
 
@@ -303,7 +306,8 @@ void replication_service_test_app::copy_parent_state_test()
     {
         std::cout << "case3. succeed" << std::endl;
 
-        child_replica->copy_parent_state(ec, lstate, mutation_list, files, plist_mock);
+        child_replica->copy_parent_state(
+            ec, lstate, mutation_list, files, total_file_size, plist_mock);
         child_replica->tracker()->wait_outstanding_tasks();
 
         ASSERT_EQ(true, child_replica->_split_states.is_prepare_list_copied);
@@ -340,6 +344,7 @@ void replication_service_test_app::apply_parent_state_test()
     // mock files
     std::vector<std::string> files;
     files.push_back("log.1.0.txt");
+    uint64_t total_file_size = 0;
 
     // mock prepare list and mutation_list
     std::vector<mutation_ptr> mutation_list;
@@ -361,10 +366,11 @@ void replication_service_test_app::apply_parent_state_test()
 
     // mock aysnc_learn_mutation_private_log, remove learn from private log files
     std::function<dsn::error_code(
-        std::vector<mutation_ptr>, std::vector<std::string>, decree, bool)>
+        std::vector<mutation_ptr>, std::vector<std::string>, uint64_t, decree, bool)>
         mock_async_learn_mutation_private_log =
             [child_replica](std::vector<mutation_ptr> mutation_list,
                             std::vector<std::string> files,
+                            uint64_t total_file_size,
                             decree last_committed_decree,
                             bool is_mock_failure) {
 
@@ -419,7 +425,8 @@ void replication_service_test_app::apply_parent_state_test()
     {
         std::cout << "case1. succeed" << std::endl;
 
-        child_replica->apply_parent_state(ec, lstate, mutation_list, files, DECREE);
+        child_replica->apply_parent_state(
+            ec, lstate, mutation_list, files, total_file_size, DECREE);
         child_replica->tracker()->wait_outstanding_tasks();
 
         ASSERT_EQ(nullptr, child_replica->_split_states.async_learn_task);
@@ -430,7 +437,8 @@ void replication_service_test_app::apply_parent_state_test()
         std::cout << "case2. child replica status wrong" << std::endl;
         child_replica->_config.status = partition_status::PS_SECONDARY;
 
-        child_replica->apply_parent_state(ec, lstate, mutation_list, files, DECREE);
+        child_replica->apply_parent_state(
+            ec, lstate, mutation_list, files, total_file_size, DECREE);
         child_replica->tracker()->wait_outstanding_tasks();
 
         child_replica->_config.status = partition_status::PS_PARTITION_SPLIT;
@@ -441,7 +449,8 @@ void replication_service_test_app::apply_parent_state_test()
 
         substitutes["async_learn_mutation_private_log_mock_failure"] = nullptr;
 
-        child_replica->apply_parent_state(ec, lstate, mutation_list, files, DECREE);
+        child_replica->apply_parent_state(
+            ec, lstate, mutation_list, files, total_file_size, DECREE);
         child_replica->tracker()->wait_outstanding_tasks();
         parent_replica->tracker()->wait_outstanding_tasks();
 
@@ -1139,7 +1148,7 @@ void replication_service_test_app::check_partition_count_test()
     {
         std::cout << "case3. succeed" << std::endl;
         replica->check_partition_count(partition_count * 2);
-//        ASSERT_EQ(-1, replica->_partition_version);
+        //        ASSERT_EQ(-1, replica->_partition_version);
     }
 
     substitutes.erase("query_child_state");

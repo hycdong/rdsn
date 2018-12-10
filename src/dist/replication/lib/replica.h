@@ -325,16 +325,19 @@ private:
                                    learn_state lstate,
                                    std::vector<mutation_ptr> mutation_list,
                                    std::vector<std::string> files,
+                                   uint64_t total_file_size,
                                    prepare_list *plist);
     // child replica async learn parent states(data, private log, mutations in memory)
     virtual void apply_parent_state(error_code ec,
                                     learn_state lstate,
                                     std::vector<mutation_ptr> mutation_list,
                                     std::vector<std::string> files,
+                                    uint64_t total_file_size,
                                     decree last_committed_decree);
     // child replica async learn parent state(private log, mutations in memory)
     virtual error_code async_learn_mutation_private_log(std::vector<mutation_ptr> mutation_list,
                                                         std::vector<std::string> files,
+                                                        uint64_t total_file_size,
                                                         decree last_committed_decree);
     // child catch up mutations while executing async learn task
     virtual void child_catch_up();
@@ -400,6 +403,9 @@ private:
 
     // child partitions have been registered on meta, could be active
     void child_partition_active(const partition_configuration &config);
+
+    // handle child partitions error
+    void handle_splitting_error(std::string err_msg);
 
 private:
     friend class ::dsn::replication::replication_checker;

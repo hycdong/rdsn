@@ -1320,7 +1320,8 @@ void mutation_log::get_mutation_log_file(gpid pid,
                                          decree start_decree,
                                          ballot start_ballot,
                                          std::vector<mutation_ptr> &mutation_list,
-                                         std::vector<std::string> &files)
+                                         std::vector<std::string> &files,
+                                         uint64_t &total_file_size)
 {
 
     dassert(_is_private, "this method is only valid for private logs");
@@ -1333,6 +1334,7 @@ void mutation_log::get_mutation_log_file(gpid pid,
 
     mutation_list.clear();
     files.clear();
+    total_file_size = 0;
 
     // get mutations
     get_mutation_in_memory(start_decree, start_ballot, mutation_list);
@@ -1366,6 +1368,7 @@ void mutation_log::get_mutation_log_file(gpid pid,
         if (log->end_offset() > log->start_offset()) {
             // not empty file
             learn_files.push_back(log->path());
+            total_file_size += log->end_offset()-log->start_offset();
         }
 
         skip_next = (log->previous_log_max_decrees().size() == 0);
