@@ -741,7 +741,6 @@ void replica::copy_mutation(mutation_ptr &mu)
     }
 
     mutation_ptr new_mu = new mutation(mu);
-    std::string name = mu->name();
     _stub->on_exec(code,
                    _child_gpid,
                    std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));

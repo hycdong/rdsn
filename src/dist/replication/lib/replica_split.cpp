@@ -361,6 +361,7 @@ void replica::copy_parent_state(error_code ec,
 
     // add cached mutations to prepare list
     for (mutation_ptr &mu : _split_states.child_temp_mutation_list) {
+        ddebug_f("{} will copy mutation {} cached when prepare list is not copied", name(), mu->name());
         _stub->on_exec(LPC_SPLIT_PARTITION,
                        get_gpid(),
                        std::bind(&replica::on_copy_mutation,
@@ -427,10 +428,10 @@ void replica::apply_parent_state(error_code ec,
 
     _split_states.async_learn_task = nullptr;
     if (error != ERR_OK) {
-        handle_splitting_error("apply_parent_state coz sync checkpoint failed");
         _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [](replica *r) {
             r->_child_gpid.set_app_id(0);
         });
+        handle_splitting_error("apply_parent_state coz sync checkpoint failed");
     } else {
         error = _app->update_init_info_ballot_and_decree(this);
         if (error == ERR_OK) {
@@ -847,10 +848,10 @@ void replica::on_update_group_partition_count(
             request.config.ballot,
             get_ballot());
 
-        handle_splitting_error("on_update_group_partition_count coz out-dated ballot");
         _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
         });
+        handle_splitting_error("on_update_group_partition_count coz out-dated ballot");
 
         response.err = ERR_VERSION_OUTDATED;
         return;
@@ -1207,10 +1208,11 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
         return;
     }
 
-    ddebug_f("{} start to copy mutation:{}, sync_to_child:{}",
-             name(),
-             mu->name(),
-             mu->data.header.sync_to_child);
+    if(mu->data.header.sync_to_child){
+        ddebug_f("{} start to sync copy mutation {}", name(), mu->name());
+    }else{
+        dinfo_f("{} start to copy mutation {} asynchronously", name(), mu->name());
+    }
 
 
     // 4. prepare mu as secondary

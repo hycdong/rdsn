@@ -1605,12 +1605,12 @@ void replica_stub::on_gc()
                 std::max(splitting_max_async_learn_time_ms, rep->_split_states.async_learn_ms());
             splitting_max_copy_file_size = std::max(splitting_max_copy_file_size, rep->_split_states.splitting_copy_file_size);
             //TODO(hyc): delete
-//            ddebug("splitting count is %" PRIu64 ", max splitting time is %" PRIu64 "ns, max splitting async learn "
-//                   "time is %" PRIu64 "ns, max copy file size is %" PRIu64,
-//                   splitting_count,
-//                   splitting_max_duration_time_ms,
-//                   splitting_max_async_learn_time_ms,
-//                   splitting_max_copy_file_size);
+            ddebug("splitting count is %" PRIu64 ", max splitting time is %" PRIu64 "ns, max splitting async learn "
+                   "time is %" PRIu64 "ns, max copy file size is %" PRIu64,
+                   splitting_count,
+                   splitting_max_duration_time_ms,
+                   splitting_max_async_learn_time_ms,
+                   splitting_max_copy_file_size);
         }
     }
 
@@ -2288,7 +2288,7 @@ void replica_stub::on_exec(task_code code,
                            std::chrono::milliseconds delay)
 {
     if (pid.get_app_id() == 0) {
-        dwarn_f("gpid app id is invalid");
+        dwarn_f("gpid ({}.{}) is invalid", pid.get_app_id(), pid.get_partition_index());
         return;
     }
 
