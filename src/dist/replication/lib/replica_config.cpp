@@ -1152,7 +1152,7 @@ void replica::on_query_child_state_reply(error_code ec,
                                          std::shared_ptr<query_child_state_response> response)
 {
     //TODO(hyc): consider
-    // check_hashed_access();
+    _checker.only_one_thread_access();
 
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_f("{} is not primary, but {}, ignore query child state reply",

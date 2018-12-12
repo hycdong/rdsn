@@ -736,7 +736,7 @@ void replica::copy_mutation(mutation_ptr &mu)
     task_code code = LPC_SPLIT_PARTITION;
     // TODO(hyc): add sync_to_child check
     if (!mu->is_split() && mu->data.header.sync_to_child) {
-        code = LPC_SPLIT_PARTITION_PREPARE;
+        code = LPC_SPLIT_PARTITION;
         mu->set_is_split();
     }
 
@@ -750,7 +750,7 @@ void replica::copy_mutation(mutation_ptr &mu)
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
     if (mu->data.header.sync_to_child) {
-        _stub->on_exec(LPC_SPLIT_PARTITION_PREPARE,
+        _stub->on_exec(LPC_SPLIT_PARTITION,
                        _split_states.parent_gpid,
                        std::bind(&replica::on_copy_mutation_reply,
                                  std::placeholders::_1,

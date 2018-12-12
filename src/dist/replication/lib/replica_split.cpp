@@ -65,7 +65,7 @@ void replica::on_add_child(const group_check_request &request) // on parent
     }
 
     if (child_gpid.get_partition_index() < _app_info.partition_count) {
-        dwarn_f("{}, receive old add child replica request, child gpid is ({},{}), "
+        dwarn_f("{}, receive old add child replica request, child gpid is ({}.{}), "
                 "local partition count is {}, ignore",
                 name(),
                 child_gpid.get_app_id(),
@@ -77,7 +77,7 @@ void replica::on_add_child(const group_check_request &request) // on parent
     _child_gpid = child_gpid;
     _child_ballot = get_ballot();
 
-    ddebug_f("{} process add child replica({}, {}), primary is {}, ballot is {}, "
+    ddebug_f("{} process add child replica({}.{}), primary is {}, ballot is {}, "
              "status is {}, last_committed_decree is {}",
              name(),
              child_gpid.get_app_id(),
@@ -604,12 +604,14 @@ void replica::child_catch_up() // on child
         }
     }
 
-    ddebug_f("{} catch up, will send notification to parent({}.{}), goal decree is {}, local decree is {}",
+    //TODO(hyc): delete max decree
+    ddebug_f("{} catch up, will send notification to parent({}.{}), goal decree is {}, local decree is {}, max decree is {}",
              name(),
              _split_states.parent_gpid.get_app_id(),
              _split_states.parent_gpid.get_partition_index(),
              _prepare_list->last_committed_decree(),
-             _app->last_committed_decree());
+             _app->last_committed_decree(),
+             _prepare_list->max_decree());
 
     _split_states.is_caught_up = true;
 
@@ -721,6 +723,8 @@ void replica::on_notify_primary_split_catch_up(
     _primary_states.is_sync_to_child = true;
 
     decree sync_point = _prepare_list->max_decree() + 1;
+    //TODO(hyc): for debug
+    ddebug_f("{}: sync_point is {}", name(), sync_point);
 
     if (!_options->empty_write_disabled) {
         mutation_ptr mu = new_mutation(invalid_decree);
