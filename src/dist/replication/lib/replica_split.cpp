@@ -633,6 +633,8 @@ void replica::notify_primary_split_catch_up() // on child
 
     auto on_notify_primary_split_catch_up_reply = [this](error_code ec,
                                                          notify_cacth_up_response response) {
+        _checker.only_one_thread_access();
+
         if (ec == ERR_TIMEOUT) {
             dwarn_f("{} failed to notify primary catch up coz timeout, please wait and retry", this->name());
             tasking::enqueue(LPC_SPLIT_PARTITION,
@@ -821,7 +823,7 @@ void replica::update_group_partition_count(int new_partition_count,
             iter.first,
             RPC_SPLIT_UPDATE_PARTITION_COUNT,
             *request,
-            tracker(), // TODO(hyc): consider, pid tracker???
+            tracker(),
             [=](error_code ec, update_group_partition_count_response &&response) {
                 on_update_group_partition_count_reply(
                     ec,
@@ -832,7 +834,7 @@ void replica::update_group_partition_count(int new_partition_count,
                     is_update_child);
             },
             std::chrono::seconds(1),
-            pid.thread_hash());
+            get_gpid().thread_hash());
     }
 }
 
@@ -920,6 +922,8 @@ void replica::on_update_group_partition_count_reply(
     rpc_address finish_update_address,
     bool is_update_child) // on primary parent
 {
+    _checker.only_one_thread_access();
+
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_f(
             "{} failed to exectue on_update_group_partition_count_reply, it is not primary but {}",
