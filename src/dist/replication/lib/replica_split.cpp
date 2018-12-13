@@ -886,7 +886,7 @@ void replica::on_update_group_partition_count(
     info.partition_count = request.app.partition_count;
 
     replica_app_info new_info((app_info *)&info);
-    std::string info_path = utils::filesystem::path_combine(_dir, ".app_info");
+    std::string info_path = utils::filesystem::path_combine(_dir, ".app-info");
     error_code err = new_info.store(info_path.c_str());
 
     if (err != ERR_OK) {
