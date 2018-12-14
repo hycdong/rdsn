@@ -626,16 +626,14 @@ void replica::child_catch_up() // on child
 
 void replica::notify_primary_split_catch_up() // on child
 {
-    notify_catch_up_request request;
-    request.child_gpid = get_gpid();
-    request.child_ballot = get_ballot();
-    request.child_address = _stub->_primary_address;
-    request.primary_parent_gpid = _split_states.parent_gpid;
+    std::shared_ptr<notify_catch_up_request> request(new notify_catch_up_request);
+    request->child_gpid = get_gpid();
+    request->child_ballot = get_ballot();
+    request->child_address = _stub->_primary_address;
+    request->primary_parent_gpid = _split_states.parent_gpid;
 
     auto on_notify_primary_split_catch_up_reply = [this](error_code ec,
-                                                         notify_cacth_up_response response) {
-        _checker.only_one_thread_access();
-
+                                                         std::shared_ptr<notify_cacth_up_response> response) {
         if (ec == ERR_TIMEOUT) {
             dwarn_f("{} failed to notify primary catch up coz timeout, please wait and retry", this->name());
             tasking::enqueue(LPC_SPLIT_PARTITION,
@@ -643,8 +641,8 @@ void replica::notify_primary_split_catch_up() // on child
                              std::bind(&replica::notify_primary_split_catch_up, this),
                              get_gpid().thread_hash(),
                              std::chrono::seconds(1));
-        } else if (ec != ERR_OK || response.err != ERR_OK) {
-            error_code err = (ec == ERR_OK) ? response.err : ec;
+        } else if (ec != ERR_OK || response->err != ERR_OK) {
+            error_code err = (ec == ERR_OK) ? response->err : ec;
             derror_f("{} failed to notify primary catch up, error is {}", name(), err.to_string());
             _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
                 r->_child_gpid.set_app_id(0);
@@ -664,11 +662,15 @@ void replica::notify_primary_split_catch_up() // on child
 
     rpc::call(_config.primary,
               RPC_SPLIT_NOTIFY_CATCH_UP,
-              request,
+              *request,
               tracker(),
-              on_notify_primary_split_catch_up_reply,
+              [=](error_code ec, notify_cacth_up_response &&response) {
+                  on_notify_primary_split_catch_up_reply(
+                      ec,
+                      std::make_shared<notify_cacth_up_response>(std::move(response)));
+              },
               std::chrono::seconds(0),
-              get_gpid().thread_hash());
+              _split_states.parent_gpid.thread_hash());
 }
 
 void replica::on_notify_primary_split_catch_up(
@@ -723,6 +725,7 @@ void replica::on_notify_primary_split_catch_up(
     }
 
     ddebug_f("{} all child catch up", name());
+
     _primary_states.child_address.clear();
     _primary_states.is_sync_to_child = true;
 
