@@ -548,10 +548,11 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                  name(),
                  count,
                  _app->last_committed_decree());
-    }
 
-    plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
-    ddebug_f("{} commit to decree {}", name(), last_committed_decree);
+        //TODO(hyc): move if replay log succeed
+        plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
+        ddebug_f("{} commit to decree {}", name(), last_committed_decree);
+    }  
 
     return ec;
 }

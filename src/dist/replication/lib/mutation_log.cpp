@@ -1368,7 +1368,7 @@ void mutation_log::get_mutation_log_file(gpid pid,
         if (log->end_offset() > log->start_offset()) {
             // not empty file
             learn_files.push_back(log->path());
-            total_file_size += log->end_offset()-log->start_offset();
+            total_file_size += (log->end_offset()-log->start_offset());
         }
 
         skip_next = (log->previous_log_max_decrees().size() == 0);
