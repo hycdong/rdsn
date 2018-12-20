@@ -93,6 +93,8 @@ void partition_resolver_simple::on_access_failure(int partition_index, error_cod
                                      // provider
         &&
         err != ERR_OPERATION_DISABLED // operation disabled
+        &&
+        err != ERR_BUSY //  busy (rpc busy or throttling busy)
         ) {
         if (err == ERR_PARENT_PARTITION_MISUSED) {
             ddebug("clear all partition configuration cache due to access failure %s at %d.%d",
