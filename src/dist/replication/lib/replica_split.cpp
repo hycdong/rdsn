@@ -359,6 +359,7 @@ void replica::copy_parent_state(error_code ec,
 
     _split_states.is_prepare_list_copied = true;
 
+    //TODO(hyc): 0115 - test fix init
     // add cached mutations to prepare list
     for (mutation_ptr &mu : _split_states.child_temp_mutation_list) {
         ddebug_f("{} will copy mutation {} cached when prepare list is not copied", name(), mu->name());
@@ -1188,6 +1189,8 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 
     // 2. check status - finish copy prepare list
     if (!_split_states.is_prepare_list_copied) {
+        //TODO(hyc): 0115 - fix init bug
+        //dwarn_f("{} not copy prepare list from parent, ignore mutation {}", name(), mu->name());
         dwarn_f("{} not copy prepare list from parent, cache mutation {}", name(), mu->name());
         _split_states.child_temp_mutation_list.emplace_back(mu);
         return;
@@ -1211,7 +1214,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 
     //TODO(hyc): consider
     if(mu->data.header.decree <= _prepare_list->last_committed_decree()){
-        dwarn_f("{}: mu decree {} VS plist last_committed_decree, ignore this mutation",
+        dwarn_f("{}: mu decree {} VS plist last_committed_decree {}, ignore this mutation",
                 name(), mu->data.header.decree, _prepare_list->last_committed_decree());
         return;
     }
@@ -1252,16 +1255,18 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 
 void replica::handle_splitting_error(std::string err_msg)
 {
-    derror_f("{}: failed during {}, parent = {}.{}, split_duration = {}ms, async_learn_duration = {}ms",
-           name(),
-           err_msg.c_str(),
-           _split_states.parent_gpid.get_app_id(),
-           _split_states.parent_gpid.get_partition_index(),
-           _split_states.total_ms(),
-           _split_states.async_learn_ms());
+    if(status() != partition_status::PS_ERROR){
+        derror_f("{}: failed during {}, parent = {}.{}, split_duration = {}ms, async_learn_duration = {}ms",
+               name(),
+               err_msg.c_str(),
+               _split_states.parent_gpid.get_app_id(),
+               _split_states.parent_gpid.get_partition_index(),
+               _split_states.total_ms(),
+               _split_states.async_learn_ms());
 
-    _stub->_counter_replicas_splitting_recent_split_fail_count->increment();
-    update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
+        _stub->_counter_replicas_splitting_recent_split_fail_count->increment();
+        update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
+    }
 }
 
 } // namespace replication

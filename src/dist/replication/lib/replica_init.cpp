@@ -160,6 +160,13 @@ error_code replica::initialize_on_load()
         return nullptr;
     }
 
+    //TODO(hyc): test
+    if(info.partition_count < pidx){
+        dwarn("gpid(%d.%d), partition_count=%d this replica may be partition split garbage replica, ignore",
+              app_id, pidx, info.partition_count);
+        return nullptr;
+    }
+
     replica *rep = new replica(stub, pid, info, dir, false);
 
     err = rep->initialize_on_load();
