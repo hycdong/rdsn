@@ -165,6 +165,8 @@ void replica::check_child_state() // on child
         return;
     }
 
+    ddebug_f("{} child partition state checked", name());
+
     // parent check its state
     _stub->on_exec(
         LPC_SPLIT_PARTITION,
@@ -202,13 +204,18 @@ void replica::check_parent_state(gpid child_gpid, ballot child_ballot) // on par
                 _child_gpid.get_partition_index(),
                 get_ballot());
 
-        _stub->on_exec(LPC_SPLIT_PARTITION,
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
                        child_gpid,
                        std::bind(&replica::handle_splitting_error,
                                  std::placeholders::_1,
                                  "check_parent_state coz wrong parent state"));
 
         _child_gpid.set_app_id(0);
+    }else{
+        ddebug_f("{} parent state checked, status is {}, ballot is {}",
+                 name(),
+                 enum_to_string(status()),
+                 get_ballot());
     }
 }
 
@@ -299,7 +306,10 @@ void replica::copy_parent_state(error_code ec,
     }
 
     if (ec != ERR_OK) {
-        dwarn_f("{} failed to copy parent state, error code is {}, retry", name(), ec.to_string());
+        // TODO(hyc): split always not finish - 0117
+        std::string full_path = _app->learn_dir()+".tmp";
+        dsn::utils::filesystem::remove_path(full_path);
+        dwarn_f("{} failed to copy parent state, error code is {}, remove tmp path {} and retry", name(), ec.to_string(),full_path);
         _stub->on_exec(LPC_SPLIT_PARTITION,
                        _split_states.parent_gpid,
                        std::bind(&replica::prepare_copy_parent_state,
@@ -783,7 +793,7 @@ void replica::update_group_partition_count(int new_partition_count,
                 _child_gpid.get_partition_index(),
                 _child_ballot,
                 get_ballot());
-        _stub->on_exec(LPC_SPLIT_PARTITION,
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
                        _child_gpid,
                        std::bind(&replica::handle_splitting_error,
                                  std::placeholders::_1,
