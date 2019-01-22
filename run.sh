@@ -53,6 +53,8 @@ function usage_build()
     echo "   --notest              build without building unit tests, default no"
     echo "   --disable_gperf       build without gperftools, this flag is mainly used"
     echo "                         to enable valgrind memcheck, default no"
+    echo "   --skip_thirdparty     whether to skip building thirdparties, default no"
+    echo "   --check               whether to perform code check before building"
     if [ "$ONLY_BUILD" == "NO" ]; then
         echo "   -m|--test_module      specify modules to test, split by ',',"
         echo "                         e.g., \"dsn.core.tests,dsn.tests\","
@@ -71,6 +73,9 @@ function run_build()
     ENABLE_GCOV=NO
     RUN_VERBOSE=NO
     NO_TEST=NO
+    DISABLE_GPERF=NO
+    SKIP_THIRDPARTY=NO
+    CHECK=NO
     TEST_MODULE=""
     while [[ $# > 0 ]]; do
         key="$1"
@@ -121,6 +126,12 @@ function run_build()
             --disable_gperf)
                 DISABLE_GPERF=YES
                 ;;
+            --skip_thirdparty)
+                SKIP_THIRDPARTY=YES
+                ;;
+            --check)
+                CHECK=YES
+                ;;
             -m|--test_module)
                 if [ "$ONLY_BUILD" == "YES" ]; then
                     echo "ERROR: unknown option \"$key\""
@@ -141,23 +152,33 @@ function run_build()
         shift
     done
 
-    # build thirdparty first
-    cd thirdparty
-    if [ "$CLEAR_THIRDPARTY" == "YES" ]; then
-        echo "Clear thirdparty..."
-        rm -rf src build output &>/dev/null
-        CLEAR=YES
-    fi
-    ./download-thirdparty.sh
-    exit_if_fail $?
-    if [ "x"$BOOST_DIR != "x" ]; then
-        ./build-thirdparty.sh -b $BOOST_DIR
+    if [[ ${CHECK} == "YES" ]]; then
+        ${scripts_dir}/run-clang-format.sh
         exit_if_fail $?
+    fi
+
+    if [[ ${SKIP_THIRDPARTY} == "YES" ]]; then
+        echo "Skip building thirdparty..."
     else
-        ./build-thirdparty.sh
+        # build thirdparty first
+        cd thirdparty
+        if [[ "$CLEAR_THIRDPARTY" == "YES" ]]; then
+            echo "Clear thirdparty..."
+            rm -rf src build output &>/dev/null
+            CLEAR=YES
+        fi
+        echo "Start building thirdparty..."
+        ./download-thirdparty.sh
         exit_if_fail $?
+        if [[ "x"$BOOST_DIR != "x" ]]; then
+            ./build-thirdparty.sh -b $BOOST_DIR
+            exit_if_fail $?
+        else
+            ./build-thirdparty.sh
+            exit_if_fail $?
+        fi
+        cd ..
     fi
-    cd ..
 
     if [ "$BUILD_TYPE" != "debug" -a "$BUILD_TYPE" != "release" ]; then
         echo "ERROR: invalid build type \"$BUILD_TYPE\""
@@ -167,6 +188,10 @@ function run_build()
     fi
     if [ "$ONLY_BUILD" == "NO" ]; then
         run_start_zk
+        if [ $? -ne 0 ]; then
+            echo "ERROR: start zk failed"
+            exit 1
+        fi
     fi
     C_COMPILER="$C_COMPILER" CXX_COMPILER="$CXX_COMPILER" BUILD_TYPE="$BUILD_TYPE" \
         ONLY_BUILD="$ONLY_BUILD" CLEAR="$CLEAR" JOB_NUM="$JOB_NUM" \
@@ -222,17 +247,22 @@ function usage_start_zk()
 {
     echo "Options for subcommand 'start_zk':"
     echo "   -h|--help         print the help info"
+    echo "   -d|--install_dir <dir>"
+    echo "                     zookeeper install directory,"
+    echo "                     if not set, then default is './.zk_install'"
     echo "   -p|--port <port>  listen port of zookeeper, default is 12181"
 }
+
 function run_start_zk()
 {
-    # download zk before start zk service
-    # as zk is a 3rdparty dependency of rdsn project,
-    # so we simply download the whole thirdparty for simplicity
-    `pwd`/thirdparty/download-thirdparty.sh
-    exit_if_fail $?
+    # first we check the environment that zk need: java and nc command
+    # check java
+    type java >/dev/null 2>&1 || { echo >&2 "start zk failed, need install jre..."; exit 1;}
 
-    DOWNLOADED_DIR=`pwd`/thirdparty/src
+    # check nc command
+    type nc >/dev/null 2>&1 || { echo >&2 "start zk failed, need install netcat command..."; exit 1;}
+
+    INSTALL_DIR=`pwd`/.zk_install
     PORT=12181
     while [[ $# > 0 ]]; do
         key="$1"
@@ -240,6 +270,10 @@ function run_start_zk()
             -h|--help)
                 usage_start_zk
                 exit 0
+                ;;
+            -d|--install_dir)
+                INSTALL_DIR=$2
+                shift
                 ;;
             -p|--port)
                 PORT=$2
@@ -254,7 +288,7 @@ function run_start_zk()
         esac
         shift
     done
-    DOWNLOADED_DIR="$DOWNLOADED_DIR" PORT="$PORT" $scripts_dir/start_zk.sh
+    INSTALL_DIR="$INSTALL_DIR" PORT="$PORT" ./scripts/linux/start_zk.sh
 }
 
 #####################
@@ -264,16 +298,23 @@ function usage_stop_zk()
 {
     echo "Options for subcommand 'stop_zk':"
     echo "   -h|--help         print the help info"
+    echo "   -d|--install_dir <dir>"
+    echo "                     zookeeper install directory,"
+    echo "                     if not set, then default is './.zk_install'"
 }
 function run_stop_zk()
 {
-    DOWNLOADED_DIR=`pwd`/thirdparty/src
+    INSTALL_DIR=`pwd`/.zk_install
     while [[ $# > 0 ]]; do
         key="$1"
         case $key in
             -h|--help)
                 usage_stop_zk
                 exit 0
+                ;;
+            -d|--install_dir)
+                INSTALL_DIR=$2
+                shift
                 ;;
             *)
                 echo "ERROR: unknown option \"$key\""
@@ -284,7 +325,7 @@ function run_stop_zk()
         esac
         shift
     done
-    DOWNLOADED_DIR="$DOWNLOADED_DIR" $scripts_dir/stop_zk.sh
+    INSTALL_DIR="$INSTALL_DIR" ./scripts/linux/stop_zk.sh
 }
 
 #####################
@@ -294,16 +335,23 @@ function usage_clear_zk()
 {
     echo "Options for subcommand 'clear_zk':"
     echo "   -h|--help         print the help info"
+    echo "   -d|--install_dir <dir>"
+    echo "                     zookeeper install directory,"
+    echo "                     if not set, then default is './.zk_install'"
 }
 function run_clear_zk()
 {
-    DOWNLOADED_DIR=`pwd`/thirdparty/src
+    INSTALL_DIR=`pwd`/.zk_install
     while [[ $# > 0 ]]; do
         key="$1"
         case $key in
             -h|--help)
                 usage_clear_zk
                 exit 0
+                ;;
+            -d|--install_dir)
+                INSTALL_DIR=$2
+                shift
                 ;;
             *)
                 echo "ERROR: unknown option \"$key\""
@@ -314,7 +362,7 @@ function run_clear_zk()
         esac
         shift
     done
-    DOWNLOADED_DIR="$DOWNLOADED_DIR" $scripts_dir/clear_zk.sh
+    INSTALL_DIR="$INSTALL_DIR" ./scripts/linux/clear_zk.sh
 }
 
 ####################################################################
