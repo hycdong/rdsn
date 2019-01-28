@@ -206,7 +206,7 @@ struct configuration_update_request
     2:dsn.layer2.partition_configuration  config;
     3:config_type              type = config_type.CT_INVALID;
     4:dsn.rpc_address          node;
-    5:dsn.rpc_address          host_node; // only used by stateless apps    
+    5:dsn.rpc_address          host_node; // deprecated, only used by stateless apps
 }
 
 // meta server (config mgr) => primary | secondary (downgrade) (w/ new config)
@@ -338,11 +338,19 @@ struct configuration_proposal_action
     // 4:i64 period_ts;
 }
 
+enum balancer_request_type
+{
+    move_primary,
+    copy_primary,
+    copy_secondary,
+}
+
 struct configuration_balancer_request
 {
     1:dsn.gpid gpid;
     2:list<configuration_proposal_action> action_list;
     3:optional bool force = false;
+    4:optional balancer_request_type balance_type;
 }
 
 struct configuration_balancer_response
@@ -705,6 +713,38 @@ struct duplication_sync_response
     2:map<i32, list<duplication_entry>>                dup_map;
 }
 
+struct ddd_diagnose_request
+{
+    // app_id == -1 means return all partitions of all apps
+    // app_id != -1 && partition_id == -1 means return all partitions of specified app
+    // app_id != -1 && partition_id != -1 means return specified partition
+    1:dsn.gpid pid;
+}
+
+struct ddd_node_info
+{
+    1:dsn.rpc_address node;
+    2:i64             drop_time_ms;
+    3:bool            is_alive; // if the node is alive now
+    4:bool            is_collected; // if replicas has been collected from this node
+    5:i64             ballot; // collected && ballot == -1 means replica not exist on this node
+    6:i64             last_committed_decree;
+    7:i64             last_prepared_decree;
+}
+
+struct ddd_partition_info
+{
+    1:dsn.layer2.partition_configuration config;
+    2:list<ddd_node_info>                dropped;
+    3:string                             reason;
+}
+
+struct ddd_diagnose_response
+{
+    1:dsn.error_code           err;
+    2:list<ddd_partition_info> partitions;
+}
+
 /////////////////// split-related structs ////////////////////
 
 // Request to split the table. It is sent from client to meta.
@@ -798,38 +838,6 @@ struct query_child_state_response
     1:dsn.error_code    err;
     2:i32               partition_count;
     3:i64               ballot;
-}
-
-struct ddd_diagnose_request
-{
-    // app_id == -1 means return all partitions of all apps
-    // app_id != -1 && partition_id == -1 means return all partitions of specified app
-    // app_id != -1 && partition_id != -1 means return specified partition
-    1:dsn.gpid pid;
-}
-
-struct ddd_node_info
-{
-    1:dsn.rpc_address node;
-    2:i64             drop_time_ms;
-    3:bool            is_alive; // if the node is alive now
-    4:bool            is_collected; // if replicas has been collected from this node
-    5:i64             ballot; // collected && ballot == -1 means replica not exist on this node
-    6:i64             last_committed_decree;
-    7:i64             last_prepared_decree;
-}
-
-struct ddd_partition_info
-{
-    1:dsn.layer2.partition_configuration config;
-    2:list<ddd_node_info>                dropped;
-    3:string                             reason;
-}
-
-struct ddd_diagnose_response
-{
-    1:dsn.error_code           err;
-    2:list<ddd_partition_info> partitions;
 }
 
 /*
