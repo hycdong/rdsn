@@ -1104,6 +1104,7 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         ASSERT_EQ(0, primary_parent->_child_gpid.get_app_id());
 
         response->err = dsn::ERR_OK;
+        primary_parent->_child_gpid = child_gpid;
     }
 
     {
