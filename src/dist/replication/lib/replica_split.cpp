@@ -971,8 +971,21 @@ void replica::on_update_group_partition_count_reply(
                      name(),
                      left_replicas->size());
         }
-    } else { // retry
+    } else {
         error_code error = (ec == ERR_OK) ? response->err : ec;
+        if (error != ERR_TIMEOUT) {
+            dwarn_f("{} failed to execute on_update_group_partition_count_reply, error is {}",
+                    name(),
+                    error.to_string());
+            _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
+                           _child_gpid,
+                           std::bind(&replica::handle_splitting_error,
+                                     std::placeholders::_1,
+                                     "on_update_group_partition_count_reply"));
+            _child_gpid.set_app_id(0);
+            return;
+        }
+
         dwarn_f("{} failed to execute on_update_group_partition_count_reply, error is {}, retry",
                 name(),
                 error.to_string());
