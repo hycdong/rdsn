@@ -1142,7 +1142,7 @@ void replica::check_partition_count(int partition_count)
                  partition_count);
         if (_child_gpid.get_app_id() <= 0) {
 //             TODO(hyc): consider partition_version???
-            _partition_version = -1;
+//            _partition_version = -1;
             query_child_state();
         }
     }
