@@ -1163,6 +1163,7 @@ void replica::query_child_state()
         return;
     }
 
+    _partition_version = -1;
     ddebug_f("{} query child partition state on meta", name());
 
     std::shared_ptr<query_child_state_request> request(new query_child_state_request);
