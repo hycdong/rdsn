@@ -1142,7 +1142,7 @@ void replica::check_partition_count(int partition_count)
                  partition_count);
         if (_child_gpid.get_app_id() <= 0) {
 //             TODO(hyc): consider partition_version???
-//            _partition_version = -1;
+            _partition_version = -1;
             query_child_state();
         }
     }
@@ -1155,6 +1155,7 @@ void replica::query_child_state()
         dwarn_f("{} can not query child partition state, current state is not primary, but {}",
                 name(),
                 enum_to_string(status()));
+        _partition_version = _app_info.partition_count - 1;
         return;
     }
 
@@ -1163,7 +1164,6 @@ void replica::query_child_state()
         return;
     }
 
-    _partition_version = -1;
     ddebug_f("{} query child partition state on meta", name());
 
     std::shared_ptr<query_child_state_request> request(new query_child_state_request);
