@@ -1155,7 +1155,7 @@ void replica::query_child_state()
         dwarn_f("{} can not query child partition state, current state is not primary, but {}",
                 name(),
                 enum_to_string(status()));
-        _partition_version = _app_info.partition_count - 1;
+        //_partition_version = _app_info.partition_count - 1;
         return;
     }
 
