@@ -1210,18 +1210,11 @@ void replica::on_query_child_state_reply(error_code ec,
         ec = response->err;
     }
 
-    int partition_count = response->partition_count;
-    if (ec != ERR_OK || partition_count <= 0) {
-        if (partition_count > 0) {
-            dwarn_f("{} failed to query child state, error is {}, please retry",
-                    name(),
-                    ec.to_string());
-        } else {
-            dwarn_f("{} failed to query child state coz something wrong with meta, got invalid "
-                    "partition_count {}, please retry",
-                    name(),
-                    partition_count);
-        }
+    if (ec != ERR_OK) {
+        dwarn_f("{} failed to query child state, error is {}, please retry",
+                name(),
+                ec.to_string());
+
         _primary_states.query_child_state_task = tasking::enqueue(
             LPC_SPLIT_PARTITION,
             tracker(),
@@ -1248,6 +1241,39 @@ void replica::on_query_child_state_reply(error_code ec,
     }
 
     _primary_states.query_child_state_task = nullptr;
+    int partition_count = response->partition_count;
+
+    if (partition_count <= 0) {
+        dwarn_f("{} failed to query child state coz something wrong with meta, got invalid "
+                "partition_count {}, please retry",
+                name(),
+                partition_count);
+        _primary_states.query_child_state_task = tasking::enqueue(
+            LPC_SPLIT_PARTITION,
+            tracker(),
+            [this, request]() {
+                dsn::rpc_address meta_address(_stub->_failure_detector->get_servers());
+                auto rpc_task_ptr = rpc::call(
+                    meta_address,
+                    RPC_CM_QUERY_CHILD_STATE,
+                    *request,
+                    tracker(),
+                    [=](error_code err, query_child_state_response &&response) {
+                        on_query_child_state_reply(
+                            err,
+                            request,
+                            std::make_shared<query_child_state_response>(std::move(response)));
+                    },
+                    std::chrono::seconds(0),
+                    get_gpid().thread_hash());
+                _primary_states.query_child_state_task = rpc_task_ptr;
+            },
+            get_gpid().thread_hash(),
+            std::chrono::seconds(1));
+        return;
+    }
+
+
     // current app finish partition split
     if (partition_count == _app_info.partition_count) {
         ddebug_f("app {}@{} has been finished partition split, current partition count is {}",
