@@ -371,14 +371,15 @@ void replica::copy_parent_state(error_code ec,
 
     //TODO(hyc): 0115 - test fix init
     // add cached mutations to prepare list
-    for (mutation_ptr &mu : _split_states.child_temp_mutation_list) {
-        ddebug_f("{} will copy mutation {} cached when prepare list is not copied", name(), mu->name());
-        _stub->on_exec(LPC_SPLIT_PARTITION,
-                       get_gpid(),
-                       std::bind(&replica::on_copy_mutation,
-                                 std::placeholders::_1,
-                                 mu));
-    }
+    //TODO(hyc): 0219 - try to remove child_temp_mutation_list
+//    for (mutation_ptr &mu : _split_states.child_temp_mutation_list) {
+//        ddebug_f("{} will copy mutation {} cached when prepare list is not copied", name(), mu->name());
+//        _stub->on_exec(LPC_SPLIT_PARTITION,
+//                       get_gpid(),
+//                       std::bind(&replica::on_copy_mutation,
+//                                 std::placeholders::_1,
+//                                 mu));
+//    }
 }
 
 void replica::apply_parent_state(error_code ec,
@@ -1251,9 +1252,10 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
     // 2. check status - finish copy prepare list
     if (!_split_states.is_prepare_list_copied) {
         //TODO(hyc): 0115 - fix init bug
-        //dwarn_f("{} not copy prepare list from parent, ignore mutation {}", name(), mu->name());
-        dwarn_f("{} not copy prepare list from parent, cache mutation {}", name(), mu->name());
-        _split_states.child_temp_mutation_list.emplace_back(mu);
+        dwarn_f("{} not copy prepare list from parent, ignore mutation {}", name(), mu->name());
+        //TODO(hyc): 0219 - try to remove child_temp_mutation_list
+//        dwarn_f("{} not copy prepare list from parent, cache mutation {}", name(), mu->name());
+//        _split_states.child_temp_mutation_list.emplace_back(mu);
         return;
     }
 
