@@ -133,8 +133,7 @@ void meta_split_service::do_app_partition_split(std::shared_ptr<app_state> app,
         }
     };
 
-    // if init_partition_count is invalid, init_partition_count = original partition_count
-    if (app->init_partition_count < 0) {
+    if (app->init_partition_count <= 0) {
         app->init_partition_count = app->partition_count;
     }
     auto copy = *app;

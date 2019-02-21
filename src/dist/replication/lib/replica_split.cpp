@@ -899,6 +899,9 @@ void replica::on_update_group_partition_count(
 
     // save app_info on disk
     auto info = _app_info;
+    if (info.init_partition_count < 1) {
+        info.init_partition_count = info.partition_count;
+    }
     info.partition_count = request.app.partition_count;
 
     replica_app_info new_info((app_info *)&info);

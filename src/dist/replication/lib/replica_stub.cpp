@@ -1821,10 +1821,11 @@ void replica_stub::open_replica(const app_info &app,
         // download restore-data from cold backup media, the a.b.pegasus will move to
         // a.b.pegasus.timestamp.err when replica-server load all the replicas, so restore-flow will
         // do it again
-
+        // we need to check partition count to avoid restoring child partitions
         bool restore_if_necessary =
             ((req2 != nullptr) && (req2->type == config_type::CT_ASSIGN_PRIMARY) &&
-             (app.envs.find(backup_restore_constant::POLICY_NAME) != app.envs.end()));
+             (app.envs.find(backup_restore_constant::POLICY_NAME) != app.envs.end()) &&
+             (app.init_partition_count == -1 || app.init_partition_count == app.partition_count));
 
         // NOTICE: when we don't need execute restore-process, we should remove a.b.pegasus
         // directory because it don't contain the valid data dir and also we need create a new
