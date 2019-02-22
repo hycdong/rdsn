@@ -250,7 +250,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
 /*static*/ void mutation::write_mutation_header(binary_writer &writer,
                                                 const mutation_header &header)
 {
-    writer.write_pod((int64_t)0);
+    writer.write_pod((int64_t)1);
     writer.write_pod(header.pid.value());
     writer.write_pod(header.ballot);
     writer.write_pod(header.decree);
@@ -274,13 +274,22 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
     //   - __isset
     //
     // new code (also 7*8=56 bytes):
-    //   - version
+    //   - version = 0
     //   - gpid
     //   - decree
     //   - ballot
     //   - log_offset
     //   - last_committed_decree
     //   - timestamp
+    // supporting partition split:
+    //   - version = 1
+    //   - gpid
+    //   - decree
+    //   - ballot
+    //   - log_offset
+    //   - last_committed_decree
+    //   - timestamp
+    //   - sync_to_child
     int64_t version;
     reader.read_pod(version);
     uint64_t pid_value;
@@ -290,7 +299,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
     reader.read_pod(header.decree);
     reader.read_pod(header.log_offset);
     reader.read_pod(header.last_committed_decree);
-    if (version == 0) {
+    if (version == 0 || version == 1) {
         reader.read_pod(header.timestamp);
     } else if (version > 64) {
         // version is vptr, we need read '__isset', and ignore it
@@ -301,7 +310,11 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
         dassert(false, "invalid mutation log version: 0x%" PRIx64, version);
     }
     // add sync_to_child
-    reader.read_pod(header.sync_to_child);
+    if (version == 1) {
+        reader.read_pod(header.sync_to_child);
+    } else {
+        header.sync_to_child = false;
+    }
 }
 
 int mutation::clear_prepare_or_commit_tasks()
