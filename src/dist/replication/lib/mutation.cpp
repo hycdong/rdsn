@@ -250,7 +250,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
 /*static*/ void mutation::write_mutation_header(binary_writer &writer,
                                                 const mutation_header &header)
 {
-    writer.write_pod((int64_t)1);
+    writer.write_pod((int64_t)0);
     writer.write_pod(header.pid.value());
     writer.write_pod(header.ballot);
     writer.write_pod(header.decree);
@@ -274,7 +274,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
     //   - __isset
     //
     // new code (also 7*8=56 bytes):
-    //   - version = 0
+    //   - version
     //   - gpid
     //   - decree
     //   - ballot
@@ -282,7 +282,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
     //   - last_committed_decree
     //   - timestamp
     // supporting partition split:
-    //   - version = 1
+    //   - version
     //   - gpid
     //   - decree
     //   - ballot
@@ -310,10 +310,8 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
         dassert(false, "invalid mutation log version: 0x%" PRIx64, version);
     }
     // add sync_to_child
-    if (version == 1) {
+    if (header.__isset.sync_to_child) {
         reader.read_pod(header.sync_to_child);
-    } else {
-        header.sync_to_child = false;
     }
 }
 

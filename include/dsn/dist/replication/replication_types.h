@@ -326,7 +326,7 @@ class query_child_state_request;
 class query_child_state_response;
 
 typedef struct _mutation_header__isset {
-  _mutation_header__isset() : pid(false), ballot(false), decree(false), log_offset(false), last_committed_decree(false), timestamp(false), sync_to_child(false) {}
+  _mutation_header__isset() : pid(false), ballot(false), decree(false), log_offset(false), last_committed_decree(false), timestamp(false), sync_to_child(true) {}
   bool pid :1;
   bool ballot :1;
   bool decree :1;
@@ -343,7 +343,7 @@ class mutation_header {
   mutation_header(mutation_header&&);
   mutation_header& operator=(const mutation_header&);
   mutation_header& operator=(mutation_header&&);
-  mutation_header() : ballot(0), decree(0), log_offset(0), last_committed_decree(0), timestamp(0), sync_to_child(0) {
+  mutation_header() : ballot(0), decree(0), log_offset(0), last_committed_decree(0), timestamp(0), sync_to_child(false) {
   }
 
   virtual ~mutation_header() throw();
@@ -385,7 +385,9 @@ class mutation_header {
       return false;
     if (!(timestamp == rhs.timestamp))
       return false;
-    if (!(sync_to_child == rhs.sync_to_child))
+    if (__isset.sync_to_child != rhs.__isset.sync_to_child)
+      return false;
+    else if (__isset.sync_to_child && !(sync_to_child == rhs.sync_to_child))
       return false;
     return true;
   }

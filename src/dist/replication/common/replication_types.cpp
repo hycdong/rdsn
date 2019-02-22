@@ -210,6 +210,7 @@ void mutation_header::__set_timestamp(const int64_t val) {
 
 void mutation_header::__set_sync_to_child(const bool val) {
   this->sync_to_child = val;
+__isset.sync_to_child = true;
 }
 
 uint32_t mutation_header::read(::apache::thrift::protocol::TProtocol* iprot) {
@@ -330,10 +331,11 @@ uint32_t mutation_header::write(::apache::thrift::protocol::TProtocol* oprot) co
   xfer += oprot->writeI64(this->timestamp);
   xfer += oprot->writeFieldEnd();
 
-  xfer += oprot->writeFieldBegin("sync_to_child", ::apache::thrift::protocol::T_BOOL, 7);
-  xfer += oprot->writeBool(this->sync_to_child);
-  xfer += oprot->writeFieldEnd();
-
+  if (this->__isset.sync_to_child) {
+    xfer += oprot->writeFieldBegin("sync_to_child", ::apache::thrift::protocol::T_BOOL, 7);
+    xfer += oprot->writeBool(this->sync_to_child);
+    xfer += oprot->writeFieldEnd();
+  }
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -402,7 +404,7 @@ void mutation_header::printTo(std::ostream& out) const {
   out << ", " << "log_offset=" << to_string(log_offset);
   out << ", " << "last_committed_decree=" << to_string(last_committed_decree);
   out << ", " << "timestamp=" << to_string(timestamp);
-  out << ", " << "sync_to_child=" << to_string(sync_to_child);
+  out << ", " << "sync_to_child="; (__isset.sync_to_child ? (out << to_string(sync_to_child)) : (out << "<null>"));
   out << ")";
 }
 
