@@ -1285,7 +1285,8 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
         return;
     }
 
-    if(mu->data.header.sync_to_child){
+//    if(mu->data.header.sync_to_child){
+    if(mu->get_sync_to_child()){
         ddebug_f("{} start to sync copy mutation {}", name(), mu->name());
     }else{
         dinfo_f("{} start to copy mutation {} asynchronously", name(), mu->name());
@@ -1296,7 +1297,8 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
     mu->data.header.pid = get_gpid();
     _prepare_list->prepare(mu, partition_status::PS_SECONDARY);
 
-    if (!mu->data.header.sync_to_child) {
+//    if (!mu->data.header.sync_to_child) {
+    if(!mu->get_sync_to_child()){
         // 5. child async copy mutation
         if (!mu->is_logged()) {
             mu->set_logged();

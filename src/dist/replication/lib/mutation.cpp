@@ -52,6 +52,7 @@ mutation::mutation()
     _appro_data_bytes = sizeof(mutation_header);
     _create_ts_ns = dsn_now_ns();
     _tid = ++s_tid;
+    _sync_to_child = false;
 }
 
 mutation::mutation(const mutation_ptr &old_mu)
@@ -62,6 +63,7 @@ mutation::mutation(const mutation_ptr &old_mu)
     _private0 = old_mu->_private0;
     client_requests = old_mu->client_requests;
     dassert(data.updates.size() == client_requests.size(), "lack of requests");
+    _sync_to_child = old_mu->get_sync_to_child();
 
     // replace msg with fresh header, so that it won't send reply to client
     for (int i = 0; i < client_requests.size(); ++i) {
@@ -257,7 +259,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
     writer.write_pod(header.log_offset);
     writer.write_pod(header.last_committed_decree);
     writer.write_pod(header.timestamp);
-    writer.write_pod(header.sync_to_child);
+    //writer.write_pod(header.sync_to_child);
 }
 
 /*static*/ void mutation::read_mutation_header(binary_reader &reader, mutation_header &header)
@@ -299,7 +301,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
     reader.read_pod(header.decree);
     reader.read_pod(header.log_offset);
     reader.read_pod(header.last_committed_decree);
-    if (version == 0 || version == 1) {
+    if (version == 0) {
         reader.read_pod(header.timestamp);
     } else if (version > 64) {
         // version is vptr, we need read '__isset', and ignore it
@@ -310,9 +312,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
         dassert(false, "invalid mutation log version: 0x%" PRIx64, version);
     }
     // add sync_to_child
-    if (header.__isset.sync_to_child) {
-        reader.read_pod(header.sync_to_child);
-    }
+    //reader.read_pod(header.sync_to_child);
 }
 
 int mutation::clear_prepare_or_commit_tasks()

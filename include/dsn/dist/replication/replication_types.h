@@ -326,14 +326,13 @@ class query_child_state_request;
 class query_child_state_response;
 
 typedef struct _mutation_header__isset {
-  _mutation_header__isset() : pid(false), ballot(false), decree(false), log_offset(false), last_committed_decree(false), timestamp(false), sync_to_child(true) {}
+  _mutation_header__isset() : pid(false), ballot(false), decree(false), log_offset(false), last_committed_decree(false), timestamp(false) {}
   bool pid :1;
   bool ballot :1;
   bool decree :1;
   bool log_offset :1;
   bool last_committed_decree :1;
   bool timestamp :1;
-  bool sync_to_child :1;
 } _mutation_header__isset;
 
 class mutation_header {
@@ -343,7 +342,7 @@ class mutation_header {
   mutation_header(mutation_header&&);
   mutation_header& operator=(const mutation_header&);
   mutation_header& operator=(mutation_header&&);
-  mutation_header() : ballot(0), decree(0), log_offset(0), last_committed_decree(0), timestamp(0), sync_to_child(false) {
+  mutation_header() : ballot(0), decree(0), log_offset(0), last_committed_decree(0), timestamp(0) {
   }
 
   virtual ~mutation_header() throw();
@@ -353,7 +352,6 @@ class mutation_header {
   int64_t log_offset;
   int64_t last_committed_decree;
   int64_t timestamp;
-  bool sync_to_child;
 
   _mutation_header__isset __isset;
 
@@ -369,8 +367,6 @@ class mutation_header {
 
   void __set_timestamp(const int64_t val);
 
-  void __set_sync_to_child(const bool val);
-
   bool operator == (const mutation_header & rhs) const
   {
     if (!(pid == rhs.pid))
@@ -384,10 +380,6 @@ class mutation_header {
     if (!(last_committed_decree == rhs.last_committed_decree))
       return false;
     if (!(timestamp == rhs.timestamp))
-      return false;
-    if (__isset.sync_to_child != rhs.__isset.sync_to_child)
-      return false;
-    else if (__isset.sync_to_child && !(sync_to_child == rhs.sync_to_child))
       return false;
     return true;
   }
@@ -526,12 +518,13 @@ inline std::ostream& operator<<(std::ostream& out, const mutation_data& obj)
 }
 
 typedef struct _replica_configuration__isset {
-  _replica_configuration__isset() : pid(false), ballot(false), primary(false), status(true), learner_signature(false) {}
+  _replica_configuration__isset() : pid(false), ballot(false), primary(false), status(true), learner_signature(false), split_sync_to_child(true) {}
   bool pid :1;
   bool ballot :1;
   bool primary :1;
   bool status :1;
   bool learner_signature :1;
+  bool split_sync_to_child :1;
 } _replica_configuration__isset;
 
 class replica_configuration {
@@ -541,7 +534,7 @@ class replica_configuration {
   replica_configuration(replica_configuration&&);
   replica_configuration& operator=(const replica_configuration&);
   replica_configuration& operator=(replica_configuration&&);
-  replica_configuration() : ballot(0), status((partition_status::type)0), learner_signature(0) {
+  replica_configuration() : ballot(0), status((partition_status::type)0), learner_signature(0), split_sync_to_child(false) {
     status = (partition_status::type)0;
 
   }
@@ -552,6 +545,7 @@ class replica_configuration {
    ::dsn::rpc_address primary;
   partition_status::type status;
   int64_t learner_signature;
+  bool split_sync_to_child;
 
   _replica_configuration__isset __isset;
 
@@ -565,6 +559,8 @@ class replica_configuration {
 
   void __set_learner_signature(const int64_t val);
 
+  void __set_split_sync_to_child(const bool val);
+
   bool operator == (const replica_configuration & rhs) const
   {
     if (!(pid == rhs.pid))
@@ -576,6 +572,10 @@ class replica_configuration {
     if (!(status == rhs.status))
       return false;
     if (!(learner_signature == rhs.learner_signature))
+      return false;
+    if (__isset.split_sync_to_child != rhs.__isset.split_sync_to_child)
+      return false;
+    else if (__isset.split_sync_to_child && !(split_sync_to_child == rhs.split_sync_to_child))
       return false;
     return true;
   }

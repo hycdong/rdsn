@@ -208,11 +208,6 @@ void mutation_header::__set_timestamp(const int64_t val) {
   this->timestamp = val;
 }
 
-void mutation_header::__set_sync_to_child(const bool val) {
-  this->sync_to_child = val;
-__isset.sync_to_child = true;
-}
-
 uint32_t mutation_header::read(::apache::thrift::protocol::TProtocol* iprot) {
 
   apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -282,14 +277,6 @@ uint32_t mutation_header::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
-      case 7:
-        if (ftype == ::apache::thrift::protocol::T_BOOL) {
-          xfer += iprot->readBool(this->sync_to_child);
-          this->__isset.sync_to_child = true;
-        } else {
-          xfer += iprot->skip(ftype);
-        }
-        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -331,11 +318,6 @@ uint32_t mutation_header::write(::apache::thrift::protocol::TProtocol* oprot) co
   xfer += oprot->writeI64(this->timestamp);
   xfer += oprot->writeFieldEnd();
 
-  if (this->__isset.sync_to_child) {
-    xfer += oprot->writeFieldBegin("sync_to_child", ::apache::thrift::protocol::T_BOOL, 7);
-    xfer += oprot->writeBool(this->sync_to_child);
-    xfer += oprot->writeFieldEnd();
-  }
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -349,7 +331,6 @@ void swap(mutation_header &a, mutation_header &b) {
   swap(a.log_offset, b.log_offset);
   swap(a.last_committed_decree, b.last_committed_decree);
   swap(a.timestamp, b.timestamp);
-  swap(a.sync_to_child, b.sync_to_child);
   swap(a.__isset, b.__isset);
 }
 
@@ -360,7 +341,6 @@ mutation_header::mutation_header(const mutation_header& other0) {
   log_offset = other0.log_offset;
   last_committed_decree = other0.last_committed_decree;
   timestamp = other0.timestamp;
-  sync_to_child = other0.sync_to_child;
   __isset = other0.__isset;
 }
 mutation_header::mutation_header( mutation_header&& other1) {
@@ -370,7 +350,6 @@ mutation_header::mutation_header( mutation_header&& other1) {
   log_offset = std::move(other1.log_offset);
   last_committed_decree = std::move(other1.last_committed_decree);
   timestamp = std::move(other1.timestamp);
-  sync_to_child = std::move(other1.sync_to_child);
   __isset = std::move(other1.__isset);
 }
 mutation_header& mutation_header::operator=(const mutation_header& other2) {
@@ -380,7 +359,6 @@ mutation_header& mutation_header::operator=(const mutation_header& other2) {
   log_offset = other2.log_offset;
   last_committed_decree = other2.last_committed_decree;
   timestamp = other2.timestamp;
-  sync_to_child = other2.sync_to_child;
   __isset = other2.__isset;
   return *this;
 }
@@ -391,7 +369,6 @@ mutation_header& mutation_header::operator=(mutation_header&& other3) {
   log_offset = std::move(other3.log_offset);
   last_committed_decree = std::move(other3.last_committed_decree);
   timestamp = std::move(other3.timestamp);
-  sync_to_child = std::move(other3.sync_to_child);
   __isset = std::move(other3.__isset);
   return *this;
 }
@@ -404,7 +381,6 @@ void mutation_header::printTo(std::ostream& out) const {
   out << ", " << "log_offset=" << to_string(log_offset);
   out << ", " << "last_committed_decree=" << to_string(last_committed_decree);
   out << ", " << "timestamp=" << to_string(timestamp);
-  out << ", " << "sync_to_child="; (__isset.sync_to_child ? (out << to_string(sync_to_child)) : (out << "<null>"));
   out << ")";
 }
 
@@ -709,6 +685,11 @@ void replica_configuration::__set_learner_signature(const int64_t val) {
   this->learner_signature = val;
 }
 
+void replica_configuration::__set_split_sync_to_child(const bool val) {
+  this->split_sync_to_child = val;
+__isset.split_sync_to_child = true;
+}
+
 uint32_t replica_configuration::read(::apache::thrift::protocol::TProtocol* iprot) {
 
   apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -772,6 +753,14 @@ uint32_t replica_configuration::read(::apache::thrift::protocol::TProtocol* ipro
           xfer += iprot->skip(ftype);
         }
         break;
+      case 6:
+        if (ftype == ::apache::thrift::protocol::T_BOOL) {
+          xfer += iprot->readBool(this->split_sync_to_child);
+          this->__isset.split_sync_to_child = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -809,6 +798,11 @@ uint32_t replica_configuration::write(::apache::thrift::protocol::TProtocol* opr
   xfer += oprot->writeI64(this->learner_signature);
   xfer += oprot->writeFieldEnd();
 
+  if (this->__isset.split_sync_to_child) {
+    xfer += oprot->writeFieldBegin("split_sync_to_child", ::apache::thrift::protocol::T_BOOL, 6);
+    xfer += oprot->writeBool(this->split_sync_to_child);
+    xfer += oprot->writeFieldEnd();
+  }
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -821,6 +815,7 @@ void swap(replica_configuration &a, replica_configuration &b) {
   swap(a.primary, b.primary);
   swap(a.status, b.status);
   swap(a.learner_signature, b.learner_signature);
+  swap(a.split_sync_to_child, b.split_sync_to_child);
   swap(a.__isset, b.__isset);
 }
 
@@ -830,6 +825,7 @@ replica_configuration::replica_configuration(const replica_configuration& other1
   primary = other19.primary;
   status = other19.status;
   learner_signature = other19.learner_signature;
+  split_sync_to_child = other19.split_sync_to_child;
   __isset = other19.__isset;
 }
 replica_configuration::replica_configuration( replica_configuration&& other20) {
@@ -838,6 +834,7 @@ replica_configuration::replica_configuration( replica_configuration&& other20) {
   primary = std::move(other20.primary);
   status = std::move(other20.status);
   learner_signature = std::move(other20.learner_signature);
+  split_sync_to_child = std::move(other20.split_sync_to_child);
   __isset = std::move(other20.__isset);
 }
 replica_configuration& replica_configuration::operator=(const replica_configuration& other21) {
@@ -846,6 +843,7 @@ replica_configuration& replica_configuration::operator=(const replica_configurat
   primary = other21.primary;
   status = other21.status;
   learner_signature = other21.learner_signature;
+  split_sync_to_child = other21.split_sync_to_child;
   __isset = other21.__isset;
   return *this;
 }
@@ -855,6 +853,7 @@ replica_configuration& replica_configuration::operator=(replica_configuration&& 
   primary = std::move(other22.primary);
   status = std::move(other22.status);
   learner_signature = std::move(other22.learner_signature);
+  split_sync_to_child = std::move(other22.split_sync_to_child);
   __isset = std::move(other22.__isset);
   return *this;
 }
@@ -866,6 +865,7 @@ void replica_configuration::printTo(std::ostream& out) const {
   out << ", " << "primary=" << to_string(primary);
   out << ", " << "status=" << to_string(status);
   out << ", " << "learner_signature=" << to_string(learner_signature);
+  out << ", " << "split_sync_to_child="; (__isset.split_sync_to_child ? (out << to_string(split_sync_to_child)) : (out << "<null>"));
   out << ")";
 }
 

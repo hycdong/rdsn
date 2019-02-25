@@ -12,7 +12,8 @@ struct mutation_header
     5:i64                  last_committed_decree;
     6:i64                  timestamp;
     // only used during split, if true, this mutation should send to child to execute 2pc procedure
-    7:optional bool        sync_to_child=false;
+    //7:optional bool        sync_to_child=false;
+
 }
 
 struct mutation_update
@@ -48,6 +49,12 @@ struct replica_configuration
     3:dsn.rpc_address     primary;
     4:partition_status    status = partition_status.PS_INVALID;
     5:i64                 learner_signature;
+    // only be used during partition split when primary send prepare message to secondary
+    // 1. true - secondary should copy mutation in this prepare message synchronously,
+    //           and _sync_to_child in mutation structure should set true
+    // 2. false - secondary copy mutation in this prepare message asynchronously
+    // NOTICE: it should always be false when update_local_configuration
+    6:optional bool       split_sync_to_child = false;
 }
 
 struct prepare_msg

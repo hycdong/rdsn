@@ -158,7 +158,8 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     // check whether mutation should send to its child replica
     if (_primary_states.is_sync_to_child) {
         ddebug("%s: mutation %s should sync to child", name(), mu->name());
-        mu->data.header.sync_to_child = true;
+        //mu->data.header.sync_to_child = true;
+        mu->set_sync_to_child(true);
     }
 
     // check bounded staleness
@@ -271,6 +272,9 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
         RPC_PREPARE, timeout_milliseconds, get_gpid().thread_hash());
     replica_configuration rconfig;
     _primary_states.get_replica_config(status, rconfig, learn_signature);
+    if (status == partition_status::PS_SECONDARY && _primary_states.is_sync_to_child) {
+        rconfig.split_sync_to_child = true;
+    }
 
     {
         rpc_write_stream writer(msg);
@@ -321,6 +325,9 @@ void replica::on_prepare(dsn::message_ex *request)
         rpc_read_stream reader(request);
         unmarshall(reader, rconfig, DSF_THRIFT_BINARY);
         mu = mutation::read_from(reader, request);
+        mu->set_sync_to_child(rconfig.split_sync_to_child);
+        // set split_sync_to_child to false immediately
+        rconfig.split_sync_to_child = false;
     }
 
     decree decree = mu->data.header.decree;
@@ -766,7 +773,8 @@ void replica::copy_mutation(mutation_ptr &mu)
 
     task_code code = LPC_SPLIT_PARTITION;
     // TODO(hyc): add sync_to_child check
-    if (!mu->is_split() && mu->data.header.sync_to_child) {
+//    if (!mu->is_split() && mu->data.header.sync_to_child) {
+    if (!mu->is_split() && mu->get_sync_to_child()) {
         code = LPC_SPLIT_PARTITION;
         mu->set_is_split();
     }
@@ -779,7 +787,8 @@ void replica::copy_mutation(mutation_ptr &mu)
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
-    if (mu->data.header.sync_to_child) {
+//    if (mu->data.header.sync_to_child) {
+    if (mu->get_sync_to_child()) {
         _stub->on_exec(LPC_SPLIT_PARTITION,
                        _split_states.parent_gpid,
                        std::bind(&replica::on_copy_mutation_reply,
@@ -791,7 +800,8 @@ void replica::ack_parent(error_code ec, mutation_ptr &mu)
         derror_f("{} failed to ack parent, mutation is {}, sync_to_child is {}",
                  name(),
                  mu->name(),
-                 mu->data.header.sync_to_child);
+//                 mu->data.header.sync_to_child);
+                 mu->get_sync_to_child());
     }
 }
 
