@@ -158,7 +158,6 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     // check whether mutation should send to its child replica
     if (_primary_states.is_sync_to_child) {
         ddebug("%s: mutation %s should sync to child", name(), mu->name());
-        //mu->data.header.sync_to_child = true;
         mu->set_sync_to_child(true);
     }
 
@@ -772,8 +771,6 @@ void replica::copy_mutation(mutation_ptr &mu)
     dassert(_child_gpid.get_app_id() > 0, "%s child_gpid is invalid", name());
 
     task_code code = LPC_SPLIT_PARTITION;
-    // TODO(hyc): add sync_to_child check
-//    if (!mu->is_split() && mu->data.header.sync_to_child) {
     if (!mu->is_split() && mu->get_sync_to_child()) {
         code = LPC_SPLIT_PARTITION;
         mu->set_is_split();
@@ -787,7 +784,6 @@ void replica::copy_mutation(mutation_ptr &mu)
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
-//    if (mu->data.header.sync_to_child) {
     if (mu->get_sync_to_child()) {
         _stub->on_exec(LPC_SPLIT_PARTITION,
                        _split_states.parent_gpid,
@@ -800,7 +796,6 @@ void replica::ack_parent(error_code ec, mutation_ptr &mu)
         derror_f("{} failed to ack parent, mutation is {}, sync_to_child is {}",
                  name(),
                  mu->name(),
-//                 mu->data.header.sync_to_child);
                  mu->get_sync_to_child());
     }
 }
