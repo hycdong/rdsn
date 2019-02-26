@@ -2359,35 +2359,67 @@ void replica_stub::on_exec(task_code code,
         return;
     }
 
-    dsn::task_tracker *tracker = nullptr;
-    int hash = 0;
-    if (get_replica(pid) != nullptr) {
-        tracker = get_replica(pid).get()->tracker();
-        hash = pid.thread_hash();
+//    dsn::task_tracker *tracker = nullptr;
+//    int hash = 0;
+//    if (get_replica(pid) != nullptr) {
+//        tracker = get_replica(pid).get()->tracker();
+//        hash = pid.thread_hash();
+//    }
+
+//    tasking::enqueue(
+//        code,
+//        tracker,
+//        [=]() {
+//            replica_ptr rep = get_replica(pid);
+//            if (rep != nullptr) {
+//                handler(rep);
+//            } else {
+//                dwarn_f("cannot find replica({}.{})", pid.get_app_id(), pid.get_partition_index());
+//                if (missing_handler) {
+//                    if (missing_handler_gpid.get_app_id() != 0) {
+//                        on_exec(code, missing_handler_gpid, missing_handler);
+//                    } else {
+//                        missing_handler(nullptr);
+//                    }
+//                } else {
+//                    ddebug_f("missing_handler is nullptr, will return");
+//                }
+//            }
+//        },
+//        hash,
+//        delay);
+
+    replica_ptr rep = get_replica(pid);
+    replica_ptr rep2 = missing_handler_gpid.get_app_id() == 0 ? nullptr : get_replica(missing_handler_gpid);
+
+    if (!rep && !rep2) {
+        derror_f("Cannot find either replica({}.{}) or replica({}.{})",
+                 pid.get_app_id(),
+                 pid.get_partition_index(),
+                 missing_handler_gpid.get_app_id(),
+                 missing_handler_gpid.get_partition_index());
+        return;
     }
 
-    tasking::enqueue(
-        code,
-        tracker,
-        [=]() {
-            replica_ptr rep = get_replica(pid);
-            if (rep != nullptr) {
-                handler(rep);
-            } else {
-                dwarn_f("cannot find replica({}.{})", pid.get_app_id(), pid.get_partition_index());
-                if (missing_handler) {
-                    if (missing_handler_gpid.get_app_id() != 0) {
-                        on_exec(code, missing_handler_gpid, missing_handler);
-                    } else {
-                        missing_handler(nullptr);
-                    }
-                } else {
-                    ddebug_f("missing_handler is nullptr, will return");
-                }
-            }
-        },
-        hash,
-        delay);
+    if (rep != nullptr) {
+        tasking::enqueue(
+            code, rep.get()->tracker(), [=]() { handler(rep); }, pid.thread_hash(), delay);
+    } else if (missing_handler && rep2) {
+        ddebug_f("Cannot find replica({}.{}), replica({}.{} will execute its handler)",
+                 pid.get_app_id(),
+                 pid.get_partition_index(),
+                 missing_handler_gpid.get_app_id(),
+                 missing_handler_gpid.get_partition_index());
+        tasking::enqueue(code,
+                         rep2.get()->tracker(),
+                         [=]() { missing_handler(rep2); },
+                         missing_handler_gpid.thread_hash(),
+                         delay);
+    } else {
+        dwarn_f("Cannot find replica({}.{}), and no handler will be executed",
+                pid.get_app_id(),
+                pid.get_partition_index());
+    }
 }
 
 replica_ptr
