@@ -91,6 +91,7 @@ void replica::broadcast_group_check()
         request->node = addr;
         _primary_states.get_replica_config(it->second, request->config);
         request->last_committed_decree = last_committed_decree();
+        request->__isset.child_gpid = true;
         request->child_gpid = _child_gpid;
 
         if (request->config.status == partition_status::PS_POTENTIAL_SECONDARY) {
