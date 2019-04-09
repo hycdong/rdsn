@@ -1024,7 +1024,7 @@ bool simple_load_balancer::construct_replica(meta_view view, const gpid &pid, in
             server.node.to_string());
     pc.primary = server.node;
     pc.ballot = server.ballot;
-    pc.partition_flags = 0;
+    pc.partition_flags &= (~pc_flags::dropped);
     pc.max_replica_count = max_replica_count;
 
     ddebug("construct for (%d.%d), select %s as primary, ballot(%" PRId64

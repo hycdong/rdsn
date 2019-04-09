@@ -1648,7 +1648,7 @@ void server_state::recall_partition(std::shared_ptr<app_state> &app, int pidx)
     partition_configuration &pc = app->partitions[pidx];
     dassert((pc.partition_flags & pc_flags::dropped), "");
 
-    pc.partition_flags = 0;
+    pc.partition_flags &= (~pc_flags::dropped);
     blob json_partition = dsn::json::json_forwarder<partition_configuration>::encode(pc);
     std::string partition_path = get_partition_path(pc.pid);
     _meta_svc->get_remote_storage()->set_data(
