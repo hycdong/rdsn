@@ -378,8 +378,9 @@ private:
                                                  std::shared_ptr<register_child_response> response);
 
     // meta <=> replica configuration sync through on_config_sync
-    // called by primary replica to check if partition count changed and start split
-    virtual void check_partition_count(int partition_count);
+    // called by primary replica to check if partition count changed and partition flag changed to
+    // control partition split
+    virtual void check_partition_state(int partition_count, const partition_configuration &config);
 
     // primary -> meta query child partition configuration
     virtual void query_child_state();

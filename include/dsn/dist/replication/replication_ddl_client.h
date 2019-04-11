@@ -183,8 +183,11 @@ public:
 
     dsn::error_code ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &ddd_partitions);
 
-    // execute partition split
+    // partition split
     dsn::error_code app_partition_split(const std::string &app_name, int partition_count);
+    dsn::error_code control_single_partition_split(const std::string &app_name,
+                                                   int parent_partition_index,
+                                                   bool is_pause_split);
 
 private:
     bool static valid_app_char(int c);

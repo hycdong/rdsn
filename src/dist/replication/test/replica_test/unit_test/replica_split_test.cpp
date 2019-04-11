@@ -1108,7 +1108,22 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
     }
 
     {
-        std::cout << "case4. succeed case" << std::endl;
+        std::cout << "case4. split paused" << std::endl;
+        response->err = dsn::ERR_CHILD_DROPPED;
+
+        primary_parent->on_register_child_on_meta_reply(ec, request, response);
+        primary_parent->tracker()->wait_outstanding_tasks();
+
+        ASSERT_EQ(nullptr, primary_parent->_primary_states.register_child_task);
+        ASSERT_TRUE(primary_parent->_primary_states.is_sync_to_child);
+        ASSERT_EQ(0, primary_parent->_child_gpid.get_app_id());
+
+        response->err = dsn::ERR_OK;
+        primary_parent->_child_gpid = child_gpid;
+    }
+
+    {
+        std::cout << "case5. succeed case" << std::endl;
 
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
         primary_parent->tracker()->wait_outstanding_tasks();
@@ -1121,35 +1136,57 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
     substitutes.erase("update_group_partition_count");
 }
 
-void replication_service_test_app::check_partition_count_test()
+void replication_service_test_app::check_partition_state_test()
 {
+    // not use parent_gpid, coz it may be registered
+    dsn::gpid pid = dsn::gpid(1,0);
     auto stub = new replica_stub_mock();
-    auto replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
-    stub->replicas[parent_gpid] = replica;
+    auto replica = stub->generate_replica(pid, partition_status::PS_PRIMARY);
+    stub->replicas[pid] = replica;
 
     dsn::app_info info;
     info.app_id = 1;
     info.partition_count = partition_count;
     replica->_app_info = info;
 
+    dsn::partition_configuration config;
+    config.pid = pid;
+    config.partition_flags &= (~pc_flags::child_dropped);
+
     substitutes["query_child_state"] = nullptr;
 
     {
         std::cout << "case1. equal partition count" << std::endl;
-        replica->check_partition_count(partition_count);
+        replica->check_partition_state(partition_count, config);
     }
 
     {
         std::cout << "case2. child_gpid valid" << std::endl;
         replica->_child_gpid = child_gpid;
-        replica->check_partition_count(partition_count * 2);
+        replica->check_partition_state(partition_count * 2, config);
         replica->_child_gpid.set_app_id(0);
     }
 
     {
-        std::cout << "case3. succeed" << std::endl;
-        replica->check_partition_count(partition_count * 2);
-        //        ASSERT_EQ(-1, replica->_partition_version);
+        std::cout << "case3. cancel split while no child register" << std::endl;
+        config.partition_flags |= pc_flags::child_dropped;
+        replica->check_partition_state(partition_count, config);
+        ASSERT_EQ(0, replica->_child_gpid.get_app_id());
+        config.partition_flags &= (~pc_flags::child_dropped);
+    }
+
+    {
+        std::cout << "case4. pause split" << std::endl;
+        config.partition_flags |= pc_flags::child_dropped;
+        replica->check_partition_state(partition_count * 2, config);
+        ASSERT_EQ(0, replica->_child_gpid.get_app_id());
+        config.partition_flags &= (~pc_flags::child_dropped);
+    }
+
+    {
+        std::cout << "case5. pass check for partition split" << std::endl;
+        replica->check_partition_state(partition_count * 2, config);
+        ASSERT_EQ(-1, replica->_partition_version);
     }
 
     substitutes.erase("query_child_state");

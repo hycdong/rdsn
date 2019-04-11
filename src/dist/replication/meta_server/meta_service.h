@@ -73,6 +73,9 @@ typedef rpc_holder<ddd_diagnose_request, ddd_diagnose_response> ddd_diagnose_rpc
 typedef rpc_holder<app_partition_split_request, app_partition_split_response>
     app_partition_split_rpc;
 
+typedef rpc_holder<control_single_partition_split_request, app_partition_split_response>
+    control_single_partition_split_rpc;
+
 typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
 
 typedef rpc_holder<query_child_state_request, query_child_state_response> query_child_state_rpc;
@@ -174,6 +177,7 @@ private:
     void on_app_partition_split(app_partition_split_rpc rpc);
     void on_register_child_on_meta(register_child_rpc rpc);
     void on_query_child_state(query_child_state_rpc rpc);
+    void on_control_single_partition_split(control_single_partition_split_rpc rpc);
 
     // meta control
     void on_control_meta_level(dsn::message_ex *req);

@@ -220,7 +220,7 @@ public:
 
     void check_child_state();
 
-    void check_partition_count(int partition_count);
+    void check_partition_state(int partition_count, const dsn::partition_configuration &config);
     void query_child_state();
     void on_query_child_state_reply(dsn::error_code ec,
                                     std::shared_ptr<query_child_state_request> request,
@@ -555,17 +555,17 @@ void replica_split_mock::on_register_child_on_meta_reply(
     }
 }
 
-void replica_split_mock::check_partition_count(int partition_count)
+void replica_split_mock::check_partition_state(int partition_count, const dsn::partition_configuration &config)
 {
-    auto iter = substitutes.find("check_partition_count");
+    auto iter = substitutes.find("check_partition_state");
 
     if (iter != substitutes.end()) {
         if (iter->second != nullptr) {
-            auto call = (std::function<void(int)> *)iter->second;
-            (*call)(partition_count);
+            auto call = (std::function<void(int, const dsn::partition_configuration)> *)iter->second;
+            (*call)(partition_count, config);
         }
     } else {
-        dsn::replication::replica::check_partition_count(partition_count);
+        dsn::replication::replica::check_partition_state(partition_count, config);
     }
 }
 

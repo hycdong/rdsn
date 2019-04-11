@@ -110,6 +110,35 @@ void meta_service_test_app::app_partition_split_test()
         ASSERT_EQ(response.err, dsn::ERR_OK);
         ASSERT_EQ(response.partition_count, PARTITION_COUNT * 2);
     }
+
+    std::cout << "case4. app_partition_split with paused partition" << std::endl;
+    {
+        // mock parent_config
+        dsn::partition_configuration config;
+        config.pid = dsn::gpid(fake_app->app_id, 0);
+        config.partition_flags |= pc_flags::child_dropped;
+        fake_app->partitions[0] = config;
+
+        app_partition_split_request request;
+        request.app_name = fake_app->app_name;
+        request.new_partition_count = PARTITION_COUNT * 4; // case3 lead partition count double
+
+        dsn::message_ex *req = dsn::message_ex::create_request(RPC_CM_APP_PARTITION_SPLIT);
+        dsn::marshall(req, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(req);
+        app_partition_split_rpc rpc(recv_msg);
+
+        svc->_split_svc = dsn::make_unique<meta_split_service>(svc);
+        meta_split_service *split_srv = svc->_split_svc.get();
+        ASSERT_NE(split_srv, nullptr);
+
+        split_srv->app_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+
+        ASSERT_EQ(response.err, dsn::ERR_CHILD_DROPPED);
+    }
 }
 
 void meta_service_test_app::register_child_test()
@@ -246,7 +275,25 @@ void meta_service_test_app::register_child_test()
         app->helpers->contexts[parent_index].stage = config_status::not_pending;
     }
 
-    std::cout << "case4. succeed" << std::endl;
+    std::cout << "case4. split paused" << std::endl;
+    {
+        app->partitions[parent_index].partition_flags |= pc_flags::child_dropped;
+
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_REGISTER_CHILD_REPLICA);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        register_child_rpc rpc(recv_msg);
+        split_srv->register_child_on_meta(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_CHILD_DROPPED);
+
+        app->partitions[parent_index].partition_flags &= (~pc_flags::child_dropped);
+    }
+
+    std::cout << "case5. succeed" << std::endl;
     {
         dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_REGISTER_CHILD_REPLICA);
         dsn::marshall(msg, request);
@@ -387,5 +434,217 @@ void meta_service_test_app::on_query_child_state_test()
         ASSERT_EQ(dsn::ERR_OK, response.err);
         ASSERT_EQ(partition_count * 2, response.partition_count);
         ASSERT_EQ(4, response.ballot);
+    }
+}
+
+void meta_service_test_app::pause_single_partition_split_test()
+{
+    // create a fake app
+    dsn::app_info info;
+    info.is_stateful = true;
+    info.app_id = 1;
+    info.app_type = "simple_kv";
+    info.app_name = "app";
+    info.max_replica_count = 3;
+    info.partition_count = PARTITION_COUNT;
+    info.status = dsn::app_status::AS_CREATING;
+    info.envs.clear();
+    std::shared_ptr<app_state> fake_app = app_state::create(info);
+
+    // create meta_service
+    std::shared_ptr<meta_service> meta_svc = std::make_shared<meta_service>();
+    meta_service *svc = meta_svc.get();
+    svc->_meta_opts.cluster_root = "/meta_test";
+    svc->_meta_opts.meta_state_service_type = "meta_state_service_simple";
+    svc->remote_storage_initialize();
+
+    std::string apps_root = "/meta_test/apps";
+    std::shared_ptr<server_state> ss = svc->_state;
+    ss->initialize(svc, apps_root);
+
+    ss->_all_apps.emplace(std::make_pair(fake_app->app_id, fake_app));
+    dsn::error_code ec = ss->sync_apps_to_remote_storage();
+    ASSERT_EQ(ec, dsn::ERR_OK);
+
+    svc->_split_svc = dsn::make_unique<meta_split_service>(svc);
+    meta_split_service *split_srv = svc->_split_svc.get();
+    ASSERT_NE(split_srv, nullptr);
+
+    // mock partition_configuration
+    int target_partition = 0;
+    for(int i = 0; i < PARTITION_COUNT; ++i){
+        dsn::partition_configuration config;
+        config.pid = dsn::gpid(fake_app->app_id, i);
+        config.partition_flags = 0;
+        config.ballot = (i<PARTITION_COUNT/2) ? 3 : -1;
+        fake_app->partitions[i] = config;
+    }
+
+    control_single_partition_split_request request;
+    request.app_name = fake_app->app_name;
+    request.parent_partition_index = target_partition;
+    request.is_pause = true;
+
+    std::cout << "case1. pause partition split with wrong partition index" << std::endl;
+    {
+        request.parent_partition_index = PARTITION_COUNT-1;
+
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONTROL_SINGLE_SPLIT);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        control_single_partition_split_rpc rpc(recv_msg);
+        split_srv->control_single_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_INVALID_PARAMETERS);
+
+        request.parent_partition_index = target_partition;
+    }
+
+    std::cout << "case2. pause partition split succeed" << std::endl;
+    {
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONTROL_SINGLE_SPLIT);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        control_single_partition_split_rpc rpc(recv_msg);
+        split_srv->control_single_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_OK);
+    }
+
+    std::cout << "case3. pause partition split which has been paused" << std::endl;
+    {
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONTROL_SINGLE_SPLIT);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        control_single_partition_split_rpc rpc(recv_msg);
+        split_srv->control_single_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_NO_NEED_OPERATE);
+    }
+
+    std::cout << "case4. pause partition split which finish split" << std::endl;
+    {
+        // clear paused flag in case2
+        fake_app->partitions[target_partition].partition_flags = 0;
+
+        for(int i = PARTITION_COUNT/2; i < PARTITION_COUNT; ++i){
+            fake_app->partitions[i].ballot = 3;
+        }
+
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONTROL_SINGLE_SPLIT);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        control_single_partition_split_rpc rpc(recv_msg);
+        split_srv->control_single_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_CHILD_REGISTERED);
+    }
+}
+
+void meta_service_test_app::restart_single_partition_split_test()
+{
+    // create a fake app
+    dsn::app_info info;
+    info.is_stateful = true;
+    info.app_id = 1;
+    info.app_type = "simple_kv";
+    info.app_name = "app";
+    info.max_replica_count = 3;
+    info.partition_count = PARTITION_COUNT;
+    info.status = dsn::app_status::AS_CREATING;
+    info.envs.clear();
+    std::shared_ptr<app_state> fake_app = app_state::create(info);
+
+    // create meta_service
+    std::shared_ptr<meta_service> meta_svc = std::make_shared<meta_service>();
+    meta_service *svc = meta_svc.get();
+    svc->_meta_opts.cluster_root = "/meta_test";
+    svc->_meta_opts.meta_state_service_type = "meta_state_service_simple";
+    svc->remote_storage_initialize();
+
+    std::string apps_root = "/meta_test/apps";
+    std::shared_ptr<server_state> ss = svc->_state;
+    ss->initialize(svc, apps_root);
+
+    ss->_all_apps.emplace(std::make_pair(fake_app->app_id, fake_app));
+    dsn::error_code ec = ss->sync_apps_to_remote_storage();
+    ASSERT_EQ(ec, dsn::ERR_OK);
+
+    svc->_split_svc = dsn::make_unique<meta_split_service>(svc);
+    meta_split_service *split_srv = svc->_split_svc.get();
+    ASSERT_NE(split_srv, nullptr);
+
+    // mock partition_configuration
+    int target_partition = 0;
+    for(int i = 0; i < PARTITION_COUNT; ++i){
+        dsn::partition_configuration config;
+        config.pid = dsn::gpid(fake_app->app_id, i);
+        config.partition_flags = 0;
+        config.ballot = (i<PARTITION_COUNT/2) ? 3 : -1;
+        fake_app->partitions[i] = config;
+    }
+
+    control_single_partition_split_request request;
+    request.app_name = fake_app->app_name;
+    request.parent_partition_index = target_partition;
+    request.is_pause = false;
+
+    std::cout << "case1. restart partition split with wrong partition index" << std::endl;
+    {
+        request.parent_partition_index = -1;
+
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONTROL_SINGLE_SPLIT);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        control_single_partition_split_rpc rpc(recv_msg);
+        split_srv->control_single_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_INVALID_PARAMETERS);
+
+        request.parent_partition_index = target_partition;
+    }
+
+    std::cout << "case2. restart partition which permit split" << std::endl;
+    {
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONTROL_SINGLE_SPLIT);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        control_single_partition_split_rpc rpc(recv_msg);
+        split_srv->control_single_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_NO_NEED_OPERATE);
+    }
+
+    std::cout << "case3. restart partition split succeed" << std::endl;
+    {
+        fake_app->partitions[target_partition].partition_flags |= pc_flags::child_dropped;
+        dsn::message_ex *msg = dsn::message_ex::create_request(RPC_CM_CONTROL_SINGLE_SPLIT);
+        dsn::marshall(msg, request);
+        dsn::message_ex *recv_msg = create_corresponding_receive(msg);
+
+        control_single_partition_split_rpc rpc(recv_msg);
+        split_srv->control_single_partition_split(rpc);
+        svc->tracker()->wait_outstanding_tasks();
+
+        auto response = rpc.response();
+        ASSERT_EQ(response.err, dsn::ERR_OK);
     }
 }

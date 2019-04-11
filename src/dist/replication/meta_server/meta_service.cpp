@@ -378,6 +378,9 @@ void meta_service::register_rpc_handlers()
                                          &meta_service::on_register_child_on_meta);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_QUERY_CHILD_STATE, "query_child_state", &meta_service::on_query_child_state);
+    register_rpc_handler_with_rpc_holder(RPC_CM_CONTROL_SINGLE_SPLIT,
+                                         "control_single_split",
+                                         &meta_service::on_control_single_partition_split);
     register_rpc_handler_with_rpc_holder(RPC_CM_DDD_DIAGNOSE, "ddd_diagnose", &meta_service::ddd_diagnose);
 }
 
@@ -876,6 +879,19 @@ void meta_service::on_query_child_state(query_child_state_rpc rpc)
                      [this, rpc]() {
                          dassert(_split_svc, "meta_split_service is uninitialized");
                          _split_svc->on_query_child_state(std::move(rpc));
+                     },
+                     server_state::sStateHash);
+}
+
+void meta_service::on_control_single_partition_split(control_single_partition_split_rpc rpc)
+{
+    RPC_CHECK_STATUS(rpc.dsn_request(), rpc.response());
+
+    tasking::enqueue(LPC_META_STATE_NORMAL,
+                     tracker(),
+                     [this, rpc]() {
+                         dassert(_split_svc, "meta_split_service is uninitialized");
+                         _split_svc->control_single_partition_split(std::move(rpc));
                      },
                      server_state::sStateHash);
 }

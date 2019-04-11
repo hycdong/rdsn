@@ -1062,11 +1062,11 @@ void replica::on_config_sync(const app_info &info, const partition_configuration
     if (nullptr != _primary_states.reconfiguration_task) {
         // already under reconfiguration, skip configuration sync
     } else if (status() == partition_status::PS_PRIMARY) {
-        check_partition_count(info.partition_count);
+        check_partition_state(info.partition_count, config);
     } else {
         if (_is_initializing) {
             //TODO(hyc): consider
-            check_partition_count(info.partition_count); // update local partition count if necessary
+            check_partition_state(info.partition_count, config); // update local partition count if necessary
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&
@@ -1131,17 +1131,62 @@ void replica::replay_prepare_list()
     }
 }
 
-void replica::check_partition_count(int partition_count)
+// TODO(hyc): add comments
+void replica::check_partition_state(int partition_count, const partition_configuration &config)
 {
-    if (partition_count == _app_info.partition_count * 2) {
-        ddebug_f("{} app {} partition count changed, local partition count is {}, meta partition "
-                 "count is {}",
+    if (partition_count == _app_info.partition_count) {
+        if ((config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped) {
+            ddebug_f(
+                "{} app {}(partition count={}) might execute partition split and admin cancel it, "
+                "so clear child_gpid({}.{})",
+                name(),
+                _app_info.app_name,
+                partition_count,
+                _child_gpid.get_app_id(),
+                _child_gpid.get_partition_index());
+            if (_child_gpid.get_app_id() > 0) {
+                _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
+                               _child_gpid,
+                               std::bind(&replica::handle_splitting_error,
+                                         std::placeholders::_1,
+                                         "admin cancel partition split"));
+                _child_gpid.set_app_id(0);
+            }
+        }
+        return;
+    }
+
+    if (partition_count == _app_info.partition_count * 2 &&
+        ((config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped)) {
+        ddebug_f("{} app {}(local partition count={}, remote partition count={}) might execute "
+                 "partition split partition split and admin pause current partition, so clear "
+                 "child_gpid({}.{})",
                  name(),
                  _app_info.app_name,
                  _app_info.partition_count,
-                 partition_count);
+                 partition_count,
+                 _child_gpid.get_app_id(),
+                 _child_gpid.get_partition_index());
+        if (_child_gpid.get_app_id() > 0) {
+            _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
+                           _child_gpid,
+                           std::bind(&replica::handle_splitting_error,
+                                     std::placeholders::_1,
+                                     "admin pause single partition split"));
+            _child_gpid.set_app_id(0);
+        }
+        return;
+    }
+
+    if (partition_count == _app_info.partition_count * 2) {
+        ddebug_f(
+            "{} app {} partition count changed, local partition count={}, remote partitin count={}",
+            name(),
+            _app_info.app_name,
+            _app_info.partition_count,
+            partition_count);
         if (_child_gpid.get_app_id() <= 0) {
-//             TODO(hyc): consider partition_version???
+            // TODO(hyc): consider partition_version???
             _partition_version = -1;
             query_child_state();
         }

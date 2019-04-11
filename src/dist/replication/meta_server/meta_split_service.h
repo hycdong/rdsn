@@ -40,6 +40,13 @@ public:
     // change partition count on remote storage
     void do_app_partition_split(std::shared_ptr<app_state> app, app_partition_split_rpc rpc);
 
+    // client -> meta to pause/restart single partition split
+    void control_single_partition_split(control_single_partition_split_rpc rpc);
+    void update_single_partition_split_flag(std::shared_ptr<app_state> app,
+                                            int pidx,
+                                            bool is_pause,
+                                            control_single_partition_split_rpc rpc);
+
     // primary replica -> meta to query child partition configuration
     void on_query_child_state(query_child_state_rpc rpc);
 

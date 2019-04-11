@@ -100,6 +100,8 @@ public:
     void app_partition_split_test();
     void register_child_test();
     void on_query_child_state_test();
+    void pause_single_partition_split_test();
+    void restart_single_partition_split_test();
 
     // test for bug found
     void adjust_dropped_size();

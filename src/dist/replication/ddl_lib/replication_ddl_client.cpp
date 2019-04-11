@@ -1641,5 +1641,45 @@ error_code replication_ddl_client::app_partition_split(const std::string &app_na
     }
     return resp.err;
 }
+
+dsn::error_code replication_ddl_client::control_single_partition_split(const std::string &app_name,
+                                                                       int parent_partition_index,
+                                                                       bool is_pause_split)
+{
+    if (app_name.empty() ||
+        !std::all_of(app_name.cbegin(),
+                     app_name.cend(),
+                     (bool (*)(int))replication_ddl_client::valid_app_char)) {
+        fmt::print("Failed to pause partition split, app_name {} is invalid\n", app_name);
+        return ERR_INVALID_PARAMETERS;
+    }
+
+    auto req = std::make_shared<control_single_partition_split_request>();
+    req->app_name = app_name;
+    req->parent_partition_index = parent_partition_index;
+    req->is_pause = is_pause_split;
+
+    auto resp_task =
+        request_meta<control_single_partition_split_request>(RPC_CM_CONTROL_SINGLE_SPLIT, req);
+    resp_task->wait();
+    if (resp_task->error() != dsn::ERR_OK) {
+        return resp_task->error();
+    }
+
+    app_partition_split_response resp;
+    dsn::unmarshall(resp_task->get_response(), resp);
+
+    if (resp.err == ERR_INVALID_PARAMETERS) {
+        fmt::print("wrong partition index {}, parent index should belong to[0,{})\n",
+                   parent_partition_index,
+                   resp.partition_count / 2);
+    } else if (resp.err == ERR_CHILD_REGISTERED) {
+        fmt::print("failed to pause partition[{}] split coz split has been finished\n",
+                   parent_partition_index);
+    }
+
+    return resp.err;
+}
+
 } // namespace replication
 } // namespace dsn

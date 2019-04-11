@@ -775,15 +775,27 @@ struct app_partition_split_request
     2:i32                    new_partition_count;
 }
 
+// control single partition split, from client to meta server
+struct control_single_partition_split_request
+{
+    1:string            app_name;
+    2:i32               parent_partition_index;
+    3:bool              is_pause;
+}
+
+// Common response from meta to client
+//-  common error
+//     ERR_APP_NOT_EXIST: if the table is not available.
+//-  app_partition_split_request:
+//     ERR_INVALID_PARAMETERS: if the given new_partition_count != old_partition_count * 2
+//     ERR_BUSY - if there's ongoing split already.
+//     ERR_CHILD_DROPPED - if partition split is paused or canceled.
+//-  control_single_partition_split_request
+//     ERR_INVALID_PARAMETERS: if the given partition index is not parent index
+//     ERR_CHILD_REGISTERED(when pause split): split has been finished
+//     ERR_NO_NEED_OPERATE: when try to pause split already paused or restart split already started
 struct app_partition_split_response
 {
-    // Possible errors:
-    // - ERR_INVALID_PARAMETERS:
-    //   if the given new_partition_count != old_partition_count * 2
-    // - ERR_APP_NOT_EXIST
-    //   if the specified table is not available.
-    // - ERR_BUSY:
-    //   if there's ongoing split already.
     1:dsn.error_code         err;
     2:i32                    app_id;
     3:i32                    partition_count;

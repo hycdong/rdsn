@@ -1115,6 +1115,21 @@ void replica::on_register_child_on_meta_reply(
         ec = response->err;
     }
 
+    // handle register failed
+    if (ec == ERR_CHILD_DROPPED) {
+        dwarn_f("{}: register child({}.{}) failed coz partition split is paused or canceled",
+                name(),
+                request->child_config.pid.get_app_id(),
+                request->child_config.pid.get_partition_index());
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
+                       _child_gpid,
+                       std::bind(&replica::handle_splitting_error,
+                                 std::placeholders::_1,
+                                 "register child failed coz split paused or canceled"));
+        _child_gpid.set_app_id(0);
+        return;
+    }
+
     if (ec != ERR_OK) {
         dwarn_f("{}: register child({}.{}) reply with error {}, request child ballot is {}, local "
                 "ballot is {}",

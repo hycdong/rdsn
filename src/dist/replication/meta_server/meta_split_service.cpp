@@ -72,14 +72,26 @@ void meta_split_service::app_partition_split(app_partition_split_rpc rpc)
             return;
         }
 
-        // if there's ongoing split already.
         for (const auto &partition_config : app->partitions) {
+            // if there's ongoing split already.
             if (partition_config.ballot < 0) {
                 response.err = ERR_BUSY;
                 dwarn_f("app is already during partition split, client({}) sent repeated split request: app({}), new_partition_count({})",
                         ((message_ex *)rpc.dsn_request())->header->from_address.to_string(),
                         request.app_name,
                         request.new_partition_count);
+                return;
+            }
+
+            // if split is paused or canceled
+            if ((partition_config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped) {
+                response.err = ERR_CHILD_DROPPED;
+                dwarn_f("client({}) sent split request with partition{}.{} flag is child_dropped, "
+                        "app{} partition split might be paused or canceled, please check state",
+                        ((message_ex *)rpc.dsn_request())->header->from_address.to_string(),
+                        partition_config.pid.get_app_id(),
+                        partition_config.pid.get_partition_index(),
+                        request.app_name);
                 return;
             }
         }
@@ -165,6 +177,14 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     partition_configuration child_config = app->partitions[child_gpid.get_partition_index()];
     config_context &parent_context = app->helpers->contexts[parent_gpid.get_partition_index()];
 
+    if((parent_config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped) {
+        dwarn_f("gpid({}.{}) register child failed, coz split is paused or canceled",
+                parent_gpid.get_app_id(),
+                parent_gpid.get_partition_index());
+        response.err = ERR_CHILD_DROPPED;
+        return;
+    }
+
     if (request.parent_config.ballot < parent_config.ballot) {
         dwarn_f("gpid({}.{}) register child failed, request is out-dated, request ballot is {}, "
                 "local ballot is {}",
@@ -177,7 +197,7 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     }
 
     if (child_config.ballot != invalid_ballot) {
-        dwarn_f("duplicated register child reques, gpid({}.{}) has already been registered, ballot "
+        dwarn_f("duplicated register child request, gpid({}.{}) has already been registered, ballot "
                 "is {}",
                 child_gpid.get_app_id(),
                 child_gpid.get_partition_index(),
@@ -316,6 +336,123 @@ void meta_split_service::on_query_child_state(query_child_state_rpc rpc)
         response.ballot =
             app->partitions[parent_gpid.get_partition_index() + app->partition_count / 2].ballot;
     }
+}
+
+void meta_split_service::control_single_partition_split(control_single_partition_split_rpc rpc)
+{
+    const auto &request = rpc.request();
+    int pidx = request.parent_partition_index;
+    bool is_pause = request.is_pause;
+    std::string op_name = is_pause ? "pause" : "restart";
+    ddebug_f("{} table {} partition[{}] split", op_name, request.app_name, pidx);
+
+    auto &response = rpc.response();
+    response.err = ERR_OK;
+
+    std::shared_ptr<app_state> app;
+    { // validate rpc parameters
+
+        zauto_write_lock l(app_lock());
+
+        // if app is not available
+        app = _state->get_app(request.app_name);
+        if (!app || app->status != app_status::AS_AVAILABLE) {
+            response.err = ERR_APP_NOT_EXIST;
+            dwarn_f("client({}) sent {} split request with invalid app({}), app is not existed or "
+                    "unavailable",
+                    ((message_ex *)rpc.dsn_request())->header->from_address.to_string(),
+                    op_name,
+                    request.app_name);
+            return;
+        }
+
+        response.app_id = app->app_id;
+        response.partition_count = app->partition_count;
+
+        if (pidx < 0 || pidx >= app->partition_count / 2) {
+            response.err = ERR_INVALID_PARAMETERS;
+            dwarn_f("client({}) sent {} split request with wrong partition index({}), app({}) "
+                    "partition_count({})",
+                    ((message_ex *)rpc.dsn_request())->header->from_address.to_string(),
+                    op_name,
+                    pidx,
+                    request.app_name,
+                    app->partition_count);
+            return;
+        }
+
+        if (is_pause && app->partitions[pidx + app->partition_count / 2].ballot != -1) {
+            response.err = ERR_CHILD_REGISTERED;
+            dwarn_f("client({}) sent pause split request with partition index({}), but its child "
+                    "partition has been registered",
+                    ((message_ex *)rpc.dsn_request())->header->from_address.to_string(),
+                    pidx);
+            return;
+        }
+
+        if ((is_pause && ((app->partitions[pidx].partition_flags &
+                         pc_flags::child_dropped) == pc_flags::child_dropped)) ||
+            (!is_pause && ((app->partitions[pidx].partition_flags & pc_flags::child_dropped) == 0))) {
+            ddebug_f("client({}) sent {} split request with partition index({}), this partition "
+                     "has already marked as {}, partition flag is {}",
+                     ((message_ex *)rpc.dsn_request())->header->from_address.to_string(),
+                     op_name,
+                     pidx,
+                     op_name,
+                     app->partitions[pidx].partition_flags);
+            response.err = ERR_NO_NEED_OPERATE;
+            return;
+        }
+    }
+    // update partition flag to remote storage
+    update_single_partition_split_flag(std::move(app), pidx, is_pause, std::move(rpc));
+}
+
+void meta_split_service::update_single_partition_split_flag(std::shared_ptr<app_state> app,
+                                                            int pidx,
+                                                            bool is_pause,
+                                                            control_single_partition_split_rpc rpc)
+{
+    auto on_update_partition_flag = [this, app, pidx, is_pause, rpc](dsn::error_code err) mutable {
+        if (err == dsn::ERR_OK) {
+            zauto_write_lock l(app_lock());
+
+            if (is_pause) {
+                app->partitions[pidx].partition_flags |= pc_flags::child_dropped;
+            } else {
+                app->partitions[pidx].partition_flags &= (~pc_flags::child_dropped);
+            }
+
+            auto &response = rpc.response();
+            response.err = ERR_OK;
+
+        } else if (err == dsn::ERR_TIMEOUT) {
+            tasking::enqueue(LPC_META_STATE_HIGH,
+                             nullptr,
+                             std::bind(&meta_split_service::update_single_partition_split_flag,
+                                       this,
+                                       app,
+                                       pidx,
+                                       is_pause,
+                                       rpc),
+                             0,
+                             std::chrono::seconds(1));
+        } else {
+            dassert(false, "we can't handle this right now, err = %s", err.to_string());
+        }
+    };
+
+    partition_configuration &pc = app->partitions[pidx];
+    if (is_pause) {
+        pc.partition_flags |= pc_flags::child_dropped;
+    } else {
+        pc.partition_flags &= (~pc_flags::child_dropped);
+    }
+
+    blob json_partition = dsn::json::json_forwarder<partition_configuration>::encode(pc);
+    std::string partition_path = _state->get_partition_path(pc.pid);
+    _meta_svc->get_remote_storage()->set_data(
+        partition_path, json_partition, LPC_META_STATE_HIGH, on_update_partition_flag);
 }
 
 meta_split_service::meta_split_service(meta_service *meta_srv)

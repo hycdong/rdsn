@@ -69,6 +69,10 @@ TEST(meta, register_child_test) { g_app->register_child_test(); }
 
 TEST(meta, query_child_state_test) { g_app->on_query_child_state_test(); }
 
+TEST(meta, pause_single_partition_split_test) { g_app->pause_single_partition_split_test(); }
+
+TEST(meta, restart_single_partition_split_test) { g_app->restart_single_partition_split_test(); }
+
 dsn::error_code meta_service_test_app::start(const std::vector<std::string> &args)
 {
     uint32_t seed =
