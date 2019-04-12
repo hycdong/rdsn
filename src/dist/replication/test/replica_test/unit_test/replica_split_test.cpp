@@ -7,23 +7,21 @@
 #include "replication_service_test_app.h"
 #include "replica_split_mock.h"
 
-#define BALLOT 1
-
 using namespace ::dsn::replication;
 
 void replication_service_test_app::on_add_child_test()
 {
     auto stub = new replica_stub_mock();
     auto parent_replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
+
     group_check_request request;
     request.child_gpid = child_gpid;
     request.config.ballot = BALLOT;
     ASSERT_EQ(nullptr, stub->get_replica(child_gpid, false));
+    mock_funcs["init_child_replica"] = nullptr;
 
-    substitutes["init_child_replica"] = nullptr;
-
+    std::cout << "case1. failed - ballot not match" << std::endl;
     {
-        std::cout << "case1. failed - ballot not match" << std::endl;
         request.config.ballot = BALLOT + 1;
         parent_replica->on_add_child(request);
         parent_replica->tracker()->wait_outstanding_tasks();
@@ -31,16 +29,16 @@ void replication_service_test_app::on_add_child_test()
         request.config.ballot = BALLOT;
     }
 
-    {
-        std::cout << "case2. failed - child_gpid alreay exist" << std::endl;
+    std::cout << "case2. failed - child_gpid alreay exist" << std::endl;
+    {        
         parent_replica->_child_gpid = child_gpid;
         parent_replica->on_add_child(request);
         parent_replica->tracker()->wait_outstanding_tasks();
         ASSERT_EQ(nullptr, stub->get_replica(child_gpid, false));
     }
 
+    std::cout << "case3. failed - partition count not match" << std::endl;
     {
-        std::cout << "case3. failed - partition count not match" << std::endl;
         dsn::app_info info = parent_replica->_app_info;
         info.partition_count = partition_count * 2;
         parent_replica->_app_info = info;
@@ -48,17 +46,15 @@ void replication_service_test_app::on_add_child_test()
         parent_replica->on_add_child(request);
         parent_replica->tracker()->wait_outstanding_tasks();
         ASSERT_EQ(nullptr, stub->get_replica(child_gpid, false));
-
         info.partition_count = partition_count;
         parent_replica->_app_info = info;
     }
 
+    std::cout << "cas4. succeed - add child" << std::endl;
     {
-        std::cout << "cas4. succeed - add child" << std::endl;
         parent_replica->_child_gpid.set_app_id(0);
         parent_replica->on_add_child(request);
         parent_replica->tracker()->wait_outstanding_tasks();
-
         replica_ptr child = stub->get_replica(child_gpid, false);
         ASSERT_NE(nullptr, child);
         ASSERT_EQ(child_gpid, child->get_gpid());
@@ -66,7 +62,7 @@ void replication_service_test_app::on_add_child_test()
         ASSERT_EQ(partition_count, child->get_app_info()->partition_count);
     }
 
-    substitutes.erase("init_child_replica");
+    mock_funcs.erase("init_child_replica");
 }
 
 void replication_service_test_app::init_child_replica_test()
@@ -74,12 +70,11 @@ void replication_service_test_app::init_child_replica_test()
     auto stub = new replica_stub_mock();
     auto parent_replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
     auto child_replica = stub->generate_replica(child_gpid, partition_status::PS_INACTIVE);
+    mock_funcs["prepare_copy_parent_state"] = nullptr;
+    mock_funcs["check_child_state"] = nullptr;
 
-    substitutes["prepare_copy_parent_state"] = nullptr;
-    substitutes["check_child_state"] = nullptr;
-
+    std::cout << "case1. failed - child status is not inactive" << std::endl;
     {
-        std::cout << "case1. failed - child status is not inactive" << std::endl;
         stub->replicas[parent_gpid] = parent_replica;
         stub->replicas[child_gpid] = child_replica;
         parent_replica->_child_gpid = child_gpid;
@@ -91,8 +86,8 @@ void replication_service_test_app::init_child_replica_test()
         ASSERT_EQ(0, parent_replica->_child_gpid.get_app_id());
     }
 
+    std::cout << "case2. succeed - init child replica" << std::endl;
     {
-        std::cout << "case2. succeed - init child replica" << std::endl;
         child_replica->_config.status = partition_status::PS_INACTIVE;
 
         child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
@@ -105,8 +100,8 @@ void replication_service_test_app::init_child_replica_test()
         ASSERT_FALSE(child_replica->_split_states.is_caught_up);
     }
 
-    substitutes.erase("prepare_copy_parent_state");
-    substitutes.erase("check_child_state");
+    mock_funcs.erase("prepare_copy_parent_state");
+    mock_funcs.erase("check_child_state");
 }
 
 void replication_service_test_app::check_child_state_test()
@@ -117,20 +112,19 @@ void replication_service_test_app::check_child_state_test()
     stub->replicas[parent_gpid] = parent_replica;
     stub->replicas[child_gpid] = child_replica;
     parent_replica->_child_gpid = child_gpid;
-    substitutes["prepare_copy_parent_state"] = nullptr;
+    mock_funcs["prepare_copy_parent_state"] = nullptr;
 
+    std::cout << "case1. failed - invalid child state" << std::endl;
     {
-        std::cout << "case1. failed - invalid child state" << std::endl;
         child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
         child_replica->_config.status = partition_status::PS_INACTIVE;
         child_replica->tracker()->wait_outstanding_tasks();
         parent_replica->tracker()->wait_outstanding_tasks();
-
         ASSERT_EQ(nullptr, child_replica->_split_states.check_state_task);
     }
 
+    std::cout << "case2. failed - invalid ballot" << std::endl;
     {
-        std::cout << "case2. failed - invalid ballot" << std::endl;
         child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT + 1);
         child_replica->tracker()->wait_outstanding_tasks();
         parent_replica->tracker()->wait_outstanding_tasks();
@@ -140,8 +134,8 @@ void replication_service_test_app::check_child_state_test()
         parent_replica->_child_gpid = child_gpid;
     }
 
+    std::cout << "case3. failed - invalid child gpid" << std::endl;
     {
-        std::cout << "case3. failed - invalid child gpid" << std::endl;
         child_replica->_config.status = partition_status::PS_INACTIVE;
         child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
         parent_replica->_child_gpid = parent_gpid;
@@ -153,8 +147,8 @@ void replication_service_test_app::check_child_state_test()
         parent_replica->_child_gpid = child_gpid;
     }
 
+    std::cout << "case4. failed - invalid parent state" << std::endl;
     {
-        std::cout << "case4. failed - invalid parent state" << std::endl;
         child_replica->_config.status = partition_status::PS_INACTIVE;
         child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
         parent_replica->_config.status = partition_status::PS_POTENTIAL_SECONDARY;
@@ -166,7 +160,7 @@ void replication_service_test_app::check_child_state_test()
         parent_replica->_child_gpid = child_gpid;
     }
 
-    substitutes.erase("prepare_copy_parent_state");
+    mock_funcs.erase("prepare_copy_parent_state");
 }
 
 void replication_service_test_app::prepare_copy_parent_state_test()
@@ -198,12 +192,12 @@ void replication_service_test_app::prepare_copy_parent_state_test()
         parent_replica->_private_log->append(
             mu, LPC_WRITE_REPLICATION_LOG_COMMON, nullptr, nullptr);
     }
+
     parent_replica->_prepare_list = plist_mock;
+    mock_funcs["copy_parent_state"] = nullptr;
 
-    substitutes["copy_parent_state"] = nullptr;
-
+    std::cout << "case1. failed - invalid parent state" << std::endl;
     {
-        std::cout << "case1. failed - invalid parent state" << std::endl;
         parent_replica->_config.status = partition_status::PS_POTENTIAL_SECONDARY;
 
         const std::string &dir = child_replica->_app->learn_dir();
@@ -217,16 +211,15 @@ void replication_service_test_app::prepare_copy_parent_state_test()
         parent_replica->_child_gpid = child_gpid;
     }
 
+    std::cout << "case2. succeed" << std::endl;
     {
-        std::cout << "case2. succeed" << std::endl;
-
         const std::string &dir = child_replica->_app->learn_dir();
         parent_replica->prepare_copy_parent_state(dir, child_gpid, child_replica->get_ballot());
         parent_replica->tracker()->wait_outstanding_tasks();
         child_replica->tracker()->wait_outstanding_tasks();
     }
 
-    substitutes.erase("copy_parent_state");
+    mock_funcs.erase("copy_parent_state");
 }
 
 void replication_service_test_app::copy_parent_state_test()
@@ -276,10 +269,10 @@ void replication_service_test_app::copy_parent_state_test()
     lstate.to_decree_included = DECREE;
     lstate.files.push_back("./learn_dummy");
 
-    substitutes["apply_parent_state"] = nullptr;
+    mock_funcs["apply_parent_state"] = nullptr;
 
+    std::cout << "case1. failed - invalid child state" << std::endl;
     {
-        std::cout << "case1. failed - invalid child state" << std::endl;
         child_replica->_config.status = partition_status::PS_SECONDARY;
 
         child_replica->copy_parent_state(
@@ -289,10 +282,10 @@ void replication_service_test_app::copy_parent_state_test()
         child_replica->_config.status = partition_status::PS_PARTITION_SPLIT;
     }
 
+    std::cout << "case2. failed - error code is not ERR_OK" << std::endl;
     {
-        std::cout << "case2. failed - error code is not ERR_OK" << std::endl;
         ec = dsn::ERR_GET_LEARN_STATE_FAILED;
-        substitutes["prepare_copy_parent_state"] = nullptr;
+        mock_funcs["prepare_copy_parent_state"] = nullptr;
 
         child_replica->copy_parent_state(
             ec, lstate, mutation_list, files, total_file_size, plist_mock);
@@ -300,12 +293,11 @@ void replication_service_test_app::copy_parent_state_test()
         child_replica->tracker()->wait_outstanding_tasks();
 
         ec = dsn::ERR_OK;
-        substitutes.erase("prepare_copy_parent_state");
+        mock_funcs.erase("prepare_copy_parent_state");
     }
 
+    std::cout << "case3. succeed" << std::endl;
     {
-        std::cout << "case3. succeed" << std::endl;
-
         child_replica->copy_parent_state(
             ec, lstate, mutation_list, files, total_file_size, plist_mock);
         child_replica->tracker()->wait_outstanding_tasks();
@@ -314,7 +306,7 @@ void replication_service_test_app::copy_parent_state_test()
         ASSERT_NE(nullptr, child_replica->_split_states.async_learn_task);
     }
 
-    substitutes.erase("apply_parent_state");
+    mock_funcs.erase("apply_parent_state");
 }
 
 void replication_service_test_app::apply_parent_state_test()
@@ -419,12 +411,11 @@ void replication_service_test_app::apply_parent_state_test()
                 }
             };
 
-    substitutes["async_learn_mutation_private_log"] = &mock_async_learn_mutation_private_log;
-    substitutes["child_catch_up"] = nullptr;
+    mock_funcs["async_learn_mutation_private_log"] = &mock_async_learn_mutation_private_log;
+    mock_funcs["child_catch_up"] = nullptr;
 
+    std::cout << "case1. succeed" << std::endl;
     {
-        std::cout << "case1. succeed" << std::endl;
-
         child_replica->apply_parent_state(
             ec, lstate, mutation_list, files, total_file_size, DECREE);
         child_replica->tracker()->wait_outstanding_tasks();
@@ -433,8 +424,8 @@ void replication_service_test_app::apply_parent_state_test()
         ASSERT_EQ(BALLOT, child_replica->get_ballot());
     }
 
+    std::cout << "case2. child replica status wrong" << std::endl;
     {
-        std::cout << "case2. child replica status wrong" << std::endl;
         child_replica->_config.status = partition_status::PS_SECONDARY;
 
         child_replica->apply_parent_state(
@@ -444,10 +435,9 @@ void replication_service_test_app::apply_parent_state_test()
         child_replica->_config.status = partition_status::PS_PARTITION_SPLIT;
     }
 
+    std::cout << "case3. checkpoint failed" << std::endl;
     {
-        std::cout << "case3. checkpoint failed" << std::endl;
-
-        substitutes["async_learn_mutation_private_log_mock_failure"] = nullptr;
+        mock_funcs["async_learn_mutation_private_log_mock_failure"] = nullptr;
 
         child_replica->apply_parent_state(
             ec, lstate, mutation_list, files, total_file_size, DECREE);
@@ -457,11 +447,11 @@ void replication_service_test_app::apply_parent_state_test()
         ASSERT_EQ(partition_status::PS_ERROR, child_replica->_config.status);
         ASSERT_EQ(0, parent_replica->_child_gpid.get_app_id());
 
-        substitutes.erase("async_learn_mutation_private_log_mock_failure");
+        mock_funcs.erase("async_learn_mutation_private_log_mock_failure");
     }
 
-    substitutes.erase("async_learn_mutation_private_log");
-    substitutes.erase("child_catch_up");
+    mock_funcs.erase("async_learn_mutation_private_log");
+    mock_funcs.erase("child_catch_up");
 }
 
 void replication_service_test_app::child_catch_up_test()
@@ -497,17 +487,17 @@ void replication_service_test_app::child_catch_up_test()
     }
     child_replica->_prepare_list = plist;
 
-    substitutes["notify_primary_split_catch_up"] = nullptr;
+    mock_funcs["notify_primary_split_catch_up"] = nullptr;
 
+    std::cout << "case1. succeed - no missing mutations" << std::endl;
     {
-        std::cout << "case1. succeed - no missing mutations" << std::endl;
-
         child_replica->child_catch_up();
         child_replica->tracker()->wait_outstanding_tasks();
 
         ASSERT_EQ(true, child_replica->_split_states.is_caught_up);
     }
 
+    std::cout << "case2. succeed - mutations in files and memory" << std::endl;
     {
         learn_state lstate;
         lstate.to_decree_included = 0;
@@ -519,14 +509,13 @@ void replication_service_test_app::child_catch_up_test()
 
         child_replica->_prepare_list = plist2;
 
-        std::cout << "case2. succeed - mutations in files and memory" << std::endl;
-
         child_replica->child_catch_up();
-        substitutes["child_catch_up"] = nullptr;
+        mock_funcs["child_catch_up"] = nullptr;
         child_replica->tracker()->wait_outstanding_tasks();
-        substitutes.erase("child_catch_up");
+        mock_funcs.erase("child_catch_up");
     }
 
+    std::cout << "case3. succeed - mutations all in memory" << std::endl;
     {
         learn_state lstate;
         lstate.to_decree_included = 7;
@@ -535,13 +524,11 @@ void replication_service_test_app::child_catch_up_test()
             replication_app_base::chkpt_apply_mode::copy, lstate);
         ASSERT_EQ(dsn::ERR_OK, error);
 
-        std::cout << "case3. succeed - mutations all in memory" << std::endl;
-
         child_replica->child_catch_up();
         child_replica->tracker()->wait_outstanding_tasks();
     }
 
-    substitutes.erase("notify_primary_split_catch_up");
+    mock_funcs.erase("notify_primary_split_catch_up");
 }
 
 void replication_service_test_app::notify_primary_split_catch_up_test()
@@ -555,11 +542,10 @@ void replication_service_test_app::notify_primary_split_catch_up_test()
     child_replica->_split_states.is_caught_up = true;
     stub->replicas[child_gpid] = child_replica;
 
-    substitutes["on_notify_primary_split_catch_up"] = nullptr;
+    mock_funcs["on_notify_primary_split_catch_up"] = nullptr;
 
+    std::cout << "case1. primary is local parent" << std::endl;
     {
-        std::cout << "case1. primary is local parent" << std::endl;
-
         auto parent_replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
         stub->replicas[parent_gpid] = parent_replica;
         parent_replica->_child_gpid = child_gpid;
@@ -576,9 +562,8 @@ void replication_service_test_app::notify_primary_split_catch_up_test()
         parent_replica->_child_gpid = child_gpid;
     }
 
+    std::cout << "case2. primary is remote parent" << std::endl;
     {
-        std::cout << "case2. primary is remote parent" << std::endl;
-
         auto primary_stub = new replica_stub_mock();
         auto primary_replica =
             primary_stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
@@ -595,7 +580,7 @@ void replication_service_test_app::notify_primary_split_catch_up_test()
         child_replica->_config.status = partition_status::PS_PARTITION_SPLIT;
     }
 
-    substitutes.erase("on_notify_primary_split_catch_up");
+    mock_funcs.erase("on_notify_primary_split_catch_up");
 }
 
 void replication_service_test_app::on_notify_primary_split_catch_up_test()
@@ -625,11 +610,10 @@ void replication_service_test_app::on_notify_primary_split_catch_up_test()
     request.primary_parent_gpid = parent_gpid;
     request.child_address = dsn::rpc_address("127.0.0.1", 8702);
 
-    substitutes["check_sync_point"] = nullptr;
+    mock_funcs["check_sync_point"] = nullptr;
 
+    std::cout << "case1. parent status wrong" << std::endl;
     {
-        std::cout << "case1. parent status wrong" << std::endl;
-
         notify_cacth_up_response response;
         primary_replica->_config.status = partition_status::PS_SECONDARY;
         primary_replica->on_notify_primary_split_catch_up(request, response);
@@ -638,9 +622,8 @@ void replication_service_test_app::on_notify_primary_split_catch_up_test()
         primary_replica->_config.status = partition_status::PS_PRIMARY;
     }
 
+    std::cout << "case2. out-dated ballot" << std::endl;
     {
-        std::cout << "case2. out-dated ballot" << std::endl;
-
         notify_cacth_up_response response;
         request.child_ballot = 0;
         primary_replica->on_notify_primary_split_catch_up(request, response);
@@ -649,9 +632,8 @@ void replication_service_test_app::on_notify_primary_split_catch_up_test()
         request.child_ballot = BALLOT;
     }
 
+    std::cout << "case3. child_gpid not match" << std::endl;
     {
-        std::cout << "case3. child_gpid not match" << std::endl;
-
         notify_cacth_up_response response;
         request.child_gpid = dsn::gpid(1, 5);
         primary_replica->on_notify_primary_split_catch_up(request, response);
@@ -660,9 +642,8 @@ void replication_service_test_app::on_notify_primary_split_catch_up_test()
         request.child_gpid = child_gpid;
     }
 
+    std::cout << "case4. succeed - not all child catch up" << std::endl;
     {
-        std::cout << "case4. succeed - not all child catch up" << std::endl;
-
         notify_cacth_up_response response;
         primary_replica->on_notify_primary_split_catch_up(request, response);
         primary_replica->tracker()->wait_outstanding_tasks();
@@ -670,9 +651,8 @@ void replication_service_test_app::on_notify_primary_split_catch_up_test()
         ASSERT_FALSE(primary_replica->_primary_states.is_sync_to_child);
     }
 
+    std::cout << "case5. succeed - all child catch up" << std::endl;
     {
-        std::cout << "case5. succeed - all child catch up" << std::endl;
-
         notify_cacth_up_response response;
         primary_replica->_primary_states.child_address.insert(dsn::rpc_address("127.0.0.1", 8702));
         primary_replica->_primary_states.child_address.insert(dsn::rpc_address("127.0.0.2", 8702));
@@ -685,7 +665,7 @@ void replication_service_test_app::on_notify_primary_split_catch_up_test()
         ASSERT_TRUE(primary_replica->_primary_states.is_sync_to_child);
     }
 
-    substitutes.erase("check_sync_point");
+    mock_funcs.erase("check_sync_point");
 }
 
 void replication_service_test_app::check_sync_point_test()
@@ -702,23 +682,23 @@ void replication_service_test_app::check_sync_point_test()
         replication_app_base::chkpt_apply_mode::copy, lstate);
     ASSERT_EQ(dsn::ERR_OK, error);
 
-    substitutes["update_group_partition_count"] = nullptr;
+    mock_funcs["update_group_partition_count"] = nullptr;
 
+    std::cout << "case1. normal case" << std::endl;
     {
-        std::cout << "case1. normal case" << std::endl;
         primary_replica->check_sync_point(DECREE);
         primary_replica->tracker()->wait_outstanding_tasks();
     }
 
+    std::cout << "case2. retry case" << std::endl;
     {
-        std::cout << "case2. retry case" << std::endl;
         primary_replica->check_sync_point(1);
-        substitutes["check_sync_point"] = nullptr;
+        mock_funcs["check_sync_point"] = nullptr;
         primary_replica->tracker()->wait_outstanding_tasks();
-        substitutes.erase("check_sync_point");
+        mock_funcs.erase("check_sync_point");
     }
 
-    substitutes.erase("update_group_partition_count");
+    mock_funcs.erase("update_group_partition_count");
 }
 
 void replication_service_test_app::update_group_partition_count_test()
@@ -747,11 +727,11 @@ void replication_service_test_app::update_group_partition_count_test()
     partition_config.ballot = BALLOT;
     primary_replica->_primary_states.membership = partition_config;
 
-    substitutes["on_update_group_partition_count"] = nullptr;
-    substitutes["on_update_group_partition_count_reply"] = nullptr;
+    mock_funcs["on_update_group_partition_count"] = nullptr;
+    mock_funcs["on_update_group_partition_count_reply"] = nullptr;
 
+    std::cout << "case1. child replica is not right one" << std::endl;
     {
-        std::cout << "case1. child replica is not right one" << std::endl;
         primary_replica->_child_ballot = 0;
 
         primary_replica->update_group_partition_count(partition_count * 2, true);
@@ -765,15 +745,15 @@ void replication_service_test_app::update_group_partition_count_test()
         primary_replica->_child_gpid = child_gpid;
     }
 
+    std::cout << "case2. succeed" << std::endl;
     {
-        std::cout << "case2. succeed" << std::endl;
         primary_replica->update_group_partition_count(partition_count * 2, true);
         primary_replica->tracker()->wait_outstanding_tasks();
         child_replica->tracker()->wait_outstanding_tasks();
     }
 
-    substitutes.erase("on_update_group_partition_count");
-    substitutes.erase("on_update_group_partition_count_reply");
+    mock_funcs.erase("on_update_group_partition_count");
+    mock_funcs.erase("on_update_group_partition_count_reply");
 }
 
 void replication_service_test_app::on_update_group_partition_count_test()
@@ -801,8 +781,8 @@ void replication_service_test_app::on_update_group_partition_count_test()
     request.config = config;
     request.last_committed_decree = DECREE;
 
+    std::cout << "case1. out-dated ballot" << std::endl;
     {
-        std::cout << "case1. out-dated ballot" << std::endl;
         update_group_partition_count_response response;
         request.config.ballot = 0;
 
@@ -819,8 +799,8 @@ void replication_service_test_app::on_update_group_partition_count_test()
         parent_replica->_child_gpid = child_gpid;
     }
 
+    std::cout << "case2. child not catch up" << std::endl;
     {
-        std::cout << "case2. child not catch up" << std::endl;
         update_group_partition_count_response response;
         child_replica->_split_states.is_caught_up = false;
 
@@ -832,8 +812,8 @@ void replication_service_test_app::on_update_group_partition_count_test()
         child_replica->_split_states.is_caught_up = true;
     }
 
+    std::cout << "case3. succeed" << std::endl;
     {
-        std::cout << "case3. succeed" << std::endl;
         update_group_partition_count_response response;
         child_replica->_app_info = info;
         child_replica->_app_info.partition_count = partition_count;
@@ -887,10 +867,10 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
     replica_addresses->insert(dsn::rpc_address("127.0.0.2", 8703));
     replica_addresses->insert(dsn::rpc_address("127.0.0.1", 8703));
 
-    substitutes["register_child_on_meta"] = nullptr;
+    mock_funcs["register_child_on_meta"] = nullptr;
 
+    std::cout << "case1. replica is not primary" << std::endl;
     {
-        std::cout << "case1. replica is not primary" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.3", 8703);
         primary_replica->_config.status = partition_status::PS_INACTIVE;
 
@@ -901,8 +881,8 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
         primary_replica->_config.status = partition_status::PS_PRIMARY;
     }
 
+    std::cout << "case2. ballot not match" << std::endl;
     {
-        std::cout << "case2. ballot not match" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.3", 8703);
         request->config.ballot = 0;
 
@@ -913,34 +893,34 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
         request->config.ballot = BALLOT;
     }
 
+    std::cout << "case3. retry case" << std::endl;
     {
-        std::cout << "case3. retry case" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.3", 8703);
         response->err = dsn::ERR_VERSION_OUTDATED;
 
         primary_replica->on_update_group_partition_count_reply(
             ec, request, response, replica_addresses, child_address, true);
 
-        substitutes["on_update_group_partition_count"] = nullptr;
-        substitutes["on_update_group_partition_count_reply"] = nullptr;
+        mock_funcs["on_update_group_partition_count"] = nullptr;
+        mock_funcs["on_update_group_partition_count_reply"] = nullptr;
 
         primary_replica->tracker()->wait_outstanding_tasks();
 
         response->err = dsn::ERR_OK;
-        substitutes.erase("on_update_group_partition_count");
-        substitutes.erase("on_update_group_partition_count_reply");
+        mock_funcs.erase("on_update_group_partition_count");
+        mock_funcs.erase("on_update_group_partition_count_reply");
     }
 
+    std::cout << "case4. not all update partition count" << std::endl;
     {
-        std::cout << "case4. not all update partition count" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.3", 8703);
         primary_replica->on_update_group_partition_count_reply(
             ec, request, response, replica_addresses, child_address, true);
         primary_replica->tracker()->wait_outstanding_tasks();
     }
 
+    std::cout << "case5. succeed child group" << std::endl;
     {
-        std::cout << "case5. succeed child group" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.1", 8703);
         replica_addresses->erase(dsn::rpc_address("127.0.0.2", 8703));
         primary_replica->on_update_group_partition_count_reply(
@@ -948,10 +928,10 @@ void replication_service_test_app::on_update_group_partition_count_reply_test()
         primary_replica->tracker()->wait_outstanding_tasks();
     }
 
-    substitutes.erase("register_child_on_meta");
+    mock_funcs.erase("register_child_on_meta");
 
+    std::cout << "case6. succeed parent group" << std::endl;
     {
-        std::cout << "case6. succeed parent group" << std::endl;
         auto child_address = dsn::rpc_address("127.0.0.1", 8705);
         replica_addresses->insert(dsn::rpc_address("127.0.0.1", 8705));
         primary_replica->on_update_group_partition_count_reply(
@@ -969,18 +949,18 @@ void replication_service_test_app::register_child_on_meta_test()
     stub->replicas[child_gpid] = child_replica;
     stub->set_meta_server(dsn::rpc_address("127.0.0.1", 8705));
 
-    substitutes["on_register_child_on_meta_reply"] = nullptr;
+    mock_funcs["on_register_child_on_meta_reply"] = nullptr;
 
+    std::cout << "case1. replica not primary" << std::endl;
     {
-        std::cout << "case1. replica not primary" << std::endl;
         primary_replica->_config.status = partition_status::PS_SECONDARY;
         primary_replica->register_child_on_meta(BALLOT);
         primary_replica->tracker()->wait_outstanding_tasks();
         primary_replica->_config.status = partition_status::PS_PRIMARY;
     }
 
+    std::cout << "case2. replica is reconfiguration" << std::endl;
     {
-        std::cout << "case2. replica is reconfiguration" << std::endl;
         dsn::task_ptr fake_reconfig_ptr = dsn::tasking::enqueue(
             LPC_SPLIT_PARTITION,
             primary_replica->tracker(),
@@ -989,22 +969,22 @@ void replication_service_test_app::register_child_on_meta_test()
         primary_replica->_primary_states.reconfiguration_task = fake_reconfig_ptr;
         primary_replica->register_child_on_meta(BALLOT);
 
-        substitutes["register_child_on_meta"] = nullptr;
+        mock_funcs["register_child_on_meta"] = nullptr;
 
         primary_replica->tracker()->wait_outstanding_tasks();
         primary_replica->_primary_states.reconfiguration_task = nullptr;
 
-        substitutes.erase("register_child_on_meta");
+        mock_funcs.erase("register_child_on_meta");
     }
 
+    std::cout << "case3. ballot not match" << std::endl;
     {
-        std::cout << "case3. ballot not match" << std::endl;
         primary_replica->register_child_on_meta(0);
         primary_replica->tracker()->wait_outstanding_tasks();
     }
 
+    std::cout << "case4. succeed" << std::endl;
     {
-        std::cout << "case4. succeed" << std::endl;
         primary_replica->register_child_on_meta(1);
         primary_replica->tracker()->wait_outstanding_tasks();
         ASSERT_EQ(partition_status::PS_INACTIVE, primary_replica->_config.status);
@@ -1012,7 +992,7 @@ void replication_service_test_app::register_child_on_meta_test()
         primary_replica->_config.status = partition_status::PS_PRIMARY;
     }
 
-    substitutes.erase("on_register_child_on_meta_reply");
+    mock_funcs.erase("on_register_child_on_meta_reply");
 }
 
 void replication_service_test_app::on_register_child_on_meta_reply_test()
@@ -1058,10 +1038,10 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
 
     dsn::error_code ec = dsn::ERR_OK;
 
-    substitutes["update_group_partition_count"] = nullptr;
+    mock_funcs["update_group_partition_count"] = nullptr;
 
+    std::cout << "case1. wrong status" << std::endl;
     {
-        std::cout << "case1. wrong status" << std::endl;
         primary_parent->_config.status = partition_status::PS_PRIMARY;
 
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
@@ -1070,8 +1050,8 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         primary_parent->_config.status = partition_status::PS_INACTIVE;
     }
 
+    std::cout << "case2. retry case" << std::endl;
     {
-        std::cout << "case2. retry case" << std::endl;
         ec = dsn::ERR_TIMEOUT;
 
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
@@ -1084,16 +1064,16 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
                             std::shared_ptr<register_child_response> response) {
                 std::cout << "Mock on_register_child_on_meta_reply is called" << std::endl;
             };
-        substitutes["on_register_child_on_meta_reply"] = &mock_reply;
+        mock_funcs["on_register_child_on_meta_reply"] = &mock_reply;
 
         primary_parent->tracker()->wait_outstanding_tasks();
 
         ec = dsn::ERR_OK;
-        substitutes.erase("on_register_child_on_meta_reply");
+        mock_funcs.erase("on_register_child_on_meta_reply");
     }
 
+    std::cout << "case3. child registered" << std::endl;
     {
-        std::cout << "case3. child registered" << std::endl;
         response->err = dsn::ERR_CHILD_REGISTERED;
 
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
@@ -1107,8 +1087,8 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         primary_parent->_child_gpid = child_gpid;
     }
 
+    std::cout << "case4. split paused" << std::endl;
     {
-        std::cout << "case4. split paused" << std::endl;
         response->err = dsn::ERR_CHILD_DROPPED;
 
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
@@ -1122,9 +1102,8 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         primary_parent->_child_gpid = child_gpid;
     }
 
+    std::cout << "case5. succeed case" << std::endl;
     {
-        std::cout << "case5. succeed case" << std::endl;
-
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
         primary_parent->tracker()->wait_outstanding_tasks();
 
@@ -1133,7 +1112,7 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         ASSERT_EQ(0, primary_parent->_child_gpid.get_app_id());
     }
 
-    substitutes.erase("update_group_partition_count");
+   mock_funcs.erase("update_group_partition_count");
 }
 
 void replication_service_test_app::check_partition_state_test()
@@ -1153,43 +1132,43 @@ void replication_service_test_app::check_partition_state_test()
     config.pid = pid;
     config.partition_flags &= (~pc_flags::child_dropped);
 
-    substitutes["query_child_state"] = nullptr;
+    mock_funcs["query_child_state"] = nullptr;
 
+    std::cout << "case1. equal partition count" << std::endl;
     {
-        std::cout << "case1. equal partition count" << std::endl;
         replica->check_partition_state(partition_count, config);
     }
 
+    std::cout << "case2. child_gpid valid" << std::endl;
     {
-        std::cout << "case2. child_gpid valid" << std::endl;
         replica->_child_gpid = child_gpid;
         replica->check_partition_state(partition_count * 2, config);
         replica->_child_gpid.set_app_id(0);
     }
 
+    std::cout << "case3. cancel split while no child register" << std::endl;
     {
-        std::cout << "case3. cancel split while no child register" << std::endl;
         config.partition_flags |= pc_flags::child_dropped;
         replica->check_partition_state(partition_count, config);
         ASSERT_EQ(0, replica->_child_gpid.get_app_id());
         config.partition_flags &= (~pc_flags::child_dropped);
     }
 
+    std::cout << "case4. pause split" << std::endl;
     {
-        std::cout << "case4. pause split" << std::endl;
         config.partition_flags |= pc_flags::child_dropped;
         replica->check_partition_state(partition_count * 2, config);
         ASSERT_EQ(0, replica->_child_gpid.get_app_id());
         config.partition_flags &= (~pc_flags::child_dropped);
     }
 
+    std::cout << "case5. pass check for partition split" << std::endl;
     {
-        std::cout << "case5. pass check for partition split" << std::endl;
         replica->check_partition_state(partition_count * 2, config);
         ASSERT_EQ(-1, replica->_partition_version);
     }
 
-    substitutes.erase("query_child_state");
+    mock_funcs.erase("query_child_state");
 }
 
 void replication_service_test_app::query_child_state_test()
@@ -1199,18 +1178,18 @@ void replication_service_test_app::query_child_state_test()
     stub->replicas[parent_gpid] = replica;
     stub->set_meta_server(dsn::rpc_address("127.0.0.1", 8710));
 
-    substitutes["on_query_child_state_reply"] = nullptr;
+    mock_funcs["on_query_child_state_reply"] = nullptr;
 
+    std::cout << "case1. replica is not primary" << std::endl;
     {
-        std::cout << "case1. replica is not primary" << std::endl;
         replica->_config.status = partition_status::PS_PARTITION_SPLIT;
         replica->query_child_state();
         replica->tracker()->wait_outstanding_tasks();
         replica->_config.status = partition_status::PS_PRIMARY;
     }
 
+    std::cout << "case2. query_child_state_task is not nullptr" << std::endl;
     {
-        std::cout << "case2. query_child_state_task is not nullptr" << std::endl;
         replica->_primary_states.query_child_state_task = dsn::tasking::enqueue(
             LPC_SPLIT_PARTITION,
             replica->tracker(),
@@ -1221,13 +1200,13 @@ void replication_service_test_app::query_child_state_test()
         replica->_primary_states.query_child_state_task = nullptr;
     }
 
+    std::cout << "case3. succeed" << std::endl;
     {
-        std::cout << "case3. succeed" << std::endl;
         replica->query_child_state();
         replica->tracker()->wait_outstanding_tasks();
     }
 
-    substitutes.erase("on_query_child_state_reply");
+    mock_funcs.erase("on_query_child_state_reply");
 }
 
 void replication_service_test_app::on_query_child_state_reply_test()
@@ -1248,8 +1227,8 @@ void replication_service_test_app::on_query_child_state_reply_test()
     response->ballot = invalid_ballot;
     response->partition_count = partition_count * 2;
 
+    std::cout << "case1. replica is not primary" << std::endl;
     {
-        std::cout << "case1. replica is not primary" << std::endl;
         replica->_config.status = partition_status::PS_PARTITION_SPLIT;
         replica->on_query_child_state_reply(ec, request, response);
         replica->tracker()->wait_outstanding_tasks();
@@ -1257,8 +1236,8 @@ void replication_service_test_app::on_query_child_state_reply_test()
         replica->_config.status = partition_status::PS_PRIMARY;
     }
 
+    std::cout << "case2. child gpid exist" << std::endl;
     {
-        std::cout << "case2. child gpid exist" << std::endl;
         replica->_child_gpid = child_gpid;
         replica->on_query_child_state_reply(ec, request, response);
         replica->tracker()->wait_outstanding_tasks();
@@ -1266,13 +1245,12 @@ void replication_service_test_app::on_query_child_state_reply_test()
         replica->_child_gpid.set_app_id(0);
     }
 
+    std::cout << "case3. retry case" << std::endl;
     {
-        std::cout << "case3. retry case" << std::endl;
-
         std::function<void(dsn::error_code,
                            std::shared_ptr<query_child_state_request>,
                            std::shared_ptr<query_child_state_response>)>
-            mock_function = [replica](dsn::error_code err,
+            mock_func = [replica](dsn::error_code err,
                                       std::shared_ptr<query_child_state_request> req,
                                       std::shared_ptr<query_child_state_response> resp) {
                 std::cout << "This is mock function of on_query_child_state_reply" << std::endl;
@@ -1281,16 +1259,16 @@ void replication_service_test_app::on_query_child_state_reply_test()
         response->err = dsn::ERR_TRY_AGAIN;
         replica->on_query_child_state_reply(ec, request, response);
 
-        substitutes["on_query_child_state_reply"] = &mock_function;
+        mock_funcs["on_query_child_state_reply"] = &mock_func;
 
         replica->tracker()->wait_outstanding_tasks();
 
         response->err = dsn::ERR_OK;
-        substitutes.erase("on_query_child_state_reply");
+        mock_funcs.erase("on_query_child_state_reply");
     }
 
+    std::cout << "case4. equal partition count, partition split finish" << std::endl;
     {
-        std::cout << "case4. equal partition count, partition split finish" << std::endl;
         response->ballot = 2;
         replica->_app_info.partition_count = partition_count * 2;
 
@@ -1302,21 +1280,20 @@ void replication_service_test_app::on_query_child_state_reply_test()
         replica->_app_info.partition_count = partition_count;
     }
 
+    std::cout << "case5. ballot is valid" << std::endl;
     {
-        std::cout << "case5. ballot is valid" << std::endl;
         response->ballot = 2;
-        substitutes["update_group_partition_count"] = nullptr;
+        mock_funcs["update_group_partition_count"] = nullptr;
 
         replica->on_query_child_state_reply(ec, request, response);
         replica->tracker()->wait_outstanding_tasks();
 
         response->ballot = invalid_ballot;
-        substitutes.erase("update_group_partition_count");
+        mock_funcs.erase("update_group_partition_count");
     }
 
+    std::cout << "case6. learner exist" << std::endl;
     {
-        std::cout << "case6. learner exist" << std::endl;
-
         dsn::partition_configuration config;
         config.max_replica_count = 3;
         config.secondaries.push_back(dsn::rpc_address("127.0.0.2", 8710));

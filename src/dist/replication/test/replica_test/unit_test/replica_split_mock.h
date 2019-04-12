@@ -13,11 +13,11 @@ using namespace ::dsn::replication;
 static const int partition_count = 8;
 static const dsn::gpid parent_gpid(1, 1);
 static const dsn::gpid child_gpid(1, 9);
-
 // function name -> mock function
-// when substitutes[$function_name] exist, using mock function, otherwise original function
-static std::map<std::string, void *> substitutes;
+// when mock_funcs[$function_name] exist, using mock function, otherwise original function
+static std::map<std::string, void *> mock_funcs;
 
+// log_file mock class
 class log_file_mock : public dsn::replication::log_file
 {
 public:
@@ -29,6 +29,7 @@ public:
     void set_file_size(int size) { _end_offset = _start_offset + size; }
 };
 
+// mutation_log_private mock class
 class mutation_log_private_mock : public dsn::replication::mutation_log_private
 {
 public:
@@ -227,7 +228,6 @@ public:
                                     std::shared_ptr<query_child_state_response> response);
     void on_add_child(const group_check_request &request);
 
-    // TODO(hyc): mock rather than override it
     bool update_local_configuration_with_no_ballot_change(partition_status::type status);
 
     // helper functions
@@ -287,9 +287,9 @@ void replica_split_mock::init_child_replica(dsn::gpid gpid_parent,
                                             dsn::rpc_address primary_address,
                                             ballot init_ballot)
 {
-    auto iter = substitutes.find("init_child_replica");
+    auto iter = mock_funcs.find("init_child_replica");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(dsn::gpid, dsn::rpc_address, ballot)> *)iter->second;
             (*call)(gpid_parent, primary_address, init_ballot);
@@ -303,9 +303,9 @@ void replica_split_mock::prepare_copy_parent_state(const std::string &dir,
                                                    dsn::gpid child_gpid,
                                                    ballot child_ballot)
 {
-    auto iter = substitutes.find("prepare_copy_parent_state");
+    auto iter = mock_funcs.find("prepare_copy_parent_state");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(const std::string, dsn::gpid, ballot)> *)iter->second;
             (*call)(dir, child_gpid, child_ballot);
@@ -317,9 +317,9 @@ void replica_split_mock::prepare_copy_parent_state(const std::string &dir,
 
 void replica_split_mock::check_child_state()
 {
-    auto iter = substitutes.find("check_child_state");
+    auto iter = mock_funcs.find("check_child_state");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void()> *)iter->second;
             (*call)();
@@ -336,9 +336,9 @@ void replica_split_mock::copy_parent_state(dsn::error_code ec,
                                            uint64_t total_file_size,
                                            prepare_list *plist)
 {
-    auto iter = substitutes.find("copy_parent_state");
+    auto iter = mock_funcs.find("copy_parent_state");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(dsn::error_code,
                                             learn_state,
@@ -361,9 +361,9 @@ void replica_split_mock::apply_parent_state(dsn::error_code ec,
                                             uint64_t total_file_size,
                                             decree last_committed_decree)
 {
-    auto iter = substitutes.find("apply_parent_state");
+    auto iter = mock_funcs.find("apply_parent_state");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(dsn::error_code,
                                             learn_state,
@@ -386,11 +386,11 @@ replica_split_mock::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                                                      decree last_committed_decree)
 {
     dsn::error_code ec = dsn::ERR_OK;
-    auto iter = substitutes.find("async_learn_mutation_private_log");
+    auto iter = mock_funcs.find("async_learn_mutation_private_log");
     bool flag =
-        substitutes.find("async_learn_mutation_private_log_mock_failure") != substitutes.end();
+        mock_funcs.find("async_learn_mutation_private_log_mock_failure") != mock_funcs.end();
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call =
                 (std::function<dsn::error_code(
@@ -407,9 +407,9 @@ replica_split_mock::async_learn_mutation_private_log(std::vector<mutation_ptr> m
 
 void replica_split_mock::child_catch_up()
 {
-    auto iter = substitutes.find("child_catch_up");
+    auto iter = mock_funcs.find("child_catch_up");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void()> *)iter->second;
             (*call)();
@@ -421,9 +421,9 @@ void replica_split_mock::child_catch_up()
 
 void replica_split_mock::notify_primary_split_catch_up()
 {
-    auto iter = substitutes.find("notify_primary_split_catch_up");
+    auto iter = mock_funcs.find("notify_primary_split_catch_up");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void()> *)iter->second;
             (*call)();
@@ -436,9 +436,9 @@ void replica_split_mock::notify_primary_split_catch_up()
 void replica_split_mock::on_notify_primary_split_catch_up(notify_catch_up_request request,
                                                           notify_cacth_up_response &response)
 {
-    auto iter = substitutes.find("on_notify_primary_split_catch_up");
+    auto iter = mock_funcs.find("on_notify_primary_split_catch_up");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(notify_catch_up_request, notify_cacth_up_response &)> *)
                             iter->second;
@@ -451,9 +451,9 @@ void replica_split_mock::on_notify_primary_split_catch_up(notify_catch_up_reques
 
 void replica_split_mock::check_sync_point(decree sync_point)
 {
-    auto iter = substitutes.find("check_sync_point");
+    auto iter = mock_funcs.find("check_sync_point");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(decree)> *)iter->second;
             (*call)(sync_point);
@@ -465,9 +465,9 @@ void replica_split_mock::check_sync_point(decree sync_point)
 
 void replica_split_mock::update_group_partition_count(int new_partition_count, bool is_update_child)
 {
-    auto iter = substitutes.find("update_group_partition_count");
+    auto iter = mock_funcs.find("update_group_partition_count");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(int, bool)> *)iter->second;
             (*call)(new_partition_count, is_update_child);
@@ -481,9 +481,9 @@ void replica_split_mock::update_group_partition_count(int new_partition_count, b
 void replica_split_mock::on_update_group_partition_count(
     update_group_partition_count_request request, update_group_partition_count_response &response)
 {
-    auto iter = substitutes.find("on_update_group_partition_count");
+    auto iter = mock_funcs.find("on_update_group_partition_count");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call =
                 (std::function<void(update_group_partition_count_request,
@@ -503,9 +503,9 @@ void replica_split_mock::on_update_group_partition_count_reply(
     dsn::rpc_address finish_update_address,
     bool is_update_child)
 {
-    auto iter = substitutes.find("on_update_group_partition_count_reply");
+    auto iter = mock_funcs.find("on_update_group_partition_count_reply");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(dsn::error_code,
                                             std::shared_ptr<update_group_partition_count_request>,
@@ -523,9 +523,9 @@ void replica_split_mock::on_update_group_partition_count_reply(
 
 void replica_split_mock::register_child_on_meta(ballot b)
 {
-    auto iter = substitutes.find("register_child_on_meta");
+    auto iter = mock_funcs.find("register_child_on_meta");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(ballot)> *)iter->second;
             (*call)(b);
@@ -540,9 +540,9 @@ void replica_split_mock::on_register_child_on_meta_reply(
     std::shared_ptr<register_child_request> request,
     std::shared_ptr<register_child_response> response)
 {
-    auto iter = substitutes.find("on_register_child_on_meta_reply");
+    auto iter = mock_funcs.find("on_register_child_on_meta_reply");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call =
                 (std::function<void(dsn::error_code,
@@ -555,13 +555,15 @@ void replica_split_mock::on_register_child_on_meta_reply(
     }
 }
 
-void replica_split_mock::check_partition_state(int partition_count, const dsn::partition_configuration &config)
+void replica_split_mock::check_partition_state(int partition_count,
+                                               const dsn::partition_configuration &config)
 {
-    auto iter = substitutes.find("check_partition_state");
+    auto iter = mock_funcs.find("check_partition_state");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
-            auto call = (std::function<void(int, const dsn::partition_configuration)> *)iter->second;
+            auto call =
+                (std::function<void(int, const dsn::partition_configuration)> *)iter->second;
             (*call)(partition_count, config);
         }
     } else {
@@ -571,9 +573,9 @@ void replica_split_mock::check_partition_state(int partition_count, const dsn::p
 
 void replica_split_mock::query_child_state()
 {
-    auto iter = substitutes.find("query_child_state");
+    auto iter = mock_funcs.find("query_child_state");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void()> *)iter->second;
             (*call)();
@@ -588,9 +590,9 @@ void replica_split_mock::on_query_child_state_reply(
     std::shared_ptr<query_child_state_request> request,
     std::shared_ptr<query_child_state_response> response)
 {
-    auto iter = substitutes.find("on_query_child_state_reply");
+    auto iter = mock_funcs.find("on_query_child_state_reply");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call =
                 (std::function<void(dsn::error_code,
@@ -605,9 +607,9 @@ void replica_split_mock::on_query_child_state_reply(
 
 void replica_split_mock::on_add_child(const group_check_request &request)
 {
-    auto iter = substitutes.find("on_add_child");
+    auto iter = mock_funcs.find("on_add_child");
 
-    if (iter != substitutes.end()) {
+    if (iter != mock_funcs.end()) {
         if (iter->second != nullptr) {
             auto call = (std::function<void(const group_check_request &)> *)iter->second;
             (*call)(request);
