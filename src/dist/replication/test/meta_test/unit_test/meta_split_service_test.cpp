@@ -156,7 +156,7 @@ void meta_service_test_app::register_child_test()
         app->helpers->contexts[parent_index].stage = config_status::not_pending;
     }
 
-    std::cout << "case5. split paused" << std::endl;
+    std::cout << "case4. split paused" << std::endl;
     {
         app->partitions[parent_index].partition_flags |= pc_flags::child_dropped;
         auto response = send_request(
@@ -165,7 +165,16 @@ void meta_service_test_app::register_child_test()
         app->partitions[parent_index].partition_flags &= (~pc_flags::child_dropped);
     }
 
-    std::cout << "case4. succeed" << std::endl;
+    std::cout << "case5. split canceled" << std::endl;
+    {
+        app->partition_count /= 2;
+        auto response = send_request(
+            RPC_CM_REGISTER_CHILD_REPLICA, request, meta_svc, meta_svc->_split_svc.get());
+        ASSERT_EQ(response.err, dsn::ERR_REJECT);
+        app->partition_count *= 2;
+    }
+
+    std::cout << "case6. succeed" << std::endl;
     {
         dsn::message_ex *recv_msg = create_recv_msg(RPC_CM_REGISTER_CHILD_REPLICA, request);
         register_child_rpc rpc(recv_msg);
@@ -338,6 +347,84 @@ void meta_service_test_app::restart_single_partition_split_test()
         app->partitions[target_partition].partition_flags |= pc_flags::child_dropped;
         auto response = send_request(
             RPC_CM_CONTROL_SINGLE_SPLIT, request, meta_svc, meta_svc->_split_svc.get());
+        ASSERT_EQ(response.err, dsn::ERR_OK);
+    }
+}
+
+void meta_service_test_app::cancel_app_partition_split_test()
+{
+    std::shared_ptr<meta_service> meta_svc = create_mock_meta_svc();
+    std::shared_ptr<app_state> app = meta_svc->get_server_state()->get_app(NAME);
+
+    mock_partition_config(app);
+
+    int target_partition = 0;
+    int original_partition_count = app->partition_count / 2;
+    cancel_app_partition_split_request request;
+    request.app_name = app->app_name;
+    request.original_partition_count = original_partition_count;
+    request.is_force = false;
+
+    std::cout << "case1. cancel with wrong partition count" << std::endl;
+    {
+        request.original_partition_count = app->partition_count;
+        auto response = send_request(
+            RPC_CM_CANCEL_APP_PARTITION_SPLIT, request, meta_svc, meta_svc->_split_svc.get());
+        ASSERT_EQ(response.err, dsn::ERR_INVALID_PARAMETERS);
+        request.original_partition_count = original_partition_count;
+    }
+
+    std::cout << "case2. cancel with some child partitions registered but not force cancel"
+              << std::endl;
+    {
+        app->partitions[target_partition + original_partition_count].ballot = 3;
+        auto response = send_request(
+            RPC_CM_CANCEL_APP_PARTITION_SPLIT, request, meta_svc, meta_svc->_split_svc.get());
+        ASSERT_EQ(response.err, dsn::ERR_REJECT);
+        app->partitions[target_partition + original_partition_count].ballot = -1;
+    }
+
+    std::cout << "case3. cancel with all child registered" << std::endl;
+    {
+        for (int i = original_partition_count; i < app->partition_count; ++i) {
+            app->partitions[i].ballot = 3;
+        }
+        request.is_force = true;
+        auto response = send_request(
+            RPC_CM_CANCEL_APP_PARTITION_SPLIT, request, meta_svc, meta_svc->_split_svc.get());
+        ASSERT_EQ(response.err, dsn::ERR_CHILD_REGISTERED);
+    }
+
+    std::cout << "case4. cancel partition split succeed" << std::endl;
+    {
+        app->partitions[target_partition + original_partition_count].ballot = -1;
+        auto response = send_request(
+            RPC_CM_CANCEL_APP_PARTITION_SPLIT, request, meta_svc, meta_svc->_split_svc.get());
+        ASSERT_EQ(response.err, dsn::ERR_OK);
+    }
+}
+
+void meta_service_test_app::clear_split_flags_test()
+{
+    std::shared_ptr<meta_service> meta_svc = create_mock_meta_svc();
+    std::shared_ptr<app_state> app = meta_svc->get_server_state()->get_app(NAME);
+
+    mock_partition_config(app);
+
+    clear_partition_split_flag_request request;
+    request.app_name = app->app_name;
+
+    std::cout << "clear flags succeed" << std::endl;
+    {
+        for(int i = 0; i < app->partition_count/2; ++i){
+            app->partitions[i].partition_flags |= pc_flags::child_dropped;
+        }
+
+        dsn::message_ex *recv_msg = create_recv_msg(RPC_CM_CLEAR_PARTITION_SPLIT_FLAG, request);
+        clear_partition_split_flag_rpc rpc(recv_msg);
+        meta_svc->_split_svc->clear_partition_split_flag(rpc);
+        meta_svc->tracker()->wait_outstanding_tasks();
+        auto response = rpc.response();
         ASSERT_EQ(response.err, dsn::ERR_OK);
     }
 }

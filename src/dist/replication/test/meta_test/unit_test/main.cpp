@@ -73,6 +73,10 @@ TEST(meta, pause_single_partition_split_test) { g_app->pause_single_partition_sp
 
 TEST(meta, restart_single_partition_split_test) { g_app->restart_single_partition_split_test(); }
 
+TEST(meta, cancel_app_partition_split_test) { g_app->cancel_app_partition_split_test(); }
+
+TEST(meta, clear_partition_split_flag_test) { g_app->clear_split_flags_test(); }
+
 dsn::error_code meta_service_test_app::start(const std::vector<std::string> &args)
 {
     uint32_t seed =

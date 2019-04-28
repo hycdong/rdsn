@@ -83,6 +83,19 @@ inline app_partition_split_response send_request(dsn::task_code rpc_code,
     return rpc.response();
 }
 
+// send control single partition split request
+inline app_partition_split_response send_request(dsn::task_code rpc_code,
+                                                 cancel_app_partition_split_request request,
+                                                 std::shared_ptr<meta_service> meta_svc,
+                                                 meta_split_service *split_srv)
+{
+    dsn::message_ex *recv_msg = create_recv_msg(rpc_code, request);
+    cancel_app_partition_split_rpc rpc(recv_msg);
+    split_srv->cancel_app_partition_split(rpc);
+    meta_svc->tracker()->wait_outstanding_tasks();
+    return rpc.response();
+}
+
 // mock partition_config while test pause/restart single partition split
 inline void mock_partition_config(std::shared_ptr<app_state> app)
 {

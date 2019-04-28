@@ -816,12 +816,22 @@ void server_state::on_config_sync(dsn::message_ex *msg)
         } else {
             response.err = ERR_OK;
             unsigned int i = 0;
+            bool has_useless_child_partitions = false;
             response.partitions.resize(ns->partition_count());
             ns->for_each_partition([&, this](const gpid &pid) {
                 std::shared_ptr<app_state> app = get_app(pid.get_app_id());
                 dassert(app != nullptr, "invalid app_id, app_id = %d", pid.get_app_id());
-                config_context &cc = app->helpers->contexts[pid.get_partition_index()];
 
+                if (pid.get_partition_index() >= app->partition_count) {
+                    ddebug("gpid(%d.%d): child partition registered in partition split but removed "
+                           "by force cancel split",
+                           pid.get_app_id(),
+                           pid.get_partition_index());
+                    has_useless_child_partitions = true;
+                    return false;
+                }
+
+                config_context &cc = app->helpers->contexts[pid.get_partition_index()];
                 // config sync need the newest data to keep the perfect FD,
                 // so if the syncing config is related to the node, we may need to reject this
                 // request
@@ -837,8 +847,13 @@ void server_state::on_config_sync(dsn::message_ex *msg)
                 ++i;
                 return true;
             });
-            if (i < response.partitions.size()) {
+            if (i < response.partitions.size() && !has_useless_child_partitions) {
                 reject_this_request = true;
+            }
+            if (has_useless_child_partitions) {
+                response.partitions.erase(response.partitions.cbegin() + i,
+                                          response.partitions.cend());
+                ddebug("current response partitions size is %d", response.partitions.size());
             }
         }
 
@@ -859,7 +874,7 @@ void server_state::on_config_sync(dsn::message_ex *msg)
                       rep.pid.get_app_id(),
                       rep.pid.get_partition_index());
                 std::shared_ptr<app_state> app = get_app(rep.pid.get_app_id());
-                if (app == nullptr || rep.pid.get_partition_index() >= app->partition_count) {
+                if (app == nullptr) {
                     // app is not recognized or partition is not recognized
                     dassert(false,
                             "gpid(%d.%d) on node(%s) is not exist on meta server, administrator "
@@ -867,6 +882,14 @@ void server_state::on_config_sync(dsn::message_ex *msg)
                             rep.pid.get_app_id(),
                             rep.pid.get_partition_index(),
                             request.node.to_string());
+                } else if (rep.pid.get_partition_index() >= app->partition_count &&
+                           rep.pid.get_partition_index() < app->partition_count * 2) {
+                    dwarn("gpid(%d.%d) on node(%s) is not exist on meta server, it might be caused "
+                          "by cancel partition split, delete it immediately",
+                          rep.pid.get_app_id(),
+                          rep.pid.get_partition_index(),
+                          request.node.to_string());
+                    response.gc_replicas.push_back(rep);
                 } else if (app->status == app_status::AS_DROPPED) {
                     if (app->expire_second == 0) {
                         ddebug("gpid(%d.%d) on node(%s) is of dropped table, but expire second is "

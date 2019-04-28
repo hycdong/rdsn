@@ -102,6 +102,8 @@ public:
     void on_query_child_state_test();
     void pause_single_partition_split_test();
     void restart_single_partition_split_test();
+    void cancel_app_partition_split_test();
+    void clear_split_flags_test();
     std::shared_ptr<dsn::replication::meta_service> create_mock_meta_svc();
 
     // test for bug found

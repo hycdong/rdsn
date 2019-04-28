@@ -1116,7 +1116,7 @@ void replica::on_register_child_on_meta_reply(
     }
 
     // handle register failed
-    if (ec == ERR_CHILD_DROPPED) {
+    if (ec == ERR_CHILD_DROPPED || ec == ERR_REJECT) {
         dwarn_f("{}: register child({}.{}) failed coz partition split is paused or canceled",
                 name(),
                 request->child_config.pid.get_app_id(),

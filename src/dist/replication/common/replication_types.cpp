@@ -12799,6 +12799,240 @@ void control_single_partition_split_request::printTo(std::ostream& out) const {
 }
 
 
+cancel_app_partition_split_request::~cancel_app_partition_split_request() throw() {
+}
+
+
+void cancel_app_partition_split_request::__set_app_name(const std::string& val) {
+  this->app_name = val;
+}
+
+void cancel_app_partition_split_request::__set_original_partition_count(const int32_t val) {
+  this->original_partition_count = val;
+}
+
+void cancel_app_partition_split_request::__set_is_force(const bool val) {
+  this->is_force = val;
+}
+
+uint32_t cancel_app_partition_split_request::read(::apache::thrift::protocol::TProtocol* iprot) {
+
+  apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+  uint32_t xfer = 0;
+  std::string fname;
+  ::apache::thrift::protocol::TType ftype;
+  int16_t fid;
+
+  xfer += iprot->readStructBegin(fname);
+
+  using ::apache::thrift::protocol::TProtocolException;
+
+
+  while (true)
+  {
+    xfer += iprot->readFieldBegin(fname, ftype, fid);
+    if (ftype == ::apache::thrift::protocol::T_STOP) {
+      break;
+    }
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+          xfer += iprot->readString(this->app_name);
+          this->__isset.app_name = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 2:
+        if (ftype == ::apache::thrift::protocol::T_I32) {
+          xfer += iprot->readI32(this->original_partition_count);
+          this->__isset.original_partition_count = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 3:
+        if (ftype == ::apache::thrift::protocol::T_BOOL) {
+          xfer += iprot->readBool(this->is_force);
+          this->__isset.is_force = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
+    xfer += iprot->readFieldEnd();
+  }
+
+  xfer += iprot->readStructEnd();
+
+  return xfer;
+}
+
+uint32_t cancel_app_partition_split_request::write(::apache::thrift::protocol::TProtocol* oprot) const {
+  uint32_t xfer = 0;
+  apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+  xfer += oprot->writeStructBegin("cancel_app_partition_split_request");
+
+  xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
+  xfer += oprot->writeString(this->app_name);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("original_partition_count", ::apache::thrift::protocol::T_I32, 2);
+  xfer += oprot->writeI32(this->original_partition_count);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("is_force", ::apache::thrift::protocol::T_BOOL, 3);
+  xfer += oprot->writeBool(this->is_force);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldStop();
+  xfer += oprot->writeStructEnd();
+  return xfer;
+}
+
+void swap(cancel_app_partition_split_request &a, cancel_app_partition_split_request &b) {
+  using ::std::swap;
+  swap(a.app_name, b.app_name);
+  swap(a.original_partition_count, b.original_partition_count);
+  swap(a.is_force, b.is_force);
+  swap(a.__isset, b.__isset);
+}
+
+cancel_app_partition_split_request::cancel_app_partition_split_request(const cancel_app_partition_split_request& other578) {
+  app_name = other578.app_name;
+  original_partition_count = other578.original_partition_count;
+  is_force = other578.is_force;
+  __isset = other578.__isset;
+}
+cancel_app_partition_split_request::cancel_app_partition_split_request( cancel_app_partition_split_request&& other579) {
+  app_name = std::move(other579.app_name);
+  original_partition_count = std::move(other579.original_partition_count);
+  is_force = std::move(other579.is_force);
+  __isset = std::move(other579.__isset);
+}
+cancel_app_partition_split_request& cancel_app_partition_split_request::operator=(const cancel_app_partition_split_request& other580) {
+  app_name = other580.app_name;
+  original_partition_count = other580.original_partition_count;
+  is_force = other580.is_force;
+  __isset = other580.__isset;
+  return *this;
+}
+cancel_app_partition_split_request& cancel_app_partition_split_request::operator=(cancel_app_partition_split_request&& other581) {
+  app_name = std::move(other581.app_name);
+  original_partition_count = std::move(other581.original_partition_count);
+  is_force = std::move(other581.is_force);
+  __isset = std::move(other581.__isset);
+  return *this;
+}
+void cancel_app_partition_split_request::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "cancel_app_partition_split_request(";
+  out << "app_name=" << to_string(app_name);
+  out << ", " << "original_partition_count=" << to_string(original_partition_count);
+  out << ", " << "is_force=" << to_string(is_force);
+  out << ")";
+}
+
+
+clear_partition_split_flag_request::~clear_partition_split_flag_request() throw() {
+}
+
+
+void clear_partition_split_flag_request::__set_app_name(const std::string& val) {
+  this->app_name = val;
+}
+
+uint32_t clear_partition_split_flag_request::read(::apache::thrift::protocol::TProtocol* iprot) {
+
+  apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+  uint32_t xfer = 0;
+  std::string fname;
+  ::apache::thrift::protocol::TType ftype;
+  int16_t fid;
+
+  xfer += iprot->readStructBegin(fname);
+
+  using ::apache::thrift::protocol::TProtocolException;
+
+
+  while (true)
+  {
+    xfer += iprot->readFieldBegin(fname, ftype, fid);
+    if (ftype == ::apache::thrift::protocol::T_STOP) {
+      break;
+    }
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+          xfer += iprot->readString(this->app_name);
+          this->__isset.app_name = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
+    xfer += iprot->readFieldEnd();
+  }
+
+  xfer += iprot->readStructEnd();
+
+  return xfer;
+}
+
+uint32_t clear_partition_split_flag_request::write(::apache::thrift::protocol::TProtocol* oprot) const {
+  uint32_t xfer = 0;
+  apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+  xfer += oprot->writeStructBegin("clear_partition_split_flag_request");
+
+  xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
+  xfer += oprot->writeString(this->app_name);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldStop();
+  xfer += oprot->writeStructEnd();
+  return xfer;
+}
+
+void swap(clear_partition_split_flag_request &a, clear_partition_split_flag_request &b) {
+  using ::std::swap;
+  swap(a.app_name, b.app_name);
+  swap(a.__isset, b.__isset);
+}
+
+clear_partition_split_flag_request::clear_partition_split_flag_request(const clear_partition_split_flag_request& other582) {
+  app_name = other582.app_name;
+  __isset = other582.__isset;
+}
+clear_partition_split_flag_request::clear_partition_split_flag_request( clear_partition_split_flag_request&& other583) {
+  app_name = std::move(other583.app_name);
+  __isset = std::move(other583.__isset);
+}
+clear_partition_split_flag_request& clear_partition_split_flag_request::operator=(const clear_partition_split_flag_request& other584) {
+  app_name = other584.app_name;
+  __isset = other584.__isset;
+  return *this;
+}
+clear_partition_split_flag_request& clear_partition_split_flag_request::operator=(clear_partition_split_flag_request&& other585) {
+  app_name = std::move(other585.app_name);
+  __isset = std::move(other585.__isset);
+  return *this;
+}
+void clear_partition_split_flag_request::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "clear_partition_split_flag_request(";
+  out << "app_name=" << to_string(app_name);
+  out << ")";
+}
+
+
 app_partition_split_response::~app_partition_split_response() throw() {
 }
 
@@ -12902,30 +13136,30 @@ void swap(app_partition_split_response &a, app_partition_split_response &b) {
   swap(a.__isset, b.__isset);
 }
 
-app_partition_split_response::app_partition_split_response(const app_partition_split_response& other578) {
-  err = other578.err;
-  app_id = other578.app_id;
-  partition_count = other578.partition_count;
-  __isset = other578.__isset;
+app_partition_split_response::app_partition_split_response(const app_partition_split_response& other586) {
+  err = other586.err;
+  app_id = other586.app_id;
+  partition_count = other586.partition_count;
+  __isset = other586.__isset;
 }
-app_partition_split_response::app_partition_split_response( app_partition_split_response&& other579) {
-  err = std::move(other579.err);
-  app_id = std::move(other579.app_id);
-  partition_count = std::move(other579.partition_count);
-  __isset = std::move(other579.__isset);
+app_partition_split_response::app_partition_split_response( app_partition_split_response&& other587) {
+  err = std::move(other587.err);
+  app_id = std::move(other587.app_id);
+  partition_count = std::move(other587.partition_count);
+  __isset = std::move(other587.__isset);
 }
-app_partition_split_response& app_partition_split_response::operator=(const app_partition_split_response& other580) {
-  err = other580.err;
-  app_id = other580.app_id;
-  partition_count = other580.partition_count;
-  __isset = other580.__isset;
+app_partition_split_response& app_partition_split_response::operator=(const app_partition_split_response& other588) {
+  err = other588.err;
+  app_id = other588.app_id;
+  partition_count = other588.partition_count;
+  __isset = other588.__isset;
   return *this;
 }
-app_partition_split_response& app_partition_split_response::operator=(app_partition_split_response&& other581) {
-  err = std::move(other581.err);
-  app_id = std::move(other581.app_id);
-  partition_count = std::move(other581.partition_count);
-  __isset = std::move(other581.__isset);
+app_partition_split_response& app_partition_split_response::operator=(app_partition_split_response&& other589) {
+  err = std::move(other589.err);
+  app_id = std::move(other589.app_id);
+  partition_count = std::move(other589.partition_count);
+  __isset = std::move(other589.__isset);
   return *this;
 }
 void app_partition_split_response::printTo(std::ostream& out) const {
@@ -13058,34 +13292,34 @@ void swap(notify_catch_up_request &a, notify_catch_up_request &b) {
   swap(a.__isset, b.__isset);
 }
 
-notify_catch_up_request::notify_catch_up_request(const notify_catch_up_request& other582) {
-  primary_parent_gpid = other582.primary_parent_gpid;
-  child_gpid = other582.child_gpid;
-  child_ballot = other582.child_ballot;
-  child_address = other582.child_address;
-  __isset = other582.__isset;
+notify_catch_up_request::notify_catch_up_request(const notify_catch_up_request& other590) {
+  primary_parent_gpid = other590.primary_parent_gpid;
+  child_gpid = other590.child_gpid;
+  child_ballot = other590.child_ballot;
+  child_address = other590.child_address;
+  __isset = other590.__isset;
 }
-notify_catch_up_request::notify_catch_up_request( notify_catch_up_request&& other583) {
-  primary_parent_gpid = std::move(other583.primary_parent_gpid);
-  child_gpid = std::move(other583.child_gpid);
-  child_ballot = std::move(other583.child_ballot);
-  child_address = std::move(other583.child_address);
-  __isset = std::move(other583.__isset);
+notify_catch_up_request::notify_catch_up_request( notify_catch_up_request&& other591) {
+  primary_parent_gpid = std::move(other591.primary_parent_gpid);
+  child_gpid = std::move(other591.child_gpid);
+  child_ballot = std::move(other591.child_ballot);
+  child_address = std::move(other591.child_address);
+  __isset = std::move(other591.__isset);
 }
-notify_catch_up_request& notify_catch_up_request::operator=(const notify_catch_up_request& other584) {
-  primary_parent_gpid = other584.primary_parent_gpid;
-  child_gpid = other584.child_gpid;
-  child_ballot = other584.child_ballot;
-  child_address = other584.child_address;
-  __isset = other584.__isset;
+notify_catch_up_request& notify_catch_up_request::operator=(const notify_catch_up_request& other592) {
+  primary_parent_gpid = other592.primary_parent_gpid;
+  child_gpid = other592.child_gpid;
+  child_ballot = other592.child_ballot;
+  child_address = other592.child_address;
+  __isset = other592.__isset;
   return *this;
 }
-notify_catch_up_request& notify_catch_up_request::operator=(notify_catch_up_request&& other585) {
-  primary_parent_gpid = std::move(other585.primary_parent_gpid);
-  child_gpid = std::move(other585.child_gpid);
-  child_ballot = std::move(other585.child_ballot);
-  child_address = std::move(other585.child_address);
-  __isset = std::move(other585.__isset);
+notify_catch_up_request& notify_catch_up_request::operator=(notify_catch_up_request&& other593) {
+  primary_parent_gpid = std::move(other593.primary_parent_gpid);
+  child_gpid = std::move(other593.child_gpid);
+  child_ballot = std::move(other593.child_ballot);
+  child_address = std::move(other593.child_address);
+  __isset = std::move(other593.__isset);
   return *this;
 }
 void notify_catch_up_request::printTo(std::ostream& out) const {
@@ -13168,22 +13402,22 @@ void swap(notify_cacth_up_response &a, notify_cacth_up_response &b) {
   swap(a.__isset, b.__isset);
 }
 
-notify_cacth_up_response::notify_cacth_up_response(const notify_cacth_up_response& other586) {
-  err = other586.err;
-  __isset = other586.__isset;
+notify_cacth_up_response::notify_cacth_up_response(const notify_cacth_up_response& other594) {
+  err = other594.err;
+  __isset = other594.__isset;
 }
-notify_cacth_up_response::notify_cacth_up_response( notify_cacth_up_response&& other587) {
-  err = std::move(other587.err);
-  __isset = std::move(other587.__isset);
+notify_cacth_up_response::notify_cacth_up_response( notify_cacth_up_response&& other595) {
+  err = std::move(other595.err);
+  __isset = std::move(other595.__isset);
 }
-notify_cacth_up_response& notify_cacth_up_response::operator=(const notify_cacth_up_response& other588) {
-  err = other588.err;
-  __isset = other588.__isset;
+notify_cacth_up_response& notify_cacth_up_response::operator=(const notify_cacth_up_response& other596) {
+  err = other596.err;
+  __isset = other596.__isset;
   return *this;
 }
-notify_cacth_up_response& notify_cacth_up_response::operator=(notify_cacth_up_response&& other589) {
-  err = std::move(other589.err);
-  __isset = std::move(other589.__isset);
+notify_cacth_up_response& notify_cacth_up_response::operator=(notify_cacth_up_response&& other597) {
+  err = std::move(other597.err);
+  __isset = std::move(other597.__isset);
   return *this;
 }
 void notify_cacth_up_response::printTo(std::ostream& out) const {
@@ -13314,34 +13548,34 @@ void swap(update_group_partition_count_request &a, update_group_partition_count_
   swap(a.__isset, b.__isset);
 }
 
-update_group_partition_count_request::update_group_partition_count_request(const update_group_partition_count_request& other590) {
-  app = other590.app;
-  target_address = other590.target_address;
-  config = other590.config;
-  last_committed_decree = other590.last_committed_decree;
-  __isset = other590.__isset;
+update_group_partition_count_request::update_group_partition_count_request(const update_group_partition_count_request& other598) {
+  app = other598.app;
+  target_address = other598.target_address;
+  config = other598.config;
+  last_committed_decree = other598.last_committed_decree;
+  __isset = other598.__isset;
 }
-update_group_partition_count_request::update_group_partition_count_request( update_group_partition_count_request&& other591) {
-  app = std::move(other591.app);
-  target_address = std::move(other591.target_address);
-  config = std::move(other591.config);
-  last_committed_decree = std::move(other591.last_committed_decree);
-  __isset = std::move(other591.__isset);
+update_group_partition_count_request::update_group_partition_count_request( update_group_partition_count_request&& other599) {
+  app = std::move(other599.app);
+  target_address = std::move(other599.target_address);
+  config = std::move(other599.config);
+  last_committed_decree = std::move(other599.last_committed_decree);
+  __isset = std::move(other599.__isset);
 }
-update_group_partition_count_request& update_group_partition_count_request::operator=(const update_group_partition_count_request& other592) {
-  app = other592.app;
-  target_address = other592.target_address;
-  config = other592.config;
-  last_committed_decree = other592.last_committed_decree;
-  __isset = other592.__isset;
+update_group_partition_count_request& update_group_partition_count_request::operator=(const update_group_partition_count_request& other600) {
+  app = other600.app;
+  target_address = other600.target_address;
+  config = other600.config;
+  last_committed_decree = other600.last_committed_decree;
+  __isset = other600.__isset;
   return *this;
 }
-update_group_partition_count_request& update_group_partition_count_request::operator=(update_group_partition_count_request&& other593) {
-  app = std::move(other593.app);
-  target_address = std::move(other593.target_address);
-  config = std::move(other593.config);
-  last_committed_decree = std::move(other593.last_committed_decree);
-  __isset = std::move(other593.__isset);
+update_group_partition_count_request& update_group_partition_count_request::operator=(update_group_partition_count_request&& other601) {
+  app = std::move(other601.app);
+  target_address = std::move(other601.target_address);
+  config = std::move(other601.config);
+  last_committed_decree = std::move(other601.last_committed_decree);
+  __isset = std::move(other601.__isset);
   return *this;
 }
 void update_group_partition_count_request::printTo(std::ostream& out) const {
@@ -13424,22 +13658,22 @@ void swap(update_group_partition_count_response &a, update_group_partition_count
   swap(a.__isset, b.__isset);
 }
 
-update_group_partition_count_response::update_group_partition_count_response(const update_group_partition_count_response& other594) {
-  err = other594.err;
-  __isset = other594.__isset;
+update_group_partition_count_response::update_group_partition_count_response(const update_group_partition_count_response& other602) {
+  err = other602.err;
+  __isset = other602.__isset;
 }
-update_group_partition_count_response::update_group_partition_count_response( update_group_partition_count_response&& other595) {
-  err = std::move(other595.err);
-  __isset = std::move(other595.__isset);
+update_group_partition_count_response::update_group_partition_count_response( update_group_partition_count_response&& other603) {
+  err = std::move(other603.err);
+  __isset = std::move(other603.__isset);
 }
-update_group_partition_count_response& update_group_partition_count_response::operator=(const update_group_partition_count_response& other596) {
-  err = other596.err;
-  __isset = other596.__isset;
+update_group_partition_count_response& update_group_partition_count_response::operator=(const update_group_partition_count_response& other604) {
+  err = other604.err;
+  __isset = other604.__isset;
   return *this;
 }
-update_group_partition_count_response& update_group_partition_count_response::operator=(update_group_partition_count_response&& other597) {
-  err = std::move(other597.err);
-  __isset = std::move(other597.__isset);
+update_group_partition_count_response& update_group_partition_count_response::operator=(update_group_partition_count_response&& other605) {
+  err = std::move(other605.err);
+  __isset = std::move(other605.__isset);
   return *this;
 }
 void update_group_partition_count_response::printTo(std::ostream& out) const {
@@ -13570,34 +13804,34 @@ void swap(register_child_request &a, register_child_request &b) {
   swap(a.__isset, b.__isset);
 }
 
-register_child_request::register_child_request(const register_child_request& other598) {
-  app = other598.app;
-  parent_config = other598.parent_config;
-  child_config = other598.child_config;
-  primary_address = other598.primary_address;
-  __isset = other598.__isset;
+register_child_request::register_child_request(const register_child_request& other606) {
+  app = other606.app;
+  parent_config = other606.parent_config;
+  child_config = other606.child_config;
+  primary_address = other606.primary_address;
+  __isset = other606.__isset;
 }
-register_child_request::register_child_request( register_child_request&& other599) {
-  app = std::move(other599.app);
-  parent_config = std::move(other599.parent_config);
-  child_config = std::move(other599.child_config);
-  primary_address = std::move(other599.primary_address);
-  __isset = std::move(other599.__isset);
+register_child_request::register_child_request( register_child_request&& other607) {
+  app = std::move(other607.app);
+  parent_config = std::move(other607.parent_config);
+  child_config = std::move(other607.child_config);
+  primary_address = std::move(other607.primary_address);
+  __isset = std::move(other607.__isset);
 }
-register_child_request& register_child_request::operator=(const register_child_request& other600) {
-  app = other600.app;
-  parent_config = other600.parent_config;
-  child_config = other600.child_config;
-  primary_address = other600.primary_address;
-  __isset = other600.__isset;
+register_child_request& register_child_request::operator=(const register_child_request& other608) {
+  app = other608.app;
+  parent_config = other608.parent_config;
+  child_config = other608.child_config;
+  primary_address = other608.primary_address;
+  __isset = other608.__isset;
   return *this;
 }
-register_child_request& register_child_request::operator=(register_child_request&& other601) {
-  app = std::move(other601.app);
-  parent_config = std::move(other601.parent_config);
-  child_config = std::move(other601.child_config);
-  primary_address = std::move(other601.primary_address);
-  __isset = std::move(other601.__isset);
+register_child_request& register_child_request::operator=(register_child_request&& other609) {
+  app = std::move(other609.app);
+  parent_config = std::move(other609.parent_config);
+  child_config = std::move(other609.child_config);
+  primary_address = std::move(other609.primary_address);
+  __isset = std::move(other609.__isset);
   return *this;
 }
 void register_child_request::printTo(std::ostream& out) const {
@@ -13731,34 +13965,34 @@ void swap(register_child_response &a, register_child_response &b) {
   swap(a.__isset, b.__isset);
 }
 
-register_child_response::register_child_response(const register_child_response& other602) {
-  err = other602.err;
-  app = other602.app;
-  parent_config = other602.parent_config;
-  child_config = other602.child_config;
-  __isset = other602.__isset;
+register_child_response::register_child_response(const register_child_response& other610) {
+  err = other610.err;
+  app = other610.app;
+  parent_config = other610.parent_config;
+  child_config = other610.child_config;
+  __isset = other610.__isset;
 }
-register_child_response::register_child_response( register_child_response&& other603) {
-  err = std::move(other603.err);
-  app = std::move(other603.app);
-  parent_config = std::move(other603.parent_config);
-  child_config = std::move(other603.child_config);
-  __isset = std::move(other603.__isset);
+register_child_response::register_child_response( register_child_response&& other611) {
+  err = std::move(other611.err);
+  app = std::move(other611.app);
+  parent_config = std::move(other611.parent_config);
+  child_config = std::move(other611.child_config);
+  __isset = std::move(other611.__isset);
 }
-register_child_response& register_child_response::operator=(const register_child_response& other604) {
-  err = other604.err;
-  app = other604.app;
-  parent_config = other604.parent_config;
-  child_config = other604.child_config;
-  __isset = other604.__isset;
+register_child_response& register_child_response::operator=(const register_child_response& other612) {
+  err = other612.err;
+  app = other612.app;
+  parent_config = other612.parent_config;
+  child_config = other612.child_config;
+  __isset = other612.__isset;
   return *this;
 }
-register_child_response& register_child_response::operator=(register_child_response&& other605) {
-  err = std::move(other605.err);
-  app = std::move(other605.app);
-  parent_config = std::move(other605.parent_config);
-  child_config = std::move(other605.child_config);
-  __isset = std::move(other605.__isset);
+register_child_response& register_child_response::operator=(register_child_response&& other613) {
+  err = std::move(other613.err);
+  app = std::move(other613.app);
+  parent_config = std::move(other613.parent_config);
+  child_config = std::move(other613.child_config);
+  __isset = std::move(other613.__isset);
   return *this;
 }
 void register_child_response::printTo(std::ostream& out) const {
@@ -13841,22 +14075,22 @@ void swap(query_child_state_request &a, query_child_state_request &b) {
   swap(a.__isset, b.__isset);
 }
 
-query_child_state_request::query_child_state_request(const query_child_state_request& other606) {
-  parent_gpid = other606.parent_gpid;
-  __isset = other606.__isset;
+query_child_state_request::query_child_state_request(const query_child_state_request& other614) {
+  parent_gpid = other614.parent_gpid;
+  __isset = other614.__isset;
 }
-query_child_state_request::query_child_state_request( query_child_state_request&& other607) {
-  parent_gpid = std::move(other607.parent_gpid);
-  __isset = std::move(other607.__isset);
+query_child_state_request::query_child_state_request( query_child_state_request&& other615) {
+  parent_gpid = std::move(other615.parent_gpid);
+  __isset = std::move(other615.__isset);
 }
-query_child_state_request& query_child_state_request::operator=(const query_child_state_request& other608) {
-  parent_gpid = other608.parent_gpid;
-  __isset = other608.__isset;
+query_child_state_request& query_child_state_request::operator=(const query_child_state_request& other616) {
+  parent_gpid = other616.parent_gpid;
+  __isset = other616.__isset;
   return *this;
 }
-query_child_state_request& query_child_state_request::operator=(query_child_state_request&& other609) {
-  parent_gpid = std::move(other609.parent_gpid);
-  __isset = std::move(other609.__isset);
+query_child_state_request& query_child_state_request::operator=(query_child_state_request&& other617) {
+  parent_gpid = std::move(other617.parent_gpid);
+  __isset = std::move(other617.__isset);
   return *this;
 }
 void query_child_state_request::printTo(std::ostream& out) const {
@@ -13970,30 +14204,30 @@ void swap(query_child_state_response &a, query_child_state_response &b) {
   swap(a.__isset, b.__isset);
 }
 
-query_child_state_response::query_child_state_response(const query_child_state_response& other610) {
-  err = other610.err;
-  partition_count = other610.partition_count;
-  ballot = other610.ballot;
-  __isset = other610.__isset;
+query_child_state_response::query_child_state_response(const query_child_state_response& other618) {
+  err = other618.err;
+  partition_count = other618.partition_count;
+  ballot = other618.ballot;
+  __isset = other618.__isset;
 }
-query_child_state_response::query_child_state_response( query_child_state_response&& other611) {
-  err = std::move(other611.err);
-  partition_count = std::move(other611.partition_count);
-  ballot = std::move(other611.ballot);
-  __isset = std::move(other611.__isset);
+query_child_state_response::query_child_state_response( query_child_state_response&& other619) {
+  err = std::move(other619.err);
+  partition_count = std::move(other619.partition_count);
+  ballot = std::move(other619.ballot);
+  __isset = std::move(other619.__isset);
 }
-query_child_state_response& query_child_state_response::operator=(const query_child_state_response& other612) {
-  err = other612.err;
-  partition_count = other612.partition_count;
-  ballot = other612.ballot;
-  __isset = other612.__isset;
+query_child_state_response& query_child_state_response::operator=(const query_child_state_response& other620) {
+  err = other620.err;
+  partition_count = other620.partition_count;
+  ballot = other620.ballot;
+  __isset = other620.__isset;
   return *this;
 }
-query_child_state_response& query_child_state_response::operator=(query_child_state_response&& other613) {
-  err = std::move(other613.err);
-  partition_count = std::move(other613.partition_count);
-  ballot = std::move(other613.ballot);
-  __isset = std::move(other613.__isset);
+query_child_state_response& query_child_state_response::operator=(query_child_state_response&& other621) {
+  err = std::move(other621.err);
+  partition_count = std::move(other621.partition_count);
+  ballot = std::move(other621.ballot);
+  __isset = std::move(other621.__isset);
   return *this;
 }
 void query_child_state_response::printTo(std::ostream& out) const {

@@ -1102,7 +1102,23 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         primary_parent->_child_gpid = child_gpid;
     }
 
-    std::cout << "case5. succeed case" << std::endl;
+    std::cout << "case5. split canceled" << std::endl;
+    {
+        response->err = dsn::ERR_REJECT;
+
+        primary_parent->on_register_child_on_meta_reply(ec, request, response);
+        primary_parent->tracker()->wait_outstanding_tasks();
+
+        ASSERT_EQ(nullptr, primary_parent->_primary_states.register_child_task);
+        ASSERT_TRUE(primary_parent->_primary_states.is_sync_to_child);
+        ASSERT_EQ(0, primary_parent->_child_gpid.get_app_id());
+
+        response->err = dsn::ERR_OK;
+        primary_parent->_child_gpid = child_gpid;
+    }
+
+
+    std::cout << "case6. succeed case" << std::endl;
     {
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
         primary_parent->tracker()->wait_outstanding_tasks();
@@ -1148,10 +1164,9 @@ void replication_service_test_app::check_partition_state_test()
 
     std::cout << "case3. cancel split while no child register" << std::endl;
     {
-        config.partition_flags |= pc_flags::child_dropped;
+        replica->_child_gpid = child_gpid;
         replica->check_partition_state(partition_count, config);
         ASSERT_EQ(0, replica->_child_gpid.get_app_id());
-        config.partition_flags &= (~pc_flags::child_dropped);
     }
 
     std::cout << "case4. pause split" << std::endl;
@@ -1162,13 +1177,29 @@ void replication_service_test_app::check_partition_state_test()
         config.partition_flags &= (~pc_flags::child_dropped);
     }
 
-    std::cout << "case5. pass check for partition split" << std::endl;
+    mock_funcs["update_group_partition_count"] = nullptr;
+
+    std::cout << "case5. cancel split with parent partition" << std::endl;
+    {
+        replica->check_partition_state(partition_count / 2, config);
+    }
+
+    std::cout << "case6. pass check for partition split" << std::endl;
     {
         replica->check_partition_state(partition_count * 2, config);
         ASSERT_EQ(-1, replica->_partition_version);
     }
 
+    std::cout << "case7. cancel split with child partition" << std::endl;
+    {
+        auto child_replica = stub->generate_replica(child_gpid, partition_status::PS_PRIMARY);
+        stub->replicas[child_gpid] = child_replica;
+        child_replica->check_partition_state(partition_count / 2, config);
+        ASSERT_EQ(child_replica->status(), partition_status::PS_ERROR);
+    }
+
     mock_funcs.erase("query_child_state");
+    mock_funcs.erase("update_group_partition_count");
 }
 
 void replication_service_test_app::query_child_state_test()

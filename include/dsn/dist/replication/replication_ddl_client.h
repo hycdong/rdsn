@@ -188,6 +188,10 @@ public:
     dsn::error_code control_single_partition_split(const std::string &app_name,
                                                    int parent_partition_index,
                                                    bool is_pause_split);
+    dsn::error_code cancel_app_partition_split(const std::string &app_name,
+                                               int original_partition_count,
+                                               bool is_force);
+    dsn::error_code clear_app_split_flags(const std::string &app_name);
 
 private:
     bool static valid_app_char(int c);

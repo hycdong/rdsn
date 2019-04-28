@@ -1135,7 +1135,7 @@ void replica::replay_prepare_list()
 void replica::check_partition_state(int partition_count, const partition_configuration &config)
 {
     if (partition_count == _app_info.partition_count) {
-        if ((config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped) {
+        if (_child_gpid.get_app_id() > 0) {
             ddebug_f(
                 "{} app {}(partition count={}) might execute partition split and admin cancel it, "
                 "so clear child_gpid({}.{})",
@@ -1144,14 +1144,12 @@ void replica::check_partition_state(int partition_count, const partition_configu
                 partition_count,
                 _child_gpid.get_app_id(),
                 _child_gpid.get_partition_index());
-            if (_child_gpid.get_app_id() > 0) {
-                _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
-                               _child_gpid,
-                               std::bind(&replica::handle_splitting_error,
-                                         std::placeholders::_1,
-                                         "admin cancel partition split"));
-                _child_gpid.set_app_id(0);
-            }
+            _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
+                           _child_gpid,
+                           std::bind(&replica::handle_splitting_error,
+                                     std::placeholders::_1,
+                                     "admin cancel partition split"));
+            _child_gpid.set_app_id(0);
         }
         return;
     }
@@ -1159,7 +1157,7 @@ void replica::check_partition_state(int partition_count, const partition_configu
     if (partition_count == _app_info.partition_count * 2 &&
         ((config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped)) {
         ddebug_f("{} app {}(local partition count={}, remote partition count={}) might execute "
-                 "partition split partition split and admin pause current partition, so clear "
+                 "partition split and admin pause current partition split, so clear "
                  "child_gpid({}.{})",
                  name(),
                  _app_info.app_name,
@@ -1174,6 +1172,33 @@ void replica::check_partition_state(int partition_count, const partition_configu
                                      std::placeholders::_1,
                                      "admin pause single partition split"));
             _child_gpid.set_app_id(0);
+        }
+        return;
+    }
+
+    if (partition_count * 2 == _app_info.partition_count) {
+        if (get_gpid().get_partition_index() >= partition_count) {
+            ddebug_f("{} app{} remote partition count={}, partition[{}] finish split before, but "
+                     "administrator force cancel whole table partition split, remove this useless "
+                     "child partition",
+                     name(),
+                     _app_info.app_name,
+                     partition_count,
+                     get_gpid().get_partition_index() - partition_count);
+            update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
+        } else {
+            ddebug_f(
+                "{} app {}(local partition count={}, remote partition count={}) finish current "
+                "partition split, but administrator cancel whole table split, so reset "
+                "partition_count({}) and partition_version({})",
+                name(),
+                _app_info.app_name,
+                _app_info.partition_count,
+                partition_count,
+                partition_count,
+                partition_count - 1);
+
+            update_group_partition_count(partition_count, false);
         }
         return;
     }

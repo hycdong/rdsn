@@ -1681,5 +1681,70 @@ dsn::error_code replication_ddl_client::control_single_partition_split(const std
     return resp.err;
 }
 
+dsn::error_code replication_ddl_client::cancel_app_partition_split(const std::string &app_name,
+                                                                   int original_partition_count,
+                                                                   bool is_force)
+{
+    if (app_name.empty() ||
+        !std::all_of(app_name.cbegin(),
+                     app_name.cend(),
+                     (bool (*)(int))replication_ddl_client::valid_app_char)) {
+        fmt::print("Failed to cancel partition split, app_name {} is invalid\n", app_name);
+        return ERR_INVALID_PARAMETERS;
+    }
+
+    auto req = std::make_shared<cancel_app_partition_split_request>();
+    req->app_name = app_name;
+    req->original_partition_count = original_partition_count;
+    req->is_force = is_force;
+
+    auto resp_task = request_meta<cancel_app_partition_split_request>(RPC_CM_CANCEL_APP_PARTITION_SPLIT, req);
+    resp_task->wait();
+    if(resp_task->error() != dsn::ERR_OK) {
+        return resp_task->error();
+    }
+
+    app_partition_split_response resp;
+    dsn::unmarshall(resp_task->get_response(), resp);
+    if(resp.err == ERR_INVALID_PARAMETERS){
+        fmt::print("wrong partition count {}, original partition count should be {}\n",
+                   original_partition_count,
+                   resp.partition_count / 2);
+    } else if(resp.err == ERR_REJECT){
+        fmt::print("some child partitions of app {} had been registered, can not cancel split without force\n",
+                   app_name);
+    } else if(resp.err == ERR_CHILD_REGISTERED){
+        fmt::print("app {} finish partition split, can not cancel it\n", app_name);
+
+    }
+
+    return resp.err;
+}
+
+dsn::error_code replication_ddl_client::clear_app_split_flags(const std::string &app_name)
+{
+    if (app_name.empty() ||
+        !std::all_of(app_name.cbegin(),
+                     app_name.cend(),
+                     (bool (*)(int))replication_ddl_client::valid_app_char)) {
+        fmt::print("Failed to cancel partition split, app_name {} is invalid\n", app_name);
+        return ERR_INVALID_PARAMETERS;
+    }
+
+    auto req = std::make_shared<clear_partition_split_flag_request>();
+    req->app_name = app_name;
+
+    auto resp_task = request_meta<clear_partition_split_flag_request>(RPC_CM_CLEAR_PARTITION_SPLIT_FLAG, req);
+    resp_task->wait();
+    if(resp_task->error() != dsn::ERR_OK){
+        return resp_task->error();
+    }
+
+    app_partition_split_response resp;
+    dsn::unmarshall(resp_task->get_response(), resp);
+
+    return resp.err;
+}
+
 } // namespace replication
 } // namespace dsn

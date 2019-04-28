@@ -47,6 +47,15 @@ public:
                                             bool is_pause,
                                             control_single_partition_split_rpc rpc);
 
+    // client -> meta to cancel app split
+    void cancel_app_partition_split(cancel_app_partition_split_rpc rpc);
+    void do_cancel_app_partition_split(std::shared_ptr<app_state> app, cancel_app_partition_split_rpc rpc);
+    void remove_child_partition(gpid pid);
+
+    // client -> meta to clear partition split flag
+    void clear_partition_split_flag(clear_partition_split_flag_rpc rpc);
+    void do_clear_flag(std::shared_ptr<app_state> app, int pidx, clear_partition_split_flag_rpc rpc);
+
     // primary replica -> meta to query child partition configuration
     void on_query_child_state(query_child_state_rpc rpc);
 
@@ -54,12 +63,13 @@ public:
     void register_child_on_meta(register_child_rpc rpc);
 
     // meta -> remote storage to update child replica config
-    dsn::task_ptr add_child_on_remote_storage(register_child_rpc rpc);
-    void on_add_child_on_remote_storage_reply(error_code ec, register_child_rpc rpc);
+    dsn::task_ptr add_child_on_remote_storage(register_child_rpc rpc, bool create_new);
+    void on_add_child_on_remote_storage_reply(error_code ec, register_child_rpc rpc, bool create_new);
 
 private:
     meta_service *_meta_svc;
     server_state *_state;
+    std::atomic<int> _need_clear_flag_count;
 
     zrwlock_nr &app_lock() const { return _state->_lock; }
 };
