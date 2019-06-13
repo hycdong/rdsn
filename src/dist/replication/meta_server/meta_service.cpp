@@ -47,6 +47,7 @@
 #include "server_state.h"
 #include "meta_server_failure_detector.h"
 #include "server_load_balancer.h"
+#include "meta_bulk_load_service.h"
 
 namespace dsn {
 namespace replication {
@@ -272,6 +273,8 @@ error_code meta_service::start()
 
     _state->register_cli_commands();
 
+    _bulk_load_svc = std::make_shared<bulk_load_service>(this);
+
     start_service();
 
     ddebug("start meta_service succeed");
@@ -320,6 +323,8 @@ void meta_service::register_rpc_handlers()
         RPC_CM_UPDATE_APP_ENV, "update_app_env(set/del/clear)", &meta_service::update_app_env);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_DDD_DIAGNOSE, "ddd_diagnose", &meta_service::ddd_diagnose);
+    register_rpc_handler_with_rpc_holder(
+        RPC_CM_START_BULK_LOAD, "start_bulk_load", &meta_service::on_start_bulk_load);
 }
 
 int meta_service::check_leader(dsn::message_ex *req, dsn::rpc_address *forward_address)
@@ -777,5 +782,14 @@ void meta_service::ddd_diagnose(ddd_diagnose_rpc rpc)
     get_balancer()->get_ddd_partitions(rpc.request().pid, response.partitions);
     response.err = ERR_OK;
 }
+
+void meta_service::on_start_bulk_load(start_bulk_load_rpc rpc)
+{
+    auto &response = rpc.response();
+    RPC_CHECK_STATUS(rpc.dsn_request(), response);
+
+    // TODO(heyuchen): add implementation of start_bulk_load
 }
-}
+
+} // namespace replication
+} // namespace dsn

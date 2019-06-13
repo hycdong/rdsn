@@ -3,18 +3,26 @@ include "dsn.thrift"
 
 namespace cpp dsn
 
-struct partition_configuration
+// for server supporting bulk load
+enum bulk_load_status
 {
-    1:dsn.gpid               pid;
-    2:i64                    ballot;
-    3:i32                    max_replica_count;
-    4:dsn.rpc_address        primary;
-    5:list<dsn.rpc_address>  secondaries;
-    6:list<dsn.rpc_address>  last_drops;
-    7:i64                    last_committed_decree;
-    8:i32                    partition_flags;
+    BS_INVALID,
+    BS_WRITING
 }
 
+struct partition_configuration
+{
+    1:dsn.gpid              pid;
+    2:i64                   ballot;
+    3:i32                   max_replica_count;
+    4:dsn.rpc_address       primary;
+    5:list<dsn.rpc_address> secondaries;
+    6:list<dsn.rpc_address> last_drops;
+    7:i64                   last_committed_decree;
+    8:i32                   partition_flags;
+    // for server supporting bulk load
+    9:bulk_load_status      load_status = bulk_load_status.BS_INVALID;
+}
 
 struct configuration_query_by_index_request
 {

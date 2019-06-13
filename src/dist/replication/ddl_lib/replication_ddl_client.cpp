@@ -1577,5 +1577,27 @@ replication_ddl_client::ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &
 
     return dsn::ERR_OK;
 }
+
+dsn::error_code replication_ddl_client::start_bulk_load(const std::string &app_name,
+                                                        const std::string &cluster_name,
+                                                        const std::string &file_provider_type)
+{
+    std::shared_ptr<start_bulk_load_request> req(new start_bulk_load_request());
+    req->app_name = app_name;
+    req->cluster_name = cluster_name;
+    req->file_provider_type = file_provider_type;
+
+    auto resp_task = request_meta<start_bulk_load_request>(RPC_CM_START_BULK_LOAD, req);
+    resp_task->wait();
+
+    if (resp_task->error() != dsn::ERR_OK) {
+        return resp_task->error();
+    }
+
+    start_bulk_load_response resp;
+    dsn::unmarshall(resp_task->get_response(), resp);
+
+    return resp.err;
+}
 }
 } // namespace

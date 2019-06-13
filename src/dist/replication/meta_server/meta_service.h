@@ -47,6 +47,7 @@
 #include "dist/replication/meta_server/meta_backup_service.h"
 #include "dist/replication/meta_server/meta_state_service_utils.h"
 #include "dist/replication/common/block_service_manager.h"
+//#include "dist/replication/meta_server/meta_bulk_load_service.h"
 
 class meta_service_test_app;
 namespace dsn {
@@ -56,6 +57,7 @@ class server_state;
 class meta_server_failure_detector;
 class server_load_balancer;
 class replication_checker;
+class bulk_load_service;
 namespace test {
 class test_checker;
 }
@@ -65,6 +67,9 @@ DEFINE_TASK_CODE(LPC_DEFAULT_CALLBACK, TASK_PRIORITY_COMMON, dsn::THREAD_POOL_DE
 typedef rpc_holder<configuration_update_app_env_request, configuration_update_app_env_response>
     app_env_rpc;
 typedef rpc_holder<ddd_diagnose_request, ddd_diagnose_response> ddd_diagnose_rpc;
+
+// TODO(heyuchen): handle rpc_holder
+typedef rpc_holder<start_bulk_load_request, start_bulk_load_response> start_bulk_load_rpc;
 
 class meta_service : public serverlet<meta_service>
 {
@@ -167,6 +172,9 @@ private:
     void on_report_restore_status(dsn::message_ex *req);
     void on_query_restore_status(dsn::message_ex *req);
 
+    // bulk load
+    void on_start_bulk_load(start_bulk_load_rpc rpc);
+
     // common routines
     // ret:
     //   1. the meta is leader
@@ -193,6 +201,8 @@ private:
 
     std::shared_ptr<server_load_balancer> _balancer;
     std::shared_ptr<backup_service> _backup_handler;
+
+    std::shared_ptr<bulk_load_service> _bulk_load_svc;
 
     // handle all the block filesystems for current meta service
     // (in other words, current service node)

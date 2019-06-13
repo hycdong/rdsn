@@ -174,6 +174,10 @@ public:
 
     dsn::error_code ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &ddd_partitions);
 
+    dsn::error_code start_bulk_load(const std::string &app_name,
+                                    const std::string &cluster_name,
+                                    const std::string &file_provider_type);
+
 private:
     bool static valid_app_char(int c);
 

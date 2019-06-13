@@ -740,6 +740,23 @@ struct ddd_diagnose_response
     2:list<ddd_partition_info> partitions;
 }
 
+
+// bulk load structures
+
+// client -> meta start bulk load, including downloading sst files and ingest them
+struct start_bulk_load_request
+{
+    1:string        app_name;
+    2:string        cluster_name;
+    3:string        file_provider_type;
+}
+
+struct start_bulk_load_response
+{
+    1:dsn.error_code        err;
+}
+
+
 /*
 service replica_s
 {
