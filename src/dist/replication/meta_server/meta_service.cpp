@@ -788,7 +788,15 @@ void meta_service::on_start_bulk_load(start_bulk_load_rpc rpc)
     auto &response = rpc.response();
     RPC_CHECK_STATUS(rpc.dsn_request(), response);
 
-    // TODO(heyuchen): add implementation of start_bulk_load
+    if (_bulk_load_svc == nullptr) {
+        derror("meta doesn't support bulk load service");
+        response.err = ERR_SERVICE_NOT_ACTIVE;
+    } else {
+        tasking::enqueue(
+            LPC_DEFAULT_CALLBACK,
+            nullptr,
+            std::bind(&bulk_load_service::on_start_bulk_load, _bulk_load_svc.get(), rpc));
+    }
 }
 
 } // namespace replication

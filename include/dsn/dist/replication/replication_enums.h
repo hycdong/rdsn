@@ -64,4 +64,8 @@ ENUM_BEGIN2(replication::node_status::type, node_status, replication::node_statu
 ENUM_REG(replication::node_status::NS_ALIVE)
 ENUM_REG(replication::node_status::NS_UNALIVE)
 ENUM_END2(replication::node_status::type, node_status)
+
+// TODO(heyuchen): complete it
+ENUM_BEGIN2(bulk_load_status::type, bulk_load_status, bulk_load_status::BS_INVALID)
+ENUM_END2(bulk_load_status::type, bulk_load_status)
 }

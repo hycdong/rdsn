@@ -282,6 +282,10 @@ struct restore_state
     restore_state() : restore_status(dsn::ERR_OK), progress(0), reason() {}
 };
 
+struct meta_bulk_load_states
+{
+};
+
 class app_state;
 class app_state_helper
 {

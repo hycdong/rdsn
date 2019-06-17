@@ -7,7 +7,7 @@ namespace cpp dsn
 enum bulk_load_status
 {
     BS_INVALID,
-    BS_WRITING
+    BS_DOWNLOADING,
 }
 
 struct partition_configuration

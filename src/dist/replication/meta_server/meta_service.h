@@ -99,6 +99,8 @@ public:
         return level;
     }
 
+    void set_function_level(meta_function_level::type level) { _function_level.store(level); }
+
     template <typename TResponse>
     void reply_data(dsn::message_ex *request, const TResponse &data)
     {
