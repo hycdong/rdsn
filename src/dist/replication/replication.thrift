@@ -742,6 +742,10 @@ struct ddd_diagnose_response
 
 
 // bulk load structures
+struct partition_bulk_load_info
+{
+    1:dsn.layer2.bulk_load_status  status;
+}
 
 // client -> meta start bulk load, including downloading sst files and ingest them
 struct start_bulk_load_request

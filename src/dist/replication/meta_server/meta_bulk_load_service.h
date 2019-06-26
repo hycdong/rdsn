@@ -32,23 +32,26 @@
 namespace dsn {
 namespace replication {
 
-// class meta_service;
-// class server_state;
-
 class bulk_load_service
 {
 public:
     explicit bulk_load_service(meta_service *meta_svc);
 
-    // client -> meta server
+    // client -> meta server to start bulk load
     void on_start_bulk_load(start_bulk_load_rpc rpc);
-    // void update_bulk_load_status_on_remote_storage(std::shared_ptr<app_state> &app, int pidx);
+
+    void update_blstatus_downloading_on_remote_storage(std::shared_ptr<app_state> app,
+                                                       start_bulk_load_rpc rpc);
+    void create_bulk_load_folder_on_remote_storage();
+    void update_partition_blstatus_downloading(std::shared_ptr<app_state> app,
+                                               int pidx,
+                                               start_bulk_load_rpc rpc);
 
 private:
     meta_service *_meta_svc;
     server_state *_state;
 
-    // zrwlock_nr &app_lock() const { return _state->_lock; }
+    zrwlock_nr &app_lock() const { return _state->_lock; }
 };
 
 } // namespace replication

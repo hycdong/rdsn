@@ -282,8 +282,10 @@ struct restore_state
     restore_state() : restore_status(dsn::ERR_OK), progress(0), reason() {}
 };
 
-struct meta_bulk_load_states
+struct bulk_load_state
 {
+    bulk_load_status::type app_status;
+    std::atomic_int partitions_in_progress;
 };
 
 class app_state;
@@ -295,6 +297,8 @@ public:
     std::vector<config_context> contexts;
     dsn::message_ex *pending_response;
     std::vector<restore_state> restore_states;
+    // TODO(heyuchen): add initialize it
+    bulk_load_state app_bulk_load_state;
 
 public:
     app_state_helper() : owner(nullptr), partitions_in_progress(0)

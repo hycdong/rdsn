@@ -65,7 +65,13 @@ ENUM_REG(replication::node_status::NS_ALIVE)
 ENUM_REG(replication::node_status::NS_UNALIVE)
 ENUM_END2(replication::node_status::type, node_status)
 
-// TODO(heyuchen): complete it
-ENUM_BEGIN2(bulk_load_status::type, bulk_load_status, bulk_load_status::BS_INVALID)
+ENUM_BEGIN2(bulk_load_status::type, bulk_load_status, bulk_load_status::BLS_INVALID)
+ENUM_REG(bulk_load_status::BLS_DOWNLOADING)
+ENUM_REG(bulk_load_status::BLS_DOWNLOADED)
+ENUM_REG(bulk_load_status::BLS_INGESTING)
+ENUM_REG(bulk_load_status::BLS_FINISH)
+ENUM_REG(bulk_load_status::BLS_FAILED)
+ENUM_REG(bulk_load_status::BLS_PAUSED)
+ENUM_REG(bulk_load_status::BLS_CANCELED)
 ENUM_END2(bulk_load_status::type, bulk_load_status)
 }

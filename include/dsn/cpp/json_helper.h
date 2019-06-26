@@ -79,6 +79,9 @@
 #define JSON_ENCODE_ENTRIES11(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)           \
     JSON_ENCODE_ENTRIES10(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);                   \
     JSON_ENCODE_ENTRY(out, prefix, T11)
+#define JSON_ENCODE_ENTRIES12(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)      \
+    JSON_ENCODE_ENTRIES11(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);              \
+    JSON_ENCODE_ENTRY(out, prefix, T12)
 
 #define JSON_DECODE_ENTRY(in, prefix, T)                                                           \
     do {                                                                                           \
@@ -127,8 +130,12 @@
 #define JSON_DECODE_ENTRIES11(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)            \
     JSON_DECODE_ENTRIES10(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);                    \
     JSON_TRY_DECODE_ENTRY(in, prefix, T11)
+#define JSON_DECODE_ENTRIES12(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)       \
+    JSON_DECODE_ENTRIES11(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);               \
+    JSON_TRY_DECODE_ENTRY(in, prefix, T12)
 
-#define JSON_ENTRIES_GET_MACRO(ph1, ph2, ph3, ph4, ph5, ph6, ph7, ph8, ph9, ph10, ph11, NAME, ...) \
+#define JSON_ENTRIES_GET_MACRO(                                                                    \
+    ph1, ph2, ph3, ph4, ph5, ph6, ph7, ph8, ph9, ph10, ph11, ph12, NAME, ...)                      \
     NAME
 // workaround due to the way VC handles "..."
 #define JSON_ENTRIES_GET_MACRO_(tuple) JSON_ENTRIES_GET_MACRO tuple
@@ -136,6 +143,7 @@
 #define JSON_ENCODE_ENTRIES(out, prefix, ...)                                                      \
     out.StartObject();                                                                             \
     JSON_ENTRIES_GET_MACRO_((__VA_ARGS__,                                                          \
+                             JSON_ENCODE_ENTRIES12,                                                \
                              JSON_ENCODE_ENTRIES11,                                                \
                              JSON_ENCODE_ENTRIES10,                                                \
                              JSON_ENCODE_ENTRIES9,                                                 \
@@ -155,6 +163,7 @@
     int arguments_count = 0;                                                                       \
     int parsed_count = 0;                                                                          \
     JSON_ENTRIES_GET_MACRO_((__VA_ARGS__,                                                          \
+                             JSON_DECODE_ENTRIES12,                                                \
                              JSON_DECODE_ENTRIES11,                                                \
                              JSON_DECODE_ENTRIES10,                                                \
                              JSON_DECODE_ENTRIES9,                                                 \
@@ -305,6 +314,7 @@ UINT_TYPE_SERIALIZATION(uint64_t)
 ENUM_TYPE_SERIALIZATION(dsn::replication::partition_status::type,
                         dsn::replication::partition_status::PS_INVALID)
 ENUM_TYPE_SERIALIZATION(dsn::app_status::type, dsn::app_status::AS_INVALID)
+ENUM_TYPE_SERIALIZATION(dsn::bulk_load_status::type, dsn::bulk_load_status::BLS_INVALID)
 
 // json serialization for gpid, we treat it as string: "app_id.partition_id"
 inline void json_encode(JsonWriter &out, const dsn::gpid &pid)
@@ -598,6 +608,7 @@ NON_MEMBER_JSON_SERIALIZATION(dsn::app_info,
                               max_replica_count,
                               expire_second,
                               create_second,
-                              drop_second)
+                              drop_second,
+                              app_bulk_load_status)
 }
 }

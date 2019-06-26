@@ -13,10 +13,24 @@
 
 namespace dsn {
 
-int _kbulk_load_statusValues[] = {bulk_load_status::BS_INVALID, bulk_load_status::BS_DOWNLOADING};
-const char *_kbulk_load_statusNames[] = {"BS_INVALID", "BS_DOWNLOADING"};
+int _kbulk_load_statusValues[] = {bulk_load_status::BLS_INVALID,
+                                  bulk_load_status::BLS_DOWNLOADING,
+                                  bulk_load_status::BLS_DOWNLOADED,
+                                  bulk_load_status::BLS_INGESTING,
+                                  bulk_load_status::BLS_FINISH,
+                                  bulk_load_status::BLS_FAILED,
+                                  bulk_load_status::BLS_PAUSED,
+                                  bulk_load_status::BLS_CANCELED};
+const char *_kbulk_load_statusNames[] = {"BLS_INVALID",
+                                         "BLS_DOWNLOADING",
+                                         "BLS_DOWNLOADED",
+                                         "BLS_INGESTING",
+                                         "BLS_FINISH",
+                                         "BLS_FAILED",
+                                         "BLS_PAUSED",
+                                         "BLS_CANCELED"};
 const std::map<int, const char *> _bulk_load_status_VALUES_TO_NAMES(
-    ::apache::thrift::TEnumIterator(2, _kbulk_load_statusValues, _kbulk_load_statusNames),
+    ::apache::thrift::TEnumIterator(8, _kbulk_load_statusValues, _kbulk_load_statusNames),
     ::apache::thrift::TEnumIterator(-1, NULL, NULL));
 
 int _kapp_statusValues[] = {app_status::AS_INVALID,
@@ -70,11 +84,6 @@ void partition_configuration::__set_last_committed_decree(const int64_t val)
 void partition_configuration::__set_partition_flags(const int32_t val)
 {
     this->partition_flags = val;
-}
-
-void partition_configuration::__set_load_status(const bulk_load_status::type val)
-{
-    this->load_status = val;
 }
 
 uint32_t partition_configuration::read(::apache::thrift::protocol::TProtocol *iprot)
@@ -182,16 +191,6 @@ uint32_t partition_configuration::read(::apache::thrift::protocol::TProtocol *ip
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 9:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast10;
-                xfer += iprot->readI32(ecast10);
-                this->load_status = (bulk_load_status::type)ecast10;
-                this->__isset.load_status = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -230,9 +229,9 @@ uint32_t partition_configuration::write(::apache::thrift::protocol::TProtocol *o
     {
         xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT,
                                       static_cast<uint32_t>(this->secondaries.size()));
-        std::vector<::dsn::rpc_address>::const_iterator _iter11;
-        for (_iter11 = this->secondaries.begin(); _iter11 != this->secondaries.end(); ++_iter11) {
-            xfer += (*_iter11).write(oprot);
+        std::vector<::dsn::rpc_address>::const_iterator _iter10;
+        for (_iter10 = this->secondaries.begin(); _iter10 != this->secondaries.end(); ++_iter10) {
+            xfer += (*_iter10).write(oprot);
         }
         xfer += oprot->writeListEnd();
     }
@@ -242,9 +241,9 @@ uint32_t partition_configuration::write(::apache::thrift::protocol::TProtocol *o
     {
         xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT,
                                       static_cast<uint32_t>(this->last_drops.size()));
-        std::vector<::dsn::rpc_address>::const_iterator _iter12;
-        for (_iter12 = this->last_drops.begin(); _iter12 != this->last_drops.end(); ++_iter12) {
-            xfer += (*_iter12).write(oprot);
+        std::vector<::dsn::rpc_address>::const_iterator _iter11;
+        for (_iter11 = this->last_drops.begin(); _iter11 != this->last_drops.end(); ++_iter11) {
+            xfer += (*_iter11).write(oprot);
         }
         xfer += oprot->writeListEnd();
     }
@@ -256,10 +255,6 @@ uint32_t partition_configuration::write(::apache::thrift::protocol::TProtocol *o
 
     xfer += oprot->writeFieldBegin("partition_flags", ::apache::thrift::protocol::T_I32, 8);
     xfer += oprot->writeI32(this->partition_flags);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("load_status", ::apache::thrift::protocol::T_I32, 9);
-    xfer += oprot->writeI32((int32_t)this->load_status);
     xfer += oprot->writeFieldEnd();
 
     xfer += oprot->writeFieldStop();
@@ -278,62 +273,57 @@ void swap(partition_configuration &a, partition_configuration &b)
     swap(a.last_drops, b.last_drops);
     swap(a.last_committed_decree, b.last_committed_decree);
     swap(a.partition_flags, b.partition_flags);
-    swap(a.load_status, b.load_status);
     swap(a.__isset, b.__isset);
 }
 
-partition_configuration::partition_configuration(const partition_configuration &other13)
+partition_configuration::partition_configuration(const partition_configuration &other12)
 {
-    pid = other13.pid;
-    ballot = other13.ballot;
-    max_replica_count = other13.max_replica_count;
-    primary = other13.primary;
-    secondaries = other13.secondaries;
-    last_drops = other13.last_drops;
-    last_committed_decree = other13.last_committed_decree;
-    partition_flags = other13.partition_flags;
-    load_status = other13.load_status;
-    __isset = other13.__isset;
+    pid = other12.pid;
+    ballot = other12.ballot;
+    max_replica_count = other12.max_replica_count;
+    primary = other12.primary;
+    secondaries = other12.secondaries;
+    last_drops = other12.last_drops;
+    last_committed_decree = other12.last_committed_decree;
+    partition_flags = other12.partition_flags;
+    __isset = other12.__isset;
 }
-partition_configuration::partition_configuration(partition_configuration &&other14)
+partition_configuration::partition_configuration(partition_configuration &&other13)
 {
-    pid = std::move(other14.pid);
-    ballot = std::move(other14.ballot);
-    max_replica_count = std::move(other14.max_replica_count);
-    primary = std::move(other14.primary);
-    secondaries = std::move(other14.secondaries);
-    last_drops = std::move(other14.last_drops);
-    last_committed_decree = std::move(other14.last_committed_decree);
-    partition_flags = std::move(other14.partition_flags);
-    load_status = std::move(other14.load_status);
-    __isset = std::move(other14.__isset);
+    pid = std::move(other13.pid);
+    ballot = std::move(other13.ballot);
+    max_replica_count = std::move(other13.max_replica_count);
+    primary = std::move(other13.primary);
+    secondaries = std::move(other13.secondaries);
+    last_drops = std::move(other13.last_drops);
+    last_committed_decree = std::move(other13.last_committed_decree);
+    partition_flags = std::move(other13.partition_flags);
+    __isset = std::move(other13.__isset);
 }
-partition_configuration &partition_configuration::operator=(const partition_configuration &other15)
+partition_configuration &partition_configuration::operator=(const partition_configuration &other14)
 {
-    pid = other15.pid;
-    ballot = other15.ballot;
-    max_replica_count = other15.max_replica_count;
-    primary = other15.primary;
-    secondaries = other15.secondaries;
-    last_drops = other15.last_drops;
-    last_committed_decree = other15.last_committed_decree;
-    partition_flags = other15.partition_flags;
-    load_status = other15.load_status;
-    __isset = other15.__isset;
+    pid = other14.pid;
+    ballot = other14.ballot;
+    max_replica_count = other14.max_replica_count;
+    primary = other14.primary;
+    secondaries = other14.secondaries;
+    last_drops = other14.last_drops;
+    last_committed_decree = other14.last_committed_decree;
+    partition_flags = other14.partition_flags;
+    __isset = other14.__isset;
     return *this;
 }
-partition_configuration &partition_configuration::operator=(partition_configuration &&other16)
+partition_configuration &partition_configuration::operator=(partition_configuration &&other15)
 {
-    pid = std::move(other16.pid);
-    ballot = std::move(other16.ballot);
-    max_replica_count = std::move(other16.max_replica_count);
-    primary = std::move(other16.primary);
-    secondaries = std::move(other16.secondaries);
-    last_drops = std::move(other16.last_drops);
-    last_committed_decree = std::move(other16.last_committed_decree);
-    partition_flags = std::move(other16.partition_flags);
-    load_status = std::move(other16.load_status);
-    __isset = std::move(other16.__isset);
+    pid = std::move(other15.pid);
+    ballot = std::move(other15.ballot);
+    max_replica_count = std::move(other15.max_replica_count);
+    primary = std::move(other15.primary);
+    secondaries = std::move(other15.secondaries);
+    last_drops = std::move(other15.last_drops);
+    last_committed_decree = std::move(other15.last_committed_decree);
+    partition_flags = std::move(other15.partition_flags);
+    __isset = std::move(other15.__isset);
     return *this;
 }
 void partition_configuration::printTo(std::ostream &out) const
@@ -355,8 +345,6 @@ void partition_configuration::printTo(std::ostream &out) const
         << "last_committed_decree=" << to_string(last_committed_decree);
     out << ", "
         << "partition_flags=" << to_string(partition_flags);
-    out << ", "
-        << "load_status=" << to_string(load_status);
     out << ")";
 }
 
@@ -403,13 +391,13 @@ uint32_t configuration_query_by_index_request::read(::apache::thrift::protocol::
             if (ftype == ::apache::thrift::protocol::T_LIST) {
                 {
                     this->partition_indices.clear();
-                    uint32_t _size17;
-                    ::apache::thrift::protocol::TType _etype20;
-                    xfer += iprot->readListBegin(_etype20, _size17);
-                    this->partition_indices.resize(_size17);
-                    uint32_t _i21;
-                    for (_i21 = 0; _i21 < _size17; ++_i21) {
-                        xfer += iprot->readI32(this->partition_indices[_i21]);
+                    uint32_t _size16;
+                    ::apache::thrift::protocol::TType _etype19;
+                    xfer += iprot->readListBegin(_etype19, _size16);
+                    this->partition_indices.resize(_size16);
+                    uint32_t _i20;
+                    for (_i20 = 0; _i20 < _size16; ++_i20) {
+                        xfer += iprot->readI32(this->partition_indices[_i20]);
                     }
                     xfer += iprot->readListEnd();
                 }
@@ -445,10 +433,10 @@ configuration_query_by_index_request::write(::apache::thrift::protocol::TProtoco
     {
         xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I32,
                                       static_cast<uint32_t>(this->partition_indices.size()));
-        std::vector<int32_t>::const_iterator _iter22;
-        for (_iter22 = this->partition_indices.begin(); _iter22 != this->partition_indices.end();
-             ++_iter22) {
-            xfer += oprot->writeI32((*_iter22));
+        std::vector<int32_t>::const_iterator _iter21;
+        for (_iter21 = this->partition_indices.begin(); _iter21 != this->partition_indices.end();
+             ++_iter21) {
+            xfer += oprot->writeI32((*_iter21));
         }
         xfer += oprot->writeListEnd();
     }
@@ -468,33 +456,33 @@ void swap(configuration_query_by_index_request &a, configuration_query_by_index_
 }
 
 configuration_query_by_index_request::configuration_query_by_index_request(
-    const configuration_query_by_index_request &other23)
+    const configuration_query_by_index_request &other22)
 {
-    app_name = other23.app_name;
-    partition_indices = other23.partition_indices;
-    __isset = other23.__isset;
+    app_name = other22.app_name;
+    partition_indices = other22.partition_indices;
+    __isset = other22.__isset;
 }
 configuration_query_by_index_request::configuration_query_by_index_request(
-    configuration_query_by_index_request &&other24)
+    configuration_query_by_index_request &&other23)
 {
-    app_name = std::move(other24.app_name);
-    partition_indices = std::move(other24.partition_indices);
-    __isset = std::move(other24.__isset);
+    app_name = std::move(other23.app_name);
+    partition_indices = std::move(other23.partition_indices);
+    __isset = std::move(other23.__isset);
 }
 configuration_query_by_index_request &configuration_query_by_index_request::
-operator=(const configuration_query_by_index_request &other25)
+operator=(const configuration_query_by_index_request &other24)
 {
-    app_name = other25.app_name;
-    partition_indices = other25.partition_indices;
-    __isset = other25.__isset;
+    app_name = other24.app_name;
+    partition_indices = other24.partition_indices;
+    __isset = other24.__isset;
     return *this;
 }
 configuration_query_by_index_request &configuration_query_by_index_request::
-operator=(configuration_query_by_index_request &&other26)
+operator=(configuration_query_by_index_request &&other25)
 {
-    app_name = std::move(other26.app_name);
-    partition_indices = std::move(other26.partition_indices);
-    __isset = std::move(other26.__isset);
+    app_name = std::move(other25.app_name);
+    partition_indices = std::move(other25.partition_indices);
+    __isset = std::move(other25.__isset);
     return *this;
 }
 void configuration_query_by_index_request::printTo(std::ostream &out) const
@@ -587,13 +575,13 @@ uint32_t configuration_query_by_index_response::read(::apache::thrift::protocol:
             if (ftype == ::apache::thrift::protocol::T_LIST) {
                 {
                     this->partitions.clear();
-                    uint32_t _size27;
-                    ::apache::thrift::protocol::TType _etype30;
-                    xfer += iprot->readListBegin(_etype30, _size27);
-                    this->partitions.resize(_size27);
-                    uint32_t _i31;
-                    for (_i31 = 0; _i31 < _size27; ++_i31) {
-                        xfer += this->partitions[_i31].read(iprot);
+                    uint32_t _size26;
+                    ::apache::thrift::protocol::TType _etype29;
+                    xfer += iprot->readListBegin(_etype29, _size26);
+                    this->partitions.resize(_size26);
+                    uint32_t _i30;
+                    for (_i30 = 0; _i30 < _size26; ++_i30) {
+                        xfer += this->partitions[_i30].read(iprot);
                     }
                     xfer += iprot->readListEnd();
                 }
@@ -641,9 +629,9 @@ configuration_query_by_index_response::write(::apache::thrift::protocol::TProtoc
     {
         xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT,
                                       static_cast<uint32_t>(this->partitions.size()));
-        std::vector<partition_configuration>::const_iterator _iter32;
-        for (_iter32 = this->partitions.begin(); _iter32 != this->partitions.end(); ++_iter32) {
-            xfer += (*_iter32).write(oprot);
+        std::vector<partition_configuration>::const_iterator _iter31;
+        for (_iter31 = this->partitions.begin(); _iter31 != this->partitions.end(); ++_iter31) {
+            xfer += (*_iter31).write(oprot);
         }
         xfer += oprot->writeListEnd();
     }
@@ -666,45 +654,45 @@ void swap(configuration_query_by_index_response &a, configuration_query_by_index
 }
 
 configuration_query_by_index_response::configuration_query_by_index_response(
-    const configuration_query_by_index_response &other33)
+    const configuration_query_by_index_response &other32)
 {
-    err = other33.err;
-    app_id = other33.app_id;
-    partition_count = other33.partition_count;
-    is_stateful = other33.is_stateful;
-    partitions = other33.partitions;
-    __isset = other33.__isset;
+    err = other32.err;
+    app_id = other32.app_id;
+    partition_count = other32.partition_count;
+    is_stateful = other32.is_stateful;
+    partitions = other32.partitions;
+    __isset = other32.__isset;
 }
 configuration_query_by_index_response::configuration_query_by_index_response(
-    configuration_query_by_index_response &&other34)
+    configuration_query_by_index_response &&other33)
 {
-    err = std::move(other34.err);
-    app_id = std::move(other34.app_id);
-    partition_count = std::move(other34.partition_count);
-    is_stateful = std::move(other34.is_stateful);
-    partitions = std::move(other34.partitions);
-    __isset = std::move(other34.__isset);
+    err = std::move(other33.err);
+    app_id = std::move(other33.app_id);
+    partition_count = std::move(other33.partition_count);
+    is_stateful = std::move(other33.is_stateful);
+    partitions = std::move(other33.partitions);
+    __isset = std::move(other33.__isset);
 }
 configuration_query_by_index_response &configuration_query_by_index_response::
-operator=(const configuration_query_by_index_response &other35)
+operator=(const configuration_query_by_index_response &other34)
 {
-    err = other35.err;
-    app_id = other35.app_id;
-    partition_count = other35.partition_count;
-    is_stateful = other35.is_stateful;
-    partitions = other35.partitions;
-    __isset = other35.__isset;
+    err = other34.err;
+    app_id = other34.app_id;
+    partition_count = other34.partition_count;
+    is_stateful = other34.is_stateful;
+    partitions = other34.partitions;
+    __isset = other34.__isset;
     return *this;
 }
 configuration_query_by_index_response &configuration_query_by_index_response::
-operator=(configuration_query_by_index_response &&other36)
+operator=(configuration_query_by_index_response &&other35)
 {
-    err = std::move(other36.err);
-    app_id = std::move(other36.app_id);
-    partition_count = std::move(other36.partition_count);
-    is_stateful = std::move(other36.is_stateful);
-    partitions = std::move(other36.partitions);
-    __isset = std::move(other36.__isset);
+    err = std::move(other35.err);
+    app_id = std::move(other35.app_id);
+    partition_count = std::move(other35.partition_count);
+    is_stateful = std::move(other35.is_stateful);
+    partitions = std::move(other35.partitions);
+    __isset = std::move(other35.__isset);
     return *this;
 }
 void configuration_query_by_index_response::printTo(std::ostream &out) const
@@ -747,6 +735,11 @@ void app_info::__set_create_second(const int64_t val) { this->create_second = va
 
 void app_info::__set_drop_second(const int64_t val) { this->drop_second = val; }
 
+void app_info::__set_app_bulk_load_status(const bulk_load_status::type val)
+{
+    this->app_bulk_load_status = val;
+}
+
 uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
@@ -768,9 +761,9 @@ uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
         switch (fid) {
         case 1:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast37;
-                xfer += iprot->readI32(ecast37);
-                this->status = (app_status::type)ecast37;
+                int32_t ecast36;
+                xfer += iprot->readI32(ecast36);
+                this->status = (app_status::type)ecast36;
                 this->__isset.status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -812,16 +805,16 @@ uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
             if (ftype == ::apache::thrift::protocol::T_MAP) {
                 {
                     this->envs.clear();
-                    uint32_t _size38;
-                    ::apache::thrift::protocol::TType _ktype39;
-                    ::apache::thrift::protocol::TType _vtype40;
-                    xfer += iprot->readMapBegin(_ktype39, _vtype40, _size38);
-                    uint32_t _i42;
-                    for (_i42 = 0; _i42 < _size38; ++_i42) {
-                        std::string _key43;
-                        xfer += iprot->readString(_key43);
-                        std::string &_val44 = this->envs[_key43];
-                        xfer += iprot->readString(_val44);
+                    uint32_t _size37;
+                    ::apache::thrift::protocol::TType _ktype38;
+                    ::apache::thrift::protocol::TType _vtype39;
+                    xfer += iprot->readMapBegin(_ktype38, _vtype39, _size37);
+                    uint32_t _i41;
+                    for (_i41 = 0; _i41 < _size37; ++_i41) {
+                        std::string _key42;
+                        xfer += iprot->readString(_key42);
+                        std::string &_val43 = this->envs[_key42];
+                        xfer += iprot->readString(_val43);
                     }
                     xfer += iprot->readMapEnd();
                 }
@@ -866,6 +859,16 @@ uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
             if (ftype == ::apache::thrift::protocol::T_I64) {
                 xfer += iprot->readI64(this->drop_second);
                 this->__isset.drop_second = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 12:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                int32_t ecast44;
+                xfer += iprot->readI32(ecast44);
+                this->app_bulk_load_status = (bulk_load_status::type)ecast44;
+                this->__isset.app_bulk_load_status = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -942,6 +945,10 @@ uint32_t app_info::write(::apache::thrift::protocol::TProtocol *oprot) const
     xfer += oprot->writeI64(this->drop_second);
     xfer += oprot->writeFieldEnd();
 
+    xfer += oprot->writeFieldBegin("app_bulk_load_status", ::apache::thrift::protocol::T_I32, 12);
+    xfer += oprot->writeI32((int32_t)this->app_bulk_load_status);
+    xfer += oprot->writeFieldEnd();
+
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -961,6 +968,7 @@ void swap(app_info &a, app_info &b)
     swap(a.expire_second, b.expire_second);
     swap(a.create_second, b.create_second);
     swap(a.drop_second, b.drop_second);
+    swap(a.app_bulk_load_status, b.app_bulk_load_status);
     swap(a.__isset, b.__isset);
 }
 
@@ -977,6 +985,7 @@ app_info::app_info(const app_info &other46)
     expire_second = other46.expire_second;
     create_second = other46.create_second;
     drop_second = other46.drop_second;
+    app_bulk_load_status = other46.app_bulk_load_status;
     __isset = other46.__isset;
 }
 app_info::app_info(app_info &&other47)
@@ -992,6 +1001,7 @@ app_info::app_info(app_info &&other47)
     expire_second = std::move(other47.expire_second);
     create_second = std::move(other47.create_second);
     drop_second = std::move(other47.drop_second);
+    app_bulk_load_status = std::move(other47.app_bulk_load_status);
     __isset = std::move(other47.__isset);
 }
 app_info &app_info::operator=(const app_info &other48)
@@ -1007,6 +1017,7 @@ app_info &app_info::operator=(const app_info &other48)
     expire_second = other48.expire_second;
     create_second = other48.create_second;
     drop_second = other48.drop_second;
+    app_bulk_load_status = other48.app_bulk_load_status;
     __isset = other48.__isset;
     return *this;
 }
@@ -1023,6 +1034,7 @@ app_info &app_info::operator=(app_info &&other49)
     expire_second = std::move(other49.expire_second);
     create_second = std::move(other49.create_second);
     drop_second = std::move(other49.drop_second);
+    app_bulk_load_status = std::move(other49.app_bulk_load_status);
     __isset = std::move(other49.__isset);
     return *this;
 }
@@ -1051,6 +1063,8 @@ void app_info::printTo(std::ostream &out) const
         << "create_second=" << to_string(create_second);
     out << ", "
         << "drop_second=" << to_string(drop_second);
+    out << ", "
+        << "app_bulk_load_status=" << to_string(app_bulk_load_status);
     out << ")";
 }
 

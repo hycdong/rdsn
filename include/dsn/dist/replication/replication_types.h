@@ -323,6 +323,8 @@ class ddd_partition_info;
 
 class ddd_diagnose_response;
 
+class partition_bulk_load_info;
+
 class start_bulk_load_request;
 
 class start_bulk_load_response;
@@ -5428,6 +5430,52 @@ public:
 void swap(ddd_diagnose_response &a, ddd_diagnose_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const ddd_diagnose_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _partition_bulk_load_info__isset
+{
+    _partition_bulk_load_info__isset() : status(false) {}
+    bool status : 1;
+} _partition_bulk_load_info__isset;
+
+class partition_bulk_load_info
+{
+public:
+    partition_bulk_load_info(const partition_bulk_load_info &);
+    partition_bulk_load_info(partition_bulk_load_info &&);
+    partition_bulk_load_info &operator=(const partition_bulk_load_info &);
+    partition_bulk_load_info &operator=(partition_bulk_load_info &&);
+    partition_bulk_load_info() : status((::dsn::bulk_load_status::type)0) {}
+
+    virtual ~partition_bulk_load_info() throw();
+    ::dsn::bulk_load_status::type status;
+
+    _partition_bulk_load_info__isset __isset;
+
+    void __set_status(const ::dsn::bulk_load_status::type val);
+
+    bool operator==(const partition_bulk_load_info &rhs) const
+    {
+        if (!(status == rhs.status))
+            return false;
+        return true;
+    }
+    bool operator!=(const partition_bulk_load_info &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const partition_bulk_load_info &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(partition_bulk_load_info &a, partition_bulk_load_info &b);
+
+inline std::ostream &operator<<(std::ostream &out, const partition_bulk_load_info &obj)
 {
     obj.printTo(out);
     return out;

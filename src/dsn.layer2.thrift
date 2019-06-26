@@ -6,8 +6,14 @@ namespace cpp dsn
 // for server supporting bulk load
 enum bulk_load_status
 {
-    BS_INVALID,
-    BS_DOWNLOADING,
+    BLS_INVALID,
+    BLS_DOWNLOADING,
+    BLS_DOWNLOADED,
+    BLS_INGESTING,
+    BLS_FINISH,
+    BLS_FAILED,
+    BLS_PAUSED,
+    BLS_CANCELED
 }
 
 struct partition_configuration
@@ -20,8 +26,6 @@ struct partition_configuration
     6:list<dsn.rpc_address> last_drops;
     7:i64                   last_committed_decree;
     8:i32                   partition_flags;
-    // for server supporting bulk load
-    9:bulk_load_status      load_status = bulk_load_status.BS_INVALID;
 }
 
 struct configuration_query_by_index_request
@@ -68,4 +72,7 @@ struct app_info
     // new fields added from v1.11.0
     10:i64          create_second;
     11:i64          drop_second;
+
+    // new fields added to support bulk load
+    12:bulk_load_status app_bulk_load_status = bulk_load_status.BLS_INVALID;
 }

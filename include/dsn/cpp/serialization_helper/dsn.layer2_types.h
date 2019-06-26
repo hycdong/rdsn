@@ -23,8 +23,14 @@ struct bulk_load_status
 {
     enum type
     {
-        BS_INVALID = 0,
-        BS_DOWNLOADING = 1
+        BLS_INVALID = 0,
+        BLS_DOWNLOADING = 1,
+        BLS_DOWNLOADED = 2,
+        BLS_INGESTING = 3,
+        BLS_FINISH = 4,
+        BLS_FAILED = 5,
+        BLS_PAUSED = 6,
+        BLS_CANCELED = 7
     };
 };
 
@@ -65,8 +71,7 @@ typedef struct _partition_configuration__isset
           secondaries(false),
           last_drops(false),
           last_committed_decree(false),
-          partition_flags(false),
-          load_status(true)
+          partition_flags(false)
     {
     }
     bool pid : 1;
@@ -77,7 +82,6 @@ typedef struct _partition_configuration__isset
     bool last_drops : 1;
     bool last_committed_decree : 1;
     bool partition_flags : 1;
-    bool load_status : 1;
 } _partition_configuration__isset;
 
 class partition_configuration
@@ -88,13 +92,8 @@ public:
     partition_configuration &operator=(const partition_configuration &);
     partition_configuration &operator=(partition_configuration &&);
     partition_configuration()
-        : ballot(0),
-          max_replica_count(0),
-          last_committed_decree(0),
-          partition_flags(0),
-          load_status((bulk_load_status::type)0)
+        : ballot(0), max_replica_count(0), last_committed_decree(0), partition_flags(0)
     {
-        load_status = (bulk_load_status::type)0;
     }
 
     virtual ~partition_configuration() throw();
@@ -106,7 +105,6 @@ public:
     std::vector<::dsn::rpc_address> last_drops;
     int64_t last_committed_decree;
     int32_t partition_flags;
-    bulk_load_status::type load_status;
 
     _partition_configuration__isset __isset;
 
@@ -126,8 +124,6 @@ public:
 
     void __set_partition_flags(const int32_t val);
 
-    void __set_load_status(const bulk_load_status::type val);
-
     bool operator==(const partition_configuration &rhs) const
     {
         if (!(pid == rhs.pid))
@@ -145,8 +141,6 @@ public:
         if (!(last_committed_decree == rhs.last_committed_decree))
             return false;
         if (!(partition_flags == rhs.partition_flags))
-            return false;
-        if (!(load_status == rhs.load_status))
             return false;
         return true;
     }
@@ -312,7 +306,8 @@ typedef struct _app_info__isset
           max_replica_count(false),
           expire_second(false),
           create_second(false),
-          drop_second(false)
+          drop_second(false),
+          app_bulk_load_status(true)
     {
     }
     bool status : 1;
@@ -326,6 +321,7 @@ typedef struct _app_info__isset
     bool expire_second : 1;
     bool create_second : 1;
     bool drop_second : 1;
+    bool app_bulk_load_status : 1;
 } _app_info__isset;
 
 class app_info
@@ -345,9 +341,12 @@ public:
           max_replica_count(0),
           expire_second(0),
           create_second(0),
-          drop_second(0)
+          drop_second(0),
+          app_bulk_load_status((bulk_load_status::type)0)
     {
         status = (app_status::type)0;
+
+        app_bulk_load_status = (bulk_load_status::type)0;
     }
 
     virtual ~app_info() throw();
@@ -362,6 +361,7 @@ public:
     int64_t expire_second;
     int64_t create_second;
     int64_t drop_second;
+    bulk_load_status::type app_bulk_load_status;
 
     _app_info__isset __isset;
 
@@ -387,6 +387,8 @@ public:
 
     void __set_drop_second(const int64_t val);
 
+    void __set_app_bulk_load_status(const bulk_load_status::type val);
+
     bool operator==(const app_info &rhs) const
     {
         if (!(status == rhs.status))
@@ -410,6 +412,8 @@ public:
         if (!(create_second == rhs.create_second))
             return false;
         if (!(drop_second == rhs.drop_second))
+            return false;
+        if (!(app_bulk_load_status == rhs.app_bulk_load_status))
             return false;
         return true;
     }

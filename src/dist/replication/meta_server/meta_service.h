@@ -47,7 +47,6 @@
 #include "dist/replication/meta_server/meta_backup_service.h"
 #include "dist/replication/meta_server/meta_state_service_utils.h"
 #include "dist/replication/common/block_service_manager.h"
-//#include "dist/replication/meta_server/meta_bulk_load_service.h"
 
 class meta_service_test_app;
 namespace dsn {
