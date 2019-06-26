@@ -329,6 +329,10 @@ class start_bulk_load_request;
 
 class start_bulk_load_response;
 
+class bulk_load_request;
+
+class bulk_load_response;
+
 typedef struct _mutation_header__isset
 {
     _mutation_header__isset()
@@ -5583,6 +5587,150 @@ public:
 void swap(start_bulk_load_response &a, start_bulk_load_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const start_bulk_load_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _bulk_load_request__isset
+{
+    _bulk_load_request__isset()
+        : pid(false),
+          app_name(false),
+          primary_addr(false),
+          remote_path(false),
+          app_bl_status(false),
+          partition_bl_info(false)
+    {
+    }
+    bool pid : 1;
+    bool app_name : 1;
+    bool primary_addr : 1;
+    bool remote_path : 1;
+    bool app_bl_status : 1;
+    bool partition_bl_info : 1;
+} _bulk_load_request__isset;
+
+class bulk_load_request
+{
+public:
+    bulk_load_request(const bulk_load_request &);
+    bulk_load_request(bulk_load_request &&);
+    bulk_load_request &operator=(const bulk_load_request &);
+    bulk_load_request &operator=(bulk_load_request &&);
+    bulk_load_request() : app_name(), remote_path(), app_bl_status((::dsn::bulk_load_status::type)0)
+    {
+    }
+
+    virtual ~bulk_load_request() throw();
+    ::dsn::gpid pid;
+    std::string app_name;
+    ::dsn::rpc_address primary_addr;
+    std::string remote_path;
+    ::dsn::bulk_load_status::type app_bl_status;
+    partition_bulk_load_info partition_bl_info;
+
+    _bulk_load_request__isset __isset;
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    void __set_app_name(const std::string &val);
+
+    void __set_primary_addr(const ::dsn::rpc_address &val);
+
+    void __set_remote_path(const std::string &val);
+
+    void __set_app_bl_status(const ::dsn::bulk_load_status::type val);
+
+    void __set_partition_bl_info(const partition_bulk_load_info &val);
+
+    bool operator==(const bulk_load_request &rhs) const
+    {
+        if (!(pid == rhs.pid))
+            return false;
+        if (!(app_name == rhs.app_name))
+            return false;
+        if (!(primary_addr == rhs.primary_addr))
+            return false;
+        if (!(remote_path == rhs.remote_path))
+            return false;
+        if (!(app_bl_status == rhs.app_bl_status))
+            return false;
+        if (!(partition_bl_info == rhs.partition_bl_info))
+            return false;
+        return true;
+    }
+    bool operator!=(const bulk_load_request &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const bulk_load_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(bulk_load_request &a, bulk_load_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const bulk_load_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _bulk_load_response__isset
+{
+    _bulk_load_response__isset() : err(false), pid(false), partition_bl_status(false) {}
+    bool err : 1;
+    bool pid : 1;
+    bool partition_bl_status : 1;
+} _bulk_load_response__isset;
+
+class bulk_load_response
+{
+public:
+    bulk_load_response(const bulk_load_response &);
+    bulk_load_response(bulk_load_response &&);
+    bulk_load_response &operator=(const bulk_load_response &);
+    bulk_load_response &operator=(bulk_load_response &&);
+    bulk_load_response() : partition_bl_status((::dsn::bulk_load_status::type)0) {}
+
+    virtual ~bulk_load_response() throw();
+    ::dsn::error_code err;
+    ::dsn::gpid pid;
+    ::dsn::bulk_load_status::type partition_bl_status;
+
+    _bulk_load_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    void __set_partition_bl_status(const ::dsn::bulk_load_status::type val);
+
+    bool operator==(const bulk_load_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (!(pid == rhs.pid))
+            return false;
+        if (!(partition_bl_status == rhs.partition_bl_status))
+            return false;
+        return true;
+    }
+    bool operator!=(const bulk_load_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const bulk_load_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(bulk_load_response &a, bulk_load_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const bulk_load_response &obj)
 {
     obj.printTo(out);
     return out;

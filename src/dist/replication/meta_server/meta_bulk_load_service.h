@@ -32,6 +32,14 @@
 namespace dsn {
 namespace replication {
 
+// TODO(heyuchen): initialize it
+struct bulk_load_progress
+{
+    // std::map<gpid, int32_t> partition_progress;
+    std::map<gpid, dsn::task_ptr> bulk_load_requests;
+    std::map<app_id, uint32_t> unfinished_partitions_per_app;
+};
+
 class bulk_load_service
 {
 public:
@@ -48,6 +56,13 @@ public:
                                                uint32_t pidx,
                                                const std::string &bulk_load_path,
                                                start_bulk_load_rpc rpc);
+
+    void partition_bulk_load(gpid pid, const std::string &remote_file_path);
+
+    void on_partition_bulk_load_reply(dsn::error_code err,
+                                      bulk_load_response &&response,
+                                      gpid pid,
+                                      const dsn::rpc_address &primary_addr);
 
     // app bulk load path is {app_path}/bulk_load
     std::string get_app_bulk_load_path(std::shared_ptr<app_state> app) const
@@ -71,7 +86,13 @@ private:
     meta_service *_meta_svc;
     server_state *_state;
 
+    bulk_load_progress _progress;
+
+    // TODO(heyuchen): lock difference???
+    // app lock
     zrwlock_nr &app_lock() const { return _state->_lock; }
+    // bulk load lock
+    zrwlock_nr _lock;
 };
 
 } // namespace replication

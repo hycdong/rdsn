@@ -1901,6 +1901,7 @@ void replica_stub::open_service()
 
     register_rpc_handler(RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
     register_rpc_handler(RPC_COLD_BACKUP, "ColdBackup", &replica_stub::on_cold_backup);
+    register_rpc_handler(RPC_BULK_LOAD, "BulkLoad", &replica_stub::on_bulk_load);
 
     _kill_partition_command = ::dsn::command_manager::instance().register_app_command(
         {"kill_partition"},
@@ -2239,5 +2240,22 @@ std::string replica_stub::get_replica_dir(const char *app_type, gpid id, bool cr
     }
     return ret_dir;
 }
+
+void replica_stub::on_bulk_load(const bulk_load_request &request, bulk_load_response &response)
+{
+    ddebug("receive bulk load request: gpid[%d.%d]",
+           request.pid.get_app_id(),
+           request.pid.get_partition_index());
+
+    replica_ptr rep = get_replica(request.pid);
+    if (rep != nullptr) {
+        rep->on_bulk_load(request, response);
+    } else {
+        derror(
+            "gpid[%d.%d] not exist", request.pid.get_app_id(), request.pid.get_partition_index());
+        response.err = ERR_OBJECT_NOT_FOUND;
+    }
 }
-} // namespace
+
+} // namespace replication
+} // namespace dsn

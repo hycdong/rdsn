@@ -301,7 +301,13 @@ private:
 
     void update_restore_progress();
 
+    /////////////////////////////////////////////////////////////////
+    // replica compaction
     std::string query_compact_state() const;
+
+    /////////////////////////////////////////////////////////////////
+    // replica bulk load
+    void on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response);
 
 private:
     friend class ::dsn::replication::replication_checker;

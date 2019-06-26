@@ -760,6 +760,23 @@ struct start_bulk_load_response
     1:dsn.error_code        err;
 }
 
+struct bulk_load_request
+{
+    1:dsn.gpid                      pid;
+    2:string                        app_name;
+    3:dsn.rpc_address               primary_addr;
+    4:string                        remote_path;
+    5:dsn.layer2.bulk_load_status   app_bl_status;
+    6:partition_bulk_load_info      partition_bl_info;
+}
+
+struct bulk_load_response
+{
+    1:dsn.error_code    err;
+    2:dsn.gpid  pid;
+    3:dsn.layer2.bulk_load_status   partition_bl_status;
+    // TODO(heyuchen): add progress struct
+}
 
 /*
 service replica_s

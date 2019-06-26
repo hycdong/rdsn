@@ -36,6 +36,8 @@ bulk_load_service::bulk_load_service(meta_service *meta_svc) : _meta_svc(meta_sv
     _state = _meta_svc->get_server_state();
 }
 
+// TODO(heyuchen): consider thread pool, meta thread or default thread???
+
 void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -191,11 +193,21 @@ void bulk_load_service::update_partition_blstatus_downloading(std::shared_ptr<ap
             zauto_write_lock(app_lock());
             --app->helpers->bl_states.partitions_in_progress;
             app->helpers->bl_states.partitions_info.insert(std::make_pair(pidx, pinfo));
+
+            // start send bulk load to replica servers
+            auto req = rpc.request();
+
+            // TODO(heyuchen): change it into real fds remote path
+            partition_bulk_load(gpid(app->app_id, pidx), req.file_provider_type);
+
             if (app->helpers->bl_states.partitions_in_progress == 0) {
                 ddebug_f("app {} start bulk load succeed", app->app_name);
+                _progress.unfinished_partitions_per_app.insert(
+                    std::make_pair(app->app_id, app->partition_count));
                 auto response = rpc.response();
                 response.err = ERR_OK;
             }
+
         } else if (err == ERR_TIMEOUT) {
             dwarn_f("failed to create app {} partition[{}] bulk_load_info, remote storage is not "
                     "available, please try later",
@@ -228,6 +240,77 @@ void bulk_load_service::update_partition_blstatus_downloading(std::shared_ptr<ap
         on_write_stroage,
         dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo),
         _meta_svc->tracker());
+}
+
+void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_file_path)
+{
+    dsn::rpc_address primary_addr;
+    std::string app_name;
+    bulk_load_status::type bl_status;
+    partition_bulk_load_info pbl_info;
+    {
+        zauto_read_lock l(app_lock());
+        std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
+        if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
+            dwarn_f("app {} not exist, set bulk load finish", app->app_name);
+            // TODO(heyuchen): handler it
+            return;
+        }
+
+        app_name = app->app_name;
+        primary_addr = app->partitions[pid.get_partition_index()].primary;
+        bl_status = app->app_bulk_load_status;
+        pbl_info = app->helpers->bl_states.partitions_info[pid.get_partition_index()];
+    }
+
+    if (primary_addr.is_invalid()) {
+        dwarn_f("app {} gpid({}.{}) primary is invalid, try it later");
+        tasking::enqueue(
+            LPC_META_STATE_NORMAL,
+            _meta_svc->tracker(),
+            std::bind(&bulk_load_service::partition_bulk_load, this, pid, remote_file_path),
+            0,
+            std::chrono::seconds(1));
+        return;
+    }
+
+    bulk_load_request req;
+    req.pid = pid;
+    req.app_name = app_name;
+    req.primary_addr = primary_addr;
+    req.app_bl_status = bl_status;
+    req.partition_bl_info = pbl_info;
+    req.remote_path = remote_file_path;
+
+    // TODO(heyuchen): handle _progress.bulk_load_requests[pid] has request
+    dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
+    dsn::marshall(msg, req);
+    dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
+        msg,
+        _meta_svc->tracker(),
+        [this, pid, primary_addr](error_code err, bulk_load_response &&resp) {
+            on_partition_bulk_load_reply(err, std::move(resp), pid, primary_addr);
+        });
+    _progress.bulk_load_requests[pid] = rpc_callback;
+
+    ddebug("send bulk load request to replica server, app(%d.%d), target_addr = %s",
+           pid.get_app_id(),
+           pid.get_partition_index(),
+           primary_addr.to_string());
+    _meta_svc->send_request(msg, primary_addr, rpc_callback);
+}
+
+void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
+                                                     bulk_load_response &&response,
+                                                     gpid pid,
+                                                     const rpc_address &primary_addr)
+{
+    ddebug_f("recevie bulk load response, app[{}.{}] from server({}), err is {}",
+             pid.get_app_id(),
+             pid.get_partition_index(),
+             primary_addr.to_string(),
+             err.to_string());
+    //--_progress.unfinished_partitions_per_app[pid];
 }
 
 } // namespace replication

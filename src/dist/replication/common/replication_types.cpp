@@ -13140,5 +13140,358 @@ void start_bulk_load_response::printTo(std::ostream &out) const
     out << "err=" << to_string(err);
     out << ")";
 }
+
+bulk_load_request::~bulk_load_request() throw() {}
+
+void bulk_load_request::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
+
+void bulk_load_request::__set_app_name(const std::string &val) { this->app_name = val; }
+
+void bulk_load_request::__set_primary_addr(const ::dsn::rpc_address &val)
+{
+    this->primary_addr = val;
+}
+
+void bulk_load_request::__set_remote_path(const std::string &val) { this->remote_path = val; }
+
+void bulk_load_request::__set_app_bl_status(const ::dsn::bulk_load_status::type val)
+{
+    this->app_bl_status = val;
+}
+
+void bulk_load_request::__set_partition_bl_info(const partition_bulk_load_info &val)
+{
+    this->partition_bl_info = val;
+}
+
+uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->pid.read(iprot);
+                this->__isset.pid = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->app_name);
+                this->__isset.app_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->primary_addr.read(iprot);
+                this->__isset.primary_addr = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 4:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->remote_path);
+                this->__isset.remote_path = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 5:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                int32_t ecast581;
+                xfer += iprot->readI32(ecast581);
+                this->app_bl_status = (::dsn::bulk_load_status::type)ecast581;
+                this->__isset.app_bl_status = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 6:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->partition_bl_info.read(iprot);
+                this->__isset.partition_bl_info = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("bulk_load_request");
+
+    xfer += oprot->writeFieldBegin("pid", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->pid.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 2);
+    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("primary_addr", ::apache::thrift::protocol::T_STRUCT, 3);
+    xfer += this->primary_addr.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("remote_path", ::apache::thrift::protocol::T_STRING, 4);
+    xfer += oprot->writeString(this->remote_path);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("app_bl_status", ::apache::thrift::protocol::T_I32, 5);
+    xfer += oprot->writeI32((int32_t)this->app_bl_status);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("partition_bl_info", ::apache::thrift::protocol::T_STRUCT, 6);
+    xfer += this->partition_bl_info.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(bulk_load_request &a, bulk_load_request &b)
+{
+    using ::std::swap;
+    swap(a.pid, b.pid);
+    swap(a.app_name, b.app_name);
+    swap(a.primary_addr, b.primary_addr);
+    swap(a.remote_path, b.remote_path);
+    swap(a.app_bl_status, b.app_bl_status);
+    swap(a.partition_bl_info, b.partition_bl_info);
+    swap(a.__isset, b.__isset);
+}
+
+bulk_load_request::bulk_load_request(const bulk_load_request &other582)
+{
+    pid = other582.pid;
+    app_name = other582.app_name;
+    primary_addr = other582.primary_addr;
+    remote_path = other582.remote_path;
+    app_bl_status = other582.app_bl_status;
+    partition_bl_info = other582.partition_bl_info;
+    __isset = other582.__isset;
+}
+bulk_load_request::bulk_load_request(bulk_load_request &&other583)
+{
+    pid = std::move(other583.pid);
+    app_name = std::move(other583.app_name);
+    primary_addr = std::move(other583.primary_addr);
+    remote_path = std::move(other583.remote_path);
+    app_bl_status = std::move(other583.app_bl_status);
+    partition_bl_info = std::move(other583.partition_bl_info);
+    __isset = std::move(other583.__isset);
+}
+bulk_load_request &bulk_load_request::operator=(const bulk_load_request &other584)
+{
+    pid = other584.pid;
+    app_name = other584.app_name;
+    primary_addr = other584.primary_addr;
+    remote_path = other584.remote_path;
+    app_bl_status = other584.app_bl_status;
+    partition_bl_info = other584.partition_bl_info;
+    __isset = other584.__isset;
+    return *this;
+}
+bulk_load_request &bulk_load_request::operator=(bulk_load_request &&other585)
+{
+    pid = std::move(other585.pid);
+    app_name = std::move(other585.app_name);
+    primary_addr = std::move(other585.primary_addr);
+    remote_path = std::move(other585.remote_path);
+    app_bl_status = std::move(other585.app_bl_status);
+    partition_bl_info = std::move(other585.partition_bl_info);
+    __isset = std::move(other585.__isset);
+    return *this;
+}
+void bulk_load_request::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "bulk_load_request(";
+    out << "pid=" << to_string(pid);
+    out << ", "
+        << "app_name=" << to_string(app_name);
+    out << ", "
+        << "primary_addr=" << to_string(primary_addr);
+    out << ", "
+        << "remote_path=" << to_string(remote_path);
+    out << ", "
+        << "app_bl_status=" << to_string(app_bl_status);
+    out << ", "
+        << "partition_bl_info=" << to_string(partition_bl_info);
+    out << ")";
+}
+
+bulk_load_response::~bulk_load_response() throw() {}
+
+void bulk_load_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
+
+void bulk_load_response::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
+
+void bulk_load_response::__set_partition_bl_status(const ::dsn::bulk_load_status::type val)
+{
+    this->partition_bl_status = val;
+}
+
+uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->err.read(iprot);
+                this->__isset.err = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->pid.read(iprot);
+                this->__isset.pid = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                int32_t ecast586;
+                xfer += iprot->readI32(ecast586);
+                this->partition_bl_status = (::dsn::bulk_load_status::type)ecast586;
+                this->__isset.partition_bl_status = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("bulk_load_response");
+
+    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->err.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("pid", ::apache::thrift::protocol::T_STRUCT, 2);
+    xfer += this->pid.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("partition_bl_status", ::apache::thrift::protocol::T_I32, 3);
+    xfer += oprot->writeI32((int32_t)this->partition_bl_status);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(bulk_load_response &a, bulk_load_response &b)
+{
+    using ::std::swap;
+    swap(a.err, b.err);
+    swap(a.pid, b.pid);
+    swap(a.partition_bl_status, b.partition_bl_status);
+    swap(a.__isset, b.__isset);
+}
+
+bulk_load_response::bulk_load_response(const bulk_load_response &other587)
+{
+    err = other587.err;
+    pid = other587.pid;
+    partition_bl_status = other587.partition_bl_status;
+    __isset = other587.__isset;
+}
+bulk_load_response::bulk_load_response(bulk_load_response &&other588)
+{
+    err = std::move(other588.err);
+    pid = std::move(other588.pid);
+    partition_bl_status = std::move(other588.partition_bl_status);
+    __isset = std::move(other588.__isset);
+}
+bulk_load_response &bulk_load_response::operator=(const bulk_load_response &other589)
+{
+    err = other589.err;
+    pid = other589.pid;
+    partition_bl_status = other589.partition_bl_status;
+    __isset = other589.__isset;
+    return *this;
+}
+bulk_load_response &bulk_load_response::operator=(bulk_load_response &&other590)
+{
+    err = std::move(other590.err);
+    pid = std::move(other590.pid);
+    partition_bl_status = std::move(other590.partition_bl_status);
+    __isset = std::move(other590.__isset);
+    return *this;
+}
+void bulk_load_response::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "bulk_load_response(";
+    out << "err=" << to_string(err);
+    out << ", "
+        << "pid=" << to_string(pid);
+    out << ", "
+        << "partition_bl_status=" << to_string(partition_bl_status);
+    out << ")";
+}
 }
 } // namespace
