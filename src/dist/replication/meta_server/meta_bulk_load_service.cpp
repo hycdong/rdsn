@@ -191,8 +191,8 @@ void bulk_load_service::update_partition_blstatus_downloading(std::shared_ptr<ap
             zauto_write_lock(app_lock());
             --app->helpers->bl_states.partitions_in_progress;
             app->helpers->bl_states.partitions_info.insert(std::make_pair(pidx, pinfo));
-            if (--app->helpers->bl_states.partitions_in_progress == 0) {
-                ddebug_f("app {} start bulk load", app->app_name);
+            if (app->helpers->bl_states.partitions_in_progress == 0) {
+                ddebug_f("app {} start bulk load succeed", app->app_name);
                 auto response = rpc.response();
                 response.err = ERR_OK;
             }
