@@ -285,7 +285,10 @@ struct restore_state
 struct bulk_load_state
 {
     bulk_load_status::type app_status;
+    int partition_count;
     std::atomic_int partitions_in_progress;
+    // p_index -> p_bulk_load_info
+    std::map<uint32_t, partition_bulk_load_info> partitions_info;
 };
 
 class app_state;
@@ -297,8 +300,8 @@ public:
     std::vector<config_context> contexts;
     dsn::message_ex *pending_response;
     std::vector<restore_state> restore_states;
-    // TODO(heyuchen): add initialize it
-    bulk_load_state app_bulk_load_state;
+    // TODO(heyuchen): initialize it
+    bulk_load_state bl_states;
 
 public:
     app_state_helper() : owner(nullptr), partitions_in_progress(0)

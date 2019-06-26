@@ -70,7 +70,7 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
         }
     }
 
-    // TODO(heyuchen)
+    // TODO(heyuchen):
     // Validate:
     // 1. check file existed
     // 2. check partition count
@@ -100,12 +100,12 @@ void bulk_load_service::update_blstatus_downloading_on_remote_storage(
 
             zauto_write_lock l(app_lock());
             app->app_bulk_load_status = bulk_load_status::BLS_DOWNLOADING;
-            app->helpers->app_bulk_load_state.app_status = app->app_bulk_load_status;
-            app->helpers->app_bulk_load_state.partitions_in_progress = app->partition_count;
+            app->helpers->bl_states.app_status = app->app_bulk_load_status;
+            app->helpers->bl_states.partitions_in_progress = app->partition_count;
 
-            for (int i = 0; i < app->partition_count; ++i) {
-                update_partition_blstatus_downloading(std::move(app), i, std::move(rpc));
-            }
+            // create bulk load info
+            create_bulk_load_folder_on_remote_storage(std::move(app), std::move(rpc));
+
         } else if (err == ERR_TIMEOUT) {
             dwarn_f("failed to update app {} bulk load status, remote storage is not available, "
                     "please try later",
@@ -137,17 +137,97 @@ void bulk_load_service::update_blstatus_downloading_on_remote_storage(
                                               _meta_svc->tracker());
 }
 
+void bulk_load_service::create_bulk_load_folder_on_remote_storage(std::shared_ptr<app_state> app,
+                                                                  start_bulk_load_rpc rpc)
+{
+    std::string bulk_load_path = get_app_bulk_load_path(app);
+
+    // TODO(heyuchen): handle dir exist
+    auto on_write_stroage = [app, rpc, bulk_load_path, this](error_code err) {
+        if (err == ERR_OK) {
+            ddebug_f("create app {} bulk load dir", app->app_name);
+            for (int i = 0; i < app->partition_count; ++i) {
+                update_partition_blstatus_downloading(app, i, bulk_load_path, rpc);
+            }
+        } else if (err == ERR_TIMEOUT) {
+            dwarn_f("failed to create app {} bulk load dir, remote storage is not available, "
+                    "please try later",
+                    app->app_name);
+            tasking::enqueue(
+                LPC_META_STATE_HIGH,
+                _meta_svc->tracker(),
+                std::bind(&bulk_load_service::create_bulk_load_folder_on_remote_storage,
+                          this,
+                          std::move(app),
+                          std::move(rpc)),
+                0,
+                std::chrono::seconds(1));
+        } else {
+            derror_f("failed to create app {} bulk load dir, error is {}",
+                     app->app_name,
+                     err.to_string());
+            auto response = rpc.response();
+            response.err = ERR_ZOOKEEPER_OPERATION;
+        }
+    };
+
+    _meta_svc->get_remote_storage()->create_node(
+        bulk_load_path, LPC_META_STATE_HIGH, on_write_stroage);
+}
+
 void bulk_load_service::update_partition_blstatus_downloading(std::shared_ptr<app_state> app,
-                                                              int pidx,
+                                                              uint32_t pidx,
+                                                              const std::string &bulk_load_path,
                                                               start_bulk_load_rpc rpc)
 {
-    ddebug_f("app {} create partition[{}] bulk_load_status", app->app_name, pidx);
-    zauto_write_lock(app_lock());
-    --app->helpers->app_bulk_load_state.partitions_in_progress;
-    if (app->helpers->app_bulk_load_state.partitions_in_progress == 0) {
-        auto response = rpc.response();
-        response.err = ERR_OK;
-    }
+    partition_bulk_load_info pinfo;
+    pinfo.status = bulk_load_status::BLS_DOWNLOADING;
+
+    // TODO(heyuchen): handle partition dir exist
+    auto on_write_stroage = [app, pidx, bulk_load_path, rpc, pinfo, this](error_code err) {
+        if (err == ERR_OK) {
+            ddebug_f("app {} create partition[{}] bulk_load_info", app->app_name, pidx);
+
+            zauto_write_lock(app_lock());
+            --app->helpers->bl_states.partitions_in_progress;
+            app->helpers->bl_states.partitions_info.insert(std::make_pair(pidx, pinfo));
+            if (--app->helpers->bl_states.partitions_in_progress == 0) {
+                ddebug_f("app {} start bulk load", app->app_name);
+                auto response = rpc.response();
+                response.err = ERR_OK;
+            }
+        } else if (err == ERR_TIMEOUT) {
+            dwarn_f("failed to create app {} partition[{}] bulk_load_info, remote storage is not "
+                    "available, please try later",
+                    app->app_name,
+                    pidx);
+            tasking::enqueue(LPC_META_STATE_HIGH,
+                             _meta_svc->tracker(),
+                             std::bind(&bulk_load_service::update_partition_blstatus_downloading,
+                                       this,
+                                       std::move(app),
+                                       pidx,
+                                       bulk_load_path,
+                                       rpc),
+                             0,
+                             std::chrono::seconds(1));
+
+        } else {
+            derror_f("failed to create app {} partition[{}] bulk_load_info, error is {}",
+                     app->app_name,
+                     pidx,
+                     err.to_string());
+            auto response = rpc.response();
+            response.err = ERR_ZOOKEEPER_OPERATION;
+        }
+    };
+
+    _meta_svc->get_remote_storage()->create_node(
+        get_partition_bulk_load_path(bulk_load_path, pidx),
+        LPC_META_STATE_HIGH,
+        on_write_stroage,
+        dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo),
+        _meta_svc->tracker());
 }
 
 } // namespace replication

@@ -347,6 +347,8 @@ inline void json_encode(JsonWriter &out, const dsn::partition_configuration &con
 inline bool json_decode(const JsonObject &in, dsn::partition_configuration &config);
 inline void json_encode(JsonWriter &out, const dsn::app_info &info);
 inline bool json_decode(const JsonObject &in, dsn::app_info &info);
+inline void json_encode(JsonWriter &out, const dsn::replication::partition_bulk_load_info &info);
+inline bool json_decode(const JsonObject &in, dsn::replication::partition_bulk_load_info &info);
 
 template <typename T>
 inline void json_encode_iterable(JsonWriter &out, const T &t)
@@ -610,5 +612,7 @@ NON_MEMBER_JSON_SERIALIZATION(dsn::app_info,
                               create_second,
                               drop_second,
                               app_bulk_load_status)
+
+NON_MEMBER_JSON_SERIALIZATION(dsn::replication::partition_bulk_load_info, status)
 }
 }

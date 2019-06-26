@@ -741,7 +741,7 @@ struct ddd_diagnose_response
 }
 
 
-// bulk load structures
+// bulk load rpc
 struct partition_bulk_load_info
 {
     1:dsn.layer2.bulk_load_status  status;

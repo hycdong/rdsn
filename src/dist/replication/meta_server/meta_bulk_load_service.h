@@ -42,10 +42,30 @@ public:
 
     void update_blstatus_downloading_on_remote_storage(std::shared_ptr<app_state> app,
                                                        start_bulk_load_rpc rpc);
-    void create_bulk_load_folder_on_remote_storage();
+    void create_bulk_load_folder_on_remote_storage(std::shared_ptr<app_state> app,
+                                                   start_bulk_load_rpc rpc);
     void update_partition_blstatus_downloading(std::shared_ptr<app_state> app,
-                                               int pidx,
+                                               uint32_t pidx,
+                                               const std::string &bulk_load_path,
                                                start_bulk_load_rpc rpc);
+
+    // app bulk load path is {app_path}/bulk_load
+    std::string get_app_bulk_load_path(std::shared_ptr<app_state> app) const
+    {
+        std::stringstream oss;
+        oss << _state->get_app_path(*app) << "/"
+            << "bulk_load";
+        return oss.str();
+    }
+
+    // partition bulk load path is {app_path}/bulk_load/partition_index/
+    std::string get_partition_bulk_load_path(const std::string &app_bulk_load_path,
+                                             int partition_id) const
+    {
+        std::stringstream oss;
+        oss << app_bulk_load_path << "/" << partition_id;
+        return oss.str();
+    }
 
 private:
     meta_service *_meta_svc;
