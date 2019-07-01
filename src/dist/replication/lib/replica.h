@@ -308,6 +308,9 @@ private:
     /////////////////////////////////////////////////////////////////
     // replica bulk load
     void on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response);
+    dsn::error_code download_sst_files(const std::string &remote_provider,
+                                       const std::string &remote_file_dir,
+                                       const std::string &local_file_dir);
 
 private:
     friend class ::dsn::replication::replication_checker;

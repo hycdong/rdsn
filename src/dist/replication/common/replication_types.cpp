@@ -13152,7 +13152,10 @@ void bulk_load_request::__set_primary_addr(const ::dsn::rpc_address &val)
     this->primary_addr = val;
 }
 
-void bulk_load_request::__set_remote_path(const std::string &val) { this->remote_path = val; }
+void bulk_load_request::__set_remote_provider_name(const std::string &val)
+{
+    this->remote_provider_name = val;
+}
 
 void bulk_load_request::__set_app_bl_status(const ::dsn::bulk_load_status::type val)
 {
@@ -13209,8 +13212,8 @@ uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
             break;
         case 4:
             if (ftype == ::apache::thrift::protocol::T_STRING) {
-                xfer += iprot->readString(this->remote_path);
-                this->__isset.remote_path = true;
+                xfer += iprot->readString(this->remote_provider_name);
+                this->__isset.remote_provider_name = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -13263,8 +13266,8 @@ uint32_t bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) 
     xfer += this->primary_addr.write(oprot);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("remote_path", ::apache::thrift::protocol::T_STRING, 4);
-    xfer += oprot->writeString(this->remote_path);
+    xfer += oprot->writeFieldBegin("remote_provider_name", ::apache::thrift::protocol::T_STRING, 4);
+    xfer += oprot->writeString(this->remote_provider_name);
     xfer += oprot->writeFieldEnd();
 
     xfer += oprot->writeFieldBegin("app_bl_status", ::apache::thrift::protocol::T_I32, 5);
@@ -13286,7 +13289,7 @@ void swap(bulk_load_request &a, bulk_load_request &b)
     swap(a.pid, b.pid);
     swap(a.app_name, b.app_name);
     swap(a.primary_addr, b.primary_addr);
-    swap(a.remote_path, b.remote_path);
+    swap(a.remote_provider_name, b.remote_provider_name);
     swap(a.app_bl_status, b.app_bl_status);
     swap(a.partition_bl_info, b.partition_bl_info);
     swap(a.__isset, b.__isset);
@@ -13297,7 +13300,7 @@ bulk_load_request::bulk_load_request(const bulk_load_request &other582)
     pid = other582.pid;
     app_name = other582.app_name;
     primary_addr = other582.primary_addr;
-    remote_path = other582.remote_path;
+    remote_provider_name = other582.remote_provider_name;
     app_bl_status = other582.app_bl_status;
     partition_bl_info = other582.partition_bl_info;
     __isset = other582.__isset;
@@ -13307,7 +13310,7 @@ bulk_load_request::bulk_load_request(bulk_load_request &&other583)
     pid = std::move(other583.pid);
     app_name = std::move(other583.app_name);
     primary_addr = std::move(other583.primary_addr);
-    remote_path = std::move(other583.remote_path);
+    remote_provider_name = std::move(other583.remote_provider_name);
     app_bl_status = std::move(other583.app_bl_status);
     partition_bl_info = std::move(other583.partition_bl_info);
     __isset = std::move(other583.__isset);
@@ -13317,7 +13320,7 @@ bulk_load_request &bulk_load_request::operator=(const bulk_load_request &other58
     pid = other584.pid;
     app_name = other584.app_name;
     primary_addr = other584.primary_addr;
-    remote_path = other584.remote_path;
+    remote_provider_name = other584.remote_provider_name;
     app_bl_status = other584.app_bl_status;
     partition_bl_info = other584.partition_bl_info;
     __isset = other584.__isset;
@@ -13328,7 +13331,7 @@ bulk_load_request &bulk_load_request::operator=(bulk_load_request &&other585)
     pid = std::move(other585.pid);
     app_name = std::move(other585.app_name);
     primary_addr = std::move(other585.primary_addr);
-    remote_path = std::move(other585.remote_path);
+    remote_provider_name = std::move(other585.remote_provider_name);
     app_bl_status = std::move(other585.app_bl_status);
     partition_bl_info = std::move(other585.partition_bl_info);
     __isset = std::move(other585.__isset);
@@ -13344,7 +13347,7 @@ void bulk_load_request::printTo(std::ostream &out) const
     out << ", "
         << "primary_addr=" << to_string(primary_addr);
     out << ", "
-        << "remote_path=" << to_string(remote_path);
+        << "remote_provider_name=" << to_string(remote_provider_name);
     out << ", "
         << "app_bl_status=" << to_string(app_bl_status);
     out << ", "

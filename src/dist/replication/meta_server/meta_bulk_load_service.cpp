@@ -242,7 +242,7 @@ void bulk_load_service::update_partition_blstatus_downloading(std::shared_ptr<ap
         _meta_svc->tracker());
 }
 
-void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_file_path)
+void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_provider_name)
 {
     dsn::rpc_address primary_addr;
     std::string app_name;
@@ -268,7 +268,7 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
         tasking::enqueue(
             LPC_META_STATE_NORMAL,
             _meta_svc->tracker(),
-            std::bind(&bulk_load_service::partition_bulk_load, this, pid, remote_file_path),
+            std::bind(&bulk_load_service::partition_bulk_load, this, pid, remote_provider_name),
             0,
             std::chrono::seconds(1));
         return;
@@ -280,7 +280,7 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
     req.primary_addr = primary_addr;
     req.app_bl_status = bl_status;
     req.partition_bl_info = pbl_info;
-    req.remote_path = remote_file_path;
+    req.remote_provider_name = remote_provider_name;
 
     // TODO(heyuchen): handle _progress.bulk_load_requests[pid] has request
     dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
@@ -291,6 +291,8 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
         [this, pid, primary_addr](error_code err, bulk_load_response &&resp) {
             on_partition_bulk_load_reply(err, std::move(resp), pid, primary_addr);
         });
+
+    // TODO(heyuchen): add lock to _progress
     _progress.bulk_load_requests[pid] = rpc_callback;
 
     ddebug("send bulk load request to replica server, app(%d.%d), target_addr = %s",

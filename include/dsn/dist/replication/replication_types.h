@@ -5598,7 +5598,7 @@ typedef struct _bulk_load_request__isset
         : pid(false),
           app_name(false),
           primary_addr(false),
-          remote_path(false),
+          remote_provider_name(false),
           app_bl_status(false),
           partition_bl_info(false)
     {
@@ -5606,7 +5606,7 @@ typedef struct _bulk_load_request__isset
     bool pid : 1;
     bool app_name : 1;
     bool primary_addr : 1;
-    bool remote_path : 1;
+    bool remote_provider_name : 1;
     bool app_bl_status : 1;
     bool partition_bl_info : 1;
 } _bulk_load_request__isset;
@@ -5618,7 +5618,8 @@ public:
     bulk_load_request(bulk_load_request &&);
     bulk_load_request &operator=(const bulk_load_request &);
     bulk_load_request &operator=(bulk_load_request &&);
-    bulk_load_request() : app_name(), remote_path(), app_bl_status((::dsn::bulk_load_status::type)0)
+    bulk_load_request()
+        : app_name(), remote_provider_name(), app_bl_status((::dsn::bulk_load_status::type)0)
     {
     }
 
@@ -5626,7 +5627,7 @@ public:
     ::dsn::gpid pid;
     std::string app_name;
     ::dsn::rpc_address primary_addr;
-    std::string remote_path;
+    std::string remote_provider_name;
     ::dsn::bulk_load_status::type app_bl_status;
     partition_bulk_load_info partition_bl_info;
 
@@ -5638,7 +5639,7 @@ public:
 
     void __set_primary_addr(const ::dsn::rpc_address &val);
 
-    void __set_remote_path(const std::string &val);
+    void __set_remote_provider_name(const std::string &val);
 
     void __set_app_bl_status(const ::dsn::bulk_load_status::type val);
 
@@ -5652,7 +5653,7 @@ public:
             return false;
         if (!(primary_addr == rhs.primary_addr))
             return false;
-        if (!(remote_path == rhs.remote_path))
+        if (!(remote_provider_name == rhs.remote_provider_name))
             return false;
         if (!(app_bl_status == rhs.app_bl_status))
             return false;

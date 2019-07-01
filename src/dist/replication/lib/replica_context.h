@@ -523,6 +523,28 @@ private:
 
 typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
 
+// enum replica_bulk_load_status
+//{
+//    BulkLoadInvalid = 0,
+//    BulkLoadDownloading,
+//    BulkLoadDownloaded,
+//    BulkLoadIngesting,
+//    BulkLoadFinish,
+//    BulkLoadPaused,
+//    BulkLoadCanceled
+//};
+
+struct bulk_load_metadata
+{
+    std::vector<file_meta> files;
+    int64_t file_total_size;
+    DEFINE_JSON_SERIALIZATION(files, file_total_size)
+};
+
+// class bulk_load_context
+//{
+//};
+
 //---------------inline impl----------------------------------------------------------------
 
 inline partition_status::type primary_context::get_node_status(::dsn::rpc_address addr) const

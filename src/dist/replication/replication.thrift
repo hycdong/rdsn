@@ -765,7 +765,7 @@ struct bulk_load_request
     1:dsn.gpid                      pid;
     2:string                        app_name;
     3:dsn.rpc_address               primary_addr;
-    4:string                        remote_path;
+    4:string                        remote_provider_name;
     5:dsn.layer2.bulk_load_status   app_bl_status;
     6:partition_bulk_load_info      partition_bl_info;
 }

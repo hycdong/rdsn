@@ -57,7 +57,7 @@ public:
                                                const std::string &bulk_load_path,
                                                start_bulk_load_rpc rpc);
 
-    void partition_bulk_load(gpid pid, const std::string &remote_file_path);
+    void partition_bulk_load(gpid pid, const std::string &remote_provider_name);
 
     void on_partition_bulk_load_reply(dsn::error_code err,
                                       bulk_load_response &&response,
