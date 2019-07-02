@@ -34,6 +34,8 @@
 namespace dsn {
 namespace replication {
 
+// TODO(heyuchen): refactor code, move some functions to replication_common & replica_context
+
 void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response &response)
 {
     _checker.only_one_thread_access();
@@ -44,33 +46,82 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         return;
     }
 
-    ddebug_f("{} receive bulk load request", name());
+    // TODO(heyuchen): 3. set response field
 
-    // TODO(heyuchen): change remote to temp folder, local to actual dir
-    std::ostringstream oss;
-    oss << "bulk_load_test/cluster/temp/" << request.pid.get_partition_index();
-    std::string remote_dir = oss.str();
+    ddebug_f("{} receive bulk load request, remote provider:{}, app bulk load status:{}, partition "
+             "bulk load status: remote {} VS local {}",
+             name(),
+             request.remote_provider_name,
+             enum_to_string(request.app_bl_status),
+             enum_to_string(request.partition_bl_info.status),
+             enum_to_string(_bulk_load_context.get_status()));
 
-    std::ostringstream os;
-    os << _dir << "/bulk_load";
-    std::string bulk_load_dir = os.str();
-    if (!utils::filesystem::directory_exists(bulk_load_dir) &&
-        !utils::filesystem::create_directory(bulk_load_dir)) {
-        derror_f("{} failed to create directory {}", name(), bulk_load_dir);
-        response.err = ERR_FILE_OPERATION_FAILED;
-        return;
+    if (_bulk_load_context.get_status() == bulk_load_status::BLS_INVALID &&
+        request.partition_bl_info.status == bulk_load_status::BLS_DOWNLOADING) {
+        ddebug_f("{} try to download sst files", name());
+        _bulk_load_context.set_status(request.partition_bl_info.status);
+        response.err = download_sst_files(request);
     }
-    response.err = download_sst_files(request.remote_provider_name, remote_dir, bulk_load_dir);
 
-    // TODO(heyuchen): 2. send group check to secondaries
-    if (status() == partition_status::PS_PRIMARY) {
-        ddebug_f("{} send bulk load request to secondary", name());
+    if ((_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
+         _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED)) {
+        if (status() == partition_status::PS_PRIMARY) {
+            send_download_request_to_secondaries(request);
+        } else {
+            // TODO(heyuchen): 1. report download
+        }
     }
 }
 
-dsn::error_code replica::download_sst_files(const std::string &remote_provider,
-                                            const std::string &remote_file_dir,
-                                            const std::string &local_file_dir)
+void replica::send_download_request_to_secondaries(const bulk_load_request &request)
+{
+    for (const auto &target_address : _primary_states.membership.secondaries) {
+        rpc::call_one_way_typed(target_address, RPC_BULK_LOAD, request, get_gpid().thread_hash());
+    }
+}
+
+dsn::error_code replica::download_sst_files(const bulk_load_request &request)
+{
+    std::string remote_dir =
+        get_bulk_load_remote_dir(request.app_name, request.pid.get_partition_index());
+
+    std::string bulk_load_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
+    dsn::error_code err = create_local_bulk_load_dir(bulk_load_dir);
+    if (err != ERR_OK) {
+        derror_f("{} failed to download sst files coz create local dir failed", name());
+        return err;
+    }
+    return do_download_sst_files(request.remote_provider_name, remote_dir, bulk_load_dir);
+}
+
+dsn::error_code replica::create_local_bulk_load_dir(const std::string &bulk_load_dir)
+{
+    if (!utils::filesystem::directory_exists(_dir) && !utils::filesystem::create_directory(_dir)) {
+        derror_f("{}: _dir {} not exist and create directory failed", name(), _dir);
+        return ERR_FILE_OPERATION_FAILED;
+    }
+
+    if (!utils::filesystem::directory_exists(bulk_load_dir) &&
+        !utils::filesystem::create_directory(bulk_load_dir)) {
+        derror_f(
+            "{}: bulk_load_dir {} not exist and create directory failed", name(), bulk_load_dir);
+        return ERR_FILE_OPERATION_FAILED;
+    }
+
+    return ERR_OK;
+}
+
+std::string replica::get_bulk_load_remote_dir(const std::string &app_name, uint32_t pidx)
+{
+    // TODO(heyuchen): change dir path
+    std::ostringstream oss;
+    oss << "bulk_load_test/cluster/" << app_name << "/" << pidx;
+    return oss.str();
+}
+
+dsn::error_code replica::do_download_sst_files(const std::string &remote_provider,
+                                               const std::string &remote_file_dir,
+                                               const std::string &local_file_dir)
 {
     dsn::dist::block_service::block_filesystem *fs =
         _stub->_block_service_manager.get_block_filesystem(remote_provider);
@@ -187,17 +238,37 @@ dsn::error_code replica::download_sst_files(const std::string &remote_provider,
     };
 
     std::string remote_file_name = "bulk_load_metadata";
-    std::string whole_file_name =
+    std::string remote_whole_file_name =
         utils::filesystem::path_combine(remote_file_dir, remote_file_name);
 
     // TODO(heyuchen): check TASK_CODE_EXEC_INLINED usage
-    fs->create_file(dsn::dist::block_service::create_file_request{whole_file_name, false},
+    fs->create_file(dsn::dist::block_service::create_file_request{remote_whole_file_name, false},
                     TASK_CODE_EXEC_INLINED,
                     std::bind(create_file_cb, std::placeholders::_1, remote_file_name),
                     &tracker);
     tracker.wait_outstanding_tasks();
 
-    // TODO(heyuchen): 1. download sst files, not only metadata
+    std::string local_whole_file_name =
+        utils::filesystem::path_combine(local_file_dir, remote_file_name);
+    bulk_load_metadata metadata;
+    if (!_bulk_load_context.read_bulk_load_metadata(local_whole_file_name, metadata)) {
+        derror_f("{}: parse bulk load metadata failed", name());
+        return ERR_FILE_OPERATION_FAILED;
+    }
+
+    _bulk_load_context._file_total_size = metadata.file_total_size;
+    for (const auto &f_meta : metadata.files) {
+        std::string rname = utils::filesystem::path_combine(remote_file_dir, f_meta.name);
+        fs->create_file(dsn::dist::block_service::create_file_request{rname, false},
+                        TASK_CODE_EXEC_INLINED,
+                        std::bind(create_file_cb, std::placeholders::_1, f_meta.name),
+                        &tracker);
+    }
+    tracker.wait_outstanding_tasks();
+
+    // TODO(heyuchen): 0. validate file with md5, size
+
+    // TODO(heyuchen): 2. download files process
 
     return err;
 }

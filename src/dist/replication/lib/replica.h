@@ -308,9 +308,16 @@ private:
     /////////////////////////////////////////////////////////////////
     // replica bulk load
     void on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response);
-    dsn::error_code download_sst_files(const std::string &remote_provider,
-                                       const std::string &remote_file_dir,
-                                       const std::string &local_file_dir);
+    dsn::error_code download_sst_files(const bulk_load_request &request);
+
+    dsn::error_code do_download_sst_files(const std::string &remote_provider,
+                                          const std::string &remote_file_dir,
+                                          const std::string &local_file_dir);
+
+    void send_download_request_to_secondaries(const bulk_load_request &request);
+
+    std::string get_bulk_load_remote_dir(const std::string &app_name, uint32_t pidx);
+    dsn::error_code create_local_bulk_load_dir(const std::string &bulk_load_dir);
 
 private:
     friend class ::dsn::replication::replication_checker;
@@ -364,6 +371,7 @@ private:
     potential_secondary_context _potential_secondary_states;
     // policy_name --> cold_backup_context
     std::map<std::string, cold_backup_context_ptr> _cold_backup_contexts;
+    bulk_load_context _bulk_load_context;
 
     // timer task that running in replication-thread
     dsn::task_ptr _collect_info_timer;

@@ -33,6 +33,7 @@
  *     xxxx-xx-xx, author, fix bug about xxx
  */
 
+#include <fstream>
 #include <dsn/utility/filesystem.h>
 #include <dsn/utility/utils.h>
 
@@ -1283,6 +1284,44 @@ void cold_backup_context::file_upload_complete(const std::string &filename)
     dassert(_cur_upload_file_cnt >= 1, "cur_upload_file_cnt = %d", _cur_upload_file_cnt);
     _cur_upload_file_cnt -= 1;
     _file_status[filename] = file_status::FileUploadComplete;
+}
+
+bool bulk_load_context::read_bulk_load_metadata(const std::string &file_path,
+                                                bulk_load_metadata &meta)
+{
+    if (!::dsn::utils::filesystem::file_exists(file_path)) {
+        derror("file(%s) doesn't exist on remote storage", file_path.c_str());
+        return false;
+    }
+
+    int64_t file_sz = 0;
+    if (!::dsn::utils::filesystem::file_size(file_path, file_sz)) {
+        derror("get file(%s) size failed", file_path.c_str());
+        return false;
+    }
+    std::shared_ptr<char> buf = utils::make_shared_array<char>(file_sz + 1);
+
+    std::ifstream fin(file_path, std::ifstream::in);
+    if (!fin.is_open()) {
+        derror("open file(%s) failed", file_path.c_str());
+        return false;
+    }
+    fin.read(buf.get(), file_sz);
+    dassert(file_sz == fin.gcount(),
+            "read file(%s) failed, need %" PRId64 ", but read %" PRId64 "",
+            file_path.c_str(),
+            file_sz,
+            fin.gcount());
+    fin.close();
+
+    buf.get()[fin.gcount()] = '\0';
+    blob bb;
+    bb.assign(std::move(buf), 0, file_sz);
+    if (!::dsn::json::json_forwarder<bulk_load_metadata>::decode(bb, meta)) {
+        derror("file(%s) is damaged", file_path.c_str());
+        return false;
+    }
+    return true;
 }
 }
 } // end namespace

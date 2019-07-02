@@ -541,9 +541,23 @@ struct bulk_load_metadata
     DEFINE_JSON_SERIALIZATION(files, file_total_size)
 };
 
-// class bulk_load_context
-//{
-//};
+class bulk_load_context
+{
+public:
+    explicit bulk_load_context() : _status(bulk_load_status::BLS_INVALID), _file_total_size(0) {}
+
+    bulk_load_status::type get_status() { return _status; }
+    void set_status(bulk_load_status::type status) { _status = status; }
+
+    bool read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
+
+private:
+    friend class ::dsn::replication::replica;
+
+    bulk_load_status::type _status;
+    uint64_t _file_total_size;
+    std::atomic<uint64_t> _cur_download_size;
+};
 
 //---------------inline impl----------------------------------------------------------------
 
