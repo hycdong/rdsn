@@ -307,11 +307,16 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                                                      gpid pid,
                                                      const rpc_address &primary_addr)
 {
+    if (err != ERR_OK) {
+        // TODO(heyuchen): retry
+        return;
+    }
+
     ddebug_f("recevie bulk load response, app[{}.{}] from server({}), err is {}",
              pid.get_app_id(),
              pid.get_partition_index(),
              primary_addr.to_string(),
-             err.to_string());
+             response.err.to_string());
     //--_progress.unfinished_partitions_per_app[pid];
 }
 

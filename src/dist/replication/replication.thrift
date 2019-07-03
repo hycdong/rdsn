@@ -153,6 +153,13 @@ struct group_check_request
     4:i64                   last_committed_decree;
 }
 
+struct partition_download_progress
+{
+    1:dsn.gpid          pid;
+    2:i32               progress;
+    3:dsn.error_code    status;
+}
+
 struct group_check_response
 {
     1:dsn.gpid pid;
@@ -162,6 +169,10 @@ struct group_check_response
     5:learner_status      learner_status_ = learner_status.LearningInvalid;
     6:i64                 learner_signature;
     7:dsn.rpc_address     node;
+
+    // add filed after supporting bulk load
+    // used when secondary downloading or downloaded
+    8:optional partition_download_progress bulk_load_download_progress;
 }
 
 /////////////////// meta server messages ////////////////////
@@ -760,6 +771,8 @@ struct start_bulk_load_response
     1:dsn.error_code        err;
 }
 
+
+
 struct bulk_load_request
 {
     1:dsn.gpid                      pid;
@@ -775,7 +788,8 @@ struct bulk_load_response
     1:dsn.error_code    err;
     2:dsn.gpid  pid;
     3:dsn.layer2.bulk_load_status   partition_bl_status;
-    // TODO(heyuchen): add progress struct
+    4:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
+    5:optional i32 total_download_progress;
 }
 
 /*

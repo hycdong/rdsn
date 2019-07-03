@@ -316,8 +316,20 @@ private:
 
     void send_download_request_to_secondaries(const bulk_load_request &request);
 
+    bool verify_sst_files(const bulk_load_metadata &metadata, const std::string &dir);
+
     std::string get_bulk_load_remote_dir(const std::string &app_name, uint32_t pidx);
     dsn::error_code create_local_bulk_load_dir(const std::string &bulk_load_dir);
+    void update_download_progress();
+    void do_download(const std::string &remote_file_dir,
+                     const std::string &local_file_dir,
+                     const std::string &remote_file_name,
+                     dsn::dist::block_service::block_filesystem *fs,
+                     bool is_update_progress,
+                     dsn::error_code &err,
+                     dsn::task_tracker &tracker);
+    dsn::error_code read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
+    void update_group_download_progress(bulk_load_response &response);
 
 private:
     friend class ::dsn::replication::replication_checker;
@@ -390,6 +402,10 @@ private:
     //      ERR_IGNORE_DAMAGED_DATA : data on backup media is damaged but we can skip the damage
     //                                data, so skip the damaged partition
     dsn::error_code _restore_status;
+
+    // bulk load
+    // TODO(heyuchen): init it
+    partition_download_progress _bld_progress;
 
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true
     bool _is_initializing;       // when initializing, switching to primary need to update ballot

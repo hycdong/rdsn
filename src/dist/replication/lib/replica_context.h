@@ -111,6 +111,9 @@ public:
     dsn::task_ptr checkpoint_task;
 
     uint64_t last_prepare_ts_ms;
+
+    // bulk load download progress
+    std::map<rpc_address, partition_download_progress> group_download_progress;
 };
 
 class secondary_context
@@ -549,14 +552,14 @@ public:
     bulk_load_status::type get_status() { return _status; }
     void set_status(bulk_load_status::type status) { _status = status; }
 
-    bool read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
-
 private:
     friend class ::dsn::replication::replica;
 
     bulk_load_status::type _status;
     uint64_t _file_total_size;
     std::atomic<uint64_t> _cur_download_size;
+    std::atomic<int32_t> _download_progress;
+    dsn::error_code _download_status;
 };
 
 //---------------inline impl----------------------------------------------------------------

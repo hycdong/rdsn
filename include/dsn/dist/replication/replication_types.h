@@ -189,6 +189,8 @@ class learn_notify_response;
 
 class group_check_request;
 
+class partition_download_progress;
+
 class group_check_response;
 
 class node_info;
@@ -1296,6 +1298,64 @@ inline std::ostream &operator<<(std::ostream &out, const group_check_request &ob
     return out;
 }
 
+typedef struct _partition_download_progress__isset
+{
+    _partition_download_progress__isset() : pid(false), progress(false), status(false) {}
+    bool pid : 1;
+    bool progress : 1;
+    bool status : 1;
+} _partition_download_progress__isset;
+
+class partition_download_progress
+{
+public:
+    partition_download_progress(const partition_download_progress &);
+    partition_download_progress(partition_download_progress &&);
+    partition_download_progress &operator=(const partition_download_progress &);
+    partition_download_progress &operator=(partition_download_progress &&);
+    partition_download_progress() : progress(0) {}
+
+    virtual ~partition_download_progress() throw();
+    ::dsn::gpid pid;
+    int32_t progress;
+    ::dsn::error_code status;
+
+    _partition_download_progress__isset __isset;
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    void __set_progress(const int32_t val);
+
+    void __set_status(const ::dsn::error_code &val);
+
+    bool operator==(const partition_download_progress &rhs) const
+    {
+        if (!(pid == rhs.pid))
+            return false;
+        if (!(progress == rhs.progress))
+            return false;
+        if (!(status == rhs.status))
+            return false;
+        return true;
+    }
+    bool operator!=(const partition_download_progress &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const partition_download_progress &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(partition_download_progress &a, partition_download_progress &b);
+
+inline std::ostream &operator<<(std::ostream &out, const partition_download_progress &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
 typedef struct _group_check_response__isset
 {
     _group_check_response__isset()
@@ -1305,7 +1365,8 @@ typedef struct _group_check_response__isset
           last_committed_decree_in_prepare_list(false),
           learner_status_(true),
           learner_signature(false),
-          node(false)
+          node(false),
+          bulk_load_download_progress(false)
     {
     }
     bool pid : 1;
@@ -1315,6 +1376,7 @@ typedef struct _group_check_response__isset
     bool learner_status_ : 1;
     bool learner_signature : 1;
     bool node : 1;
+    bool bulk_load_download_progress : 1;
 } _group_check_response__isset;
 
 class group_check_response
@@ -1341,6 +1403,7 @@ public:
     learner_status::type learner_status_;
     int64_t learner_signature;
     ::dsn::rpc_address node;
+    partition_download_progress bulk_load_download_progress;
 
     _group_check_response__isset __isset;
 
@@ -1358,6 +1421,8 @@ public:
 
     void __set_node(const ::dsn::rpc_address &val);
 
+    void __set_bulk_load_download_progress(const partition_download_progress &val);
+
     bool operator==(const group_check_response &rhs) const
     {
         if (!(pid == rhs.pid))
@@ -1373,6 +1438,11 @@ public:
         if (!(learner_signature == rhs.learner_signature))
             return false;
         if (!(node == rhs.node))
+            return false;
+        if (__isset.bulk_load_download_progress != rhs.__isset.bulk_load_download_progress)
+            return false;
+        else if (__isset.bulk_load_download_progress &&
+                 !(bulk_load_download_progress == rhs.bulk_load_download_progress))
             return false;
         return true;
     }
@@ -5681,10 +5751,19 @@ inline std::ostream &operator<<(std::ostream &out, const bulk_load_request &obj)
 
 typedef struct _bulk_load_response__isset
 {
-    _bulk_load_response__isset() : err(false), pid(false), partition_bl_status(false) {}
+    _bulk_load_response__isset()
+        : err(false),
+          pid(false),
+          partition_bl_status(false),
+          download_progresses(false),
+          total_download_progress(false)
+    {
+    }
     bool err : 1;
     bool pid : 1;
     bool partition_bl_status : 1;
+    bool download_progresses : 1;
+    bool total_download_progress : 1;
 } _bulk_load_response__isset;
 
 class bulk_load_response
@@ -5694,12 +5773,17 @@ public:
     bulk_load_response(bulk_load_response &&);
     bulk_load_response &operator=(const bulk_load_response &);
     bulk_load_response &operator=(bulk_load_response &&);
-    bulk_load_response() : partition_bl_status((::dsn::bulk_load_status::type)0) {}
+    bulk_load_response()
+        : partition_bl_status((::dsn::bulk_load_status::type)0), total_download_progress(0)
+    {
+    }
 
     virtual ~bulk_load_response() throw();
     ::dsn::error_code err;
     ::dsn::gpid pid;
     ::dsn::bulk_load_status::type partition_bl_status;
+    std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
+    int32_t total_download_progress;
 
     _bulk_load_response__isset __isset;
 
@@ -5709,6 +5793,11 @@ public:
 
     void __set_partition_bl_status(const ::dsn::bulk_load_status::type val);
 
+    void
+    __set_download_progresses(const std::map<::dsn::rpc_address, partition_download_progress> &val);
+
+    void __set_total_download_progress(const int32_t val);
+
     bool operator==(const bulk_load_response &rhs) const
     {
         if (!(err == rhs.err))
@@ -5716,6 +5805,15 @@ public:
         if (!(pid == rhs.pid))
             return false;
         if (!(partition_bl_status == rhs.partition_bl_status))
+            return false;
+        if (__isset.download_progresses != rhs.__isset.download_progresses)
+            return false;
+        else if (__isset.download_progresses && !(download_progresses == rhs.download_progresses))
+            return false;
+        if (__isset.total_download_progress != rhs.__isset.total_download_progress)
+            return false;
+        else if (__isset.total_download_progress &&
+                 !(total_download_progress == rhs.total_download_progress))
             return false;
         return true;
     }
