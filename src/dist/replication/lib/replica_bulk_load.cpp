@@ -108,7 +108,7 @@ void replica::update_group_download_progress(bulk_load_response &response)
         // if(sprogress != nullptr){
         response.download_progresses[target_address] = sprogress;
         total_progress += sprogress.progress;
-        ddebug_f("pid({}.{}) primary={}, download progress={}",
+        ddebug_f("pid({}.{}) secondary={}, download progress={}",
                  response.pid.get_app_id(),
                  response.pid.get_partition_index(),
                  target_address.to_string(),
@@ -285,7 +285,7 @@ void replica::do_download(const std::string &remote_file_dir,
                        name(),
                        local_file.c_str(),
                        resp.downloaded_size,
-                       _bulk_load_context._download_progress.load());
+                       _bld_progress.progress);
             }
         }
     };

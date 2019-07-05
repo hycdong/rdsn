@@ -62,7 +62,8 @@ public:
     void on_partition_bulk_load_reply(dsn::error_code err,
                                       bulk_load_response &&response,
                                       gpid pid,
-                                      const dsn::rpc_address &primary_addr);
+                                      const dsn::rpc_address &primary_addr,
+                                      const std::string &remote_provider_name);
 
     // app bulk load path is {app_path}/bulk_load
     std::string get_app_bulk_load_path(std::shared_ptr<app_state> app) const

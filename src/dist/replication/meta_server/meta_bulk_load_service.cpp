@@ -198,6 +198,7 @@ void bulk_load_service::update_partition_blstatus_downloading(std::shared_ptr<ap
             auto req = rpc.request();
 
             // TODO(heyuchen): change it into real fds remote path
+            // TODO(heyuchen): change thread pool???
             partition_bulk_load(gpid(app->app_id, pidx), req.file_provider_type);
 
             if (app->helpers->bl_states.partitions_in_progress == 0) {
@@ -288,8 +289,9 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
     dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
         msg,
         _meta_svc->tracker(),
-        [this, pid, primary_addr](error_code err, bulk_load_response &&resp) {
-            on_partition_bulk_load_reply(err, std::move(resp), pid, primary_addr);
+        [this, pid, primary_addr, remote_provider_name](error_code err, bulk_load_response &&resp) {
+            on_partition_bulk_load_reply(
+                err, std::move(resp), pid, primary_addr, remote_provider_name);
         });
 
     // TODO(heyuchen): add lock to _progress
@@ -305,19 +307,65 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
 void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                                                      bulk_load_response &&response,
                                                      gpid pid,
-                                                     const rpc_address &primary_addr)
+                                                     const rpc_address &primary_addr,
+                                                     const std::string &remote_provider_name)
 {
     if (err != ERR_OK) {
-        // TODO(heyuchen): retry
-        return;
+        dwarn_f("gpid({}.{}) failed to recevie bulk load response, err is {}",
+                pid.get_app_id(),
+                pid.get_partition_index(),
+                err.to_string());
+    } else if (response.err != ERR_OK) {
+        // TODO(heyuchen): add bulk load status check, downloading error handler below
+        // handle file damaged error during downloading files from remote stroage
+        if (response.err == ERR_CORRUPTION || response.err == ERR_OBJECT_NOT_FOUND) {
+            derror_f("gpid({}.{}) failed to download sst files from remote provider {}, coz files "
+                     "are damaged",
+                     pid.get_app_id(),
+                     pid.get_partition_index(),
+                     remote_provider_name);
+
+            // TODO(heyuchen): set partition bulk load and app bulk load failed, not return
+            // immdiately
+            return;
+        } else {
+            dwarn_f("gpid({}.{}) failed to download sst files from remote provider {}, coz file "
+                    "system error, retry later",
+                    pid.get_app_id(),
+                    pid.get_partition_index(),
+                    remote_provider_name);
+        }
+    } else {
+        // TODO(heyuchen): handle reponse error, handle resend until finish(download) or failed
+        int32_t cur_progress =
+            response.__isset.total_download_progress ? response.total_download_progress : 0;
+        ddebug_f("recevie bulk load response from {} gpid({}.{}), bulk load status={}, "
+                 "download_progress={}",
+                 primary_addr.to_string(),
+                 pid.get_app_id(),
+                 pid.get_partition_index(),
+                 enum_to_string(response.partition_bl_status),
+                 cur_progress);
+
+        int32_t max_progress = 100;
+        if (cur_progress >= max_progress) {
+            // TODO(heyuchen): set partition status to downloaded
+            ddebug_f("gpid({}.{}) finish download remote files from remote provider {}",
+                     pid.get_app_id(),
+                     pid.get_partition_index(),
+                     remote_provider_name);
+
+            //--_progress.unfinished_partitions_per_app[pid];
+            return;
+        }
     }
 
-    ddebug_f("recevie bulk load response, app[{}.{}] from server({}), err is {}",
-             pid.get_app_id(),
-             pid.get_partition_index(),
-             primary_addr.to_string(),
-             response.err.to_string());
-    //--_progress.unfinished_partitions_per_app[pid];
+    tasking::enqueue(
+        LPC_META_STATE_NORMAL,
+        _meta_svc->tracker(),
+        std::bind(&bulk_load_service::partition_bulk_load, this, pid, remote_provider_name),
+        0,
+        std::chrono::seconds(10));
 }
 
 } // namespace replication
