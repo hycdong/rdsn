@@ -35,9 +35,9 @@ namespace replication {
 // TODO(heyuchen): initialize it
 struct bulk_load_progress
 {
-    // std::map<gpid, int32_t> partition_progress;
     std::map<gpid, dsn::task_ptr> bulk_load_requests;
     std::map<app_id, uint32_t> unfinished_partitions_per_app;
+    std::map<gpid, int32_t> partition_download_progress;
 };
 
 class bulk_load_service
@@ -52,10 +52,10 @@ public:
                                                        start_bulk_load_rpc rpc);
     void create_bulk_load_folder_on_remote_storage(std::shared_ptr<app_state> app,
                                                    start_bulk_load_rpc rpc);
-    void update_partition_blstatus_downloading(std::shared_ptr<app_state> app,
-                                               uint32_t pidx,
-                                               const std::string &bulk_load_path,
-                                               start_bulk_load_rpc rpc);
+    void create_partition_bulk_load_info_on_remote_storage(std::shared_ptr<app_state> app,
+                                                           uint32_t pidx,
+                                                           const std::string &bulk_load_path,
+                                                           start_bulk_load_rpc rpc);
 
     void partition_bulk_load(gpid pid, const std::string &remote_provider_name);
 
@@ -64,6 +64,19 @@ public:
                                       gpid pid,
                                       const dsn::rpc_address &primary_addr,
                                       const std::string &remote_provider_name);
+
+    void update_partition_bulk_load_status(std::shared_ptr<app_state> app,
+                                           dsn::gpid pid,
+                                           std::string path,
+                                           bulk_load_status::type status);
+
+    void on_update_partition_bulk_load_status_reply(dsn::error_code err,
+                                                    std::shared_ptr<app_state> app,
+                                                    dsn::gpid pid,
+                                                    std::string path,
+                                                    bulk_load_status::type new_status);
+
+    void update_app_bulk_load_status(std::shared_ptr<app_state> app, bulk_load_status::type status);
 
     // app bulk load path is {app_path}/bulk_load
     std::string get_app_bulk_load_path(std::shared_ptr<app_state> app) const
