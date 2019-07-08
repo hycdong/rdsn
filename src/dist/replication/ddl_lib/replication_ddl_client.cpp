@@ -1600,7 +1600,7 @@ dsn::error_code replication_ddl_client::start_bulk_load(const std::string &app_n
     return resp.err;
 }
 
-//TODO(heyuchen): change this function
+// TODO(heyuchen): change this function
 static std::string get_short_status(bulk_load_status::type status)
 {
     std::string str = enum_to_string(status);

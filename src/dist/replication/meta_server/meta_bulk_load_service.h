@@ -33,11 +33,13 @@ namespace dsn {
 namespace replication {
 
 // TODO(heyuchen): initialize it
-struct bulk_load_progress
+
+struct bulk_load_context
 {
-    std::map<gpid, dsn::task_ptr> bulk_load_requests;
-    std::map<app_id, uint32_t> unfinished_partitions_per_app;
-    std::map<gpid, int32_t> partition_download_progress;
+    std::map<app_id, uint32_t> apps_in_progress_count;
+    std::map<gpid, dsn::task_ptr> partitions_request;
+    std::map<gpid, partition_bulk_load_info> partitions_info;
+    std::map<gpid, int32_t> partitions_download_progress;
 };
 
 class bulk_load_service
@@ -102,12 +104,13 @@ private:
     meta_service *_meta_svc;
     server_state *_state;
 
-    bulk_load_progress _progress;
+    // app_id -> bulk_load_context
+    bulk_load_context _bulk_load_states;
 
     // TODO(heyuchen): lock difference???
     // app lock
     zrwlock_nr &app_lock() const { return _state->_lock; }
-    // bulk load lock
+    // _bulk_load_states lock
     zrwlock_nr _lock;
 };
 
