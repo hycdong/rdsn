@@ -772,6 +772,19 @@ struct start_bulk_load_response
 }
 
 
+struct configuration_query_bulk_load_request
+{
+    1:string   app_name;
+}
+
+struct configuration_query_bulk_load_response
+{
+    1:dsn.error_code                    err;
+    2:string                            app_name;
+    3:dsn.layer2.bulk_load_status       app_status;
+    4:list<dsn.layer2.bulk_load_status> partition_status;
+    5:optional list<i32>                partition_download_progress;
+}
 
 struct bulk_load_request
 {

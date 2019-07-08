@@ -173,6 +173,7 @@ void bulk_load_service::create_bulk_load_folder_on_remote_storage(std::shared_pt
                      err.to_string());
             auto response = rpc.response();
             response.err = ERR_ZOOKEEPER_OPERATION;
+            // TODO(heyuchen): set app bulk_load status to failed
         }
     };
 
@@ -234,6 +235,7 @@ void bulk_load_service::create_partition_bulk_load_info_on_remote_storage(
                      err.to_string());
             auto response = rpc.response();
             response.err = ERR_ZOOKEEPER_OPERATION;
+            // TODO(heyuchen): set app bulk_load status to failed
         }
     };
 
@@ -285,7 +287,6 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
     req.partition_bl_info = pbl_info;
     req.remote_provider_name = remote_provider_name;
 
-    // TODO(heyuchen): handle _progress.bulk_load_requests[pid] has request
     dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
     dsn::marshall(msg, req);
     dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
@@ -350,6 +351,7 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                  cur_progress);
         _progress.partition_download_progress[pid] = cur_progress;
 
+        // TODO(heyuchen): change it to common value
         int32_t max_progress = 100;
         if (cur_progress >= max_progress) {
             ddebug_f("gpid({}.{}) finish download remote files from remote provider {}",
@@ -379,6 +381,7 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
         }
     }
 
+    // TODO(heyuchen): delay time to config
     tasking::enqueue(
         LPC_DEFAULT_CALLBACK,
         _meta_svc->tracker(),
@@ -509,6 +512,58 @@ void bulk_load_service::update_app_bulk_load_status(std::shared_ptr<app_state> a
                                               LPC_META_STATE_HIGH,
                                               on_write_storage,
                                               _meta_svc->tracker());
+}
+
+void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
+{
+    const auto &request = rpc.request();
+    const std::string &app_name = request.app_name;
+
+    configuration_query_bulk_load_response &response = rpc.response();
+    response.err = ERR_OK;
+    response.app_name = app_name;
+
+    {
+        zauto_read_lock l(app_lock());
+        std::shared_ptr<app_state> app = _state->get_app(app_name);
+
+        if (app == nullptr) {
+            derror_f("app {} is not existed", app_name);
+            response.err = ERR_OBJECT_NOT_FOUND;
+            return;
+        }
+
+        if (app->status != app_status::AS_AVAILABLE) {
+            derror_f("app {} is not available", app_name);
+            response.err = ERR_APP_DROPPED;
+            return;
+        }
+
+        if (app->app_bulk_load_status == bulk_load_status::BLS_INVALID) {
+            dwarn_f("app {} is not during bulk load", app_name);
+            response.err = ERR_INVALID_STATE;
+            return;
+        }
+
+        response.app_status = app->app_bulk_load_status;
+        response.partition_status.resize(app->partition_count);
+        if (response.app_status == bulk_load_status::BLS_DOWNLOADING ||
+            response.app_status == bulk_load_status::BLS_DOWNLOADED) {
+            response.__isset.partition_download_progress = true;
+            response.partition_download_progress.resize(app->partition_count);
+        }
+
+        auto partition_bulk_load_info_map = app->helpers->bl_states.partitions_info;
+        for (auto iter = partition_bulk_load_info_map.begin();
+             iter != partition_bulk_load_info_map.end();
+             iter++) {
+            response.partition_status[iter->first] = iter->second.status;
+            if (response.__isset.partition_download_progress) {
+                response.partition_download_progress[iter->first] =
+                    _progress.partition_download_progress[gpid(app->app_id, iter->first)];
+            }
+        }
+    }
 }
 
 } // namespace replication

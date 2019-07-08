@@ -47,6 +47,8 @@ public:
 
     // client -> meta server to start bulk load
     void on_start_bulk_load(start_bulk_load_rpc rpc);
+    // client -> meta server to query bulk load status
+    void on_query_bulk_load_status(query_bulk_load_rpc rpc);
 
     void update_blstatus_downloading_on_remote_storage(std::shared_ptr<app_state> app,
                                                        start_bulk_load_rpc rpc);

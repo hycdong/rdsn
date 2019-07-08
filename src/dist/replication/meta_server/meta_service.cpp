@@ -325,6 +325,9 @@ void meta_service::register_rpc_handlers()
         RPC_CM_DDD_DIAGNOSE, "ddd_diagnose", &meta_service::ddd_diagnose);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_START_BULK_LOAD, "start_bulk_load", &meta_service::on_start_bulk_load);
+    register_rpc_handler_with_rpc_holder(RPC_CM_QUERY_BULK_LOAD_STATUS,
+                                         "query_bulk_load_status",
+                                         &meta_service::on_query_bulk_load_status);
 }
 
 int meta_service::check_leader(dsn::message_ex *req, dsn::rpc_address *forward_address)
@@ -796,6 +799,22 @@ void meta_service::on_start_bulk_load(start_bulk_load_rpc rpc)
             LPC_DEFAULT_CALLBACK,
             nullptr,
             std::bind(&bulk_load_service::on_start_bulk_load, _bulk_load_svc.get(), rpc));
+    }
+}
+
+void meta_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
+{
+    auto &response = rpc.response();
+    RPC_CHECK_STATUS(rpc.dsn_request(), response);
+
+    if (_bulk_load_svc == nullptr) {
+        derror("meta doesn't support bulk load service");
+        response.err = ERR_SERVICE_NOT_ACTIVE;
+    } else {
+        tasking::enqueue(
+            LPC_DEFAULT_CALLBACK,
+            nullptr,
+            std::bind(&bulk_load_service::on_query_bulk_load_status, _bulk_load_svc.get(), rpc));
     }
 }
 

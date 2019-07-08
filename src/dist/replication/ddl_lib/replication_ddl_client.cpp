@@ -1599,5 +1599,85 @@ dsn::error_code replication_ddl_client::start_bulk_load(const std::string &app_n
 
     return resp.err;
 }
+
+//TODO(heyuchen): change this function
+static std::string get_short_status(bulk_load_status::type status)
+{
+    std::string str = enum_to_string(status);
+    str = str.substr(22);
+    return str;
+}
+
+dsn::error_code replication_ddl_client::query_bulk_load(const std::string &app_name, bool detailed)
+{
+    std::shared_ptr<configuration_query_bulk_load_request> req(
+        new configuration_query_bulk_load_request());
+    req->app_name = app_name;
+
+    auto resp_task =
+        request_meta<configuration_query_bulk_load_request>(RPC_CM_QUERY_BULK_LOAD_STATUS, req);
+    resp_task->wait();
+
+    if (resp_task->error() != dsn::ERR_OK) {
+        return resp_task->error();
+    }
+
+    configuration_query_bulk_load_response resp;
+    dsn::unmarshall(resp_task->get_response(), resp);
+
+    if (resp.err == ERR_OBJECT_NOT_FOUND || resp.err == ERR_APP_DROPPED) {
+        std::cout << "app(" << app_name << ") not existed or not available" << std::endl;
+        return resp.err;
+    }
+
+    else if (resp.err == ERR_INVALID_STATE) {
+        std::cout << "app(" << app_name << ") not during bulk load" << std::endl;
+        return resp.err;
+    }
+
+    bool print_progress = resp.__isset.partition_download_progress;
+    int total_progress = 0;
+    if (print_progress) {
+        for (int i = 0; i < resp.partition_status.size(); ++i) {
+            total_progress += resp.partition_download_progress[i];
+        }
+        total_progress /= resp.partition_status.size();
+    }
+
+    if (resp.err == ERR_OK) {
+        if (!detailed) {
+            std::cout << "app(" << app_name << ") bulk load status is "
+                      << enum_to_string(resp.app_status) << std::endl;
+        } else {
+            int width = strlen("bulk_load_status");
+            if (!print_progress) {
+                std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
+                          << "status" << std::endl;
+            } else {
+                std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
+                          << "status" << std::setw(width) << std::left << "progress(%)"
+                          << std::endl;
+            }
+
+            for (int i = 0; i < resp.partition_status.size(); ++i) {
+                if (!print_progress) {
+                    std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
+                              << get_short_status(resp.partition_status[i]) << std::endl;
+                } else {
+                    std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
+                              << get_short_status(resp.partition_status[i]) << std::setw(width)
+                              << std::left << resp.partition_download_progress[i] << std::endl;
+                }
+            }
+        }
+
+        if (print_progress) {
+            std::cout << "app(" << app_name << ") total download progress is " << total_progress
+                      << "%" << std::endl;
+        }
+    }
+
+    return resp.err;
+}
 }
 } // namespace

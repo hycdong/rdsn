@@ -331,6 +331,10 @@ class start_bulk_load_request;
 
 class start_bulk_load_response;
 
+class configuration_query_bulk_load_request;
+
+class configuration_query_bulk_load_response;
+
 class bulk_load_request;
 
 class bulk_load_response;
@@ -5657,6 +5661,143 @@ public:
 void swap(start_bulk_load_response &a, start_bulk_load_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const start_bulk_load_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _configuration_query_bulk_load_request__isset
+{
+    _configuration_query_bulk_load_request__isset() : app_name(false) {}
+    bool app_name : 1;
+} _configuration_query_bulk_load_request__isset;
+
+class configuration_query_bulk_load_request
+{
+public:
+    configuration_query_bulk_load_request(const configuration_query_bulk_load_request &);
+    configuration_query_bulk_load_request(configuration_query_bulk_load_request &&);
+    configuration_query_bulk_load_request &operator=(const configuration_query_bulk_load_request &);
+    configuration_query_bulk_load_request &operator=(configuration_query_bulk_load_request &&);
+    configuration_query_bulk_load_request() : app_name() {}
+
+    virtual ~configuration_query_bulk_load_request() throw();
+    std::string app_name;
+
+    _configuration_query_bulk_load_request__isset __isset;
+
+    void __set_app_name(const std::string &val);
+
+    bool operator==(const configuration_query_bulk_load_request &rhs) const
+    {
+        if (!(app_name == rhs.app_name))
+            return false;
+        return true;
+    }
+    bool operator!=(const configuration_query_bulk_load_request &rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool operator<(const configuration_query_bulk_load_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(configuration_query_bulk_load_request &a, configuration_query_bulk_load_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const configuration_query_bulk_load_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _configuration_query_bulk_load_response__isset
+{
+    _configuration_query_bulk_load_response__isset()
+        : err(false),
+          app_name(false),
+          app_status(false),
+          partition_status(false),
+          partition_download_progress(false)
+    {
+    }
+    bool err : 1;
+    bool app_name : 1;
+    bool app_status : 1;
+    bool partition_status : 1;
+    bool partition_download_progress : 1;
+} _configuration_query_bulk_load_response__isset;
+
+class configuration_query_bulk_load_response
+{
+public:
+    configuration_query_bulk_load_response(const configuration_query_bulk_load_response &);
+    configuration_query_bulk_load_response(configuration_query_bulk_load_response &&);
+    configuration_query_bulk_load_response &
+    operator=(const configuration_query_bulk_load_response &);
+    configuration_query_bulk_load_response &operator=(configuration_query_bulk_load_response &&);
+    configuration_query_bulk_load_response()
+        : app_name(), app_status((::dsn::bulk_load_status::type)0)
+    {
+    }
+
+    virtual ~configuration_query_bulk_load_response() throw();
+    ::dsn::error_code err;
+    std::string app_name;
+    ::dsn::bulk_load_status::type app_status;
+    std::vector<::dsn::bulk_load_status::type> partition_status;
+    std::vector<int32_t> partition_download_progress;
+
+    _configuration_query_bulk_load_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_app_name(const std::string &val);
+
+    void __set_app_status(const ::dsn::bulk_load_status::type val);
+
+    void __set_partition_status(const std::vector<::dsn::bulk_load_status::type> &val);
+
+    void __set_partition_download_progress(const std::vector<int32_t> &val);
+
+    bool operator==(const configuration_query_bulk_load_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (!(app_name == rhs.app_name))
+            return false;
+        if (!(app_status == rhs.app_status))
+            return false;
+        if (!(partition_status == rhs.partition_status))
+            return false;
+        if (__isset.partition_download_progress != rhs.__isset.partition_download_progress)
+            return false;
+        else if (__isset.partition_download_progress &&
+                 !(partition_download_progress == rhs.partition_download_progress))
+            return false;
+        return true;
+    }
+    bool operator!=(const configuration_query_bulk_load_response &rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool operator<(const configuration_query_bulk_load_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(configuration_query_bulk_load_response &a, configuration_query_bulk_load_response &b);
+
+inline std::ostream &operator<<(std::ostream &out,
+                                const configuration_query_bulk_load_response &obj)
 {
     obj.printTo(out);
     return out;
