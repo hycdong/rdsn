@@ -587,6 +587,11 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                             drop_partition(app, partition_id);
                         } else
                             process_one_partition(app);
+                        // TODO(heyuchen):
+                        // if(app->helper->process_partitions == 0){
+                        //     // confirm app status = AVAILABLE
+                        //     continue_bulk_load(app)
+                        // }
                     }
                 } else if (ec == ERR_OBJECT_NOT_FOUND) {
                     dwarn("partition node %s not exist on remote storage, may half create before",

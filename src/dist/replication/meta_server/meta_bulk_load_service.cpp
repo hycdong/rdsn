@@ -202,17 +202,12 @@ void bulk_load_service::create_partition_bulk_load_info_on_remote_storage(
 
             {
                 zauto_write_lock l(_lock);
-                //--app->helpers->bl_states.partitions_in_progress;
-                // app->helpers->bl_states.partitions_info.insert(std::make_pair(pidx, pinfo));
                 --_bulk_load_states.apps_in_progress_count[app->app_id];
                 _bulk_load_states.partitions_info.insert(
                     std::make_pair(gpid(app->app_id, pidx), pinfo));
 
-                // if (app->helpers->bl_states.partitions_in_progress == 0) {
                 if (_bulk_load_states.apps_in_progress_count[app->app_id] == 0) {
                     ddebug_f("app {} start bulk load succeed", app->app_name);
-                    //                _bulk_load_states.apps_in_progress_count.insert(
-                    //                    std::make_pair(app->app_id, app->partition_count));
                     _bulk_load_states.apps_in_progress_count[app->app_id] = app->partition_count;
                     auto response = rpc.response();
                     response.err = ERR_OK;
@@ -277,8 +272,6 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
         app_name = app->app_name;
         primary_addr = app->partitions[pid.get_partition_index()].primary;
         bl_status = app->app_bulk_load_status;
-        // pbl_info = app->helpers->bl_states.partitions_info[pid.get_partition_index()];
-        // pbl_info = _bulk_load_states.partitions_info[pid];
     }
 
     {
@@ -419,8 +412,6 @@ void bulk_load_service::update_partition_bulk_load_status(std::shared_ptr<app_st
                                                           std::string path,
                                                           bulk_load_status::type status)
 {
-    //    partition_bulk_load_info pinfo =
-    //        app->helpers->bl_states.partitions_info[pid.get_partition_index()];
     zauto_read_lock l(_lock);
     partition_bulk_load_info pinfo = _bulk_load_states.partitions_info[pid];
     pinfo.status = status;
@@ -477,8 +468,6 @@ void bulk_load_service::on_update_partition_bulk_load_status_reply(
         return;
     }
 
-    //    bulk_load_status::type old_status =
-    //        app->helpers->bl_states.partitions_info[pid.get_partition_index()].status;
     zauto_write_lock l(_lock);
     bulk_load_status::type old_status = _bulk_load_states.partitions_info[pid].status;
     ddebug_f("app {} update partition[{}] bulk_load status from {} to {}",
@@ -487,7 +476,6 @@ void bulk_load_service::on_update_partition_bulk_load_status_reply(
              enum_to_string(old_status),
              enum_to_string(new_status));
 
-    // app->helpers->bl_states.partitions_info[pid.get_partition_index()].status = new_status;
     _bulk_load_states.partitions_info[pid].status = new_status;
     _bulk_load_states.partitions_request[pid] = nullptr;
     if (--_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
@@ -503,11 +491,8 @@ void bulk_load_service::update_app_bulk_load_status(std::shared_ptr<app_state> a
             ddebug_f("app {} update bulk load status to {} on remote storage",
                      app->app_name,
                      enum_to_string(status));
-
             zauto_write_lock l(app_lock());
             app->app_bulk_load_status = status;
-            // app->helpers->bl_states.app_status = app->app_bulk_load_status;
-
             ddebug_f("app {} finish download files", app->app_name);
 
         } else if (err == ERR_TIMEOUT) {
@@ -584,7 +569,6 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
     }
 
     {
-        // auto partition_bulk_load_info_map = app->helpers->bl_states.partitions_info;
         zauto_read_lock l(_lock);
         auto partition_bulk_load_info_map = _bulk_load_states.partitions_info;
         for (auto iter = partition_bulk_load_info_map.begin();
