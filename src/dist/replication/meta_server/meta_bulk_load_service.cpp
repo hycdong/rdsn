@@ -70,8 +70,7 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
         }
     }
 
-    // TODO(heyuchen):
-    // Validate:
+    // TODO(heyuchen): validate in bulk load info file
     // 1. check file existed
     // 2. check partition count
     ddebug_f("start app {} bulk load", request.app_name);
@@ -86,180 +85,100 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
     }
 
     // set bulk_load_status to BLS_DOWMLOADING on zk
-    update_blstatus_downloading_on_remote_storage(std::move(app), std::move(rpc));
+    update_app_bulk_load_status_with_rpc(
+        std::move(app), bulk_load_status::BLS_DOWNLOADING, std::move(rpc));
 }
 
-void bulk_load_service::update_blstatus_downloading_on_remote_storage(
-    std::shared_ptr<app_state> app, start_bulk_load_rpc rpc)
+void bulk_load_service::update_app_bulk_load_status_with_rpc(std::shared_ptr<app_state> app,
+                                                             bulk_load_status::type new_status,
+                                                             start_bulk_load_rpc rpc)
 {
-    auto on_write_storage = [app, rpc, this](error_code err) {
-        if (err == ERR_OK) {
+    app_info info = *app;
+    info.app_bulk_load_status = new_status;
+
+    blob value = dsn::json::json_forwarder<app_info>::encode(info);
+    _meta_svc->get_meta_storage()->set_data(
+        _state->get_app_path(*app), std::move(value), [app, new_status, rpc, this]() {
             ddebug_f("app {} update bulk load status to {} on remote storage",
                      app->app_name,
-                     enum_to_string(bulk_load_status::BLS_DOWNLOADING));
-
+                     enum_to_string(new_status));
             {
                 zauto_write_lock l(app_lock());
-                app->app_bulk_load_status = bulk_load_status::BLS_DOWNLOADING;
+                app->app_bulk_load_status = new_status;
             }
-
             {
                 zauto_write_lock l(_lock);
                 _bulk_load_states.apps_in_progress_count[app->app_id] = app->partition_count;
             }
-
-            tasking::enqueue(
-                LPC_DEFAULT_CALLBACK,
-                this->_meta_svc->tracker(),
-                std::bind(&bulk_load_service::create_bulk_load_folder_on_remote_storage,
-                          this,
-                          std::move(app),
-                          std::move(rpc)),
-                0);
-        } else if (err == ERR_TIMEOUT) {
-            dwarn_f("failed to update app {} bulk load status, remote storage is not available, "
-                    "please try later",
-                    app->app_name);
-            tasking::enqueue(
-                LPC_META_STATE_HIGH,
-                _meta_svc->tracker(),
-                std::bind(&bulk_load_service::update_blstatus_downloading_on_remote_storage,
-                          this,
-                          std::move(app),
-                          std::move(rpc)),
-                0,
-                std::chrono::seconds(1));
-        } else {
-            derror_f("failed to update app {} bulk load status, error is {}",
-                     app->app_name,
-                     err.to_string());
-            auto response = rpc.response();
-            response.err = ERR_ZOOKEEPER_OPERATION;
-        }
-    };
-
-    app_info info = *app;
-    info.app_bulk_load_status = bulk_load_status::BLS_DOWNLOADING;
-    _meta_svc->get_remote_storage()->set_data(_state->get_app_path(*app),
-                                              dsn::json::json_forwarder<app_info>::encode(info),
-                                              LPC_META_STATE_HIGH,
-                                              on_write_storage,
-                                              _meta_svc->tracker());
+            create_app_bulk_load_info_with_rpc(std::move(app), std::move(rpc));
+        });
 }
 
-void bulk_load_service::create_bulk_load_folder_on_remote_storage(std::shared_ptr<app_state> app,
-                                                                  start_bulk_load_rpc rpc)
+void bulk_load_service::create_app_bulk_load_info_with_rpc(std::shared_ptr<app_state> app,
+                                                           start_bulk_load_rpc rpc)
 {
     std::string bulk_load_path = get_app_bulk_load_path(app);
+    const auto req = rpc.request();
+    app_bulk_load_info ainfo;
+    ainfo.app_id = app->app_id;
+    ainfo.cluster_name = req.cluster_name;
+    ainfo.file_provider_type = req.file_provider_type;
+    blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
 
-    // TODO(heyuchen): handle dir exist
-    auto on_write_stroage = [app, rpc, bulk_load_path, this](error_code err) {
-        if (err == ERR_OK) {
+    {
+        zauto_write_lock l(_lock);
+        _apps_bulk_load_info[ainfo.app_id].remote_root = bulk_load_path;
+        _apps_bulk_load_info[ainfo.app_id].info = ainfo;
+    }
+
+    _meta_svc->get_meta_storage()->create_node(
+        std::move(bulk_load_path), std::move(value), [app, rpc, bulk_load_path, this]() {
             ddebug_f("create app {} bulk load dir", app->app_name);
             for (int i = 0; i < app->partition_count; ++i) {
-                create_partition_bulk_load_info_on_remote_storage(app, i, bulk_load_path, rpc);
+                create_partition_bulk_load_info_with_rpc(
+                    app->app_name, gpid(app->app_id, i), app->partition_count, bulk_load_path, rpc);
             }
-        } else if (err == ERR_TIMEOUT) {
-            dwarn_f("failed to create app {} bulk load dir, remote storage is not available, "
-                    "please try later",
-                    app->app_name);
-            tasking::enqueue(
-                LPC_DEFAULT_CALLBACK,
-                _meta_svc->tracker(),
-                std::bind(&bulk_load_service::create_bulk_load_folder_on_remote_storage,
-                          this,
-                          std::move(app),
-                          std::move(rpc)),
-                0,
-                std::chrono::seconds(1));
-        } else {
-            derror_f("failed to create app {} bulk load dir, error is {}",
-                     app->app_name,
-                     err.to_string());
-            auto response = rpc.response();
-            response.err = ERR_ZOOKEEPER_OPERATION;
-            // TODO(heyuchen): set app bulk_load status to failed
-        }
-    };
-
-    _meta_svc->get_remote_storage()->create_node(
-        bulk_load_path, LPC_DEFAULT_CALLBACK, on_write_stroage);
+        });
 }
 
-void bulk_load_service::create_partition_bulk_load_info_on_remote_storage(
-    std::shared_ptr<app_state> app,
-    uint32_t pidx,
-    const std::string &bulk_load_path,
-    start_bulk_load_rpc rpc)
+void bulk_load_service::create_partition_bulk_load_info_with_rpc(const std::string &app_name,
+                                                                 gpid pid,
+                                                                 uint32_t partition_count,
+                                                                 const std::string &bulk_load_path,
+                                                                 start_bulk_load_rpc rpc)
 {
     partition_bulk_load_info pinfo;
     pinfo.status = bulk_load_status::BLS_DOWNLOADING;
+    blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
-    // TODO(heyuchen): handle partition dir exist
-    auto on_write_stroage = [app, pidx, bulk_load_path, rpc, pinfo, this](error_code err) {
-        if (err == ERR_OK) {
-            ddebug_f("app {} create partition[{}] bulk_load_info", app->app_name, pidx);
-
+    _meta_svc->get_meta_storage()->create_node(
+        get_partition_bulk_load_path(bulk_load_path, pid.get_partition_index()),
+        std::move(value),
+        [app_name, pid, partition_count, bulk_load_path, rpc, pinfo, this]() {
+            ddebug_f(
+                "app {} create partition[{}] bulk_load_info", app_name, pid.get_partition_index());
             {
                 zauto_write_lock l(_lock);
-                --_bulk_load_states.apps_in_progress_count[app->app_id];
-                _bulk_load_states.partitions_info.insert(
-                    std::make_pair(gpid(app->app_id, pidx), pinfo));
+                --_bulk_load_states.apps_in_progress_count[pid.get_app_id()];
+                _bulk_load_states.partitions_info.insert(std::make_pair(pid, pinfo));
 
-                if (_bulk_load_states.apps_in_progress_count[app->app_id] == 0) {
-                    ddebug_f("app {} start bulk load succeed", app->app_name);
-                    _bulk_load_states.apps_in_progress_count[app->app_id] = app->partition_count;
+                if (_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
+                    ddebug_f("app {} start bulk load succeed", app_name);
+                    _bulk_load_states.apps_in_progress_count[pid.get_app_id()] = partition_count;
                     auto response = rpc.response();
                     response.err = ERR_OK;
                 }
             }
-
             // start send bulk load to replica servers
-            auto req = rpc.request();
-            partition_bulk_load(gpid(app->app_id, pidx), req.file_provider_type);
-
-        } else if (err == ERR_TIMEOUT) {
-            dwarn_f("failed to create app {} partition[{}] bulk_load_info, remote storage is not "
-                    "available, please try later",
-                    app->app_name,
-                    pidx);
-            tasking::enqueue(
-                LPC_DEFAULT_CALLBACK,
-                _meta_svc->tracker(),
-                std::bind(&bulk_load_service::create_partition_bulk_load_info_on_remote_storage,
-                          this,
-                          std::move(app),
-                          pidx,
-                          bulk_load_path,
-                          rpc),
-                0,
-                std::chrono::seconds(1));
-
-        } else {
-            derror_f("failed to create app {} partition[{}] bulk_load_info, error is {}",
-                     app->app_name,
-                     pidx,
-                     err.to_string());
-            auto response = rpc.response();
-            response.err = ERR_ZOOKEEPER_OPERATION;
-            // TODO(heyuchen): set app bulk_load status to failed
-        }
-    };
-
-    _meta_svc->get_remote_storage()->create_node(
-        get_partition_bulk_load_path(bulk_load_path, pidx),
-        LPC_DEFAULT_CALLBACK,
-        on_write_stroage,
-        dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo),
-        _meta_svc->tracker());
+            partition_bulk_load(pid);
+        });
 }
 
-void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_provider_name)
+void bulk_load_service::partition_bulk_load(gpid pid)
 {
     dsn::rpc_address primary_addr;
     std::string app_name;
     bulk_load_status::type bl_status;
-    partition_bulk_load_info pbl_info;
     {
         zauto_read_lock l(app_lock());
         std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
@@ -268,12 +187,12 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
             // TODO(heyuchen): handler it
             return;
         }
-
         app_name = app->app_name;
         primary_addr = app->partitions[pid.get_partition_index()].primary;
         bl_status = app->app_bulk_load_status;
     }
 
+    partition_bulk_load_info pbl_info;
     {
         zauto_read_lock l(_lock);
         pbl_info = _bulk_load_states.partitions_info[pid];
@@ -281,12 +200,11 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
 
     if (primary_addr.is_invalid()) {
         dwarn_f("app {} gpid({}.{}) primary is invalid, try it later");
-        tasking::enqueue(
-            LPC_DEFAULT_CALLBACK,
-            _meta_svc->tracker(),
-            std::bind(&bulk_load_service::partition_bulk_load, this, pid, remote_provider_name),
-            0,
-            std::chrono::seconds(1));
+        tasking::enqueue(LPC_META_STATE_NORMAL,
+                         _meta_svc->tracker(),
+                         std::bind(&bulk_load_service::partition_bulk_load, this, pid),
+                         0,
+                         std::chrono::seconds(1));
         return;
     }
 
@@ -296,36 +214,37 @@ void bulk_load_service::partition_bulk_load(gpid pid, const std::string &remote_
     req.primary_addr = primary_addr;
     req.app_bl_status = bl_status;
     req.partition_bl_info = pbl_info;
-    req.remote_provider_name = remote_provider_name;
+    req.remote_provider_name = _apps_bulk_load_info[pid.get_app_id()].info.file_provider_type;
+    req.cluster_name = _apps_bulk_load_info[pid.get_app_id()].info.cluster_name;
 
     dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
     dsn::marshall(msg, req);
     dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
         msg,
         _meta_svc->tracker(),
-        [this, pid, primary_addr, remote_provider_name](error_code err, bulk_load_response &&resp) {
-            on_partition_bulk_load_reply(
-                err, std::move(resp), pid, primary_addr, remote_provider_name);
+        [this, pid, primary_addr](error_code err, bulk_load_response &&resp) {
+            on_partition_bulk_load_reply(err, std::move(resp), pid, primary_addr);
         });
 
     zauto_write_lock l(_lock);
     _bulk_load_states.partitions_request[pid] = rpc_callback;
 
     ddebug("send bulk load request to replica server, app(%d.%d), target_addr = %s, app bulk load "
-           "is %s, partition bulk load status is %s",
+           "=%s, partition bulk load status = %s, remote provider = %s, cluster_name = %s",
            pid.get_app_id(),
            pid.get_partition_index(),
            primary_addr.to_string(),
            enum_to_string(bl_status),
-           enum_to_string(pbl_info.status));
+           enum_to_string(pbl_info.status),
+           req.remote_provider_name,
+           req.cluster_name);
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 
 void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                                                      bulk_load_response &&response,
                                                      gpid pid,
-                                                     const rpc_address &primary_addr,
-                                                     const std::string &remote_provider_name)
+                                                     const rpc_address &primary_addr)
 {
     if (err != ERR_OK) {
         dwarn_f("gpid({}.{}) failed to recevie bulk load response, err is {}",
@@ -336,21 +255,19 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
         // handle file damaged error during downloading files from remote stroage
         if (response.err == ERR_CORRUPTION || response.err == ERR_OBJECT_NOT_FOUND) {
-            derror_f("gpid({}.{}) failed to download sst files from remote provider {}, coz files "
+            derror_f("gpid({}.{}) failed to download sst files from remote provider, coz files "
                      "are damaged",
                      pid.get_app_id(),
-                     pid.get_partition_index(),
-                     remote_provider_name);
+                     pid.get_partition_index());
 
             // TODO(heyuchen): set partition bulk load and app bulk load failed, not return
             // immdiately
             return;
         } else {
-            dwarn_f("gpid({}.{}) failed to download sst files from remote provider {}, coz file "
+            dwarn_f("gpid({}.{}) failed to download sst files from remote provider, coz file "
                     "system error, retry later",
                     pid.get_app_id(),
-                    pid.get_partition_index(),
-                    remote_provider_name);
+                    pid.get_partition_index());
         }
     } else {
         // download
@@ -371,10 +288,9 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
         // TODO(heyuchen): change it to common value
         int32_t max_progress = 100;
         if (cur_progress >= max_progress) {
-            ddebug_f("gpid({}.{}) finish download remote files from remote provider {}",
+            ddebug_f("gpid({}.{}) finish download remote files from remote provider",
                      pid.get_app_id(),
-                     pid.get_partition_index(),
-                     remote_provider_name);
+                     pid.get_partition_index());
 
             {
                 zauto_read_lock l(app_lock());
@@ -386,7 +302,7 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                 }
 
                 std::string partition_bulk_load_path = get_partition_bulk_load_path(
-                    get_app_bulk_load_path(app), pid.get_partition_index());
+                    _apps_bulk_load_info[pid.get_app_id()].remote_root, pid.get_partition_index());
                 // TODO(heyuchen): check if status switch is valid
                 update_partition_bulk_load_status(std::move(app),
                                                   pid,
@@ -399,17 +315,16 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
     }
 
     // TODO(heyuchen): delay time to config
-    tasking::enqueue(
-        LPC_DEFAULT_CALLBACK,
-        _meta_svc->tracker(),
-        std::bind(&bulk_load_service::partition_bulk_load, this, pid, remote_provider_name),
-        0,
-        std::chrono::seconds(10));
+    tasking::enqueue(LPC_META_STATE_NORMAL,
+                     _meta_svc->tracker(),
+                     std::bind(&bulk_load_service::partition_bulk_load, this, pid),
+                     0,
+                     std::chrono::seconds(10));
 }
 
 void bulk_load_service::update_partition_bulk_load_status(std::shared_ptr<app_state> app,
                                                           dsn::gpid pid,
-                                                          std::string path,
+                                                          std::string &path,
                                                           bulk_load_status::type status)
 {
     zauto_read_lock l(_lock);
@@ -417,115 +332,40 @@ void bulk_load_service::update_partition_bulk_load_status(std::shared_ptr<app_st
     pinfo.status = status;
     dsn::blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
-    _meta_svc->get_remote_storage()->set_data(
-        path,
-        value,
-        LPC_DEFAULT_CALLBACK,
-        std::bind(&bulk_load_service::on_update_partition_bulk_load_status_reply,
-                  this,
-                  std::placeholders::_1,
-                  app,
-                  pid,
-                  path,
-                  status),
-        _meta_svc->tracker());
-}
+    _meta_svc->get_meta_storage()->set_data(
+        std::move(path), std::move(value), [this, app, pid, path, status]() {
+            zauto_write_lock l(_lock);
+            bulk_load_status::type old_status = _bulk_load_states.partitions_info[pid].status;
+            ddebug_f("app {} update partition[{}] bulk_load status from {} to {}",
+                     app->app_name,
+                     pid.get_partition_index(),
+                     enum_to_string(old_status),
+                     enum_to_string(status));
 
-void bulk_load_service::on_update_partition_bulk_load_status_reply(
-    dsn::error_code err,
-    std::shared_ptr<app_state> app,
-    dsn::gpid pid,
-    std::string path,
-    bulk_load_status::type new_status)
-{
-    if (err == ERR_TIMEOUT) {
-        dwarn_f(
-            "failed to update app {} partition[{}] bulk_load status to {}, remote storage is not "
-            "available, please try later",
-            app->app_name,
-            pid.get_partition_index(),
-            enum_to_string(new_status));
-        tasking::enqueue(LPC_DEFAULT_CALLBACK,
-                         _meta_svc->tracker(),
-                         std::bind(&bulk_load_service::update_partition_bulk_load_status,
-                                   this,
-                                   std::move(app),
-                                   pid,
-                                   path,
-                                   new_status),
-                         0,
-                         std::chrono::seconds(1));
-        return;
-    }
-
-    if (err != ERR_OK) {
-        derror_f("failed to update app {} partition[{}] bulk_load status to {}, error is {}",
-                 app->app_name,
-                 pid.get_partition_index(),
-                 enum_to_string(new_status),
-                 err.to_string());
-        // TODO(heyuchen): assert or other way???
-        return;
-    }
-
-    zauto_write_lock l(_lock);
-    bulk_load_status::type old_status = _bulk_load_states.partitions_info[pid].status;
-    ddebug_f("app {} update partition[{}] bulk_load status from {} to {}",
-             app->app_name,
-             pid.get_partition_index(),
-             enum_to_string(old_status),
-             enum_to_string(new_status));
-
-    _bulk_load_states.partitions_info[pid].status = new_status;
-    _bulk_load_states.partitions_request[pid] = nullptr;
-    if (--_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
-        update_app_bulk_load_status(std::move(app), new_status);
-    }
+            _bulk_load_states.partitions_info[pid].status = status;
+            _bulk_load_states.partitions_request[pid] = nullptr;
+            if (--_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
+                update_app_bulk_load_status(std::move(app), status);
+            }
+        });
 }
 
 void bulk_load_service::update_app_bulk_load_status(std::shared_ptr<app_state> app,
                                                     bulk_load_status::type status)
 {
-    auto on_write_storage = [app, status, this](error_code err) {
-        if (err == ERR_OK) {
+    app_info info = *app;
+    info.app_bulk_load_status = status;
+    dsn::blob value = dsn::json::json_forwarder<app_info>::encode(info);
+
+    _meta_svc->get_meta_storage()->set_data(
+        _state->get_app_path(*app), std::move(value), [this, app, status]() {
             ddebug_f("app {} update bulk load status to {} on remote storage",
                      app->app_name,
                      enum_to_string(status));
             zauto_write_lock l(app_lock());
             app->app_bulk_load_status = status;
             ddebug_f("app {} finish download files", app->app_name);
-
-        } else if (err == ERR_TIMEOUT) {
-            dwarn_f(
-                "failed to update app {} bulk load status to {}, remote storage is not available, "
-                "please try later",
-                app->app_name,
-                enum_to_string(status));
-            tasking::enqueue(
-                LPC_META_STATE_HIGH,
-                _meta_svc->tracker(),
-                std::bind(
-                    &bulk_load_service::update_app_bulk_load_status, this, std::move(app), status),
-                0,
-                std::chrono::seconds(1));
-        } else {
-            derror_f("failed to update app {} bulk load status to {}, error is {}",
-                     app->app_name,
-                     enum_to_string(status),
-                     err.to_string());
-            //            auto response = rpc.response();
-            //            response.err = ERR_ZOOKEEPER_OPERATION;
-        }
-    };
-
-    app_info info = *app;
-    info.app_bulk_load_status = status;
-    dsn::blob value = dsn::json::json_forwarder<app_info>::encode(info);
-    _meta_svc->get_remote_storage()->set_data(_state->get_app_path(*app),
-                                              value,
-                                              LPC_META_STATE_HIGH,
-                                              on_write_storage,
-                                              _meta_svc->tracker());
+        });
 }
 
 void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)

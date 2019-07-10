@@ -13681,6 +13681,8 @@ void bulk_load_request::__set_remote_provider_name(const std::string &val)
     this->remote_provider_name = val;
 }
 
+void bulk_load_request::__set_cluster_name(const std::string &val) { this->cluster_name = val; }
+
 void bulk_load_request::__set_app_bl_status(const ::dsn::bulk_load_status::type val)
 {
     this->app_bl_status = val;
@@ -13743,6 +13745,14 @@ uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
             }
             break;
         case 5:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->cluster_name);
+                this->__isset.cluster_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 6:
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 int32_t ecast607;
                 xfer += iprot->readI32(ecast607);
@@ -13752,7 +13762,7 @@ uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 6:
+        case 7:
             if (ftype == ::apache::thrift::protocol::T_STRUCT) {
                 xfer += this->partition_bl_info.read(iprot);
                 this->__isset.partition_bl_info = true;
@@ -13794,11 +13804,15 @@ uint32_t bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) 
     xfer += oprot->writeString(this->remote_provider_name);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("app_bl_status", ::apache::thrift::protocol::T_I32, 5);
+    xfer += oprot->writeFieldBegin("cluster_name", ::apache::thrift::protocol::T_STRING, 5);
+    xfer += oprot->writeString(this->cluster_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("app_bl_status", ::apache::thrift::protocol::T_I32, 6);
     xfer += oprot->writeI32((int32_t)this->app_bl_status);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("partition_bl_info", ::apache::thrift::protocol::T_STRUCT, 6);
+    xfer += oprot->writeFieldBegin("partition_bl_info", ::apache::thrift::protocol::T_STRUCT, 7);
     xfer += this->partition_bl_info.write(oprot);
     xfer += oprot->writeFieldEnd();
 
@@ -13814,6 +13828,7 @@ void swap(bulk_load_request &a, bulk_load_request &b)
     swap(a.app_name, b.app_name);
     swap(a.primary_addr, b.primary_addr);
     swap(a.remote_provider_name, b.remote_provider_name);
+    swap(a.cluster_name, b.cluster_name);
     swap(a.app_bl_status, b.app_bl_status);
     swap(a.partition_bl_info, b.partition_bl_info);
     swap(a.__isset, b.__isset);
@@ -13825,6 +13840,7 @@ bulk_load_request::bulk_load_request(const bulk_load_request &other608)
     app_name = other608.app_name;
     primary_addr = other608.primary_addr;
     remote_provider_name = other608.remote_provider_name;
+    cluster_name = other608.cluster_name;
     app_bl_status = other608.app_bl_status;
     partition_bl_info = other608.partition_bl_info;
     __isset = other608.__isset;
@@ -13835,6 +13851,7 @@ bulk_load_request::bulk_load_request(bulk_load_request &&other609)
     app_name = std::move(other609.app_name);
     primary_addr = std::move(other609.primary_addr);
     remote_provider_name = std::move(other609.remote_provider_name);
+    cluster_name = std::move(other609.cluster_name);
     app_bl_status = std::move(other609.app_bl_status);
     partition_bl_info = std::move(other609.partition_bl_info);
     __isset = std::move(other609.__isset);
@@ -13845,6 +13862,7 @@ bulk_load_request &bulk_load_request::operator=(const bulk_load_request &other61
     app_name = other610.app_name;
     primary_addr = other610.primary_addr;
     remote_provider_name = other610.remote_provider_name;
+    cluster_name = other610.cluster_name;
     app_bl_status = other610.app_bl_status;
     partition_bl_info = other610.partition_bl_info;
     __isset = other610.__isset;
@@ -13856,6 +13874,7 @@ bulk_load_request &bulk_load_request::operator=(bulk_load_request &&other611)
     app_name = std::move(other611.app_name);
     primary_addr = std::move(other611.primary_addr);
     remote_provider_name = std::move(other611.remote_provider_name);
+    cluster_name = std::move(other611.cluster_name);
     app_bl_status = std::move(other611.app_bl_status);
     partition_bl_info = std::move(other611.partition_bl_info);
     __isset = std::move(other611.__isset);
@@ -13872,6 +13891,8 @@ void bulk_load_request::printTo(std::ostream &out) const
         << "primary_addr=" << to_string(primary_addr);
     out << ", "
         << "remote_provider_name=" << to_string(remote_provider_name);
+    out << ", "
+        << "cluster_name=" << to_string(cluster_name);
     out << ", "
         << "app_bl_status=" << to_string(app_bl_status);
     out << ", "

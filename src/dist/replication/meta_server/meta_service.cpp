@@ -100,6 +100,7 @@ error_code meta_service::remote_storage_initialize()
         return err;
     }
     _storage.reset(storage);
+    _meta_storage.reset(new mss::meta_storage(_storage.get(), &_tracker));
 
     std::vector<std::string> slices;
     utils::split_args(_meta_opts.cluster_root.c_str(), slices, '/');
@@ -796,7 +797,7 @@ void meta_service::on_start_bulk_load(start_bulk_load_rpc rpc)
         response.err = ERR_SERVICE_NOT_ACTIVE;
     } else {
         tasking::enqueue(
-            LPC_DEFAULT_CALLBACK,
+            LPC_META_STATE_NORMAL,
             nullptr,
             std::bind(&bulk_load_service::on_start_bulk_load, _bulk_load_svc.get(), rpc));
     }
@@ -812,7 +813,7 @@ void meta_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         response.err = ERR_SERVICE_NOT_ACTIVE;
     } else {
         tasking::enqueue(
-            LPC_DEFAULT_CALLBACK,
+            LPC_META_STATE_NORMAL,
             nullptr,
             std::bind(&bulk_load_service::on_query_bulk_load_status, _bulk_load_svc.get(), rpc));
     }

@@ -751,8 +751,7 @@ struct ddd_diagnose_response
     2:list<ddd_partition_info> partitions;
 }
 
-
-// bulk load rpc
+// bulk load
 struct partition_bulk_load_info
 {
     1:dsn.layer2.bulk_load_status  status;
@@ -792,8 +791,9 @@ struct bulk_load_request
     2:string                        app_name;
     3:dsn.rpc_address               primary_addr;
     4:string                        remote_provider_name;
-    5:dsn.layer2.bulk_load_status   app_bl_status;
-    6:partition_bulk_load_info      partition_bl_info;
+    5:string                        cluster_name;
+    6:dsn.layer2.bulk_load_status   app_bl_status;
+    7:partition_bulk_load_info      partition_bl_info;
 }
 
 struct bulk_load_response

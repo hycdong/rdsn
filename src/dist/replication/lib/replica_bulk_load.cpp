@@ -58,7 +58,6 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
              enum_to_string(request.partition_bl_info.status),
              enum_to_string(_bulk_load_context.get_status()));
 
-    // auto bl_status = _bulk_load_context.get_status();
     if (_bulk_load_context.get_status() == bulk_load_status::BLS_INVALID &&
         request.partition_bl_info.status == bulk_load_status::BLS_DOWNLOADING) {
         ddebug_f("{} try to download sst files", name());

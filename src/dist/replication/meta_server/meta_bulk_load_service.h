@@ -32,8 +32,30 @@
 namespace dsn {
 namespace replication {
 
-// TODO(heyuchen): initialize it
+struct app_bulk_load_info
+{
+    uint32_t app_id;
+    std::string cluster_name;
+    std::string file_provider_type;
+    // TODO(heyuchen): consider add bulk load status
+    // bulk_load_status::type status;
+    DEFINE_JSON_SERIALIZATION(app_id, cluster_name, file_provider_type)
+};
 
+// struct partition_bulk_load_info
+//{
+//    bulk_load_status::type status;
+//    DEFINE_JSON_SERIALIZATION(status)
+//};
+
+struct bulk_load_info
+{
+    std::string app_name;
+    std::string remote_root;
+    app_bulk_load_info info;
+};
+
+// TODO(heyuchen): initialize it
 struct bulk_load_context
 {
     std::map<app_id, uint32_t> apps_in_progress_count;
@@ -52,33 +74,30 @@ public:
     // client -> meta server to query bulk load status
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
 
-    void update_blstatus_downloading_on_remote_storage(std::shared_ptr<app_state> app,
-                                                       start_bulk_load_rpc rpc);
-    void create_bulk_load_folder_on_remote_storage(std::shared_ptr<app_state> app,
-                                                   start_bulk_load_rpc rpc);
-    void create_partition_bulk_load_info_on_remote_storage(std::shared_ptr<app_state> app,
-                                                           uint32_t pidx,
-                                                           const std::string &bulk_load_path,
-                                                           start_bulk_load_rpc rpc);
+    void update_app_bulk_load_status_with_rpc(std::shared_ptr<app_state> app,
+                                              bulk_load_status::type new_status,
+                                              start_bulk_load_rpc rpc);
 
-    void partition_bulk_load(gpid pid, const std::string &remote_provider_name);
+    void create_app_bulk_load_info_with_rpc(std::shared_ptr<app_state> app,
+                                            start_bulk_load_rpc rpc);
+
+    void create_partition_bulk_load_info_with_rpc(const std::string &app_name,
+                                                  gpid pid,
+                                                  uint32_t partition_count,
+                                                  const std::string &bulk_load_path,
+                                                  start_bulk_load_rpc rpc);
+
+    void partition_bulk_load(gpid pid);
 
     void on_partition_bulk_load_reply(dsn::error_code err,
                                       bulk_load_response &&response,
                                       gpid pid,
-                                      const dsn::rpc_address &primary_addr,
-                                      const std::string &remote_provider_name);
+                                      const dsn::rpc_address &primary_addr);
 
     void update_partition_bulk_load_status(std::shared_ptr<app_state> app,
                                            dsn::gpid pid,
-                                           std::string path,
+                                           std::string &path,
                                            bulk_load_status::type status);
-
-    void on_update_partition_bulk_load_status_reply(dsn::error_code err,
-                                                    std::shared_ptr<app_state> app,
-                                                    dsn::gpid pid,
-                                                    std::string path,
-                                                    bulk_load_status::type new_status);
 
     void update_app_bulk_load_status(std::shared_ptr<app_state> app, bulk_load_status::type status);
 
@@ -105,6 +124,8 @@ private:
     server_state *_state;
 
     // app_id -> bulk_load_context
+    std::map<uint32_t, bulk_load_info> _apps_bulk_load_info;
+
     bulk_load_context _bulk_load_states;
 
     // TODO(heyuchen): lock difference???
