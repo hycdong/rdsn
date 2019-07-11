@@ -74,5 +74,6 @@ struct app_info
     11:i64          drop_second;
 
     // new fields added to support bulk load
-    12:bulk_load_status app_bulk_load_status = bulk_load_status.BLS_INVALID;
+    //12:bulk_load_status app_bulk_load_status = bulk_load_status.BLS_INVALID;
+    12:bool         is_bulk_loading = false;
 }

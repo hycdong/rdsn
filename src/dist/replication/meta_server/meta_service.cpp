@@ -204,6 +204,14 @@ void meta_service::start_service()
                          nullptr,
                          std::bind(&backup_service::start, _backup_handler.get()));
     }
+
+    if (_bulk_load_svc.get()) {
+        ddebug("start to create bulk load dir");
+        tasking::enqueue(LPC_META_STATE_NORMAL,
+                         nullptr,
+                         std::bind(&bulk_load_service::create_bulk_load_dir_on_remote_stroage,
+                                   _bulk_load_svc.get()));
+    }
 }
 
 // the start function is executed in threadpool default
@@ -274,7 +282,8 @@ error_code meta_service::start()
 
     _state->register_cli_commands();
 
-    _bulk_load_svc = std::make_shared<bulk_load_service>(this);
+    _bulk_load_svc = std::make_shared<bulk_load_service>(
+        this, meta_options::concat_path_unix_style(_cluster_root, "bulk_load"));
 
     start_service();
 

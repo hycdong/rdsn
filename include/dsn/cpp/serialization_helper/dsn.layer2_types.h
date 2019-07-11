@@ -307,7 +307,7 @@ typedef struct _app_info__isset
           expire_second(false),
           create_second(false),
           drop_second(false),
-          app_bulk_load_status(true)
+          is_bulk_loading(true)
     {
     }
     bool status : 1;
@@ -321,7 +321,7 @@ typedef struct _app_info__isset
     bool expire_second : 1;
     bool create_second : 1;
     bool drop_second : 1;
-    bool app_bulk_load_status : 1;
+    bool is_bulk_loading : 1;
 } _app_info__isset;
 
 class app_info
@@ -342,11 +342,9 @@ public:
           expire_second(0),
           create_second(0),
           drop_second(0),
-          app_bulk_load_status((bulk_load_status::type)0)
+          is_bulk_loading(false)
     {
         status = (app_status::type)0;
-
-        app_bulk_load_status = (bulk_load_status::type)0;
     }
 
     virtual ~app_info() throw();
@@ -361,7 +359,7 @@ public:
     int64_t expire_second;
     int64_t create_second;
     int64_t drop_second;
-    bulk_load_status::type app_bulk_load_status;
+    bool is_bulk_loading;
 
     _app_info__isset __isset;
 
@@ -387,7 +385,7 @@ public:
 
     void __set_drop_second(const int64_t val);
 
-    void __set_app_bulk_load_status(const bulk_load_status::type val);
+    void __set_is_bulk_loading(const bool val);
 
     bool operator==(const app_info &rhs) const
     {
@@ -413,7 +411,7 @@ public:
             return false;
         if (!(drop_second == rhs.drop_second))
             return false;
-        if (!(app_bulk_load_status == rhs.app_bulk_load_status))
+        if (!(is_bulk_loading == rhs.is_bulk_loading))
             return false;
         return true;
     }

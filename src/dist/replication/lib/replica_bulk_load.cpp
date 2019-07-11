@@ -189,6 +189,7 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
     // download metadata
     std::string meta_name = "bulk_load_metadata";
     do_download(remote_file_dir, local_file_dir, meta_name, fs, false, err, tracker);
+    // TODO(heyuchen): handle download metadata file error
 
     // parse metadata
     std::string local_whole_file_name = utils::filesystem::path_combine(local_file_dir, meta_name);
@@ -196,7 +197,9 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
     bulk_load_metadata metadata;
     err = read_bulk_load_metadata(local_whole_file_name, metadata);
     if (err != ERR_OK) {
-        derror_f("{}: parse bulk load metadata failed", name());
+        derror_f("{}: parse bulk load metadata failed, error is {}", name(), err.to_string());
+        // TODO(heyuchen): consider error except ERR_CORRUPTION
+        _bld_progress.status = err;
         return err;
     }
     _bulk_load_context._file_total_size = metadata.file_total_size;

@@ -735,10 +735,7 @@ void app_info::__set_create_second(const int64_t val) { this->create_second = va
 
 void app_info::__set_drop_second(const int64_t val) { this->drop_second = val; }
 
-void app_info::__set_app_bulk_load_status(const bulk_load_status::type val)
-{
-    this->app_bulk_load_status = val;
-}
+void app_info::__set_is_bulk_loading(const bool val) { this->is_bulk_loading = val; }
 
 uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
 {
@@ -864,11 +861,9 @@ uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
             }
             break;
         case 12:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast44;
-                xfer += iprot->readI32(ecast44);
-                this->app_bulk_load_status = (bulk_load_status::type)ecast44;
-                this->__isset.app_bulk_load_status = true;
+            if (ftype == ::apache::thrift::protocol::T_BOOL) {
+                xfer += iprot->readBool(this->is_bulk_loading);
+                this->__isset.is_bulk_loading = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -916,10 +911,10 @@ uint32_t app_info::write(::apache::thrift::protocol::TProtocol *oprot) const
         xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRING,
                                      ::apache::thrift::protocol::T_STRING,
                                      static_cast<uint32_t>(this->envs.size()));
-        std::map<std::string, std::string>::const_iterator _iter45;
-        for (_iter45 = this->envs.begin(); _iter45 != this->envs.end(); ++_iter45) {
-            xfer += oprot->writeString(_iter45->first);
-            xfer += oprot->writeString(_iter45->second);
+        std::map<std::string, std::string>::const_iterator _iter44;
+        for (_iter44 = this->envs.begin(); _iter44 != this->envs.end(); ++_iter44) {
+            xfer += oprot->writeString(_iter44->first);
+            xfer += oprot->writeString(_iter44->second);
         }
         xfer += oprot->writeMapEnd();
     }
@@ -945,8 +940,8 @@ uint32_t app_info::write(::apache::thrift::protocol::TProtocol *oprot) const
     xfer += oprot->writeI64(this->drop_second);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("app_bulk_load_status", ::apache::thrift::protocol::T_I32, 12);
-    xfer += oprot->writeI32((int32_t)this->app_bulk_load_status);
+    xfer += oprot->writeFieldBegin("is_bulk_loading", ::apache::thrift::protocol::T_BOOL, 12);
+    xfer += oprot->writeBool(this->is_bulk_loading);
     xfer += oprot->writeFieldEnd();
 
     xfer += oprot->writeFieldStop();
@@ -968,74 +963,74 @@ void swap(app_info &a, app_info &b)
     swap(a.expire_second, b.expire_second);
     swap(a.create_second, b.create_second);
     swap(a.drop_second, b.drop_second);
-    swap(a.app_bulk_load_status, b.app_bulk_load_status);
+    swap(a.is_bulk_loading, b.is_bulk_loading);
     swap(a.__isset, b.__isset);
 }
 
-app_info::app_info(const app_info &other46)
+app_info::app_info(const app_info &other45)
 {
-    status = other46.status;
-    app_type = other46.app_type;
-    app_name = other46.app_name;
-    app_id = other46.app_id;
-    partition_count = other46.partition_count;
-    envs = other46.envs;
-    is_stateful = other46.is_stateful;
-    max_replica_count = other46.max_replica_count;
-    expire_second = other46.expire_second;
-    create_second = other46.create_second;
-    drop_second = other46.drop_second;
-    app_bulk_load_status = other46.app_bulk_load_status;
-    __isset = other46.__isset;
+    status = other45.status;
+    app_type = other45.app_type;
+    app_name = other45.app_name;
+    app_id = other45.app_id;
+    partition_count = other45.partition_count;
+    envs = other45.envs;
+    is_stateful = other45.is_stateful;
+    max_replica_count = other45.max_replica_count;
+    expire_second = other45.expire_second;
+    create_second = other45.create_second;
+    drop_second = other45.drop_second;
+    is_bulk_loading = other45.is_bulk_loading;
+    __isset = other45.__isset;
 }
-app_info::app_info(app_info &&other47)
+app_info::app_info(app_info &&other46)
 {
-    status = std::move(other47.status);
-    app_type = std::move(other47.app_type);
-    app_name = std::move(other47.app_name);
-    app_id = std::move(other47.app_id);
-    partition_count = std::move(other47.partition_count);
-    envs = std::move(other47.envs);
-    is_stateful = std::move(other47.is_stateful);
-    max_replica_count = std::move(other47.max_replica_count);
-    expire_second = std::move(other47.expire_second);
-    create_second = std::move(other47.create_second);
-    drop_second = std::move(other47.drop_second);
-    app_bulk_load_status = std::move(other47.app_bulk_load_status);
-    __isset = std::move(other47.__isset);
+    status = std::move(other46.status);
+    app_type = std::move(other46.app_type);
+    app_name = std::move(other46.app_name);
+    app_id = std::move(other46.app_id);
+    partition_count = std::move(other46.partition_count);
+    envs = std::move(other46.envs);
+    is_stateful = std::move(other46.is_stateful);
+    max_replica_count = std::move(other46.max_replica_count);
+    expire_second = std::move(other46.expire_second);
+    create_second = std::move(other46.create_second);
+    drop_second = std::move(other46.drop_second);
+    is_bulk_loading = std::move(other46.is_bulk_loading);
+    __isset = std::move(other46.__isset);
 }
-app_info &app_info::operator=(const app_info &other48)
+app_info &app_info::operator=(const app_info &other47)
 {
-    status = other48.status;
-    app_type = other48.app_type;
-    app_name = other48.app_name;
-    app_id = other48.app_id;
-    partition_count = other48.partition_count;
-    envs = other48.envs;
-    is_stateful = other48.is_stateful;
-    max_replica_count = other48.max_replica_count;
-    expire_second = other48.expire_second;
-    create_second = other48.create_second;
-    drop_second = other48.drop_second;
-    app_bulk_load_status = other48.app_bulk_load_status;
-    __isset = other48.__isset;
+    status = other47.status;
+    app_type = other47.app_type;
+    app_name = other47.app_name;
+    app_id = other47.app_id;
+    partition_count = other47.partition_count;
+    envs = other47.envs;
+    is_stateful = other47.is_stateful;
+    max_replica_count = other47.max_replica_count;
+    expire_second = other47.expire_second;
+    create_second = other47.create_second;
+    drop_second = other47.drop_second;
+    is_bulk_loading = other47.is_bulk_loading;
+    __isset = other47.__isset;
     return *this;
 }
-app_info &app_info::operator=(app_info &&other49)
+app_info &app_info::operator=(app_info &&other48)
 {
-    status = std::move(other49.status);
-    app_type = std::move(other49.app_type);
-    app_name = std::move(other49.app_name);
-    app_id = std::move(other49.app_id);
-    partition_count = std::move(other49.partition_count);
-    envs = std::move(other49.envs);
-    is_stateful = std::move(other49.is_stateful);
-    max_replica_count = std::move(other49.max_replica_count);
-    expire_second = std::move(other49.expire_second);
-    create_second = std::move(other49.create_second);
-    drop_second = std::move(other49.drop_second);
-    app_bulk_load_status = std::move(other49.app_bulk_load_status);
-    __isset = std::move(other49.__isset);
+    status = std::move(other48.status);
+    app_type = std::move(other48.app_type);
+    app_name = std::move(other48.app_name);
+    app_id = std::move(other48.app_id);
+    partition_count = std::move(other48.partition_count);
+    envs = std::move(other48.envs);
+    is_stateful = std::move(other48.is_stateful);
+    max_replica_count = std::move(other48.max_replica_count);
+    expire_second = std::move(other48.expire_second);
+    create_second = std::move(other48.create_second);
+    drop_second = std::move(other48.drop_second);
+    is_bulk_loading = std::move(other48.is_bulk_loading);
+    __isset = std::move(other48.__isset);
     return *this;
 }
 void app_info::printTo(std::ostream &out) const
@@ -1064,7 +1059,7 @@ void app_info::printTo(std::ostream &out) const
     out << ", "
         << "drop_second=" << to_string(drop_second);
     out << ", "
-        << "app_bulk_load_status=" << to_string(app_bulk_load_status);
+        << "is_bulk_loading=" << to_string(is_bulk_loading);
     out << ")";
 }
 

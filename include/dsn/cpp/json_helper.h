@@ -611,7 +611,7 @@ NON_MEMBER_JSON_SERIALIZATION(dsn::app_info,
                               expire_second,
                               create_second,
                               drop_second,
-                              app_bulk_load_status)
+                              is_bulk_loading)
 
 NON_MEMBER_JSON_SERIALIZATION(dsn::replication::partition_bulk_load_info, status)
 }

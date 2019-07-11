@@ -35,11 +35,12 @@ namespace replication {
 struct app_bulk_load_info
 {
     uint32_t app_id;
+    std::string app_name;
     std::string cluster_name;
     std::string file_provider_type;
     // TODO(heyuchen): consider add bulk load status
-    // bulk_load_status::type status;
-    DEFINE_JSON_SERIALIZATION(app_id, cluster_name, file_provider_type)
+    bulk_load_status::type status;
+    DEFINE_JSON_SERIALIZATION(app_id, app_name, cluster_name, file_provider_type, status)
 };
 
 // struct partition_bulk_load_info
@@ -48,12 +49,12 @@ struct app_bulk_load_info
 //    DEFINE_JSON_SERIALIZATION(status)
 //};
 
-struct bulk_load_info
-{
-    std::string app_name;
-    std::string remote_root;
-    app_bulk_load_info info;
-};
+// struct bulk_load_info
+//{
+//    std::map<app_id, std::string> app_name;
+//    std::map<app_id, std::string> cluster_name;
+//    std::map<app_id, std::string> file_provider_type;
+//};
 
 // TODO(heyuchen): initialize it
 struct bulk_load_context
@@ -67,16 +68,15 @@ struct bulk_load_context
 class bulk_load_service
 {
 public:
-    explicit bulk_load_service(meta_service *meta_svc);
+    explicit bulk_load_service(meta_service *meta_svc, const std::string &bulk_load_dir);
+    void create_bulk_load_dir_on_remote_stroage();
 
     // client -> meta server to start bulk load
     void on_start_bulk_load(start_bulk_load_rpc rpc);
     // client -> meta server to query bulk load status
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
 
-    void update_app_bulk_load_status_with_rpc(std::shared_ptr<app_state> app,
-                                              bulk_load_status::type new_status,
-                                              start_bulk_load_rpc rpc);
+    void start_bulk_load_on_remote_storage(std::shared_ptr<app_state> app, start_bulk_load_rpc rpc);
 
     void create_app_bulk_load_info_with_rpc(std::shared_ptr<app_state> app,
                                             start_bulk_load_rpc rpc);
@@ -99,14 +99,13 @@ public:
                                            std::string &path,
                                            bulk_load_status::type status);
 
-    void update_app_bulk_load_status(std::shared_ptr<app_state> app, bulk_load_status::type status);
+    void update_app_bulk_load_status(uint32_t app_id, bulk_load_status::type new_status);
 
-    // app bulk load path is {app_path}/bulk_load
-    std::string get_app_bulk_load_path(std::shared_ptr<app_state> app) const
+    // app bulk load path is {_bulk_load_root}/{app_id}
+    std::string get_app_bulk_load_path(uint32_t app_id) const
     {
         std::stringstream oss;
-        oss << _state->get_app_path(*app) << "/"
-            << "bulk_load";
+        oss << _bulk_load_root << "/" << app_id;
         return oss.str();
     }
 
@@ -119,12 +118,21 @@ public:
         return oss.str();
     }
 
+    bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
+    {
+        auto ainfo = _bulk_load_info[app_id];
+        return ainfo.status;
+    }
+
 private:
     meta_service *_meta_svc;
     server_state *_state;
 
+    // bulk load root on remote stroage
+    std::string _bulk_load_root;
+
     // app_id -> bulk_load_context
-    std::map<uint32_t, bulk_load_info> _apps_bulk_load_info;
+    std::map<app_id, app_bulk_load_info> _bulk_load_info;
 
     bulk_load_context _bulk_load_states;
 
