@@ -37,7 +37,6 @@ namespace replication {
 
 // TODO(heyuchen): refactor code, move some functions to replication_common & replica_context
 // many functions are similar to replica_restore.cpp
-
 void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response &response)
 {
     _checker.only_one_thread_access();
@@ -206,21 +205,25 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
 
     // download sst files
     for (const auto &f_meta : metadata.files) {
-        do_download(remote_file_dir, local_file_dir, f_meta.name, fs, true, err, tracker);
+        // TODO(heyuchen): change task to vector per file for convience to cancel it
+        _bulk_load_download_task = tasking::enqueue(
+            LPC_BACKGROUND_BULK_LOAD,
+            &_tracker,
+            [this, remote_file_dir, local_file_dir, f_meta, fs]() {
+                dsn::error_code ec;
+                dsn::task_tracker tracker;
+                do_download(remote_file_dir, local_file_dir, f_meta.name, fs, true, ec, tracker);
+                if (ec == ERR_OK) {
+                    if (!verify_sst_files(f_meta, local_file_dir)) {
+                        derror_f("{}: sst file damaged, file name {}", name(), f_meta.name);
+                        ec = ERR_CORRUPTION;
+                        _bld_progress.status = ec;
+                    } else {
+                        ddebug_f("{}: sst file({}) is verified", name(), f_meta.name);
+                    }
+                }
+            });
     }
-
-    // verify sst files
-    if (err == ERR_OK) {
-        if (!verify_sst_files(metadata, local_file_dir)) {
-            derror_f("{}: sst file damaged, file name {}", name(), local_whole_file_name.c_str());
-            err = ERR_CORRUPTION;
-            _bld_progress.status = err;
-        } else {
-            ddebug_f(
-                "{}: sst file is verified, file name {}", name(), local_whole_file_name.c_str());
-        }
-    }
-
     return err;
 }
 
@@ -410,24 +413,22 @@ dsn::error_code replica::read_bulk_load_metadata(const std::string &file_path,
 }
 
 // verify whether the checkpoint directory is damaged base on backup_metadata under the chkpt
-bool replica::verify_sst_files(const bulk_load_metadata &metadata, const std::string &dir)
+bool replica::verify_sst_files(const file_meta &f_meta, const std::string &dir)
 {
-    for (const auto &f_meta : metadata.files) {
-        std::string local_file = ::dsn::utils::filesystem::path_combine(dir, f_meta.name);
-        int64_t file_sz = 0;
-        std::string md5;
-        if (!::dsn::utils::filesystem::file_size(local_file, file_sz)) {
-            derror("%s: get file(%s) size failed", name(), local_file.c_str());
-            return false;
-        }
-        if (::dsn::utils::filesystem::md5sum(local_file, md5) != ERR_OK) {
-            derror("%s: get file(%s) md5 failed", name(), local_file.c_str());
-            return false;
-        }
-        if (file_sz != f_meta.size || md5 != f_meta.md5) {
-            derror("%s: file(%s) is damaged", name(), local_file.c_str());
-            return false;
-        }
+    std::string local_file = ::dsn::utils::filesystem::path_combine(dir, f_meta.name);
+    int64_t file_sz = 0;
+    std::string md5;
+    if (!::dsn::utils::filesystem::file_size(local_file, file_sz)) {
+        derror("%s: get file(%s) size failed", name(), local_file.c_str());
+        return false;
+    }
+    if (::dsn::utils::filesystem::md5sum(local_file, md5) != ERR_OK) {
+        derror("%s: get file(%s) md5 failed", name(), local_file.c_str());
+        return false;
+    }
+    if (file_sz != f_meta.size || md5 != f_meta.md5) {
+        derror("%s: file(%s) is damaged", name(), local_file.c_str());
+        return false;
     }
     // return remove_useless_file_under_chkpt(chkpt_dir, backup_metadata);
     return true;
@@ -446,186 +447,6 @@ void replica::update_download_progress()
         static_cast<int32_t>((cur_download_size / total_size) * 100));
     _bld_progress.progress = _bulk_load_context._download_progress.load();
 }
-
-// dsn::error_code replica::do_download_sst_files(const std::string &remote_provider,
-//                                               const std::string &remote_file_dir,
-//                                               const std::string &local_file_dir)
-//{
-//    dsn::dist::block_service::block_filesystem *fs =
-//        _stub->_block_service_manager.get_block_filesystem(remote_provider);
-//    dsn::task_tracker tracker;
-//    dsn::error_code err;
-
-//    auto download_file_callback_func = [this, &err](
-//        const dsn::dist::block_service::download_response &resp,
-//        dsn::dist::block_service::block_file_ptr bf,
-//        const std::string &local_file,
-//        bool update_progress) {
-//        if (resp.err != dsn::ERR_OK) {
-//            if (resp.err == ERR_OBJECT_NOT_FOUND) {
-//                derror_f("{}: data on bulk load provider is damaged", name());
-//            }
-//            err = resp.err;
-//        } else {
-//            ddebug_f("{} start to download file {}", name(), local_file.c_str());
-//            if (resp.downloaded_size != bf->get_size()) {
-//                derror_f("{}: size not match when download file({}), total({}) vs downloaded({})",
-//                         name(),
-//                         bf->file_name().c_str(),
-//                         bf->get_size(),
-//                         resp.downloaded_size);
-//            }
-
-//            std::string current_md5;
-//            dsn::error_code e = utils::filesystem::md5sum(local_file, current_md5);
-//            if (e != dsn::ERR_OK) {
-//                derror("%s: calc md5sum(%s) failed", name(), local_file.c_str());
-//                err = e;
-//            } else if (current_md5 != bf->get_md5sum()) {
-//                ddebug(
-//                    "%s: local file(%s) not same with remote file(%s), download failed, %s VS %s",
-//                    name(),
-//                    local_file.c_str(),
-//                    bf->file_name().c_str(),
-//                    current_md5.c_str(),
-//                    bf->get_md5sum().c_str());
-//                err = ERR_FILE_OPERATION_FAILED;
-//            } else {
-//                if(update_progress){
-//                    _bulk_load_context._cur_download_size.fetch_add(bf->get_size());
-//                    update_download_progress();
-//                }
-//                ddebug("%s: download file(%s) succeed, size(%" PRId64 "), progress is %d",
-//                       name(),
-//                       local_file.c_str(),
-//                       resp.downloaded_size,
-//                       _bulk_load_context._download_progress.load());
-//            }
-//        }
-//    };
-
-//    auto create_file_cb = [this, &err, &local_file_dir, &download_file_callback_func, &tracker](
-//        const dsn::dist::block_service::create_file_response &resp, const std::string fname, bool
-//        update_progress) {
-//        if (resp.err != dsn::ERR_OK) {
-//            derror_f("{}: create file({}) failed with err({})",
-//                     name(),
-//                     fname.c_str(),
-//                     resp.err.to_string());
-//            err = resp.err;
-//        } else {
-//            ddebug_f("{}: create file({}) succeed", name(), fname.c_str());
-
-//            dsn::dist::block_service::block_file *bf = resp.file_handle.get();
-//            if (bf->get_md5sum().empty()) {
-//                derror_f(
-//                    "{}: file({}) doesn't on bulk load provider", name(),
-//                    bf->file_name().c_str());
-//                err = ERR_CORRUPTION;
-//                return;
-//            }
-
-//            std::string local_file = utils::filesystem::path_combine(local_file_dir, fname);
-//            bool download_file = false;
-//            if (!utils::filesystem::file_exists(local_file)) {
-//                ddebug_f("{}: local file({}) not exist, download it from remote file({})",
-//                         name(),
-//                         local_file.c_str(),
-//                         bf->file_name().c_str());
-//                download_file = true;
-//            } else {
-//                std::string current_md5;
-//                dsn::error_code e = utils::filesystem::md5sum(local_file, current_md5);
-//                if (e != dsn::ERR_OK) {
-//                    derror_f("{}: calc md5sum({}) failed", name(), local_file.c_str());
-//                    // here we just retry and download it
-//                    if (!utils::filesystem::remove_path(local_file)) {
-//                        err = e;
-//                        return;
-//                    }
-//                    download_file = true;
-//                } else if (current_md5 != bf->get_md5sum()) {
-//                    ddebug_f("{}: local file({}) not same with remote file({}), redownload, "
-//                             "{} VS {}",
-//                             name(),
-//                             local_file.c_str(),
-//                             bf->file_name().c_str(),
-//                             current_md5.c_str(),
-//                             bf->get_md5sum().c_str());
-//                    download_file = true;
-//                } else {
-//                    ddebug_f("{}: local file({}) has been downloaded, just ignore",
-//                             name(),
-//                             local_file.c_str());
-//                }
-//            }
-
-//            if (download_file) {
-//                bf->download(dsn::dist::block_service::download_request{local_file, 0, -1},
-//                             TASK_CODE_EXEC_INLINED,
-//                             std::bind(download_file_callback_func,
-//                                       std::placeholders::_1,
-//                                       resp.file_handle,
-//                                       local_file,
-//                                       update_progress),
-//                             &tracker);
-//            }
-//        }
-//    };
-
-//    std::string remote_file_name = "bulk_load_metadata";
-//    std::string remote_whole_file_name =
-//        utils::filesystem::path_combine(remote_file_dir, remote_file_name);
-
-//    // TODO(heyuchen): check TASK_CODE_EXEC_INLINED usage
-//    fs->create_file(dsn::dist::block_service::create_file_request{remote_whole_file_name, false},
-//                    TASK_CODE_EXEC_INLINED,
-//                    std::bind(create_file_cb, std::placeholders::_1, remote_file_name, false),
-//                    &tracker);
-//    tracker.wait_outstanding_tasks();
-
-//    std::string local_whole_file_name =
-//        utils::filesystem::path_combine(local_file_dir, remote_file_name);
-//    bulk_load_metadata metadata;
-//    if (!_bulk_load_context.read_bulk_load_metadata(local_whole_file_name, metadata)) {
-//        derror_f("{}: parse bulk load metadata failed", name());
-//        return ERR_FILE_OPERATION_FAILED;
-//    }
-
-//    _bulk_load_context._file_total_size = metadata.file_total_size;
-//    for (const auto &f_meta : metadata.files) {
-//        std::string rname = utils::filesystem::path_combine(remote_file_dir, f_meta.name);
-//        fs->create_file(dsn::dist::block_service::create_file_request{rname, false},
-//                        TASK_CODE_EXEC_INLINED,
-//                        std::bind(create_file_cb, std::placeholders::_1, f_meta.name, true),
-//                        &tracker);
-//    }
-//    tracker.wait_outstanding_tasks();
-
-//    if (err == ERR_OK) {
-//        if (!verify_sst_files(metadata, local_file_dir)) {
-//            derror_f("{}: sst file damaged, file name {}", name(), local_whole_file_name.c_str());
-//            err = ERR_CORRUPTION;
-//        }else{
-//            ddebug_f("{}: sst file is verified, file name {}", name(),
-//            local_whole_file_name.c_str());
-//        }
-//    }
-
-//    return err;
-//}
-
-// void replica::update_totoal_download_progress(bulk_load_response &response){
-//    if(status() != partition_status::PS_PRIMARY){
-//        dwarn_f("{}: status is {}, not {}", name(), enum_to_string(status()),
-//        enum_to_string(partition_status::PS_PRIMARY));
-//        response.err = ERR_INVALID_STATE;
-//        return;
-//    }
-
-//    response.__isset.progress = true;
-//    response.progress = _bld_progress;
-//}
 
 } // namespace replication
 } // namespace dsn

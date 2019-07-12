@@ -235,15 +235,16 @@ void bulk_load_service::partition_bulk_load(gpid pid)
     zauto_write_lock l(_lock);
     _bulk_load_states.partitions_request[pid] = rpc_callback;
 
-    ddebug("send bulk load request to replica server, app(%d.%d), target_addr = %s, app bulk load "
-           "=%s, partition bulk load status = %s, remote provider = %s, cluster_name = %s",
-           pid.get_app_id(),
-           pid.get_partition_index(),
-           primary_addr.to_string(),
-           enum_to_string(req.app_bl_status),
-           enum_to_string(pbl_info.status),
-           req.remote_provider_name,
-           req.cluster_name);
+    ddebug_f(
+        "send bulk load request to replica server, app({}.{}), target_addr = {}, app bulk load "
+        "={}, partition bulk load status = {}, remote provider = {}, cluster_name = {}",
+        pid.get_app_id(),
+        pid.get_partition_index(),
+        primary_addr.to_string(),
+        enum_to_string(req.app_bl_status),
+        enum_to_string(pbl_info.status),
+        req.remote_provider_name,
+        req.cluster_name);
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 
