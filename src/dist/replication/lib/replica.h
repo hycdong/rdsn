@@ -318,7 +318,9 @@ private:
 
     bool verify_sst_files(const file_meta &f_meta, const std::string &dir);
 
-    std::string get_bulk_load_remote_dir(const std::string &app_name, uint32_t pidx);
+    std::string get_bulk_load_remote_dir(const std::string &app_name,
+                                         const std::string &cluster_name,
+                                         uint32_t pidx);
     dsn::error_code create_local_bulk_load_dir(const std::string &bulk_load_dir);
     void update_download_progress();
     void do_download(const std::string &remote_file_dir,
@@ -406,7 +408,8 @@ private:
     // bulk load
     // TODO(heyuchen): init it
     partition_download_progress _bld_progress;
-    dsn::task_ptr _bulk_load_download_task;
+    // file_name -> downloading task
+    std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
 
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true
     bool _is_initializing;       // when initializing, switching to primary need to update ballot
