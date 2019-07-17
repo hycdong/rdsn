@@ -103,6 +103,8 @@ public:
 
     void update_app_bulk_load_status(uint32_t app_id, bulk_load_status::type new_status);
 
+    dsn::error_code check_download_status(bulk_load_response &response);
+
     // app bulk load path is {_bulk_load_root}/{app_id}
     std::string get_app_bulk_load_path(uint32_t app_id) const
     {

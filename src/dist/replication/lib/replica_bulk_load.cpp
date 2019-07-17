@@ -182,6 +182,9 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
                 }
                 _bld_progress.status = ec;
                 _bulk_load_download_task.erase(f_meta.name);
+                if (ec != ERR_OK) {
+                    handle_bulk_load_error();
+                }
             });
         _bulk_load_download_task[f_meta.name] = bulk_load_download_task;
     }

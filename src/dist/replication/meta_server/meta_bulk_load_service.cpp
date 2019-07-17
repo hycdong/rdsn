@@ -291,47 +291,69 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
         // download sst files
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
         // handle file damaged error during downloading files from remote stroage
-        int32_t cur_progress =
-            response.__isset.total_download_progress ? response.total_download_progress : 0;
-        ddebug_f("recevie bulk load response from {} gpid({}.{}), bulk load status={}, "
-                 "download_progress={}",
-                 primary_addr.to_string(),
-                 pid.get_app_id(),
-                 pid.get_partition_index(),
-                 enum_to_string(response.partition_bl_status),
-                 cur_progress);
-        {
-            zauto_write_lock l(_lock);
-            _bulk_load_states.partitions_total_download_progress[pid] = cur_progress;
-            if (response.__isset.download_progresses) {
-                _bulk_load_states.partitions_download_progress[pid] = response.download_progresses;
-            }
-        }
 
-        // TODO(heyuchen): change it to common value
-        int32_t max_progress = 100;
-        if (cur_progress >= max_progress) {
-            ddebug_f("gpid({}.{}) finish download remote files from remote provider",
+        dsn::error_code ec = check_download_status(response);
+        if (ec != ERR_OK) {
+            dwarn_f("recevie bulk load response from {} app({}), gpid({}.{}), bulk load status={}, "
+                    "download meet error={}",
+                    primary_addr.to_string(),
+                    response.app_name,
+                    pid.get_app_id(),
+                    pid.get_partition_index(),
+                    enum_to_string(response.partition_bl_status),
+                    ec.to_string());
+            std::string partition_bulk_load_path = get_partition_bulk_load_path(
+                get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
+            update_partition_bulk_load_status(
+                response.app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_FAILED);
+        } else {
+            // download sst files succeed
+            int32_t cur_progress =
+                response.__isset.total_download_progress ? response.total_download_progress : 0;
+            ddebug_f("recevie bulk load response from {} app({}) gpid({}.{}), bulk load status={}, "
+                     "total_download_progress={}",
+                     primary_addr.to_string(),
+                     response.app_name,
                      pid.get_app_id(),
-                     pid.get_partition_index());
-
+                     pid.get_partition_index(),
+                     enum_to_string(response.partition_bl_status),
+                     cur_progress);
             {
-                zauto_read_lock l(app_lock());
-                std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
-                if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
-                    dwarn_f("app {} not exist, set bulk load finish", app->app_name);
-                    // TODO(heyuchen): handler it
-                    return;
+                zauto_write_lock l(_lock);
+                _bulk_load_states.partitions_total_download_progress[pid] = cur_progress;
+                if (response.__isset.download_progresses) {
+                    _bulk_load_states.partitions_download_progress[pid] =
+                        response.download_progresses;
                 }
-
-                std::string partition_bulk_load_path = get_partition_bulk_load_path(
-                    get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
-                // TODO(heyuchen): check if status switch is valid
-                update_partition_bulk_load_status(
-                    app->app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_DOWNLOADED);
             }
-            // TODO(heyuchen): not return here
-            return;
+
+            // TODO(heyuchen): change it to common value
+            int32_t max_progress = 100;
+            if (cur_progress >= max_progress) {
+                ddebug_f("gpid({}.{}) finish download remote files from remote provider",
+                         pid.get_app_id(),
+                         pid.get_partition_index());
+
+                {
+                    zauto_read_lock l(app_lock());
+                    std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
+                    if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
+                        dwarn_f("app {} not exist, set bulk load finish", app->app_name);
+                        // TODO(heyuchen): handler it
+                        return;
+                    }
+
+                    std::string partition_bulk_load_path = get_partition_bulk_load_path(
+                        get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
+                    // TODO(heyuchen): check if status switch is valid
+                    update_partition_bulk_load_status(app->app_name,
+                                                      pid,
+                                                      partition_bulk_load_path,
+                                                      bulk_load_status::BLS_DOWNLOADED);
+                }
+                // TODO(heyuchen): not return here
+                return;
+            }
         }
     }
 
@@ -341,6 +363,31 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                      std::bind(&bulk_load_service::partition_bulk_load, this, pid),
                      0,
                      std::chrono::seconds(10));
+}
+
+dsn::error_code bulk_load_service::check_download_status(bulk_load_response &response)
+{
+    // download_progresses filed is not set
+    if (!response.__isset.download_progresses) {
+        return ERR_INVALID_STATE;
+    }
+
+    for (auto iter = response.download_progresses.begin();
+         iter != response.download_progresses.end();
+         ++iter) {
+        partition_download_progress progress = iter->second;
+        if (progress.status != ERR_OK) {
+            dwarn_f("app({}) gpid({}.{}) meet error during downloading sst files, node_address={}, "
+                    "error={}",
+                    response.app_name,
+                    progress.pid.get_app_id(),
+                    progress.pid.get_partition_index(),
+                    iter->first.to_string(),
+                    progress.status.to_string());
+            return progress.status;
+        }
+    }
+    return ERR_OK;
 }
 
 void bulk_load_service::update_partition_bulk_load_status(const std::string &app_name,
