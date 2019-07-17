@@ -62,7 +62,9 @@ struct bulk_load_context
     std::map<app_id, uint32_t> apps_in_progress_count;
     std::map<gpid, dsn::task_ptr> partitions_request;
     std::map<gpid, partition_bulk_load_info> partitions_info;
-    std::map<gpid, int32_t> partitions_download_progress;
+    std::map<gpid, std::map<dsn::rpc_address, partition_download_progress>>
+        partitions_download_progress;
+    std::map<gpid, int32_t> partitions_total_download_progress;
 };
 
 class bulk_load_service
@@ -94,7 +96,7 @@ public:
                                       gpid pid,
                                       const dsn::rpc_address &primary_addr);
 
-    void update_partition_bulk_load_status(std::shared_ptr<app_state> app,
+    void update_partition_bulk_load_status(const std::string &app_name,
                                            dsn::gpid pid,
                                            std::string &path,
                                            bulk_load_status::type status);

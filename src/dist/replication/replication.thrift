@@ -782,7 +782,8 @@ struct configuration_query_bulk_load_response
     2:string                            app_name;
     3:dsn.layer2.bulk_load_status       app_status;
     4:list<dsn.layer2.bulk_load_status> partition_status;
-    5:optional list<i32>                partition_download_progress;
+    5:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
+    6:optional list<i32>                total_download_progress;
 }
 
 struct bulk_load_request
@@ -800,9 +801,10 @@ struct bulk_load_response
 {
     1:dsn.error_code    err;
     2:dsn.gpid  pid;
-    3:dsn.layer2.bulk_load_status   partition_bl_status;
-    4:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
-    5:optional i32 total_download_progress;
+    3:string    app_name;
+    4:dsn.layer2.bulk_load_status   partition_bl_status;
+    5:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
+    6:optional i32 total_download_progress;
 }
 
 /*

@@ -5722,14 +5722,16 @@ typedef struct _configuration_query_bulk_load_response__isset
           app_name(false),
           app_status(false),
           partition_status(false),
-          partition_download_progress(false)
+          download_progresses(false),
+          total_download_progress(false)
     {
     }
     bool err : 1;
     bool app_name : 1;
     bool app_status : 1;
     bool partition_status : 1;
-    bool partition_download_progress : 1;
+    bool download_progresses : 1;
+    bool total_download_progress : 1;
 } _configuration_query_bulk_load_response__isset;
 
 class configuration_query_bulk_load_response
@@ -5750,7 +5752,8 @@ public:
     std::string app_name;
     ::dsn::bulk_load_status::type app_status;
     std::vector<::dsn::bulk_load_status::type> partition_status;
-    std::vector<int32_t> partition_download_progress;
+    std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
+    std::vector<int32_t> total_download_progress;
 
     _configuration_query_bulk_load_response__isset __isset;
 
@@ -5762,7 +5765,10 @@ public:
 
     void __set_partition_status(const std::vector<::dsn::bulk_load_status::type> &val);
 
-    void __set_partition_download_progress(const std::vector<int32_t> &val);
+    void
+    __set_download_progresses(const std::map<::dsn::rpc_address, partition_download_progress> &val);
+
+    void __set_total_download_progress(const std::vector<int32_t> &val);
 
     bool operator==(const configuration_query_bulk_load_response &rhs) const
     {
@@ -5774,10 +5780,14 @@ public:
             return false;
         if (!(partition_status == rhs.partition_status))
             return false;
-        if (__isset.partition_download_progress != rhs.__isset.partition_download_progress)
+        if (__isset.download_progresses != rhs.__isset.download_progresses)
             return false;
-        else if (__isset.partition_download_progress &&
-                 !(partition_download_progress == rhs.partition_download_progress))
+        else if (__isset.download_progresses && !(download_progresses == rhs.download_progresses))
+            return false;
+        if (__isset.total_download_progress != rhs.__isset.total_download_progress)
+            return false;
+        else if (__isset.total_download_progress &&
+                 !(total_download_progress == rhs.total_download_progress))
             return false;
         return true;
     }
@@ -5905,6 +5915,7 @@ typedef struct _bulk_load_response__isset
     _bulk_load_response__isset()
         : err(false),
           pid(false),
+          app_name(false),
           partition_bl_status(false),
           download_progresses(false),
           total_download_progress(false)
@@ -5912,6 +5923,7 @@ typedef struct _bulk_load_response__isset
     }
     bool err : 1;
     bool pid : 1;
+    bool app_name : 1;
     bool partition_bl_status : 1;
     bool download_progresses : 1;
     bool total_download_progress : 1;
@@ -5925,13 +5937,16 @@ public:
     bulk_load_response &operator=(const bulk_load_response &);
     bulk_load_response &operator=(bulk_load_response &&);
     bulk_load_response()
-        : partition_bl_status((::dsn::bulk_load_status::type)0), total_download_progress(0)
+        : app_name(),
+          partition_bl_status((::dsn::bulk_load_status::type)0),
+          total_download_progress(0)
     {
     }
 
     virtual ~bulk_load_response() throw();
     ::dsn::error_code err;
     ::dsn::gpid pid;
+    std::string app_name;
     ::dsn::bulk_load_status::type partition_bl_status;
     std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
     int32_t total_download_progress;
@@ -5941,6 +5956,8 @@ public:
     void __set_err(const ::dsn::error_code &val);
 
     void __set_pid(const ::dsn::gpid &val);
+
+    void __set_app_name(const std::string &val);
 
     void __set_partition_bl_status(const ::dsn::bulk_load_status::type val);
 
@@ -5954,6 +5971,8 @@ public:
         if (!(err == rhs.err))
             return false;
         if (!(pid == rhs.pid))
+            return false;
+        if (!(app_name == rhs.app_name))
             return false;
         if (!(partition_bl_status == rhs.partition_bl_status))
             return false;

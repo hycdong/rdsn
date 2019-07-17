@@ -332,6 +332,7 @@ private:
                      dsn::task_tracker &tracker);
     dsn::error_code read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
     void update_group_download_progress(bulk_load_response &response);
+    // void handle_bulk_load_error();
 
 private:
     friend class ::dsn::replication::replication_checker;

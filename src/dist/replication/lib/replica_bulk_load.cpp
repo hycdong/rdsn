@@ -48,6 +48,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
     }
 
     response.pid = request.pid;
+    response.app_name = request.app_name;
 
     ddebug_f("{}: receive bulk load request, remote provider={}, cluster_name={}, app_name={}, "
              "app_bulk_load_status={}, partition_bulk_load_status: remote={} VS local={}",
@@ -69,7 +70,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
 
     if ((_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
          _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) &&
-        status() == partition_status::PS_PRIMARY) {
+        status() == partition_status::PS_PRIMARY && response.err == ERR_OK) {
         response.partition_bl_status = _bulk_load_context.get_status();
         send_download_request_to_secondaries(request);
         update_group_download_progress(response);
@@ -83,8 +84,8 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
 //                   verify failed, fize not match, md5 not match, meta file not exist or damaged
 dsn::error_code replica::download_sst_files(const bulk_load_request &request)
 {
-    std::string remote_dir =
-        get_bulk_load_remote_dir(request.app_name, request.cluster_name, request.pid.get_partition_index());
+    std::string remote_dir = get_bulk_load_remote_dir(
+        request.app_name, request.cluster_name, request.pid.get_partition_index());
 
     std::string local_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
     dsn::error_code err = create_local_bulk_load_dir(local_dir);

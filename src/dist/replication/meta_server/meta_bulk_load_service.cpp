@@ -253,33 +253,44 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                                                      gpid pid,
                                                      const rpc_address &primary_addr)
 {
-    // TODO(heyuchen): handle object_not_found and invalid_state
     if (err != ERR_OK) {
-        dwarn_f("gpid({}.{}) failed to recevie bulk load response, err is {}",
+        dwarn_f("gpid({}.{}) failed to recevie bulk load response, err={}",
                 pid.get_app_id(),
                 pid.get_partition_index(),
                 err.to_string());
+    } else if (response.err == ERR_OBJECT_NOT_FOUND || response.err == ERR_INVALID_STATE) {
+        dwarn_f("gpid({}.{}) doesn't exist or has invalid state on node({}), err={}, plesae retry "
+                "later",
+                pid.get_app_id(),
+                pid.get_partition_index(),
+                primary_addr.to_string(),
+                response.err.to_string());
     } else if (response.err != ERR_OK) {
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
-        // handle file damaged error during downloading files from remote stroage
-        // TODO(heyuchen): damage file won't return object_not_found
-        if (response.err == ERR_CORRUPTION || response.err == ERR_OBJECT_NOT_FOUND) {
-            derror_f("gpid({}.{}) failed to download sst files from remote provider, coz files "
-                     "are damaged",
+        if (response.err == ERR_CORRUPTION) {
+            derror_f("gpid({}.{}) failed to download files from remote provider, coz files "
+                     "are damaged, err={}",
                      pid.get_app_id(),
-                     pid.get_partition_index());
-
-            // TODO(heyuchen): set partition bulk load and app bulk load failed, not return
-            // immdiately
-            return;
+                     pid.get_partition_index(),
+                     response.err.to_string());
         } else {
-            dwarn_f("gpid({}.{}) failed to download sst files from remote provider, coz file "
-                    "system error, retry later",
+            dwarn_f("gpid({}.{}) failed to download files from remote provider, coz file "
+                    "system error, err={}",
                     pid.get_app_id(),
-                    pid.get_partition_index());
+                    pid.get_partition_index(),
+                    response.err.to_string());
         }
+        // TODO(heyuchen): set partition bulk load and app bulk load failed, not return
+        // immdiately
+        std::string partition_bulk_load_path = get_partition_bulk_load_path(
+            get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
+        update_partition_bulk_load_status(
+            response.app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_FAILED);
+        return;
     } else {
-        // download
+        // download sst files
+        // TODO(heyuchen): add bulk load status check, not only downloading error handler below
+        // handle file damaged error during downloading files from remote stroage
         int32_t cur_progress =
             response.__isset.total_download_progress ? response.total_download_progress : 0;
         ddebug_f("recevie bulk load response from {} gpid({}.{}), bulk load status={}, "
@@ -291,7 +302,10 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                  cur_progress);
         {
             zauto_write_lock l(_lock);
-            _bulk_load_states.partitions_download_progress[pid] = cur_progress;
+            _bulk_load_states.partitions_total_download_progress[pid] = cur_progress;
+            if (response.__isset.download_progresses) {
+                _bulk_load_states.partitions_download_progress[pid] = response.download_progresses;
+            }
         }
 
         // TODO(heyuchen): change it to common value
@@ -313,10 +327,8 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                 std::string partition_bulk_load_path = get_partition_bulk_load_path(
                     get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
                 // TODO(heyuchen): check if status switch is valid
-                update_partition_bulk_load_status(std::move(app),
-                                                  pid,
-                                                  partition_bulk_load_path,
-                                                  bulk_load_status::BLS_DOWNLOADED);
+                update_partition_bulk_load_status(
+                    app->app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_DOWNLOADED);
             }
             // TODO(heyuchen): not return here
             return;
@@ -331,7 +343,7 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                      std::chrono::seconds(10));
 }
 
-void bulk_load_service::update_partition_bulk_load_status(std::shared_ptr<app_state> app,
+void bulk_load_service::update_partition_bulk_load_status(const std::string &app_name,
                                                           dsn::gpid pid,
                                                           std::string &path,
                                                           bulk_load_status::type status)
@@ -342,18 +354,24 @@ void bulk_load_service::update_partition_bulk_load_status(std::shared_ptr<app_st
     dsn::blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
     _meta_svc->get_meta_storage()->set_data(
-        std::move(path), std::move(value), [this, app, pid, path, status]() {
+        std::move(path), std::move(value), [this, app_name, pid, path, status]() {
             zauto_write_lock l(_lock);
             bulk_load_status::type old_status = _bulk_load_states.partitions_info[pid].status;
             ddebug_f("app {} update partition[{}] bulk_load status from {} to {}",
-                     app->app_name,
+                     app_name,
                      pid.get_partition_index(),
                      enum_to_string(old_status),
                      enum_to_string(status));
 
             _bulk_load_states.partitions_info[pid].status = status;
-            _bulk_load_states.partitions_request[pid] = nullptr;
-            if (--_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
+
+            if (status == bulk_load_status::BLS_DOWNLOADED) {
+                _bulk_load_states.partitions_request[pid] = nullptr;
+                if (--_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
+                    update_app_bulk_load_status(pid.get_app_id(), status);
+                }
+            } else if (status == bulk_load_status::BLS_FAILED) {
+                // TODO(heyuchen): consider other setting
                 update_app_bulk_load_status(pid.get_app_id(), status);
             }
         });
@@ -420,8 +438,9 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         response.partition_status.resize(partition_count);
         if (response.app_status == bulk_load_status::BLS_DOWNLOADING ||
             response.app_status == bulk_load_status::BLS_DOWNLOADED) {
-            response.__isset.partition_download_progress = true;
-            response.partition_download_progress.resize(partition_count);
+            response.__isset.total_download_progress = true;
+            response.__isset.download_progresses = true;
+            response.total_download_progress.resize(partition_count);
         }
 
         auto partition_bulk_load_info_map = _bulk_load_states.partitions_info;
@@ -430,8 +449,12 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
              iter++) {
             int idx = iter->first.get_partition_index();
             response.partition_status[idx] = iter->second.status;
-            if (response.__isset.partition_download_progress) {
-                response.partition_download_progress[idx] =
+            if (response.__isset.total_download_progress) {
+                response.total_download_progress[idx] =
+                    _bulk_load_states.partitions_total_download_progress[iter->first];
+            }
+            if (response.__isset.download_progresses) {
+                response.download_progresses =
                     _bulk_load_states.partitions_download_progress[iter->first];
             }
         }

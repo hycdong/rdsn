@@ -1635,11 +1635,11 @@ dsn::error_code replication_ddl_client::query_bulk_load(const std::string &app_n
         return resp.err;
     }
 
-    bool print_progress = resp.__isset.partition_download_progress;
+    bool print_progress = resp.__isset.total_download_progress;
     int total_progress = 0;
     if (print_progress) {
         for (int i = 0; i < resp.partition_status.size(); ++i) {
-            total_progress += resp.partition_download_progress[i];
+            total_progress += resp.total_download_progress[i];
         }
         total_progress /= resp.partition_status.size();
     }
@@ -1649,6 +1649,7 @@ dsn::error_code replication_ddl_client::query_bulk_load(const std::string &app_n
             std::cout << "app(" << app_name << ") bulk load status is "
                       << enum_to_string(resp.app_status) << std::endl;
         } else {
+            // TODO(heyuchen): add download status, every partition status
             int width = strlen("bulk_load_status");
             if (!print_progress) {
                 std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
@@ -1666,7 +1667,7 @@ dsn::error_code replication_ddl_client::query_bulk_load(const std::string &app_n
                 } else {
                     std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
                               << get_short_status(resp.partition_status[i]) << std::setw(width)
-                              << std::left << resp.partition_download_progress[i] << std::endl;
+                              << std::left << resp.total_download_progress[i] << std::endl;
                 }
             }
         }
