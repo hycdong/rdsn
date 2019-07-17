@@ -75,6 +75,10 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         send_download_request_to_secondaries(request);
         update_group_download_progress(response);
     }
+
+    if (response.err != ERR_OK) {
+        handle_bulk_load_error();
+    }
 }
 
 // return value:
@@ -177,7 +181,7 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
                     }
                 }
                 _bld_progress.status = ec;
-                _bulk_load_download_task[f_meta.name] = nullptr;
+                _bulk_load_download_task.erase(f_meta.name);
             });
         _bulk_load_download_task[f_meta.name] = bulk_load_download_task;
     }
@@ -447,6 +451,61 @@ void replica::update_group_download_progress(bulk_load_response &response)
 
     response.__isset.total_download_progress = true;
     response.total_download_progress = total_progress;
+}
+
+void replica::handle_bulk_load_error()
+{
+    // set bulk load status to failure
+    auto old_status = _bulk_load_context.get_status();
+    auto new_status = bulk_load_status::BLS_FAILED;
+    _bulk_load_context.set_status(new_status);
+    dwarn_f("{}: bulk load failed, from({}) to ({})",
+            name(),
+            enum_to_string(old_status),
+            enum_to_string(new_status));
+
+    if (old_status == bulk_load_status::BLS_DOWNLOADING ||
+        old_status == bulk_load_status::BLS_DOWNLOADED) {
+        // clean bulk load download task
+        for (auto iter = _bulk_load_download_task.begin(); iter != _bulk_load_download_task.end();
+             iter++) {
+            auto download_task = iter->second;
+            if (download_task != nullptr) {
+                download_task->cancel(false);
+            }
+            _bulk_load_download_task.erase(iter);
+        }
+        // TODO(heyuchen): delete this debug log
+        ddebug_f(
+            "{}: _bulk_load_download_task is_empty({})", name(), _bulk_load_download_task.empty());
+
+        // reset bulk load download progress
+        _bld_progress.progress = 0;
+    }
+
+    // remove local bulk load dir
+    std::string local_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
+    dsn::error_code err = remove_local_bulk_load_dir(local_dir);
+    if (err != ERR_OK) {
+        tasking::enqueue(LPC_BACKGROUND_BULK_LOAD, &_tracker, [this, local_dir]() {
+            remove_local_bulk_load_dir(local_dir);
+        });
+    } else {
+        ddebug_f("{} remove dir({}) succeed", name(), local_dir);
+    }
+}
+
+// - ERR_FILE_OPERATION_FAILED: remove folder failed
+dsn::error_code replica::remove_local_bulk_load_dir(const std::string &bulk_load_dir)
+{
+    if (!utils::filesystem::directory_exists(bulk_load_dir) ||
+        !utils::filesystem::remove_path(bulk_load_dir)) {
+        derror_f(
+            "{}: bulk_load_dir {} not exist and remove directory failed", name(), bulk_load_dir);
+        return ERR_FILE_OPERATION_FAILED;
+    }
+
+    return ERR_OK;
 }
 
 } // namespace replication
