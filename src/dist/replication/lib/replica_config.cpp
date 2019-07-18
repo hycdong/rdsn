@@ -793,6 +793,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
                 set_backup_context_cancel();
                 clear_cold_backup_state();
             }
+            // TODO(heyuchen): consider handle bulk load
             break;
         case partition_status::PS_SECONDARY:
         case partition_status::PS_ERROR:
@@ -802,6 +803,8 @@ bool replica::update_local_configuration(const replica_configuration &config,
             // upload
             set_backup_context_cancel();
             clear_cold_backup_state();
+            handle_bulk_load_error();
+            _bulk_load_context.cleanup();
             break;
         case partition_status::PS_POTENTIAL_SECONDARY:
             dassert(false, "invalid execution path");
@@ -811,6 +814,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
         }
         break;
     case partition_status::PS_SECONDARY:
+        // TODO(heyuchen): handle bulk load cleanup
         cleanup_preparing_mutations(false);
         if (config.status != partition_status::PS_SECONDARY) {
             // if primary change the ballot, secondary will update ballot from A to

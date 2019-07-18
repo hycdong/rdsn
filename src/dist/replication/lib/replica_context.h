@@ -547,10 +547,17 @@ struct bulk_load_metadata
 class bulk_load_context
 {
 public:
-    explicit bulk_load_context() : _status(bulk_load_status::BLS_INVALID), _file_total_size(0) {}
+    explicit bulk_load_context()
+        : _status(bulk_load_status::BLS_INVALID),
+          _file_total_size(0),
+          _cur_download_size(0),
+          _download_progress(0)
+    {
+    }
 
     bulk_load_status::type get_status() { return _status; }
     void set_status(bulk_load_status::type status) { _status = status; }
+    void cleanup();
 
 private:
     friend class ::dsn::replication::replica;
@@ -559,7 +566,6 @@ private:
     uint64_t _file_total_size;
     std::atomic<uint64_t> _cur_download_size;
     std::atomic<int32_t> _download_progress;
-    dsn::error_code _download_status;
 };
 
 //---------------inline impl----------------------------------------------------------------

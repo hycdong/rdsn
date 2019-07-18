@@ -92,6 +92,8 @@ void primary_context::cleanup(bool clean_pending_mutations)
     CLEANUP_TASK_ALWAYS(checkpoint_task)
 
     membership.ballot = 0;
+
+    group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
 }
 
 bool primary_context::is_cleaned()
@@ -1284,5 +1286,14 @@ void cold_backup_context::file_upload_complete(const std::string &filename)
     _cur_upload_file_cnt -= 1;
     _file_status[filename] = file_status::FileUploadComplete;
 }
+
+void bulk_load_context::cleanup()
+{
+    _status = bulk_load_status::BLS_INVALID;
+    _file_total_size = 0;
+    _cur_download_size.store(0);
+    _download_progress.store(0);
 }
-} // end namespace
+
+} // namespace replication
+} // namespace dsn

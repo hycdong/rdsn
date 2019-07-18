@@ -36,7 +36,6 @@ namespace dsn {
 namespace replication {
 
 // TODO(heyuchen): refactor code, move some functions to replication_common & replica_context
-// many functions are similar to replica_restore.cpp
 void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response &response)
 {
     _checker.only_one_thread_access();
@@ -154,7 +153,6 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
     // parse metadata
     std::string local_metadata_file_name =
         utils::filesystem::path_combine(local_file_dir, meta_name);
-    // TODO(heyuchen): change metadata to a private var of replica instance
     bulk_load_metadata metadata;
     err = read_bulk_load_metadata(local_metadata_file_name, metadata);
     if (err != ERR_OK) {
@@ -462,14 +460,11 @@ void replica::handle_bulk_load_error()
     auto old_status = _bulk_load_context.get_status();
     auto new_status = bulk_load_status::BLS_FAILED;
     _bulk_load_context.set_status(new_status);
-    dwarn_f("{}: bulk load failed, from({}) to ({})",
-            name(),
-            enum_to_string(old_status),
-            enum_to_string(new_status));
+    dwarn_f("{}: bulk load failed, old status={}", name(), enum_to_string(old_status));
 
     if (old_status == bulk_load_status::BLS_DOWNLOADING ||
         old_status == bulk_load_status::BLS_DOWNLOADED) {
-        // clean bulk load download task
+        // stop bulk load download tasks
         for (auto iter = _bulk_load_download_task.begin(); iter != _bulk_load_download_task.end();
              iter++) {
             auto download_task = iter->second;
