@@ -5722,8 +5722,7 @@ typedef struct _configuration_query_bulk_load_response__isset
           app_name(false),
           app_status(false),
           partition_status(false),
-          download_progresses(false),
-          total_download_progress(false)
+          download_progresses(false)
     {
     }
     bool err : 1;
@@ -5731,7 +5730,6 @@ typedef struct _configuration_query_bulk_load_response__isset
     bool app_status : 1;
     bool partition_status : 1;
     bool download_progresses : 1;
-    bool total_download_progress : 1;
 } _configuration_query_bulk_load_response__isset;
 
 class configuration_query_bulk_load_response
@@ -5752,8 +5750,7 @@ public:
     std::string app_name;
     ::dsn::bulk_load_status::type app_status;
     std::vector<::dsn::bulk_load_status::type> partition_status;
-    std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
-    std::vector<int32_t> total_download_progress;
+    std::vector<std::map<::dsn::rpc_address, partition_download_progress>> download_progresses;
 
     _configuration_query_bulk_load_response__isset __isset;
 
@@ -5765,10 +5762,8 @@ public:
 
     void __set_partition_status(const std::vector<::dsn::bulk_load_status::type> &val);
 
-    void
-    __set_download_progresses(const std::map<::dsn::rpc_address, partition_download_progress> &val);
-
-    void __set_total_download_progress(const std::vector<int32_t> &val);
+    void __set_download_progresses(
+        const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val);
 
     bool operator==(const configuration_query_bulk_load_response &rhs) const
     {
@@ -5783,11 +5778,6 @@ public:
         if (__isset.download_progresses != rhs.__isset.download_progresses)
             return false;
         else if (__isset.download_progresses && !(download_progresses == rhs.download_progresses))
-            return false;
-        if (__isset.total_download_progress != rhs.__isset.total_download_progress)
-            return false;
-        else if (__isset.total_download_progress &&
-                 !(total_download_progress == rhs.total_download_progress))
             return false;
         return true;
     }

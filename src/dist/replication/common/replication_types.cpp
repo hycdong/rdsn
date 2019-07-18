@@ -13437,17 +13437,10 @@ void configuration_query_bulk_load_response::__set_partition_status(
 }
 
 void configuration_query_bulk_load_response::__set_download_progresses(
-    const std::map<::dsn::rpc_address, partition_download_progress> &val)
+    const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val)
 {
     this->download_progresses = val;
     __isset.download_progresses = true;
-}
-
-void configuration_query_bulk_load_response::__set_total_download_progress(
-    const std::vector<int32_t> &val)
-{
-    this->total_download_progress = val;
-    __isset.total_download_progress = true;
 }
 
 uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
@@ -13517,42 +13510,35 @@ uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol
             }
             break;
         case 5:
-            if (ftype == ::apache::thrift::protocol::T_MAP) {
+            if (ftype == ::apache::thrift::protocol::T_LIST) {
                 {
                     this->download_progresses.clear();
                     uint32_t _size596;
-                    ::apache::thrift::protocol::TType _ktype597;
-                    ::apache::thrift::protocol::TType _vtype598;
-                    xfer += iprot->readMapBegin(_ktype597, _vtype598, _size596);
+                    ::apache::thrift::protocol::TType _etype599;
+                    xfer += iprot->readListBegin(_etype599, _size596);
+                    this->download_progresses.resize(_size596);
                     uint32_t _i600;
                     for (_i600 = 0; _i600 < _size596; ++_i600) {
-                        ::dsn::rpc_address _key601;
-                        xfer += _key601.read(iprot);
-                        partition_download_progress &_val602 = this->download_progresses[_key601];
-                        xfer += _val602.read(iprot);
-                    }
-                    xfer += iprot->readMapEnd();
-                }
-                this->__isset.download_progresses = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 6:
-            if (ftype == ::apache::thrift::protocol::T_LIST) {
-                {
-                    this->total_download_progress.clear();
-                    uint32_t _size603;
-                    ::apache::thrift::protocol::TType _etype606;
-                    xfer += iprot->readListBegin(_etype606, _size603);
-                    this->total_download_progress.resize(_size603);
-                    uint32_t _i607;
-                    for (_i607 = 0; _i607 < _size603; ++_i607) {
-                        xfer += iprot->readI32(this->total_download_progress[_i607]);
+                        {
+                            this->download_progresses[_i600].clear();
+                            uint32_t _size601;
+                            ::apache::thrift::protocol::TType _ktype602;
+                            ::apache::thrift::protocol::TType _vtype603;
+                            xfer += iprot->readMapBegin(_ktype602, _vtype603, _size601);
+                            uint32_t _i605;
+                            for (_i605 = 0; _i605 < _size601; ++_i605) {
+                                ::dsn::rpc_address _key606;
+                                xfer += _key606.read(iprot);
+                                partition_download_progress &_val607 =
+                                    this->download_progresses[_i600][_key606];
+                                xfer += _val607.read(iprot);
+                            }
+                            xfer += iprot->readMapEnd();
+                        }
                     }
                     xfer += iprot->readListEnd();
                 }
-                this->__isset.total_download_progress = true;
+                this->__isset.download_progresses = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -13602,34 +13588,29 @@ configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProto
     xfer += oprot->writeFieldEnd();
 
     if (this->__isset.download_progresses) {
-        xfer += oprot->writeFieldBegin("download_progresses", ::apache::thrift::protocol::T_MAP, 5);
+        xfer +=
+            oprot->writeFieldBegin("download_progresses", ::apache::thrift::protocol::T_LIST, 5);
         {
-            xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
-                                         ::apache::thrift::protocol::T_STRUCT,
-                                         static_cast<uint32_t>(this->download_progresses.size()));
-            std::map<::dsn::rpc_address, partition_download_progress>::const_iterator _iter609;
+            xfer += oprot->writeListBegin(::apache::thrift::protocol::T_MAP,
+                                          static_cast<uint32_t>(this->download_progresses.size()));
+            std::vector<std::map<::dsn::rpc_address, partition_download_progress>>::const_iterator
+                _iter609;
             for (_iter609 = this->download_progresses.begin();
                  _iter609 != this->download_progresses.end();
                  ++_iter609) {
-                xfer += _iter609->first.write(oprot);
-                xfer += _iter609->second.write(oprot);
-            }
-            xfer += oprot->writeMapEnd();
-        }
-        xfer += oprot->writeFieldEnd();
-    }
-    if (this->__isset.total_download_progress) {
-        xfer += oprot->writeFieldBegin(
-            "total_download_progress", ::apache::thrift::protocol::T_LIST, 6);
-        {
-            xfer +=
-                oprot->writeListBegin(::apache::thrift::protocol::T_I32,
-                                      static_cast<uint32_t>(this->total_download_progress.size()));
-            std::vector<int32_t>::const_iterator _iter610;
-            for (_iter610 = this->total_download_progress.begin();
-                 _iter610 != this->total_download_progress.end();
-                 ++_iter610) {
-                xfer += oprot->writeI32((*_iter610));
+                {
+                    xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
+                                                 ::apache::thrift::protocol::T_STRUCT,
+                                                 static_cast<uint32_t>((*_iter609).size()));
+                    std::map<::dsn::rpc_address, partition_download_progress>::const_iterator
+                        _iter610;
+                    for (_iter610 = (*_iter609).begin(); _iter610 != (*_iter609).end();
+                         ++_iter610) {
+                        xfer += _iter610->first.write(oprot);
+                        xfer += _iter610->second.write(oprot);
+                    }
+                    xfer += oprot->writeMapEnd();
+                }
             }
             xfer += oprot->writeListEnd();
         }
@@ -13648,7 +13629,6 @@ void swap(configuration_query_bulk_load_response &a, configuration_query_bulk_lo
     swap(a.app_status, b.app_status);
     swap(a.partition_status, b.partition_status);
     swap(a.download_progresses, b.download_progresses);
-    swap(a.total_download_progress, b.total_download_progress);
     swap(a.__isset, b.__isset);
 }
 
@@ -13660,7 +13640,6 @@ configuration_query_bulk_load_response::configuration_query_bulk_load_response(
     app_status = other611.app_status;
     partition_status = other611.partition_status;
     download_progresses = other611.download_progresses;
-    total_download_progress = other611.total_download_progress;
     __isset = other611.__isset;
 }
 configuration_query_bulk_load_response::configuration_query_bulk_load_response(
@@ -13671,7 +13650,6 @@ configuration_query_bulk_load_response::configuration_query_bulk_load_response(
     app_status = std::move(other612.app_status);
     partition_status = std::move(other612.partition_status);
     download_progresses = std::move(other612.download_progresses);
-    total_download_progress = std::move(other612.total_download_progress);
     __isset = std::move(other612.__isset);
 }
 configuration_query_bulk_load_response &configuration_query_bulk_load_response::
@@ -13682,7 +13660,6 @@ operator=(const configuration_query_bulk_load_response &other613)
     app_status = other613.app_status;
     partition_status = other613.partition_status;
     download_progresses = other613.download_progresses;
-    total_download_progress = other613.total_download_progress;
     __isset = other613.__isset;
     return *this;
 }
@@ -13694,7 +13671,6 @@ operator=(configuration_query_bulk_load_response &&other614)
     app_status = std::move(other614.app_status);
     partition_status = std::move(other614.partition_status);
     download_progresses = std::move(other614.download_progresses);
-    total_download_progress = std::move(other614.total_download_progress);
     __isset = std::move(other614.__isset);
     return *this;
 }
@@ -13712,10 +13688,6 @@ void configuration_query_bulk_load_response::printTo(std::ostream &out) const
     out << ", "
         << "download_progresses=";
     (__isset.download_progresses ? (out << to_string(download_progresses)) : (out << "<null>"));
-    out << ", "
-        << "total_download_progress=";
-    (__isset.total_download_progress ? (out << to_string(total_download_progress))
-                                     : (out << "<null>"));
     out << ")";
 }
 

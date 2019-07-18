@@ -485,9 +485,8 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         response.partition_status.resize(partition_count);
         if (response.app_status == bulk_load_status::BLS_DOWNLOADING ||
             response.app_status == bulk_load_status::BLS_DOWNLOADED) {
-            response.__isset.total_download_progress = true;
             response.__isset.download_progresses = true;
-            response.total_download_progress.resize(partition_count);
+            response.download_progresses.resize(partition_count);
         }
 
         auto partition_bulk_load_info_map = _bulk_load_states.partitions_info;
@@ -496,12 +495,8 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
              iter++) {
             int idx = iter->first.get_partition_index();
             response.partition_status[idx] = iter->second.status;
-            if (response.__isset.total_download_progress) {
-                response.total_download_progress[idx] =
-                    _bulk_load_states.partitions_total_download_progress[iter->first];
-            }
             if (response.__isset.download_progresses) {
-                response.download_progresses =
+                response.download_progresses[idx] =
                     _bulk_load_states.partitions_download_progress[iter->first];
             }
         }

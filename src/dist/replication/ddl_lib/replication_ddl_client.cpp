@@ -1608,7 +1608,8 @@ static std::string get_short_status(bulk_load_status::type status)
     return str;
 }
 
-dsn::error_code replication_ddl_client::query_bulk_load(const std::string &app_name, bool detailed)
+dsn::error_code
+replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pidx, bool detailed)
 {
     std::shared_ptr<configuration_query_bulk_load_request> req(
         new configuration_query_bulk_load_request());
@@ -1635,14 +1636,34 @@ dsn::error_code replication_ddl_client::query_bulk_load(const std::string &app_n
         return resp.err;
     }
 
-    bool print_progress = resp.__isset.total_download_progress;
+    int partition_count = resp.partition_status.size();
+    if (pidx < -1 || pidx >= partition_count) {
+        std::cout << "app(" << app_name << ") partition_count(" << partition_count << ")"
+                  << std::endl;
+        return ERR_INVALID_PARAMETERS;
+    }
+
+    bool print_progress = resp.__isset.download_progresses;
+    // pidx -> partition_progress
+    std::map<int32_t, int32_t> partitions_progress;
     int total_progress = 0;
     if (print_progress) {
-        for (int i = 0; i < resp.partition_status.size(); ++i) {
-            total_progress += resp.total_download_progress[i];
+        for (int i = 0; i < partition_count; ++i) {
+            auto pid_map = resp.download_progresses[i];
+            int32_t progress = 0, count = 0;
+            for (auto iter = pid_map.begin(); iter != pid_map.end(); ++iter) {
+                progress += iter->second.progress;
+                ++count;
+            }
+            progress /= count;
+            partitions_progress.insert(std::make_pair(i, progress));
+            total_progress += progress;
         }
-        total_progress /= resp.partition_status.size();
+        total_progress /= partition_count;
     }
+
+    // pidx = -1 means not print specific pidx progress
+    bool print_single_pidx = (pidx > -1 && resp.__isset.download_progresses);
 
     if (resp.err == ERR_OK) {
         if (!detailed) {
@@ -1654,27 +1675,48 @@ dsn::error_code replication_ddl_client::query_bulk_load(const std::string &app_n
             if (!print_progress) {
                 std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
                           << "status" << std::endl;
-            } else {
+            } else if (!print_single_pidx) {
                 std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
-                          << "status" << std::setw(width) << std::left << "progress(%)"
+                          << "status" << std::setw(width) << std::left << "total_progress(%)"
                           << std::endl;
+            } else {
+                std::cout << std::setw(width) << std::left << "pid" << std::setw(25) << std::left
+                          << "node_address" << std::setw(width) << std::left
+                          << "download_progress(%)" << std::endl;
             }
 
-            for (int i = 0; i < resp.partition_status.size(); ++i) {
-                if (!print_progress) {
-                    std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
-                              << get_short_status(resp.partition_status[i]) << std::endl;
-                } else {
-                    std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
-                              << get_short_status(resp.partition_status[i]) << std::setw(width)
-                              << std::left << resp.total_download_progress[i] << std::endl;
+            if (!print_single_pidx) {
+                for (int i = 0; i < partition_count; ++i) {
+                    if (!print_progress) {
+                        std::cout << std::setw(width) << std::left << i << std::setw(width)
+                                  << std::left << get_short_status(resp.partition_status[i])
+                                  << std::endl;
+                    } else {
+                        std::cout << std::setw(width) << std::left << i << std::setw(width)
+                                  << std::left << get_short_status(resp.partition_status[i])
+                                  << std::setw(width) << std::left << partitions_progress[i]
+                                  << std::endl;
+                    }
+                }
+            } else {
+                for (auto iter = resp.download_progresses[pidx].begin();
+                     iter != resp.download_progresses[pidx].end();
+                     iter++) {
+                    std::cout << std::setw(width) << std::left << pidx << std::setw(25) << std::left
+                              << iter->first.to_string() << std::setw(width) << std::left
+                              << iter->second.progress << std::endl;
                 }
             }
         }
 
         if (print_progress) {
-            std::cout << "app(" << app_name << ") total download progress is " << total_progress
-                      << "%" << std::endl;
+            if (!print_single_pidx) {
+                std::cout << "app(" << app_name << ") total download progress is " << total_progress
+                          << "%" << std::endl;
+            } else {
+                std::cout << "pidx(" << pidx << ") total download progress is "
+                          << partitions_progress[pidx] << "%" << std::endl;
+            }
         }
     }
 

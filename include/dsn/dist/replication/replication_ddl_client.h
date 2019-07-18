@@ -178,7 +178,7 @@ public:
                                     const std::string &cluster_name,
                                     const std::string &file_provider_type);
 
-    dsn::error_code query_bulk_load(const std::string &app_name, bool detailed);
+    dsn::error_code query_bulk_load(const std::string &app_name, int32_t pidx, bool detailed);
 
 private:
     bool static valid_app_char(int c);
