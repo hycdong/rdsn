@@ -335,6 +335,7 @@ private:
     // TODO(heyuchen): consider rename this function
     void handle_bulk_load_error();
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
+    void update_group_context_clean_flag(bulk_load_response &response);
 
 private:
     friend class ::dsn::replication::replication_checker;

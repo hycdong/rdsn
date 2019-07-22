@@ -185,11 +185,15 @@ void replica::on_group_check(const group_check_request &request,
     response.learner_status_ = _potential_secondary_states.learning_status;
     response.learner_signature = _potential_secondary_states.learning_version;
 
-    if (status() == partition_status::PS_SECONDARY &&
-        (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
-         _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED)) {
-        response.__isset.bulk_load_download_progress = true;
-        response.bulk_load_download_progress = _bld_progress;
+    if (status() == partition_status::PS_SECONDARY) {
+        if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
+            _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
+            response.__isset.bulk_load_download_progress = true;
+            response.bulk_load_download_progress = _bld_progress;
+        } else {
+            response.__isset.bulk_load_context_cleaned = true;
+            response.bulk_load_context_cleaned = _bulk_load_context.is_cleanup();
+        }
     }
 }
 
@@ -217,6 +221,10 @@ void replica::on_group_check_reply(error_code err,
             if (resp->__isset.bulk_load_download_progress) {
                 _primary_states.group_download_progress[req->node] =
                     resp->bulk_load_download_progress;
+            }
+            if (resp->__isset.bulk_load_context_cleaned) {
+                _primary_states.group_bulk_load_context_flag[req->node] =
+                    resp->bulk_load_context_cleaned;
             }
         } else {
             handle_remote_failure(req->config.status, req->node, resp->err, "group check");

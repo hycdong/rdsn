@@ -35,12 +35,14 @@ namespace replication {
 struct app_bulk_load_info
 {
     uint32_t app_id;
+    uint32_t partition_count;
     std::string app_name;
     std::string cluster_name;
     std::string file_provider_type;
     // TODO(heyuchen): consider add bulk load status
     bulk_load_status::type status;
-    DEFINE_JSON_SERIALIZATION(app_id, app_name, cluster_name, file_provider_type, status)
+    DEFINE_JSON_SERIALIZATION(
+        app_id, partition_count, app_name, cluster_name, file_provider_type, status)
 };
 
 // struct partition_bulk_load_info
@@ -65,6 +67,7 @@ struct bulk_load_context
     std::map<gpid, std::map<dsn::rpc_address, partition_download_progress>>
         partitions_download_progress;
     std::map<gpid, int32_t> partitions_total_download_progress;
+    std::map<app_id, bool> apps_cleaning_up;
 };
 
 class bulk_load_service
@@ -101,9 +104,18 @@ public:
                                            std::string &path,
                                            bulk_load_status::type status);
 
-    void update_app_bulk_load_status(uint32_t app_id, bulk_load_status::type new_status);
+    void update_app_bulk_load_status_unlock(uint32_t app_id, bulk_load_status::type new_status);
 
     dsn::error_code check_download_status(bulk_load_response &response);
+
+    void update_app_bulk_load_flag(std::shared_ptr<app_state> app, bool is_bulk_loading);
+
+    void remove_app_bulk_load_dir(uint32_t app_id);
+
+    void clear_app_bulk_load_context(uint32_t app_id);
+
+    template <typename T>
+    void erase_map_elem_by_id(uint32_t app_id, std::map<gpid, T> &mymap);
 
     // app bulk load path is {_bulk_load_root}/{app_id}
     std::string get_app_bulk_load_path(uint32_t app_id) const
@@ -128,6 +140,11 @@ public:
         return ainfo.status;
     }
 
+    bool is_app_bulk_loading(uint32_t app_id)
+    {
+        return (_bulk_load_app_id.find(app_id) == _bulk_load_app_id.end() ? false : true);
+    }
+
 private:
     meta_service *_meta_svc;
     server_state *_state;
@@ -139,6 +156,8 @@ private:
     std::map<app_id, app_bulk_load_info> _bulk_load_info;
 
     bulk_load_context _bulk_load_states;
+
+    std::set<uint32_t> _bulk_load_app_id;
 
     // TODO(heyuchen): lock difference???
     // app lock

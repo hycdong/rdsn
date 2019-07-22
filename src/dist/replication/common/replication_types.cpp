@@ -2611,6 +2611,12 @@ void group_check_response::__set_bulk_load_download_progress(const partition_dow
     __isset.bulk_load_download_progress = true;
 }
 
+void group_check_response::__set_bulk_load_context_cleaned(const bool val)
+{
+    this->bulk_load_context_cleaned = val;
+    __isset.bulk_load_context_cleaned = true;
+}
+
 uint32_t group_check_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
@@ -2696,6 +2702,14 @@ uint32_t group_check_response::read(::apache::thrift::protocol::TProtocol *iprot
                 xfer += iprot->skip(ftype);
             }
             break;
+        case 9:
+            if (ftype == ::apache::thrift::protocol::T_BOOL) {
+                xfer += iprot->readBool(this->bulk_load_context_cleaned);
+                this->__isset.bulk_load_context_cleaned = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -2750,6 +2764,12 @@ uint32_t group_check_response::write(::apache::thrift::protocol::TProtocol *opro
         xfer += this->bulk_load_download_progress.write(oprot);
         xfer += oprot->writeFieldEnd();
     }
+    if (this->__isset.bulk_load_context_cleaned) {
+        xfer += oprot->writeFieldBegin(
+            "bulk_load_context_cleaned", ::apache::thrift::protocol::T_BOOL, 9);
+        xfer += oprot->writeBool(this->bulk_load_context_cleaned);
+        xfer += oprot->writeFieldEnd();
+    }
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -2766,6 +2786,7 @@ void swap(group_check_response &a, group_check_response &b)
     swap(a.learner_signature, b.learner_signature);
     swap(a.node, b.node);
     swap(a.bulk_load_download_progress, b.bulk_load_download_progress);
+    swap(a.bulk_load_context_cleaned, b.bulk_load_context_cleaned);
     swap(a.__isset, b.__isset);
 }
 
@@ -2779,6 +2800,7 @@ group_check_response::group_check_response(const group_check_response &other76)
     learner_signature = other76.learner_signature;
     node = other76.node;
     bulk_load_download_progress = other76.bulk_load_download_progress;
+    bulk_load_context_cleaned = other76.bulk_load_context_cleaned;
     __isset = other76.__isset;
 }
 group_check_response::group_check_response(group_check_response &&other77)
@@ -2792,6 +2814,7 @@ group_check_response::group_check_response(group_check_response &&other77)
     learner_signature = std::move(other77.learner_signature);
     node = std::move(other77.node);
     bulk_load_download_progress = std::move(other77.bulk_load_download_progress);
+    bulk_load_context_cleaned = std::move(other77.bulk_load_context_cleaned);
     __isset = std::move(other77.__isset);
 }
 group_check_response &group_check_response::operator=(const group_check_response &other78)
@@ -2804,6 +2827,7 @@ group_check_response &group_check_response::operator=(const group_check_response
     learner_signature = other78.learner_signature;
     node = other78.node;
     bulk_load_download_progress = other78.bulk_load_download_progress;
+    bulk_load_context_cleaned = other78.bulk_load_context_cleaned;
     __isset = other78.__isset;
     return *this;
 }
@@ -2818,6 +2842,7 @@ group_check_response &group_check_response::operator=(group_check_response &&oth
     learner_signature = std::move(other79.learner_signature);
     node = std::move(other79.node);
     bulk_load_download_progress = std::move(other79.bulk_load_download_progress);
+    bulk_load_context_cleaned = std::move(other79.bulk_load_context_cleaned);
     __isset = std::move(other79.__isset);
     return *this;
 }
@@ -2843,6 +2868,10 @@ void group_check_response::printTo(std::ostream &out) const
         << "bulk_load_download_progress=";
     (__isset.bulk_load_download_progress ? (out << to_string(bulk_load_download_progress))
                                          : (out << "<null>"));
+    out << ", "
+        << "bulk_load_context_cleaned=";
+    (__isset.bulk_load_context_cleaned ? (out << to_string(bulk_load_context_cleaned))
+                                       : (out << "<null>"));
     out << ")";
 }
 
@@ -13952,6 +13981,12 @@ void bulk_load_response::__set_total_download_progress(const int32_t val)
     __isset.total_download_progress = true;
 }
 
+void bulk_load_response::__set_context_clean_flags(const std::map<::dsn::rpc_address, bool> &val)
+{
+    this->context_clean_flags = val;
+    __isset.context_clean_flags = true;
+}
+
 uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
@@ -14035,6 +14070,28 @@ uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
+        case 7:
+            if (ftype == ::apache::thrift::protocol::T_MAP) {
+                {
+                    this->context_clean_flags.clear();
+                    uint32_t _size628;
+                    ::apache::thrift::protocol::TType _ktype629;
+                    ::apache::thrift::protocol::TType _vtype630;
+                    xfer += iprot->readMapBegin(_ktype629, _vtype630, _size628);
+                    uint32_t _i632;
+                    for (_i632 = 0; _i632 < _size628; ++_i632) {
+                        ::dsn::rpc_address _key633;
+                        xfer += _key633.read(iprot);
+                        bool &_val634 = this->context_clean_flags[_key633];
+                        xfer += iprot->readBool(_val634);
+                    }
+                    xfer += iprot->readMapEnd();
+                }
+                this->__isset.context_clean_flags = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -14075,12 +14132,12 @@ uint32_t bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot)
             xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
                                          ::apache::thrift::protocol::T_STRUCT,
                                          static_cast<uint32_t>(this->download_progresses.size()));
-            std::map<::dsn::rpc_address, partition_download_progress>::const_iterator _iter628;
-            for (_iter628 = this->download_progresses.begin();
-                 _iter628 != this->download_progresses.end();
-                 ++_iter628) {
-                xfer += _iter628->first.write(oprot);
-                xfer += _iter628->second.write(oprot);
+            std::map<::dsn::rpc_address, partition_download_progress>::const_iterator _iter635;
+            for (_iter635 = this->download_progresses.begin();
+                 _iter635 != this->download_progresses.end();
+                 ++_iter635) {
+                xfer += _iter635->first.write(oprot);
+                xfer += _iter635->second.write(oprot);
             }
             xfer += oprot->writeMapEnd();
         }
@@ -14090,6 +14147,23 @@ uint32_t bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot)
         xfer +=
             oprot->writeFieldBegin("total_download_progress", ::apache::thrift::protocol::T_I32, 6);
         xfer += oprot->writeI32(this->total_download_progress);
+        xfer += oprot->writeFieldEnd();
+    }
+    if (this->__isset.context_clean_flags) {
+        xfer += oprot->writeFieldBegin("context_clean_flags", ::apache::thrift::protocol::T_MAP, 7);
+        {
+            xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
+                                         ::apache::thrift::protocol::T_BOOL,
+                                         static_cast<uint32_t>(this->context_clean_flags.size()));
+            std::map<::dsn::rpc_address, bool>::const_iterator _iter636;
+            for (_iter636 = this->context_clean_flags.begin();
+                 _iter636 != this->context_clean_flags.end();
+                 ++_iter636) {
+                xfer += _iter636->first.write(oprot);
+                xfer += oprot->writeBool(_iter636->second);
+            }
+            xfer += oprot->writeMapEnd();
+        }
         xfer += oprot->writeFieldEnd();
     }
     xfer += oprot->writeFieldStop();
@@ -14106,49 +14180,54 @@ void swap(bulk_load_response &a, bulk_load_response &b)
     swap(a.partition_bl_status, b.partition_bl_status);
     swap(a.download_progresses, b.download_progresses);
     swap(a.total_download_progress, b.total_download_progress);
+    swap(a.context_clean_flags, b.context_clean_flags);
     swap(a.__isset, b.__isset);
 }
 
-bulk_load_response::bulk_load_response(const bulk_load_response &other629)
+bulk_load_response::bulk_load_response(const bulk_load_response &other637)
 {
-    err = other629.err;
-    pid = other629.pid;
-    app_name = other629.app_name;
-    partition_bl_status = other629.partition_bl_status;
-    download_progresses = other629.download_progresses;
-    total_download_progress = other629.total_download_progress;
-    __isset = other629.__isset;
+    err = other637.err;
+    pid = other637.pid;
+    app_name = other637.app_name;
+    partition_bl_status = other637.partition_bl_status;
+    download_progresses = other637.download_progresses;
+    total_download_progress = other637.total_download_progress;
+    context_clean_flags = other637.context_clean_flags;
+    __isset = other637.__isset;
 }
-bulk_load_response::bulk_load_response(bulk_load_response &&other630)
+bulk_load_response::bulk_load_response(bulk_load_response &&other638)
 {
-    err = std::move(other630.err);
-    pid = std::move(other630.pid);
-    app_name = std::move(other630.app_name);
-    partition_bl_status = std::move(other630.partition_bl_status);
-    download_progresses = std::move(other630.download_progresses);
-    total_download_progress = std::move(other630.total_download_progress);
-    __isset = std::move(other630.__isset);
+    err = std::move(other638.err);
+    pid = std::move(other638.pid);
+    app_name = std::move(other638.app_name);
+    partition_bl_status = std::move(other638.partition_bl_status);
+    download_progresses = std::move(other638.download_progresses);
+    total_download_progress = std::move(other638.total_download_progress);
+    context_clean_flags = std::move(other638.context_clean_flags);
+    __isset = std::move(other638.__isset);
 }
-bulk_load_response &bulk_load_response::operator=(const bulk_load_response &other631)
+bulk_load_response &bulk_load_response::operator=(const bulk_load_response &other639)
 {
-    err = other631.err;
-    pid = other631.pid;
-    app_name = other631.app_name;
-    partition_bl_status = other631.partition_bl_status;
-    download_progresses = other631.download_progresses;
-    total_download_progress = other631.total_download_progress;
-    __isset = other631.__isset;
+    err = other639.err;
+    pid = other639.pid;
+    app_name = other639.app_name;
+    partition_bl_status = other639.partition_bl_status;
+    download_progresses = other639.download_progresses;
+    total_download_progress = other639.total_download_progress;
+    context_clean_flags = other639.context_clean_flags;
+    __isset = other639.__isset;
     return *this;
 }
-bulk_load_response &bulk_load_response::operator=(bulk_load_response &&other632)
+bulk_load_response &bulk_load_response::operator=(bulk_load_response &&other640)
 {
-    err = std::move(other632.err);
-    pid = std::move(other632.pid);
-    app_name = std::move(other632.app_name);
-    partition_bl_status = std::move(other632.partition_bl_status);
-    download_progresses = std::move(other632.download_progresses);
-    total_download_progress = std::move(other632.total_download_progress);
-    __isset = std::move(other632.__isset);
+    err = std::move(other640.err);
+    pid = std::move(other640.pid);
+    app_name = std::move(other640.app_name);
+    partition_bl_status = std::move(other640.partition_bl_status);
+    download_progresses = std::move(other640.download_progresses);
+    total_download_progress = std::move(other640.total_download_progress);
+    context_clean_flags = std::move(other640.context_clean_flags);
+    __isset = std::move(other640.__isset);
     return *this;
 }
 void bulk_load_response::printTo(std::ostream &out) const
@@ -14169,6 +14248,9 @@ void bulk_load_response::printTo(std::ostream &out) const
         << "total_download_progress=";
     (__isset.total_download_progress ? (out << to_string(total_download_progress))
                                      : (out << "<null>"));
+    out << ", "
+        << "context_clean_flags=";
+    (__isset.context_clean_flags ? (out << to_string(context_clean_flags)) : (out << "<null>"));
     out << ")";
 }
 }

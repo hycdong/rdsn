@@ -173,6 +173,7 @@ struct group_check_response
     // add filed after supporting bulk load
     // used when secondary downloading or downloaded
     8:optional partition_download_progress bulk_load_download_progress;
+    9:optional bool bulk_load_context_cleaned;
 }
 
 /////////////////// meta server messages ////////////////////
@@ -804,6 +805,7 @@ struct bulk_load_response
     4:dsn.layer2.bulk_load_status   partition_bl_status;
     5:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
     6:optional i32 total_download_progress;
+    7:optional map<dsn.rpc_address, bool> context_clean_flags;
 }
 
 /*

@@ -75,6 +75,16 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         update_group_download_progress(response);
     }
 
+    if (request.app_bl_status == bulk_load_status::BLS_FAILED &&
+        request.partition_bl_info.status == bulk_load_status::BLS_FAILED) {
+        handle_bulk_load_error();
+        // send to secondary
+        if (status() == partition_status::PS_PRIMARY) {
+            send_download_request_to_secondaries(request);
+            update_group_context_clean_flag(response);
+        }
+    }
+
     if (response.err != ERR_OK) {
         handle_bulk_load_error();
     }
@@ -456,6 +466,11 @@ void replica::update_group_download_progress(bulk_load_response &response)
 
 void replica::handle_bulk_load_error()
 {
+    if (_bulk_load_context.is_cleanup()) {
+        ddebug_f("{}: bulk load context has been cleaned up", name());
+        return;
+    }
+
     // set bulk load status to failure
     auto old_status = _bulk_load_context.get_status();
     auto new_status = bulk_load_status::BLS_FAILED;
@@ -473,12 +488,9 @@ void replica::handle_bulk_load_error()
             }
             _bulk_load_download_task.erase(iter);
         }
-        // TODO(heyuchen): delete this debug log
-        ddebug_f(
-            "{}: _bulk_load_download_task is_empty({})", name(), _bulk_load_download_task.empty());
-
         // reset bulk load download progress
         _bld_progress.progress = 0;
+        _bld_progress.status = ERR_OK;
     }
 
     // remove local bulk load dir
@@ -491,6 +503,9 @@ void replica::handle_bulk_load_error()
     } else {
         ddebug_f("{} remove dir({}) succeed", name(), local_dir);
     }
+
+    // clean up bulk_load_context
+    _bulk_load_context.cleanup();
 }
 
 // - ERR_FILE_OPERATION_FAILED: remove folder failed
@@ -504,6 +519,37 @@ dsn::error_code replica::remove_local_bulk_load_dir(const std::string &bulk_load
     }
 
     return ERR_OK;
+}
+
+void replica::update_group_context_clean_flag(bulk_load_response &response)
+{
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_f("{} receive request with wrong status {}", name(), enum_to_string(status()));
+        response.err = ERR_INVALID_STATE;
+        return;
+    }
+
+    response.__isset.context_clean_flags = true;
+    response.context_clean_flags[_primary_states.membership.primary] =
+        _bulk_load_context.is_cleanup();
+    ddebug_f("{}: pid({}.{}) primary={}, bulk_load_context cleanup={}",
+             name(),
+             response.pid.get_app_id(),
+             response.pid.get_partition_index(),
+             _primary_states.membership.primary.to_string(),
+             _bulk_load_context.is_cleanup());
+
+    for (const auto &target_address : _primary_states.membership.secondaries) {
+        bool is_clean_up = _primary_states.group_bulk_load_context_flag[target_address];
+        response.context_clean_flags[target_address] = is_clean_up;
+
+        ddebug_f("{}: pid({}.{}) secondary={}, bulk_load_context cleanup={}",
+                 name(),
+                 response.pid.get_app_id(),
+                 response.pid.get_partition_index(),
+                 target_address.to_string(),
+                 is_clean_up);
+    }
 }
 
 } // namespace replication

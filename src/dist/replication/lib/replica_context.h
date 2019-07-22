@@ -114,6 +114,8 @@ public:
 
     // bulk load download progress
     std::map<rpc_address, partition_download_progress> group_download_progress;
+    // bulk load cleanup flag
+    std::map<rpc_address, bool> group_bulk_load_context_flag;
 };
 
 class secondary_context
@@ -551,13 +553,15 @@ public:
         : _status(bulk_load_status::BLS_INVALID),
           _file_total_size(0),
           _cur_download_size(0),
-          _download_progress(0)
+          _download_progress(0),
+          _clean_up(false)
     {
     }
 
     bulk_load_status::type get_status() { return _status; }
     void set_status(bulk_load_status::type status) { _status = status; }
     void cleanup();
+    bool is_cleanup() { return _clean_up; }
 
 private:
     friend class ::dsn::replication::replica;
@@ -566,6 +570,7 @@ private:
     uint64_t _file_total_size;
     std::atomic<uint64_t> _cur_download_size;
     std::atomic<int32_t> _download_progress;
+    bool _clean_up;
 };
 
 //---------------inline impl----------------------------------------------------------------

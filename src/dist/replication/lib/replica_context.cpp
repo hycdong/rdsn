@@ -94,6 +94,9 @@ void primary_context::cleanup(bool clean_pending_mutations)
     membership.ballot = 0;
 
     group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
+
+    group_bulk_load_context_flag.erase(group_bulk_load_context_flag.begin(),
+                                       group_bulk_load_context_flag.end());
 }
 
 bool primary_context::is_cleaned()
@@ -1293,6 +1296,7 @@ void bulk_load_context::cleanup()
     _file_total_size = 0;
     _cur_download_size.store(0);
     _download_progress.store(0);
+    _clean_up = true;
 }
 
 } // namespace replication

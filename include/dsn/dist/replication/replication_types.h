@@ -1370,7 +1370,8 @@ typedef struct _group_check_response__isset
           learner_status_(true),
           learner_signature(false),
           node(false),
-          bulk_load_download_progress(false)
+          bulk_load_download_progress(false),
+          bulk_load_context_cleaned(false)
     {
     }
     bool pid : 1;
@@ -1381,6 +1382,7 @@ typedef struct _group_check_response__isset
     bool learner_signature : 1;
     bool node : 1;
     bool bulk_load_download_progress : 1;
+    bool bulk_load_context_cleaned : 1;
 } _group_check_response__isset;
 
 class group_check_response
@@ -1394,7 +1396,8 @@ public:
         : last_committed_decree_in_app(0),
           last_committed_decree_in_prepare_list(0),
           learner_status_((learner_status::type)0),
-          learner_signature(0)
+          learner_signature(0),
+          bulk_load_context_cleaned(0)
     {
         learner_status_ = (learner_status::type)0;
     }
@@ -1408,6 +1411,7 @@ public:
     int64_t learner_signature;
     ::dsn::rpc_address node;
     partition_download_progress bulk_load_download_progress;
+    bool bulk_load_context_cleaned;
 
     _group_check_response__isset __isset;
 
@@ -1426,6 +1430,8 @@ public:
     void __set_node(const ::dsn::rpc_address &val);
 
     void __set_bulk_load_download_progress(const partition_download_progress &val);
+
+    void __set_bulk_load_context_cleaned(const bool val);
 
     bool operator==(const group_check_response &rhs) const
     {
@@ -1447,6 +1453,11 @@ public:
             return false;
         else if (__isset.bulk_load_download_progress &&
                  !(bulk_load_download_progress == rhs.bulk_load_download_progress))
+            return false;
+        if (__isset.bulk_load_context_cleaned != rhs.__isset.bulk_load_context_cleaned)
+            return false;
+        else if (__isset.bulk_load_context_cleaned &&
+                 !(bulk_load_context_cleaned == rhs.bulk_load_context_cleaned))
             return false;
         return true;
     }
@@ -5908,7 +5919,8 @@ typedef struct _bulk_load_response__isset
           app_name(false),
           partition_bl_status(false),
           download_progresses(false),
-          total_download_progress(false)
+          total_download_progress(false),
+          context_clean_flags(false)
     {
     }
     bool err : 1;
@@ -5917,6 +5929,7 @@ typedef struct _bulk_load_response__isset
     bool partition_bl_status : 1;
     bool download_progresses : 1;
     bool total_download_progress : 1;
+    bool context_clean_flags : 1;
 } _bulk_load_response__isset;
 
 class bulk_load_response
@@ -5940,6 +5953,7 @@ public:
     ::dsn::bulk_load_status::type partition_bl_status;
     std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
     int32_t total_download_progress;
+    std::map<::dsn::rpc_address, bool> context_clean_flags;
 
     _bulk_load_response__isset __isset;
 
@@ -5955,6 +5969,8 @@ public:
     __set_download_progresses(const std::map<::dsn::rpc_address, partition_download_progress> &val);
 
     void __set_total_download_progress(const int32_t val);
+
+    void __set_context_clean_flags(const std::map<::dsn::rpc_address, bool> &val);
 
     bool operator==(const bulk_load_response &rhs) const
     {
@@ -5974,6 +5990,10 @@ public:
             return false;
         else if (__isset.total_download_progress &&
                  !(total_download_progress == rhs.total_download_progress))
+            return false;
+        if (__isset.context_clean_flags != rhs.__isset.context_clean_flags)
+            return false;
+        else if (__isset.context_clean_flags && !(context_clean_flags == rhs.context_clean_flags))
             return false;
         return true;
     }
