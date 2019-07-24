@@ -267,6 +267,9 @@ error_code meta_service::start()
             [](backup_service *bs) { return std::make_shared<policy_context>(bs); });
     }
 
+    _bulk_load_svc = std::make_shared<bulk_load_service>(
+        this, meta_options::concat_path_unix_style(_cluster_root, "bulk_load"));
+
     // initialize the server_state
     _state->initialize(this, meta_options::concat_path_unix_style(_cluster_root, "apps"));
     while ((err = _state->initialize_data_structure()) != ERR_OK) {
@@ -281,9 +284,6 @@ error_code meta_service::start()
     }
 
     _state->register_cli_commands();
-
-    _bulk_load_svc = std::make_shared<bulk_load_service>(
-        this, meta_options::concat_path_unix_style(_cluster_root, "bulk_load"));
 
     start_service();
 

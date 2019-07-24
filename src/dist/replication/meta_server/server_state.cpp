@@ -46,6 +46,7 @@
 
 #include "server_state.h"
 #include "server_load_balancer.h"
+#include "meta_bulk_load_service.h"
 
 #include "dump_file.h"
 
@@ -585,13 +586,16 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                         } else if (app->status == app_status::AS_DROPPING &&
                                    (pc.partition_flags & pc_flags::dropped) == 0) {
                             drop_partition(app, partition_id);
-                        } else
+                        } else {
                             process_one_partition(app);
-                        // TODO(heyuchen):
-                        // if(app->helper->process_partitions == 0){
-                        //     // confirm app status = AVAILABLE
-                        //     continue_bulk_load(app)
-                        // }
+                            // if app is bulk loading, check if dir exist
+                            if (app->helpers->partitions_in_progress.load() == 0 &&
+                                app->status == app_status::AS_AVAILABLE &&
+                                _meta_svc->get_bulk_load_service()) {
+                                _meta_svc->get_bulk_load_service()->check_app_bulk_load_dir_exist(
+                                    std::move(app), app->is_bulk_loading);
+                            }
+                        }
                     }
                 } else if (ec == ERR_OBJECT_NOT_FOUND) {
                     dwarn("partition node %s not exist on remote storage, may half create before",

@@ -108,11 +108,31 @@ public:
 
     dsn::error_code check_download_status(bulk_load_response &response);
 
-    void update_app_bulk_load_flag(std::shared_ptr<app_state> app, bool is_bulk_loading);
+    // need_remove is only used when trying to set is_bulk_loading to false
+    // need_remove = true: remove app bulk load dir on remote storage, otherwise not remove
+    void update_app_bulk_load_flag(std::shared_ptr<app_state> app,
+                                   bool is_bulk_loading,
+                                   bool need_remove);
 
     void remove_app_bulk_load_dir(uint32_t app_id);
 
     void clear_app_bulk_load_context(uint32_t app_id);
+
+    void start_sync_apps_bulk_load();
+
+    void do_sync_app_bulk_load(uint32_t app_id, std::string app_path);
+
+    void do_sync_partitions_bulk_load(std::string app_path,
+                                      uint32_t app_id,
+                                      std::string app_name,
+                                      uint32_t partition_count);
+
+    void create_partition_bulk_load_info(const std::string &app_name,
+                                         gpid pid,
+                                         uint32_t partition_count,
+                                         const std::string &bulk_load_path);
+
+    void check_app_bulk_load_dir_exist(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
     template <typename T>
     void erase_map_elem_by_id(uint32_t app_id, std::map<gpid, T> &mymap);

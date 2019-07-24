@@ -134,6 +134,8 @@ public:
 
     dsn::task_tracker *tracker() { return &_tracker; }
 
+    bulk_load_service *get_bulk_load_service() { return _bulk_load_svc.get(); }
+
 private:
     void register_rpc_handlers();
 
