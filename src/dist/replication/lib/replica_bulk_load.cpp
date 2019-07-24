@@ -315,6 +315,10 @@ void replica::do_download(const std::string &remote_file_dir,
                     download_file = true;
                 } else {
                     ddebug_f("{}: local file({}) has been downloaded", name(), local_file.c_str());
+                    if (update_progress) {
+                        _bulk_load_context._cur_download_size.fetch_add(bf->get_size());
+                        update_download_progress();
+                    }
                 }
             }
 
