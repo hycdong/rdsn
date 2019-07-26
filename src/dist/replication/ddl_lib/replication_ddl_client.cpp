@@ -1650,12 +1650,11 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
     if (print_progress) {
         for (int i = 0; i < partition_count; ++i) {
             auto pid_map = resp.download_progresses[i];
-            int32_t progress = 0, count = 0;
+            int32_t progress = 0;
             for (auto iter = pid_map.begin(); iter != pid_map.end(); ++iter) {
                 progress += iter->second.progress;
-                ++count;
             }
-            progress /= count;
+            progress /= resp.max_replica_count;
             partitions_progress.insert(std::make_pair(i, progress));
             total_progress += progress;
         }

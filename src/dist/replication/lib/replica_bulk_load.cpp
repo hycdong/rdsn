@@ -457,7 +457,7 @@ void replica::update_group_download_progress(bulk_load_response &response)
                  target_address.to_string(),
                  sprogress.progress);
     }
-    total_progress /= (_primary_states.membership.secondaries.size() + 1);
+    total_progress /= _primary_states.membership.max_replica_count;
     ddebug_f("{}: pid({}.{}) total download progress={}%",
              name(),
              response.pid.get_app_id(),

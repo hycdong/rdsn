@@ -13465,6 +13465,11 @@ void configuration_query_bulk_load_response::__set_partition_status(
     this->partition_status = val;
 }
 
+void configuration_query_bulk_load_response::__set_max_replica_count(const int32_t val)
+{
+    this->max_replica_count = val;
+}
+
 void configuration_query_bulk_load_response::__set_download_progresses(
     const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val)
 {
@@ -13539,6 +13544,14 @@ uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol
             }
             break;
         case 5:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->max_replica_count);
+                this->__isset.max_replica_count = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 6:
             if (ftype == ::apache::thrift::protocol::T_LIST) {
                 {
                     this->download_progresses.clear();
@@ -13616,9 +13629,13 @@ configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProto
     }
     xfer += oprot->writeFieldEnd();
 
+    xfer += oprot->writeFieldBegin("max_replica_count", ::apache::thrift::protocol::T_I32, 5);
+    xfer += oprot->writeI32(this->max_replica_count);
+    xfer += oprot->writeFieldEnd();
+
     if (this->__isset.download_progresses) {
         xfer +=
-            oprot->writeFieldBegin("download_progresses", ::apache::thrift::protocol::T_LIST, 5);
+            oprot->writeFieldBegin("download_progresses", ::apache::thrift::protocol::T_LIST, 6);
         {
             xfer += oprot->writeListBegin(::apache::thrift::protocol::T_MAP,
                                           static_cast<uint32_t>(this->download_progresses.size()));
@@ -13657,6 +13674,7 @@ void swap(configuration_query_bulk_load_response &a, configuration_query_bulk_lo
     swap(a.app_name, b.app_name);
     swap(a.app_status, b.app_status);
     swap(a.partition_status, b.partition_status);
+    swap(a.max_replica_count, b.max_replica_count);
     swap(a.download_progresses, b.download_progresses);
     swap(a.__isset, b.__isset);
 }
@@ -13668,6 +13686,7 @@ configuration_query_bulk_load_response::configuration_query_bulk_load_response(
     app_name = other611.app_name;
     app_status = other611.app_status;
     partition_status = other611.partition_status;
+    max_replica_count = other611.max_replica_count;
     download_progresses = other611.download_progresses;
     __isset = other611.__isset;
 }
@@ -13678,6 +13697,7 @@ configuration_query_bulk_load_response::configuration_query_bulk_load_response(
     app_name = std::move(other612.app_name);
     app_status = std::move(other612.app_status);
     partition_status = std::move(other612.partition_status);
+    max_replica_count = std::move(other612.max_replica_count);
     download_progresses = std::move(other612.download_progresses);
     __isset = std::move(other612.__isset);
 }
@@ -13688,6 +13708,7 @@ operator=(const configuration_query_bulk_load_response &other613)
     app_name = other613.app_name;
     app_status = other613.app_status;
     partition_status = other613.partition_status;
+    max_replica_count = other613.max_replica_count;
     download_progresses = other613.download_progresses;
     __isset = other613.__isset;
     return *this;
@@ -13699,6 +13720,7 @@ operator=(configuration_query_bulk_load_response &&other614)
     app_name = std::move(other614.app_name);
     app_status = std::move(other614.app_status);
     partition_status = std::move(other614.partition_status);
+    max_replica_count = std::move(other614.max_replica_count);
     download_progresses = std::move(other614.download_progresses);
     __isset = std::move(other614.__isset);
     return *this;
@@ -13714,6 +13736,8 @@ void configuration_query_bulk_load_response::printTo(std::ostream &out) const
         << "app_status=" << to_string(app_status);
     out << ", "
         << "partition_status=" << to_string(partition_status);
+    out << ", "
+        << "max_replica_count=" << to_string(max_replica_count);
     out << ", "
         << "download_progresses=";
     (__isset.download_progresses ? (out << to_string(download_progresses)) : (out << "<null>"));

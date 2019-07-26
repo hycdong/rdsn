@@ -5733,6 +5733,7 @@ typedef struct _configuration_query_bulk_load_response__isset
           app_name(false),
           app_status(false),
           partition_status(false),
+          max_replica_count(false),
           download_progresses(false)
     {
     }
@@ -5740,6 +5741,7 @@ typedef struct _configuration_query_bulk_load_response__isset
     bool app_name : 1;
     bool app_status : 1;
     bool partition_status : 1;
+    bool max_replica_count : 1;
     bool download_progresses : 1;
 } _configuration_query_bulk_load_response__isset;
 
@@ -5752,7 +5754,7 @@ public:
     operator=(const configuration_query_bulk_load_response &);
     configuration_query_bulk_load_response &operator=(configuration_query_bulk_load_response &&);
     configuration_query_bulk_load_response()
-        : app_name(), app_status((::dsn::bulk_load_status::type)0)
+        : app_name(), app_status((::dsn::bulk_load_status::type)0), max_replica_count(0)
     {
     }
 
@@ -5761,6 +5763,7 @@ public:
     std::string app_name;
     ::dsn::bulk_load_status::type app_status;
     std::vector<::dsn::bulk_load_status::type> partition_status;
+    int32_t max_replica_count;
     std::vector<std::map<::dsn::rpc_address, partition_download_progress>> download_progresses;
 
     _configuration_query_bulk_load_response__isset __isset;
@@ -5772,6 +5775,8 @@ public:
     void __set_app_status(const ::dsn::bulk_load_status::type val);
 
     void __set_partition_status(const std::vector<::dsn::bulk_load_status::type> &val);
+
+    void __set_max_replica_count(const int32_t val);
 
     void __set_download_progresses(
         const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val);
@@ -5785,6 +5790,8 @@ public:
         if (!(app_status == rhs.app_status))
             return false;
         if (!(partition_status == rhs.partition_status))
+            return false;
+        if (!(max_replica_count == rhs.max_replica_count))
             return false;
         if (__isset.download_progresses != rhs.__isset.download_progresses)
             return false;

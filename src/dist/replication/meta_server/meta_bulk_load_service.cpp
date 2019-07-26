@@ -608,12 +608,13 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
     response.err = ERR_OK;
     response.app_name = app_name;
 
-    uint32_t app_id, partition_count;
+    uint32_t app_id, partition_count, max_replica_count;
     {
         zauto_read_lock l(app_lock());
         std::shared_ptr<app_state> app = _state->get_app(app_name);
         app_id = app->app_id;
         partition_count = app->partition_count;
+        max_replica_count = app->max_replica_count;
 
         if (app == nullptr) {
             derror_f("app {} is not existed", app_name);
@@ -636,6 +637,7 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
 
     {
         zauto_read_lock l(_lock);
+        response.max_replica_count = max_replica_count;
         response.app_status = get_app_bulk_load_status(app_id);
         response.partition_status.resize(partition_count);
         ddebug_f("query app({}) bulk_load_status({}) succeed",
