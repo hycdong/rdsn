@@ -230,7 +230,8 @@ void meta_service_test_app::on_query_child_state_test()
     {
         dsn::partition_configuration config;
         config.ballot = 3;
-        config.pid = dsn::gpid(app->app_id, parent_gpid.get_partition_index() + partition_count / 2);
+        config.pid =
+            dsn::gpid(app->app_id, parent_gpid.get_partition_index() + partition_count / 2);
         app->partitions[config.pid.get_partition_index()] = config;
 
         auto response =
@@ -416,7 +417,7 @@ void meta_service_test_app::clear_split_flags_test()
 
     std::cout << "clear flags succeed" << std::endl;
     {
-        for(int i = 0; i < app->partition_count/2; ++i){
+        for (int i = 0; i < app->partition_count / 2; ++i) {
             app->partitions[i].partition_flags |= pc_flags::child_dropped;
         }
 

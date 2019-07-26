@@ -777,9 +777,8 @@ void replica::copy_mutation(mutation_ptr &mu)
     }
 
     mutation_ptr new_mu = new mutation(mu);
-    _stub->on_exec(code,
-                   _child_gpid,
-                   std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
+    _stub->on_exec(
+        code, _child_gpid, std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
 }
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
@@ -842,7 +841,7 @@ void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d)
         case partition_status::PS_PRIMARY:
             if (ec != ERR_OK) {
                 handle_local_failure(ec);
-            }else{
+            } else {
                 do_possible_commit_on_primary(mu);
             }
             break;

@@ -150,7 +150,7 @@ public:
     // used by pending mutation queue only
     mutation *next;
 
-    void set_sync_to_child(bool sync_to_child){ _sync_to_child = sync_to_child; }
+    void set_sync_to_child(bool sync_to_child) { _sync_to_child = sync_to_child; }
     bool get_sync_to_child() { return _sync_to_child; }
 
 private:
@@ -177,7 +177,7 @@ private:
     uint64_t _tid;          // trace id, unique in process
     static std::atomic<uint64_t> s_tid;
 
-    bool _sync_to_child;    // for partition split
+    bool _sync_to_child; // for partition split
 };
 
 class replica;

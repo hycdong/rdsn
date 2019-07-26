@@ -107,4 +107,3 @@ inline void mock_partition_config(std::shared_ptr<app_state> app)
         app->partitions[i] = config;
     }
 }
-

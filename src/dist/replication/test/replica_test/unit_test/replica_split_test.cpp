@@ -30,7 +30,7 @@ void replication_service_test_app::on_add_child_test()
     }
 
     std::cout << "case2. failed - child_gpid alreay exist" << std::endl;
-    {        
+    {
         parent_replica->_child_gpid = child_gpid;
         parent_replica->on_add_child(request);
         parent_replica->tracker()->wait_outstanding_tasks();
@@ -1117,7 +1117,6 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         primary_parent->_child_gpid = child_gpid;
     }
 
-
     std::cout << "case6. succeed case" << std::endl;
     {
         primary_parent->on_register_child_on_meta_reply(ec, request, response);
@@ -1128,13 +1127,13 @@ void replication_service_test_app::on_register_child_on_meta_reply_test()
         ASSERT_EQ(0, primary_parent->_child_gpid.get_app_id());
     }
 
-   mock_funcs.erase("update_group_partition_count");
+    mock_funcs.erase("update_group_partition_count");
 }
 
 void replication_service_test_app::check_partition_state_test()
 {
     // not use parent_gpid, coz it may be registered
-    dsn::gpid pid = dsn::gpid(1,0);
+    dsn::gpid pid = dsn::gpid(1, 0);
     auto stub = new replica_stub_mock();
     auto replica = stub->generate_replica(pid, partition_status::PS_PRIMARY);
     stub->replicas[pid] = replica;
@@ -1282,8 +1281,8 @@ void replication_service_test_app::on_query_child_state_reply_test()
                            std::shared_ptr<query_child_state_request>,
                            std::shared_ptr<query_child_state_response>)>
             mock_func = [replica](dsn::error_code err,
-                                      std::shared_ptr<query_child_state_request> req,
-                                      std::shared_ptr<query_child_state_response> resp) {
+                                  std::shared_ptr<query_child_state_request> req,
+                                  std::shared_ptr<query_child_state_response> resp) {
                 std::cout << "This is mock function of on_query_child_state_reply" << std::endl;
             };
 

@@ -109,8 +109,9 @@ void replica::init_child_replica(gpid parent_gpid,
                 name(),
                 enum_to_string(status()));
 
-        _stub->on_exec(
-            LPC_SPLIT_PARTITION_ERROR, parent_gpid, [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+        _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, parent_gpid, [](replica_ptr r) {
+            r->_child_gpid.set_app_id(0);
+        });
         return;
     }
 
@@ -124,12 +125,13 @@ void replica::init_child_replica(gpid parent_gpid,
     _split_states.is_caught_up = false;
     _split_states.is_prepare_list_copied = false;
     _split_states.splitting_start_ts_ns = dsn_now_ns();
-    //TODO(hyc): pref-counter - delete
+    // TODO(hyc): pref-counter - delete
     ddebug_f("{}: splitting_start_ts_ns is {}", name(), _split_states.splitting_start_ts_ns);
 
     _stub->_counter_replicas_splitting_recent_start_count->increment();
-    //TODO(hyc): delete
-    ddebug_f("stub recent start split count is {}", _stub->_counter_replicas_splitting_recent_start_count.get()->get_value());
+    // TODO(hyc): delete
+    ddebug_f("stub recent start split count is {}",
+             _stub->_counter_replicas_splitting_recent_start_count.get()->get_value());
 
     // heartbeat
     _split_states.check_state_task = tasking::enqueue(LPC_SPLIT_PARTITION,
@@ -160,7 +162,9 @@ void replica::init_child_replica(gpid parent_gpid,
 void replica::check_child_state() // on child
 {
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} status is not PS_PARTITION_SPLIT during check_child_state, but {}", name(), enum_to_string(status()));
+        dwarn_f("{} status is not PS_PARTITION_SPLIT during check_child_state, but {}",
+                name(),
+                enum_to_string(status()));
         _split_states.check_state_task = nullptr;
         return;
     }
@@ -211,7 +215,7 @@ void replica::check_parent_state(gpid child_gpid, ballot child_ballot) // on par
                                  "check_parent_state coz wrong parent state"));
 
         _child_gpid.set_app_id(0);
-    }else{
+    } else {
         ddebug_f("{} parent state checked, status is {}, ballot is {}",
                  name(),
                  enum_to_string(status()),
@@ -247,7 +251,9 @@ void replica::prepare_copy_parent_state(const std::string &dir,
             copy_parent_state.files.push_back(dsn::utils::filesystem::path_combine(dir, "dummy"));
 
         } else {
-            derror_f("{} prepare state failed: copy checkpoint failed, error is {}", name(), ec.to_string());
+            derror_f("{} prepare state failed: copy checkpoint failed, error is {}",
+                     name(),
+                     ec.to_string());
             ec = ERR_GET_LEARN_STATE_FAILED;
         }
     }
@@ -259,20 +265,26 @@ void replica::prepare_copy_parent_state(const std::string &dir,
 
     if (ec == ERR_OK) {
         // get mutation and private log
-        _private_log->get_mutation_log_file(
-            get_gpid(), checkpoint_decree + 1, invalid_ballot, mutation_list, files, total_file_size);
+        _private_log->get_mutation_log_file(get_gpid(),
+                                            checkpoint_decree + 1,
+                                            invalid_ballot,
+                                            mutation_list,
+                                            files,
+                                            total_file_size);
 
         // get prepare list
         plist = new prepare_list(this, *_prepare_list);
         plist->truncate(last_committed_decree());
 
-        ddebug_f("{} prepare state succeed: {} mutations, {} private log files, total file size is {}, last_committed_decree is {}",
+        ddebug_f("{} prepare state succeed: {} mutations, {} private log files, total file size is "
+                 "{}, last_committed_decree is {}",
                  name(),
                  mutation_list.size(),
                  files.size(),
                  total_file_size,
                  last_committed_decree());
-        dassert(last_committed_decree() == checkpoint_decree || !mutation_list.empty() || !files.empty(),
+        dassert(last_committed_decree() == checkpoint_decree || !mutation_list.empty() ||
+                    !files.empty(),
                 "");
     }
 
@@ -287,7 +299,7 @@ void replica::prepare_copy_parent_state(const std::string &dir,
                              files,
                              total_file_size,
                              plist),
-                   [plist](replica* r){ delete plist;},
+                   [plist](replica *r) { delete plist; },
                    get_gpid());
 }
 
@@ -307,9 +319,12 @@ void replica::copy_parent_state(error_code ec,
 
     if (ec != ERR_OK) {
         // TODO(hyc): split always not finish - 0117
-        std::string full_path = _app->learn_dir()+".tmp";
+        std::string full_path = _app->learn_dir() + ".tmp";
         dsn::utils::filesystem::remove_path(full_path);
-        dwarn_f("{} failed to copy parent state, error code is {}, remove tmp path {} and retry", name(), ec.to_string(),full_path);
+        dwarn_f("{} failed to copy parent state, error code is {}, remove tmp path {} and retry",
+                name(),
+                ec.to_string(),
+                full_path);
         _stub->on_exec(LPC_SPLIT_PARTITION,
                        _split_states.parent_gpid,
                        std::bind(&replica::prepare_copy_parent_state,
@@ -351,7 +366,7 @@ void replica::copy_parent_state(error_code ec,
     delete _prepare_list;
     plist->set_committer(std::bind(&replica::execute_mutation, this, std::placeholders::_1));
     _prepare_list = new prepare_list(this, *plist);
-//    _split_states.is_prepare_list_copied = true;
+    //    _split_states.is_prepare_list_copied = true;
 
     for (decree d = last_committed_decree + 1; d <= _prepare_list->max_decree(); ++d) {
         auto mu = _prepare_list->get_mutation_by_decree(d);
@@ -369,17 +384,18 @@ void replica::copy_parent_state(error_code ec,
 
     _split_states.is_prepare_list_copied = true;
 
-    //TODO(hyc): 0115 - test fix init
+    // TODO(hyc): 0115 - test fix init
     // add cached mutations to prepare list
-    //TODO(hyc): 0219 - try to remove child_temp_mutation_list
-//    for (mutation_ptr &mu : _split_states.child_temp_mutation_list) {
-//        ddebug_f("{} will copy mutation {} cached when prepare list is not copied", name(), mu->name());
-//        _stub->on_exec(LPC_SPLIT_PARTITION,
-//                       get_gpid(),
-//                       std::bind(&replica::on_copy_mutation,
-//                                 std::placeholders::_1,
-//                                 mu));
-//    }
+    // TODO(hyc): 0219 - try to remove child_temp_mutation_list
+    //    for (mutation_ptr &mu : _split_states.child_temp_mutation_list) {
+    //        ddebug_f("{} will copy mutation {} cached when prepare list is not copied", name(),
+    //        mu->name());
+    //        _stub->on_exec(LPC_SPLIT_PARTITION,
+    //                       get_gpid(),
+    //                       std::bind(&replica::on_copy_mutation,
+    //                                 std::placeholders::_1,
+    //                                 mu));
+    //    }
 }
 
 void replica::apply_parent_state(error_code ec,
@@ -396,7 +412,8 @@ void replica::apply_parent_state(error_code ec,
         return;
     }
 
-    ddebug_f("{} start to learn data and mutations asynchronously, last_committed_decree is {}, private_log file "
+    ddebug_f("{} start to learn data and mutations asynchronously, last_committed_decree is {}, "
+             "private_log file "
              "count is {}, mutation in memory count is {}",
              name(),
              last_committed_decree,
@@ -410,14 +427,13 @@ void replica::apply_parent_state(error_code ec,
         _app->apply_checkpoint(replication_app_base::chkpt_apply_mode::learn, lstate);
     if (error != ERR_OK) {
         is_error = true;
-        derror_f("{} failed to apply checkpoint, error is {}",
-                 name(),
-                 error.to_string());
+        derror_f("{} failed to apply checkpoint, error is {}", name(), error.to_string());
     }
 
     // apply private log and mutations in memory
     if (!is_error) {
-        error = async_learn_mutation_private_log(mutation_list, files, total_file_size, last_committed_decree);
+        error = async_learn_mutation_private_log(
+            mutation_list, files, total_file_size, last_committed_decree);
         if (error != ERR_OK) {
             is_error = true;
             derror_f("{} failed to apply private log and mutations in memory, error is {}",
@@ -429,12 +445,10 @@ void replica::apply_parent_state(error_code ec,
     // generate a checkpoint sync
     if (!is_error) {
         error = _app->sync_checkpoint();
-//        error = background_sync_checkpoint();
+        //        error = background_sync_checkpoint();
         if (error != ERR_OK) {
             is_error = true;
-            derror_f("{} failed to sync checkpoint, error is {}",
-                     name(),
-                     error.to_string());
+            derror_f("{} failed to sync checkpoint, error is {}", name(), error.to_string());
         }
     }
 
@@ -468,7 +482,9 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                                                      decree last_committed_decree) // on child
 {
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} status is not PS_PARTITION_SPLIT during while async learn mutations, but {}", name(), enum_to_string(status()));
+        dwarn_f("{} status is not PS_PARTITION_SPLIT during while async learn mutations, but {}",
+                name(),
+                enum_to_string(status()));
         return ERR_INACTIVE_STATE;
     }
 
@@ -479,56 +495,68 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                        _app->last_committed_decree(),
                        _options->max_mutation_count_in_prepare_list,
                        [this, &ec](mutation_ptr &mu) {
-                           //TODO(hyc): for debug - delete
-                           dinfo_f("{}, _app last_committed_decree is {}", this->name(), _app->last_committed_decree());
+                           // TODO(hyc): for debug - delete
+                           dinfo_f("{}, _app last_committed_decree is {}",
+                                   this->name(),
+                                   _app->last_committed_decree());
                            if (mu->data.header.decree == _app->last_committed_decree() + 1) {
-                               //TODO(hyc): for debug - delete
-                               dinfo_f("{} will apply mu {}, _app last_committed_decree is {}", this->name(), mu->name(), _app->last_committed_decree());
+                               // TODO(hyc): for debug - delete
+                               dinfo_f("{} will apply mu {}, _app last_committed_decree is {}",
+                                       this->name(),
+                                       mu->name(),
+                                       _app->last_committed_decree());
                                _app->apply_mutation(mu);
                            }
                        });
 
     // replay private log
-    ec = mutation_log::replay(files,
-                              [this, &plist](int log_length, mutation_ptr &mu) {
-                                  decree d = mu->data.header.decree;
-                                  if (d <= plist.last_committed_decree()) {
-                                      return false;
-                                  }
+    ec = mutation_log::replay(
+        files,
+        [this, &plist](int log_length, mutation_ptr &mu) {
+            decree d = mu->data.header.decree;
+            if (d <= plist.last_committed_decree()) {
+                return false;
+            }
 
-                                  mutation_ptr origin_mu = plist.get_mutation_by_decree(d);
-                                  if (origin_mu != nullptr &&
-                                      origin_mu->data.header.ballot >= mu->data.header.ballot) {
-                                      dwarn_f("mu {} existed, ignore replay outdated mutation, origin ballot {} VS mu ballot {}",
-                                              mu->name(), origin_mu->data.header.ballot, mu->data.header.ballot);
-                                      return false;
-                                  }
+            mutation_ptr origin_mu = plist.get_mutation_by_decree(d);
+            if (origin_mu != nullptr && origin_mu->data.header.ballot >= mu->data.header.ballot) {
+                dwarn_f("mu {} existed, ignore replay outdated mutation, origin ballot {} VS mu "
+                        "ballot {}",
+                        mu->name(),
+                        origin_mu->data.header.ballot,
+                        mu->data.header.ballot);
+                return false;
+            }
 
-                                  //TODO(hyc): consider - learn
-                                  if (origin_mu == nullptr && mu->data.header.ballot > this->get_ballot()) {
-                                      dwarn_f("ballot changed while replay mu {}, replica ballot {} VS mu ballot {}",
-                                              mu->name(), this->get_ballot(), mu->data.header.ballot);
-                                      return false;
-                                  }
+            // TODO(hyc): consider - learn
+            if (origin_mu == nullptr && mu->data.header.ballot > this->get_ballot()) {
+                dwarn_f("ballot changed while replay mu {}, replica ballot {} VS mu ballot {}",
+                        mu->name(),
+                        this->get_ballot(),
+                        mu->data.header.ballot);
+                return false;
+            }
 
+            // TODO(hyc): for debug - delete
+            dinfo_f("{} will replay mu {}, plist last_committed_decree is {}",
+                    this->name(),
+                    mu->name(),
+                    plist.last_committed_decree());
+            plist.prepare(mu, partition_status::PS_SECONDARY);
+            return true;
 
-                                  //TODO(hyc): for debug - delete
-                                  dinfo_f("{} will replay mu {}, plist last_committed_decree is {}",
-                                           this->name(), mu->name(), plist.last_committed_decree());
-                                  plist.prepare(mu, partition_status::PS_SECONDARY);
-                                  return true;
-
-                              },
-                              offset);
+        },
+        offset);
 
     _split_states.splitting_copy_file_count += files.size();
     _split_states.splitting_copy_file_size += total_file_size;
     _stub->_counter_replicas_splitting_recent_copy_file_count->add(files.size());
     _stub->_counter_replicas_splitting_recent_copy_file_size->add(total_file_size);
-    ddebug_f("{} finish replay private_log files, file count is {}, app last_committed_decree is {}",
-             name(),
-             files.size(),
-             _app->last_committed_decree());
+    ddebug_f(
+        "{} finish replay private_log files, file count is {}, app last_committed_decree is {}",
+        name(),
+        files.size(),
+        _app->last_committed_decree());
 
     // apply mutations in memory
     if (ec == ERR_OK) {
@@ -561,10 +589,10 @@ error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> m
                  count,
                  _app->last_committed_decree());
 
-        //TODO(hyc): move if replay log succeed
+        // TODO(hyc): move if replay log succeed
         plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
         ddebug_f("{} commit to decree {}", name(), last_committed_decree);
-    }  
+    }
 
     return ec;
 }
@@ -618,8 +646,9 @@ void replica::child_catch_up() // on child
         }
     }
 
-    //TODO(hyc): delete max decree
-    ddebug_f("{} catch up, will send notification to parent({}.{}), goal decree is {}, local decree is {}, max decree is {}",
+    // TODO(hyc): delete max decree
+    ddebug_f("{} catch up, will send notification to parent({}.{}), goal decree is {}, local "
+             "decree is {}, max decree is {}",
              name(),
              _split_states.parent_gpid.get_app_id(),
              _split_states.parent_gpid.get_partition_index(),
@@ -644,10 +673,11 @@ void replica::notify_primary_split_catch_up() // on child
     request->child_address = _stub->_primary_address;
     request->primary_parent_gpid = _split_states.parent_gpid;
 
-    auto on_notify_primary_split_catch_up_reply = [this](error_code ec,
-                                                         std::shared_ptr<notify_cacth_up_response> response) {
+    auto on_notify_primary_split_catch_up_reply = [this](
+        error_code ec, std::shared_ptr<notify_cacth_up_response> response) {
         if (ec == ERR_TIMEOUT) {
-            dwarn_f("{} failed to notify primary catch up coz timeout, please wait and retry", this->name());
+            dwarn_f("{} failed to notify primary catch up coz timeout, please wait and retry",
+                    this->name());
             tasking::enqueue(LPC_SPLIT_PARTITION,
                              tracker(),
                              std::bind(&replica::notify_primary_split_catch_up, this),
@@ -678,8 +708,7 @@ void replica::notify_primary_split_catch_up() // on child
               tracker(),
               [=](error_code ec, notify_cacth_up_response &&response) {
                   on_notify_primary_split_catch_up_reply(
-                      ec,
-                      std::make_shared<notify_cacth_up_response>(std::move(response)));
+                      ec, std::make_shared<notify_cacth_up_response>(std::move(response)));
               },
               std::chrono::seconds(0),
               _split_states.parent_gpid.thread_hash());
@@ -717,12 +746,12 @@ void replica::on_notify_primary_split_catch_up(
 
     response.err = ERR_OK;
     ddebug_f("{}: on_notify_primary_split_catch_up. local status:{}, local ballot:{}"
-               ", request ballot:{} , from {}",
-               name(),
-               enum_to_string(status()),
-               get_ballot(),
-               request.child_ballot,
-               request.child_address.to_string());
+             ", request ballot:{} , from {}",
+             name(),
+             enum_to_string(status()),
+             get_ballot(),
+             request.child_ballot,
+             request.child_address.to_string());
 
     // cache child_address
     _primary_states.child_address.insert(request.child_address);
@@ -742,7 +771,7 @@ void replica::on_notify_primary_split_catch_up(
     _primary_states.is_sync_to_child = true;
 
     decree sync_point = _prepare_list->max_decree() + 1;
-    //TODO(hyc): for debug
+    // TODO(hyc): for debug
     ddebug_f("{}: sync_point is {}", name(), sync_point);
 
     if (!_options->empty_write_disabled) {
@@ -831,9 +860,9 @@ void replica::update_group_partition_count(int new_partition_count,
         request->last_committed_decree = last_committed_decree();
 
         dinfo_f("{} send update_group_partition_count_request to {} replica {}",
-                 name(),
-                 enum_to_string(iter.second),
-                 iter.first.to_string());
+                name(),
+                enum_to_string(iter.second),
+                iter.first.to_string());
 
         rpc::call(
             iter.first,
@@ -860,11 +889,11 @@ void replica::on_update_group_partition_count(
 {
 
     if (request.config.ballot < get_ballot()) {
-        dwarn_f(
-            "{} receive out-dated update_group_partition_count_request, request ballot is {}, local ballot is {}",
-            name(),
-            request.config.ballot,
-            get_ballot());
+        dwarn_f("{} receive out-dated update_group_partition_count_request, request ballot is {}, "
+                "local ballot is {}",
+                name(),
+                request.config.ballot,
+                get_ballot());
 
         _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
@@ -876,7 +905,8 @@ void replica::on_update_group_partition_count(
     }
 
     if (_split_states.parent_gpid.get_app_id() != 0 && _split_states.is_caught_up == false) {
-        dwarn_f("{} receive out-dated update_group_partition_count_request, child is not caught up, request ballot is {},"
+        dwarn_f("{} receive out-dated update_group_partition_count_request, child is not caught "
+                "up, request ballot is {},"
                 "local ballot is {}",
                 name(),
                 request.config.ballot,
@@ -885,17 +915,18 @@ void replica::on_update_group_partition_count(
         return;
     }
 
-//    ddebug_f("{} execute update group partition count, new partition count is {}",
-//             name(),
-//             request.app.partition_count);
+    //    ddebug_f("{} execute update group partition count, new partition count is {}",
+    //             name(),
+    //             request.app.partition_count);
 
-    ddebug_f("{} process update partition count to {}, primary ={}, ballot = {}, status = {}, last_committed_decree = {}",
-           name(),
-           request.app.partition_count,
-           request.config.primary.to_string(),
-           request.config.ballot,
-           enum_to_string(request.config.status),
-           request.last_committed_decree);
+    ddebug_f("{} process update partition count to {}, primary ={}, ballot = {}, status = {}, "
+             "last_committed_decree = {}",
+             name(),
+             request.app.partition_count,
+             request.config.primary.to_string(),
+             request.config.ballot,
+             enum_to_string(request.config.status),
+             request.last_committed_decree);
 
     // save app_info on disk
     auto info = _app_info;
@@ -910,20 +941,22 @@ void replica::on_update_group_partition_count(
 
     if (err != ERR_OK) {
         derror_f("{} failed to save app_info to {}, error is {}",
-               name(),
-               info_path.c_str(),
-               err.to_string());
+                 name(),
+                 info_path.c_str(),
+                 err.to_string());
     } else {
         // save app_info in memory
-//        _app_info = info;
-//        _partition_version = _app_info.partition_count - 1;
-//        _app->set_partition_version(_partition_version);
+        //        _app_info = info;
+        //        _partition_version = _app_info.partition_count - 1;
+        //        _app->set_partition_version(_partition_version);
         // TODO(hyc): to check
         _app_info = info;
         _app->set_partition_version(_app_info.partition_count - 1);
         _partition_version = _app_info.partition_count - 1;
         _app->set_partition_version(_partition_version);
-        ddebug_f("{}: succeed to update local partition version to {}",name(), _partition_version.load());
+        ddebug_f("{}: succeed to update local partition version to {}",
+                 name(),
+                 _partition_version.load());
 
         if (_child_gpid.get_partition_index() < _app_info.partition_count) {
             _child_gpid.set_app_id(0);
@@ -964,10 +997,14 @@ void replica::on_update_group_partition_count_reply(
         left_replicas->erase(finish_update_address);
         if (left_replicas->empty()) {
             if (is_update_child) { // all child reply
-                ddebug_f("{} finish update child group partition count, is_update_child is {}", name(), is_update_child);
+                ddebug_f("{} finish update child group partition count, is_update_child is {}",
+                         name(),
+                         is_update_child);
                 register_child_on_meta(get_ballot());
             } else { // all parent group reply
-                ddebug_f("{} finish update parent group partition count, is_update_child is {}", name(), is_update_child);
+                ddebug_f("{} finish update parent group partition count, is_update_child is {}",
+                         name(),
+                         is_update_child);
                 _primary_states.is_sync_to_child = false;
             }
         } else { // not all reply
@@ -1071,26 +1108,27 @@ void replica::register_child_on_meta(ballot b) // on primary parent
     set_inactive_state_transient(true);
     _partition_version = -1;
 
-    ddebug_f(
-        "{} set register child partition({}.{}) request to meta, current ballot is {}, child ballot is {}",
-        name(),
-        request->child_config.pid.get_app_id(),
-        request->child_config.pid.get_partition_index(),
-        request->parent_config.ballot,
-        request->child_config.ballot);
+    ddebug_f("{} set register child partition({}.{}) request to meta, current ballot is {}, child "
+             "ballot is {}",
+             name(),
+             request->child_config.pid.get_app_id(),
+             request->child_config.pid.get_partition_index(),
+             request->parent_config.ballot,
+             request->child_config.ballot);
 
     rpc_address meta_address(_stub->_failure_detector->get_servers());
-    //TODO(hyc): new change
-    _primary_states.register_child_task = rpc::call(meta_address,
-              RPC_CM_REGISTER_CHILD_REPLICA,
-              *request,
-              tracker(),
-              [=](error_code ec, register_child_response &&response) {
-                  on_register_child_on_meta_reply(
-                      ec, request, std::make_shared<register_child_response>(std::move(response)));
-              },
-              std::chrono::seconds(0),
-              get_gpid().thread_hash());
+    // TODO(hyc): new change
+    _primary_states.register_child_task = rpc::call(
+        meta_address,
+        RPC_CM_REGISTER_CHILD_REPLICA,
+        *request,
+        tracker(),
+        [=](error_code ec, register_child_response &&response) {
+            on_register_child_on_meta_reply(
+                ec, request, std::make_shared<register_child_response>(std::move(response)));
+        },
+        std::chrono::seconds(0),
+        get_gpid().thread_hash());
 }
 
 void replica::on_register_child_on_meta_reply(
@@ -1141,7 +1179,7 @@ void replica::on_register_child_on_meta_reply(
                 get_ballot());
 
         if (ec != ERR_INVALID_VERSION && ec != ERR_CHILD_REGISTERED) {
-                _primary_states.register_child_task = tasking::enqueue(
+            _primary_states.register_child_task = tasking::enqueue(
                 LPC_DELAY_UPDATE_CONFIG,
                 tracker(),
                 [this, request]() {
@@ -1208,14 +1246,15 @@ void replica::on_register_child_on_meta_reply(
     }
 
     if (ec == ERR_OK && response->err == ERR_OK) {
-        ddebug_f("{}: register child({}.{}) succeed, parent ballot is {}, local ballot is {}, local "
-                 "status {}",
-                 name(),
-                 response->child_config.pid.get_app_id(),
-                 response->child_config.pid.get_partition_index(),
-                 response->parent_config.ballot,
-                 get_ballot(),
-                 enum_to_string(status()));
+        ddebug_f(
+            "{}: register child({}.{}) succeed, parent ballot is {}, local ballot is {}, local "
+            "status {}",
+            name(),
+            response->child_config.pid.get_app_id(),
+            response->child_config.pid.get_partition_index(),
+            response->parent_config.ballot,
+            get_ballot(),
+            enum_to_string(status()));
         dassert(_app_info.partition_count * 2 == response->app.partition_count,
                 "local partition count is %d, remote partition count is %d",
                 _app_info.partition_count,
@@ -1251,12 +1290,13 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 {
     // 1. check status - partition_split
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} not during partition split or ballot is not match, status is {}, current ballot is {}, local ballot of "
-                 "mutation is {}, ignore copy mutation {}",
-                 name(),
-                 enum_to_string(status()),
-                 get_ballot(),
-                 mu->data.header.ballot,
+        dwarn_f("{} not during partition split or ballot is not match, status is {}, current "
+                "ballot is {}, local ballot of "
+                "mutation is {}, ignore copy mutation {}",
+                name(),
+                enum_to_string(status()),
+                get_ballot(),
+                mu->data.header.ballot,
                 mu->name());
 
         _stub->on_exec(LPC_SPLIT_PARTITION_ERROR, _split_states.parent_gpid, [mu](replica_ptr r) {
@@ -1269,11 +1309,12 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 
     // 2. check status - finish copy prepare list
     if (!_split_states.is_prepare_list_copied) {
-        //TODO(hyc): 0115 - fix init bug
+        // TODO(hyc): 0115 - fix init bug
         dwarn_f("{} not copy prepare list from parent, ignore mutation {}", name(), mu->name());
-        //TODO(hyc): 0219 - try to remove child_temp_mutation_list
-//        dwarn_f("{} not copy prepare list from parent, cache mutation {}", name(), mu->name());
-//        _split_states.child_temp_mutation_list.emplace_back(mu);
+        // TODO(hyc): 0219 - try to remove child_temp_mutation_list
+        //        dwarn_f("{} not copy prepare list from parent, cache mutation {}", name(),
+        //        mu->name());
+        //        _split_states.child_temp_mutation_list.emplace_back(mu);
         return;
     }
 
@@ -1293,16 +1334,18 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
         return;
     }
 
-    //TODO(hyc): consider
-    if(mu->data.header.decree <= _prepare_list->last_committed_decree()){
+    // TODO(hyc): consider
+    if (mu->data.header.decree <= _prepare_list->last_committed_decree()) {
         dwarn_f("{}: mu decree {} VS plist last_committed_decree {}, ignore this mutation",
-                name(), mu->data.header.decree, _prepare_list->last_committed_decree());
+                name(),
+                mu->data.header.decree,
+                _prepare_list->last_committed_decree());
         return;
     }
 
-    if(mu->get_sync_to_child()){
+    if (mu->get_sync_to_child()) {
         ddebug_f("{} start to sync copy mutation {}", name(), mu->name());
-    }else{
+    } else {
         dinfo_f("{} start to copy mutation {} asynchronously", name(), mu->name());
     }
 
@@ -1310,7 +1353,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
     mu->data.header.pid = get_gpid();
     _prepare_list->prepare(mu, partition_status::PS_SECONDARY);
 
-    if(!mu->get_sync_to_child()){
+    if (!mu->get_sync_to_child()) {
         // 5. child async copy mutation
         if (!mu->is_logged()) {
             mu->set_logged();
@@ -1335,14 +1378,15 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 
 void replica::handle_splitting_error(std::string err_msg)
 {
-    if(status() != partition_status::PS_ERROR){
-        derror_f("{}: failed during {}, parent = {}.{}, split_duration = {}ms, async_learn_duration = {}ms",
-               name(),
-               err_msg.c_str(),
-               _split_states.parent_gpid.get_app_id(),
-               _split_states.parent_gpid.get_partition_index(),
-               _split_states.total_ms(),
-               _split_states.async_learn_ms());
+    if (status() != partition_status::PS_ERROR) {
+        derror_f("{}: failed during {}, parent = {}.{}, split_duration = {}ms, "
+                 "async_learn_duration = {}ms",
+                 name(),
+                 err_msg.c_str(),
+                 _split_states.parent_gpid.get_app_id(),
+                 _split_states.parent_gpid.get_partition_index(),
+                 _split_states.total_ms(),
+                 _split_states.async_learn_ms());
 
         _stub->_counter_replicas_splitting_recent_split_fail_count->increment();
         update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);

@@ -566,7 +566,6 @@ public:
                    : 0;
     }
 
-
 public:
     gpid parent_gpid;
     bool is_prepare_list_copied;

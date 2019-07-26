@@ -111,8 +111,9 @@ error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status
     //    return err;
 
     case partition_status::PS_INACTIVE: // only possible during init
-        //TODO(hyc): delete when fix init bug
-        //ddebug_f("{}: max_decree={}, _last_committed_decree={}", mu->name(), max_decree(), _last_committed_decree);
+        // TODO(hyc): delete when fix init bug
+        // ddebug_f("{}: max_decree={}, _last_committed_decree={}", mu->name(), max_decree(),
+        // _last_committed_decree);
 
         if (mu->data.header.last_committed_decree > max_decree()) {
             reset(mu->data.header.last_committed_decree);

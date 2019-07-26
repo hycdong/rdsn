@@ -105,8 +105,8 @@ void partition_resolver::call_task(const rpc_response_task_ptr &t)
                 // update gpid when necessary
                 auto &hdr = *(t->get_request()->header);
                 if (hdr.gpid.value() != result.pid.value()) {
-                    //dassert(hdr.gpid.value() == 0, "inconsistent gpid");
-                    //hdr.gpid = result.pid;
+                    // dassert(hdr.gpid.value() == 0, "inconsistent gpid");
+                    // hdr.gpid = result.pid;
 
                     // update thread hash if not assigned by applications
                     if (hdr.client.thread_hash == 0 || hdr.gpid.value() != 0) {

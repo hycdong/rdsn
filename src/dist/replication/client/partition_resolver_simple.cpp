@@ -291,9 +291,10 @@ void partition_resolver_simple::query_config_reply(error_code err,
                         resp.app_id);
             }
 
-            //TODO(hyc): consider cancel split condition
+            // TODO(hyc): consider cancel split condition
             if (_app_partition_count != -1 && _app_partition_count != resp.partition_count &&
-                _app_partition_count * 2 != resp.partition_count && _app_partition_count != resp.partition_count * 2) {
+                _app_partition_count * 2 != resp.partition_count &&
+                _app_partition_count != resp.partition_count * 2) {
                 dassert(false,
                         "partition count is changed (mostly the app was removed and created with "
                         "the same name), local Vs remote: %u vs %u ",
@@ -441,7 +442,6 @@ rpc_address partition_resolver_simple::get_address(const partition_configuration
         }
     }
 }
-
 
 // ERR_CHILD_NOT_READY   child partition is not ready.
 error_code partition_resolver_simple::get_address(int partition_index, /*out*/ rpc_address &addr)

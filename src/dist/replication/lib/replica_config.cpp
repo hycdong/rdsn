@@ -618,7 +618,7 @@ bool replica::update_configuration(const partition_configuration &config)
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
         _primary_states.child_address.clear();
         _child_gpid.set_app_id(0);
-//        _partition_version = -1;
+        //        _partition_version = -1;
         query_child_state();
     }
 
@@ -1065,8 +1065,9 @@ void replica::on_config_sync(const app_info &info, const partition_configuration
         check_partition_state(info.partition_count, config);
     } else {
         if (_is_initializing) {
-            //TODO(hyc): consider
-            check_partition_state(info.partition_count, config); // update local partition count if necessary
+            // TODO(hyc): consider
+            check_partition_state(info.partition_count,
+                                  config); // update local partition count if necessary
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&
@@ -1220,7 +1221,7 @@ void replica::check_partition_state(int partition_count, const partition_configu
 
 void replica::query_child_state()
 {
-    //TODO(hyc): why original not check here
+    // TODO(hyc): why original not check here
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_f("{} can not query child partition state, current state is not primary, but {}",
                 name(),
@@ -1256,7 +1257,7 @@ void replica::on_query_child_state_reply(error_code ec,
                                          std::shared_ptr<query_child_state_request> request,
                                          std::shared_ptr<query_child_state_response> response)
 {
-    //TODO(hyc): consider
+    // TODO(hyc): consider
     _checker.only_one_thread_access();
 
     if (status() != partition_status::PS_PRIMARY) {
@@ -1281,9 +1282,8 @@ void replica::on_query_child_state_reply(error_code ec,
     }
 
     if (ec != ERR_OK) {
-        dwarn_f("{} failed to query child state, error is {}, please retry",
-                name(),
-                ec.to_string());
+        dwarn_f(
+            "{} failed to query child state, error is {}, please retry", name(), ec.to_string());
 
         _primary_states.query_child_state_task = tasking::enqueue(
             LPC_SPLIT_PARTITION,
@@ -1343,7 +1343,6 @@ void replica::on_query_child_state_reply(error_code ec,
         return;
     }
 
-
     // current app finish partition split
     if (partition_count == _app_info.partition_count) {
         ddebug_f("app {}@{} has been finished partition split, current partition count is {}",
@@ -1355,7 +1354,7 @@ void replica::on_query_child_state_reply(error_code ec,
         return;
     }
 
-    //TODO(hyc): consider add assert
+    // TODO(hyc): consider add assert
     dassert(_app_info.partition_count * 2 == partition_count,
             "%d vs %d",
             _app_info.partition_count,
@@ -1364,11 +1363,11 @@ void replica::on_query_child_state_reply(error_code ec,
     if (response->ballot != invalid_ballot ||
         get_gpid().get_partition_index() >= partition_count / 2) {
         ddebug_f("{} has registered its child replica or current replica is child replica, local "
-                "partition count is {}, remote partition count is {}, response ballot is {}",
-                name(),
-                _app_info.partition_count,
-                partition_count,
-                response->ballot);
+                 "partition count is {}, remote partition count is {}, response ballot is {}",
+                 name(),
+                 _app_info.partition_count,
+                 partition_count,
+                 response->ballot);
         update_group_partition_count(partition_count, false);
     } else if (!_primary_states.learners.empty() ||
                _primary_states.membership.secondaries.size() + 1 <
@@ -1393,7 +1392,7 @@ void replica::on_query_child_state_reply(error_code ec,
         add_child_request.app = _app_info;
         add_child_request.child_gpid = child_gpid;
         // TODO(hyc): consider why original not have
-//        _primary_states.get_replica_config(status(), add_child_request.config);
+        //        _primary_states.get_replica_config(status(), add_child_request.config);
         add_child_request.config.ballot = get_ballot();
         _primary_states.is_sync_to_child = false;
 

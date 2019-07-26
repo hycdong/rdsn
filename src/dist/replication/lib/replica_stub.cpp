@@ -1636,9 +1636,11 @@ void replica_stub::on_gc()
                 std::max(splitting_max_duration_time_ms, rep->_split_states.total_ms());
             splitting_max_async_learn_time_ms =
                 std::max(splitting_max_async_learn_time_ms, rep->_split_states.async_learn_ms());
-            splitting_max_copy_file_size = std::max(splitting_max_copy_file_size, rep->_split_states.splitting_copy_file_size);
-            //TODO(hyc): delete
-            ddebug("splitting count is %" PRIu64 ", max splitting time is %" PRIu64 "ns, max splitting async learn "
+            splitting_max_copy_file_size =
+                std::max(splitting_max_copy_file_size, rep->_split_states.splitting_copy_file_size);
+            // TODO(hyc): delete
+            ddebug("splitting count is %" PRIu64 ", max splitting time is %" PRIu64
+                   "ns, max splitting async learn "
                    "time is %" PRIu64 "ns, max copy file size is %" PRIu64,
                    splitting_count,
                    splitting_max_duration_time_ms,
@@ -2361,38 +2363,40 @@ void replica_stub::on_exec(task_code code,
         return;
     }
 
-//    dsn::task_tracker *tracker = nullptr;
-//    int hash = 0;
-//    if (get_replica(pid) != nullptr) {
-//        tracker = get_replica(pid).get()->tracker();
-//        hash = pid.thread_hash();
-//    }
+    //    dsn::task_tracker *tracker = nullptr;
+    //    int hash = 0;
+    //    if (get_replica(pid) != nullptr) {
+    //        tracker = get_replica(pid).get()->tracker();
+    //        hash = pid.thread_hash();
+    //    }
 
-//    tasking::enqueue(
-//        code,
-//        tracker,
-//        [=]() {
-//            replica_ptr rep = get_replica(pid);
-//            if (rep != nullptr) {
-//                handler(rep);
-//            } else {
-//                dwarn_f("cannot find replica({}.{})", pid.get_app_id(), pid.get_partition_index());
-//                if (missing_handler) {
-//                    if (missing_handler_gpid.get_app_id() != 0) {
-//                        on_exec(code, missing_handler_gpid, missing_handler);
-//                    } else {
-//                        missing_handler(nullptr);
-//                    }
-//                } else {
-//                    ddebug_f("missing_handler is nullptr, will return");
-//                }
-//            }
-//        },
-//        hash,
-//        delay);
+    //    tasking::enqueue(
+    //        code,
+    //        tracker,
+    //        [=]() {
+    //            replica_ptr rep = get_replica(pid);
+    //            if (rep != nullptr) {
+    //                handler(rep);
+    //            } else {
+    //                dwarn_f("cannot find replica({}.{})", pid.get_app_id(),
+    //                pid.get_partition_index());
+    //                if (missing_handler) {
+    //                    if (missing_handler_gpid.get_app_id() != 0) {
+    //                        on_exec(code, missing_handler_gpid, missing_handler);
+    //                    } else {
+    //                        missing_handler(nullptr);
+    //                    }
+    //                } else {
+    //                    ddebug_f("missing_handler is nullptr, will return");
+    //                }
+    //            }
+    //        },
+    //        hash,
+    //        delay);
 
     replica_ptr rep = get_replica(pid);
-    replica_ptr rep2 = missing_handler_gpid.get_app_id() == 0 ? nullptr : get_replica(missing_handler_gpid);
+    replica_ptr rep2 =
+        missing_handler_gpid.get_app_id() == 0 ? nullptr : get_replica(missing_handler_gpid);
 
     if (!rep && !rep2) {
         derror_f("Cannot find either replica({}.{}) or replica({}.{})",
@@ -2466,7 +2470,9 @@ void replica_stub::add_split_replica(rpc_address primary_address,
 {
     replica_ptr child_replica = get_replica_permit_create_new(child_gpid, &app, parent_dir);
     if (child_replica != nullptr) {
-        ddebug_f("Succeed to create child replica ({}.{})", child_gpid.get_app_id(), child_gpid.get_partition_index());
+        ddebug_f("Succeed to create child replica ({}.{})",
+                 child_gpid.get_app_id(),
+                 child_gpid.get_partition_index());
         child_replica->init_child_replica(parent_gpid, primary_address, init_ballot);
     } else {
         dwarn_f("Failed to create child replica ({}.{}), ignore it and wait next run",

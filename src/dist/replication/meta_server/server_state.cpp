@@ -1628,7 +1628,8 @@ void server_state::on_update_configuration_on_remote_reply(
                 }
             }
         }
-    } else if (ec == ERR_OBJECT_NOT_FOUND) { // child partition has not been registered, but drop app is called
+    } else if (ec == ERR_OBJECT_NOT_FOUND) { // child partition has not been registered, but drop
+                                             // app is called
         dassert(config_request->type == config_type::CT_DROP_PARTITION,
                 "invalid type %s",
                 _config_type_VALUES_TO_NAMES.find(config_request->type)->second);
@@ -1644,8 +1645,7 @@ void server_state::on_update_configuration_on_remote_reply(
             cc.msg = nullptr;
         }
         process_one_partition(app);
-    }
-    else {
+    } else {
         dassert(false, "we can't handle this right now, err = %s", ec.to_string());
     }
 }
