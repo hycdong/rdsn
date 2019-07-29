@@ -35,6 +35,7 @@
 #include <cctype>
 
 #include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/prettywriter.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/document.h>
 
@@ -209,6 +210,7 @@ namespace json {
 
 typedef rapidjson::GenericValue<rapidjson::UTF8<>> JsonObject;
 typedef rapidjson::Writer<rapidjson::OStreamWrapper> JsonWriter;
+typedef rapidjson::PrettyWriter<rapidjson::OStreamWrapper> PrettyJsonWriter;
 
 template <typename>
 class json_forwarder;
@@ -216,7 +218,8 @@ class json_forwarder;
 // json serialization for string types.
 // please notice when we call rapidjson::Writer::String, with 3rd parameter with "true",
 // which means that we will COPY string to writer
-inline void json_encode(JsonWriter &out, const std::string &str)
+template <typename Writer>
+void json_encode(Writer &out, const std::string &str)
 {
     out.String(str.c_str(), str.length(), true);
 }
@@ -614,5 +617,5 @@ NON_MEMBER_JSON_SERIALIZATION(dsn::app_info,
                               is_bulk_loading)
 
 NON_MEMBER_JSON_SERIALIZATION(dsn::replication::partition_bulk_load_info, status)
-}
-}
+} // namespace json
+} // namespace dsn

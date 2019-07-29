@@ -65,6 +65,7 @@ public:
     dsn::error_code list_apps(const dsn::app_status::type status,
                               bool show_all,
                               bool detailed,
+                              bool json,
                               const std::string &file_name);
 
     dsn::error_code list_apps(const dsn::app_status::type status,
@@ -81,10 +82,11 @@ public:
 
     dsn::error_code cluster_name(int64_t timeout_ms, std::string &cluster_name);
 
-    dsn::error_code cluster_info(const std::string &file_name, bool resolve_ip = false);
+    dsn::error_code cluster_info(const std::string &file_name, bool resolve_ip, bool json);
 
     dsn::error_code list_app(const std::string &app_name,
                              bool detailed,
+                             bool json,
                              const std::string &file_name,
                              bool resolve_ip = false);
 
