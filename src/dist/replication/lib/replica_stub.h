@@ -367,6 +367,8 @@ private:
 
     perf_counter_wrapper _counter_recent_read_fail_count;
     perf_counter_wrapper _counter_recent_write_fail_count;
+    perf_counter_wrapper _counter_recent_read_busy_count;
+    perf_counter_wrapper _counter_recent_write_busy_count;
 
     perf_counter_wrapper _counter_replicas_splitting_count;
     perf_counter_wrapper _counter_replicas_splitting_max_duration_time_ms;

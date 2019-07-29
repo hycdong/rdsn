@@ -277,6 +277,14 @@ void replica_stub::install_perf_counters()
                                                       COUNTER_TYPE_VOLATILE_NUMBER,
                                                       "write fail count in the recent period");
 
+    _counter_recent_read_busy_count.init_app_counter("eon.replica_stub",
+                                                     "recent.read.busy.count",
+                                                     COUNTER_TYPE_VOLATILE_NUMBER,
+                                                     "read busy count in the recent period");
+    _counter_recent_write_busy_count.init_app_counter("eon.replica_stub",
+                                                      "recent.write.busy.count",
+                                                      COUNTER_TYPE_VOLATILE_NUMBER,
+                                                      "write busy count in the recent period");
     _counter_replicas_splitting_count.init_app_counter("eon.replica_stub",
                                                        "replicas.splitting.count",
                                                        COUNTER_TYPE_NUMBER,
@@ -1388,7 +1396,12 @@ void replica_stub::response_client(gpid id,
                                    partition_status::type status,
                                    error_code error)
 {
-    if (error != ERR_OK) {
+    if (error == ERR_BUSY) {
+        if (is_read)
+            _counter_recent_read_busy_count->increment();
+        else
+            _counter_recent_write_busy_count->increment();
+    } else if (error != ERR_OK) {
         if (is_read)
             _counter_recent_read_fail_count->increment();
         else
