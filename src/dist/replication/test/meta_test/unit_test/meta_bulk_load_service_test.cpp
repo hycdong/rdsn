@@ -50,7 +50,6 @@ public:
         _meta_svc->_bulk_load_svc->create_bulk_load_dir_on_remote_stroage();
 
         _state = _meta_svc->_state;
-        create_app(NAME, PARTITION_COUNT);
     }
 
     void TearDown() override
@@ -65,13 +64,13 @@ public:
 
     bulk_load_service *bulk_svc() { return _meta_svc->_bulk_load_svc.get(); }
 
-    void create_app(const std::string &name, int partition_count)
+    void create_app(const std::string &name)
     {
         configuration_create_app_request req;
         configuration_create_app_response resp;
         req.app_name = name;
         req.options.app_type = "simple_kv";
-        req.options.partition_count = partition_count;
+        req.options.partition_count = PARTITION_COUNT;
         req.options.replica_count = 3;
         req.options.success_if_exist = false;
         req.options.is_stateful = true;
@@ -103,28 +102,64 @@ public:
         return rpc.response();
     }
 
+    configuration_query_bulk_load_response query_bulk_load(const std::string &app_name)
+    {
+        auto request = dsn::make_unique<configuration_query_bulk_load_request>();
+        request->app_name = app_name;
+
+        query_bulk_load_rpc rpc(std::move(request), RPC_CM_QUERY_BULK_LOAD_STATUS);
+        bulk_svc()->on_query_bulk_load_status(rpc);
+        wait_all();
+        return rpc.response();
+    }
+
     std::shared_ptr<server_state> _state;
     std::unique_ptr<meta_service> _meta_svc;
 };
 
 TEST_F(meta_bulk_load_service_test, start_bulk_load_with_not_existed_app)
 {
+    create_app(NAME);
     auto resp = start_bulk_load("table_not_exist", CLUSTER, PROVIDER);
     ASSERT_EQ(resp.err, ERR_APP_NOT_EXIST);
 }
 
 TEST_F(meta_bulk_load_service_test, start_bulk_load_with_wrong_provider)
 {
+    create_app(NAME);
     auto resp = start_bulk_load(NAME, CLUSTER, "provider_not_exist");
     ASSERT_EQ(resp.err, ERR_INVALID_PARAMETERS);
 }
 
+// TODO(heyuchen): validate cluster_name and partition_count
+
 TEST_F(meta_bulk_load_service_test, start_bulk_load_succeed)
 {
+    create_app(NAME);
     mock_funcs["partition_bulk_load"] = nullptr;
+
     auto resp = start_bulk_load(NAME, CLUSTER, PROVIDER);
     ASSERT_EQ(resp.err, ERR_OK);
+    std::shared_ptr<app_state> app = find_app(NAME);
+    ASSERT_EQ(app->is_bulk_loading, true);
+
     mock_funcs.erase("partition_bulk_load");
+}
+
+TEST_F(meta_bulk_load_service_test, query_bulk_load_status_with_wrong_state)
+{
+    create_app(NAME);
+    auto resp = query_bulk_load(NAME);
+    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
+}
+
+TEST_F(meta_bulk_load_service_test, query_bulk_load_status)
+{
+    create_app(NAME);
+    std::shared_ptr<app_state> app = find_app(NAME);
+    app->is_bulk_loading = true;
+    auto resp = query_bulk_load(NAME);
+    ASSERT_EQ(resp.err, ERR_OK);
 }
 
 } // namespace replication
