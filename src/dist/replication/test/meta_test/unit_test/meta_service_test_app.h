@@ -93,6 +93,10 @@ public:
     void policy_context_test();
     void backup_service_test();
 
+    // bulk load
+    void on_start_bulk_load_test();
+    std::shared_ptr<dsn::replication::meta_service> create_bulk_load_mock_meta_svc();
+
     // test server_state set_app_envs/del_app_envs/clear_app_envs
     void app_envs_basic_test();
 

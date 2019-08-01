@@ -92,7 +92,7 @@ public:
                                                   const std::string &bulk_load_path,
                                                   start_bulk_load_rpc rpc);
 
-    void partition_bulk_load(gpid pid);
+    virtual void partition_bulk_load(gpid pid);
 
     void on_partition_bulk_load_reply(dsn::error_code err,
                                       bulk_load_response &&response,
