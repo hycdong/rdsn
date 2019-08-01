@@ -208,6 +208,7 @@ private:
     std::shared_ptr<server_load_balancer> _balancer;
     std::shared_ptr<backup_service> _backup_handler;
 
+    friend class meta_bulk_load_service_test;
     std::shared_ptr<bulk_load_service> _bulk_load_svc;
 
     // handle all the block filesystems for current meta service

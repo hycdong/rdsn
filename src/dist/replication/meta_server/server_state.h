@@ -302,6 +302,7 @@ private:
     friend class test::test_checker;
     friend class ::meta_service_test_app;
     friend class bulk_load_service;
+    friend class meta_bulk_load_service_test;
 
     dsn::task_tracker _tracker;
 

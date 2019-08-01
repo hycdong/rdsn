@@ -93,10 +93,6 @@ public:
     void policy_context_test();
     void backup_service_test();
 
-    // bulk load
-    void on_start_bulk_load_test();
-    std::shared_ptr<dsn::replication::meta_service> create_bulk_load_mock_meta_svc();
-
     // test server_state set_app_envs/del_app_envs/clear_app_envs
     void app_envs_basic_test();
 
@@ -110,36 +106,29 @@ public:
         dsn::replication::meta_service *svc,
         std::shared_ptr<dsn::replication::configuration_query_by_node_request> &request);
 
-    template <typename TRequest, typename RequestHandler>
-    std::shared_ptr<reply_context>
-    fake_rpc_call(dsn::task_code rpc_code,
-                  dsn::task_code server_state_write_code,
-                  RequestHandler *handle_class,
-                  void (RequestHandler::*handle)(dsn::message_ex *request),
-                  const TRequest &data,
-                  int hash = 0,
-                  std::chrono::milliseconds delay = std::chrono::milliseconds(0))
+    static dsn::replication::meta_service *initialize_meta_service()
     {
-        dsn::message_ex *msg = dsn::message_ex::create_request(rpc_code);
-        dsn::marshall(msg, data);
+        auto meta_svc = new fake_receiver_meta_service();
+        meta_svc->remote_storage_initialize();
 
-        std::shared_ptr<reply_context> result = std::make_shared<reply_context>();
-        result->e.block();
-        uint64_t ptr = reinterpret_cast<uint64_t>(result.get());
-        dsn::marshall(msg, ptr);
+        auto state = meta_svc->_state;
+        state->initialize(meta_svc, meta_svc->_cluster_root + "/apps");
 
-        dsn::message_ex *received = create_corresponding_receive(msg);
-        received->add_ref();
-        dsn::tasking::enqueue(server_state_write_code,
-                              nullptr,
-                              std::bind(handle, handle_class, received),
-                              hash,
-                              delay);
+        meta_svc->_started = true;
+        state->initialize_data_structure();
 
-        // release the sending message
-        destroy_message(msg);
+        return meta_svc;
+    }
 
-        return result;
+    static void delete_all_on_meta_storage(dsn::replication::meta_service *meta_svc)
+    {
+        meta_svc->get_meta_storage()->get_children(
+            {"/"}, [meta_svc](bool, const std::vector<std::string> &children) {
+                for (const std::string &child : children) {
+                    meta_svc->get_meta_storage()->delete_node_recursively("/" + child, []() {});
+                }
+            });
+        meta_svc->tracker()->wait_outstanding_tasks();
     }
 
 private:
@@ -147,5 +136,42 @@ private:
     bool
     wait_state(dsn::replication::server_state *ss, const state_validator &validator, int time = -1);
 };
+
+template <typename TRequest, typename RequestHandler>
+std::shared_ptr<reply_context>
+fake_rpc_call(dsn::task_code rpc_code,
+              dsn::task_code server_state_write_code,
+              RequestHandler *handle_class,
+              void (RequestHandler::*handle)(dsn::message_ex *request),
+              const TRequest &data,
+              int hash = 0,
+              std::chrono::milliseconds delay = std::chrono::milliseconds(0))
+{
+    dsn::message_ex *msg = dsn::message_ex::create_request(rpc_code);
+    dsn::marshall(msg, data);
+
+    std::shared_ptr<reply_context> result = std::make_shared<reply_context>();
+    result->e.block();
+    uint64_t ptr = reinterpret_cast<uint64_t>(result.get());
+    dsn::marshall(msg, ptr);
+
+    dsn::message_ex *received = create_corresponding_receive(msg);
+    received->add_ref();
+    dsn::tasking::enqueue(
+        server_state_write_code, nullptr, std::bind(handle, handle_class, received), hash, delay);
+
+    // release the sending message
+    destroy_message(msg);
+
+    return result;
+}
+
+#define fake_create_app(state, request_data)                                                       \
+    fake_rpc_call(                                                                                 \
+        RPC_CM_CREATE_APP, LPC_META_STATE_NORMAL, state, &server_state::create_app, request_data)
+
+#define fake_drop_app(state, request_data)                                                         \
+    fake_rpc_call(                                                                                 \
+        RPC_CM_DROP_APP, LPC_META_STATE_NORMAL, state, &server_state::drop_app, request_data)
 
 #endif // META_SERVICE_TEST_APP_H
