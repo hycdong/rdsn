@@ -592,7 +592,7 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                             if (app->helpers->partitions_in_progress.load() == 0 &&
                                 app->status == app_status::AS_AVAILABLE &&
                                 _meta_svc->get_bulk_load_service()) {
-                                _meta_svc->get_bulk_load_service()->check_app_bulk_load_dir_exist(
+                                _meta_svc->get_bulk_load_service()->check_app_bulk_load_consistency(
                                     std::move(app), app->is_bulk_loading);
                             }
                         }

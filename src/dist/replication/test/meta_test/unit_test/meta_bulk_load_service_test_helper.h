@@ -49,6 +49,7 @@ public:
     }
 
     void partition_bulk_load(dsn::gpid pid);
+    void create_bulk_load_dir_on_remote_stroage(bool use_mock);
 };
 
 void bulk_load_service_mock::partition_bulk_load(dsn::gpid pid)
@@ -62,5 +63,14 @@ void bulk_load_service_mock::partition_bulk_load(dsn::gpid pid)
         }
     } else {
         bulk_load_service::partition_bulk_load(pid);
+    }
+}
+
+void bulk_load_service_mock::create_bulk_load_dir_on_remote_stroage(bool use_mock)
+{
+    if (!use_mock) {
+        bulk_load_service::create_bulk_load_dir_on_remote_stroage();
+    } else {
+        std::cout << "test,test" << std::endl;
     }
 }

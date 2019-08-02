@@ -117,12 +117,12 @@ void bulk_load_service::start_bulk_load_on_remote_storage(std::shared_ptr<app_st
                 _bulk_load_app_id.insert(app->app_id);
                 _bulk_load_states.apps_in_progress_count[app->app_id] = app->partition_count;
             }
-            create_app_bulk_load_info_with_rpc(std::move(app), std::move(rpc));
+            create_app_bulk_load_dir_with_rpc(std::move(app), std::move(rpc));
         });
 }
 
-void bulk_load_service::create_app_bulk_load_info_with_rpc(std::shared_ptr<app_state> app,
-                                                           start_bulk_load_rpc rpc)
+void bulk_load_service::create_app_bulk_load_dir_with_rpc(std::shared_ptr<app_state> app,
+                                                          start_bulk_load_rpc rpc)
 {
     std::string bulk_load_path = get_app_bulk_load_path(app->app_id);
     const auto req = rpc.request();
@@ -144,17 +144,17 @@ void bulk_load_service::create_app_bulk_load_info_with_rpc(std::shared_ptr<app_s
         std::move(bulk_load_path), std::move(value), [app, rpc, bulk_load_path, this]() {
             ddebug_f("create app {} bulk load dir", app->app_name);
             for (int i = 0; i < app->partition_count; ++i) {
-                create_partition_bulk_load_info_with_rpc(
+                create_partition_bulk_load_dir_with_rpc(
                     app->app_name, gpid(app->app_id, i), app->partition_count, bulk_load_path, rpc);
             }
         });
 }
 
-void bulk_load_service::create_partition_bulk_load_info_with_rpc(const std::string &app_name,
-                                                                 gpid pid,
-                                                                 uint32_t partition_count,
-                                                                 const std::string &bulk_load_path,
-                                                                 start_bulk_load_rpc rpc)
+void bulk_load_service::create_partition_bulk_load_dir_with_rpc(const std::string &app_name,
+                                                                gpid pid,
+                                                                uint32_t partition_count,
+                                                                const std::string &bulk_load_path,
+                                                                start_bulk_load_rpc rpc)
 {
     partition_bulk_load_info pinfo;
     pinfo.status = bulk_load_status::BLS_DOWNLOADING;
@@ -758,7 +758,7 @@ void bulk_load_service::do_sync_partitions_bulk_load(std::string app_path,
                             partition_bulk_load(pid);
                         });
                 } else {
-                    create_partition_bulk_load_info(app_name, pid, partition_count, partition_path);
+                    create_partition_bulk_load_info(app_name, pid, partition_count, app_path);
                 }
             }
         });
@@ -794,8 +794,8 @@ void bulk_load_service::create_partition_bulk_load_info(const std::string &app_n
         });
 }
 
-void bulk_load_service::check_app_bulk_load_dir_exist(std::shared_ptr<app_state> app,
-                                                      bool is_app_bulk_loading)
+void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_state> app,
+                                                        bool is_app_bulk_loading)
 {
     std::string app_path = get_app_bulk_load_path(app->app_id);
     // TODO(heyuchen): create node_exist function in mms
@@ -807,7 +807,7 @@ void bulk_load_service::check_app_bulk_load_dir_exist(std::shared_ptr<app_state>
                 ddebug_f("check app bulk load dir({}) timeout, try later", app_path);
                 tasking::enqueue(LPC_META_STATE_HIGH,
                                  nullptr,
-                                 std::bind(&bulk_load_service::check_app_bulk_load_dir_exist,
+                                 std::bind(&bulk_load_service::check_app_bulk_load_consistency,
                                            this,
                                            app,
                                            is_app_bulk_loading),
