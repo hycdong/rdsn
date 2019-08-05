@@ -588,7 +588,7 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                             drop_partition(app, partition_id);
                         } else {
                             process_one_partition(app);
-                            // if app is bulk loading, check if dir exist
+                            // check consistency between app bulk_loading flag and app bulk load dir
                             if (app->helpers->partitions_in_progress.load() == 0 &&
                                 app->status == app_status::AS_AVAILABLE &&
                                 _meta_svc->get_bulk_load_service()) {
