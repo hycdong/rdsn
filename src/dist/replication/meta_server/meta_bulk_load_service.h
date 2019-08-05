@@ -82,36 +82,12 @@ public:
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
 
     // meta sent bulk_load_request to each partition's primary
-    // TODO(heyuchen): add unit test
     virtual void partition_bulk_load(gpid pid);
 
     void on_partition_bulk_load_reply(dsn::error_code err,
                                       bulk_load_response &&response,
                                       gpid pid,
                                       const dsn::rpc_address &primary_addr);
-
-    void update_partition_bulk_load_status(const std::string &app_name,
-                                           dsn::gpid pid,
-                                           std::string &path,
-                                           bulk_load_status::type status);
-
-    void update_app_bulk_load_status_unlock(uint32_t app_id,
-                                            bulk_load_status::type new_status); // private + zk
-
-    // check download status in progress
-    dsn::error_code check_download_status(bulk_load_response &response); // private
-
-    // need_remove is only used when trying to set is_bulk_loading to false
-    // need_remove = true: remove app bulk load dir on remote storage, otherwise not remove
-    void update_app_bulk_load_flag(std::shared_ptr<app_state> app,
-                                   bool is_bulk_loading,
-                                   bool need_remove); // private + zk
-
-    // remove app bulk load dir on remote stroage
-    void remove_app_bulk_load_dir(uint32_t app_id); // private + zk
-
-    // clear bulk load service local variety
-    void clear_app_bulk_load_context(uint32_t app_id); // private
 
     // Called when service initialize and meta service leader switch
     // sync app's bulk load status from remote stroage
@@ -124,10 +100,31 @@ public:
     // If app is_bulk_loading = true, and app_bulk_load_info not existed, set is_bulk_loading=false
     // If app is_bulk_loading = false, and app_bulk_load_info existed, remove useless app bulk load
     // on remote stroage
-    // TODO(heyuchen): add unit test for it with different conditions
     void check_app_bulk_load_consistency(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
 private:
+    // check download status in progress, if all partitions download_status is ERR_OK, return
+    // ERR_OK,
+    // otherwise return the error_code NOT ERR_OK
+    dsn::error_code check_download_status(bulk_load_response &response); // private
+
+    // helper function for on_partition_bulk_load_reply
+    // handle situation when response.error is NOT ERR_OK during downloading status
+    void handle_partition_download_error(gpid pid); // private
+
+    // helper function for on_partition_bulk_load_reply
+    // hanlde situation when response.error is ERR_OK during downloading status
+    bool handle_partition_bulk_load_downloading(bulk_load_response &response,
+                                                const rpc_address &primary_addr); // private
+
+    // helper function for on_partition_bulk_load_reply
+    // hanlde situation when response.error is ERR_OK during failed status
+    void handle_partition_bulk_load_failed(bulk_load_response &response,
+                                           const rpc_address &primary_addr); // private
+
+    // clear bulk load service local variety
+    void clear_app_bulk_load_context(uint32_t app_id); // private
+
     /// remote stroage functions
     // update app's is_bulk_loading = true
     void start_bulk_load_on_remote_storage(std::shared_ptr<app_state> app,
@@ -159,6 +156,26 @@ private:
                                          gpid pid,
                                          uint32_t partition_count,
                                          const std::string &bulk_load_path); // private + zk
+
+    // update partition's bulk load status to {status} on remote storage
+    void update_partition_bulk_load_status(const std::string &app_name,
+                                           dsn::gpid pid,
+                                           std::string &path,
+                                           bulk_load_status::type status); // private + zk
+
+    // update app's bulk load status to {new_status} on remote storage
+    void update_app_bulk_load_status_unlock(uint32_t app_id,
+                                            bulk_load_status::type new_status); // private + zk
+
+    // remove app bulk load dir on remote stroage
+    void remove_app_bulk_load_dir(uint32_t app_id); // private + zk
+
+    // update app's is_bulk_loading to {is_bulk_loading} on remote_storage
+    // need_remove is only used when trying to set is_bulk_loading to false
+    // need_remove = true: remove app bulk load dir on remote storage, otherwise not remove
+    void update_app_bulk_load_flag(std::shared_ptr<app_state> app,
+                                   bool is_bulk_loading,
+                                   bool need_remove); // private + zk
 
     /// helper functions
     template <typename T>

@@ -223,32 +223,6 @@ public:
         ASSERT_TRUE(_state->spin_wait_staging(30));
     }
 
-    std::shared_ptr<app_state> find_app(const std::string &name) { return _state->get_app(name); }
-
-    void wait_all() { _meta_svc->tracker()->wait_outstanding_tasks(); }
-
-    std::shared_ptr<server_state> _state;
-    std::unique_ptr<meta_service> _meta_svc;
-    std::string _app_root;
-    std::function<void(dsn::gpid)> partition_bulk_load_mock = [](gpid pid) {
-        std::cout << "send bulk load request to gpid(" << pid.get_app_id() << ","
-                  << pid.get_partition_index() << ")" << std::endl;
-    };
-};
-
-class bulk_load_start_test : public meta_bulk_load_service_test
-{
-public:
-    bulk_load_start_test() {}
-
-    void SetUp()
-    {
-        meta_bulk_load_service_test::SetUp();
-        create_app(NAME);
-    }
-
-    void TearDown() { meta_bulk_load_service_test::TearDown(); }
-
     start_bulk_load_response start_bulk_load(const std::string &app_name,
                                              const std::string &cluster_name,
                                              const std::string &file_provider)
@@ -263,6 +237,37 @@ public:
         wait_all();
         return rpc.response();
     }
+
+    std::shared_ptr<app_state> find_app(const std::string &name) { return _state->get_app(name); }
+
+    void wait_all() { _meta_svc->tracker()->wait_outstanding_tasks(); }
+
+    std::shared_ptr<server_state> _state;
+    std::unique_ptr<meta_service> _meta_svc;
+    std::string _app_root;
+    std::function<void(dsn::gpid)> partition_bulk_load_mock = [](gpid pid) {
+        std::cout << "send bulk load request to gpid(" << pid.get_app_id() << ","
+                  << pid.get_partition_index() << ")" << std::endl;
+    };
+
+    bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
+    {
+        return bulk_svc()->get_app_bulk_load_status(app_id);
+    }
+};
+
+class bulk_load_start_test : public meta_bulk_load_service_test
+{
+public:
+    bulk_load_start_test() {}
+
+    void SetUp()
+    {
+        meta_bulk_load_service_test::SetUp();
+        create_app(NAME);
+    }
+
+    void TearDown() { meta_bulk_load_service_test::TearDown(); }
 };
 
 TEST_F(bulk_load_start_test, wrong_app)
@@ -381,6 +386,155 @@ TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_bulk_load_dir)
     wait_all();
 
     std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
+    ASSERT_EQ(app->is_bulk_loading, false);
+}
+
+class bulk_load_partition_bulk_load_test : public meta_bulk_load_service_test
+{
+public:
+    bulk_load_partition_bulk_load_test() {}
+
+    void SetUp()
+    {
+        meta_bulk_load_service_test::SetUp();
+        create_app(NAME);
+        mock_funcs["partition_bulk_load"] = &partition_bulk_load_mock;
+        auto resp = start_bulk_load(NAME, CLUSTER, PROVIDER);
+        ASSERT_EQ(resp.err, ERR_OK);
+        std::shared_ptr<app_state> app = find_app(NAME);
+        _app_id = app->app_id;
+        _partition_count = app->partition_count;
+        ASSERT_EQ(app->is_bulk_loading, true);
+    }
+
+    void TearDown()
+    {
+        mock_funcs.erase("partition_bulk_load");
+        meta_bulk_load_service_test::TearDown();
+    }
+
+    void create_basic_response(error_code err, bulk_load_status::type status, uint32_t pidx)
+    {
+        _resp.app_name = NAME;
+        _resp.pid = gpid(_app_id, pidx);
+        _resp.err = err;
+        _resp.partition_bl_status = status;
+    }
+
+    void mock_response_progress(error_code progress_err, bool finish_download, uint32_t pidx)
+    {
+        create_basic_response(ERR_OK, bulk_load_status::BLS_DOWNLOADING, pidx);
+        partition_download_progress progress;
+        progress.pid = gpid(_app_id, pidx);
+        progress.progress = 100;
+        progress.status = ERR_OK;
+
+        _resp.__isset.download_progresses = true;
+        _resp.__isset.total_download_progress = true;
+        _resp.download_progresses[rpc_address("127.0.0.1", 10085)] = progress;
+        _resp.download_progresses[_primary] = progress;
+
+        if (finish_download) {
+            _resp.download_progresses[rpc_address("127.0.0.1", 10087)] = progress;
+            _resp.total_download_progress = 100;
+        } else {
+            progress.progress = 0;
+            _resp.download_progresses[rpc_address("127.0.0.1", 10087)] = progress;
+            _resp.total_download_progress = 66;
+        }
+
+        if (progress_err != ERR_OK) {
+            progress.status = progress_err;
+            _resp.download_progresses[rpc_address("127.0.0.1", 10087)] = progress;
+        }
+    }
+
+    void mock_response_cleanup_flag(bool finish_cleanup, uint32_t pidx)
+    {
+        create_basic_response(ERR_OK, bulk_load_status::BLS_FAILED, pidx);
+        _resp.__isset.context_clean_flags = true;
+        _resp.context_clean_flags[rpc_address("127.0.0.1", 10085)] = true;
+        _resp.context_clean_flags[_primary] = true;
+        if (finish_cleanup) {
+            _resp.context_clean_flags[rpc_address("127.0.0.1", 10087)] = true;
+        } else {
+            _resp.context_clean_flags[rpc_address("127.0.0.1", 10085)] = false;
+        }
+    }
+
+    uint32_t _app_id;
+    uint32_t _partition_count;
+    bulk_load_response _resp;
+    rpc_address _primary = rpc_address("127.0.0.1", 10086);
+};
+
+TEST_F(bulk_load_partition_bulk_load_test, response_fs_error)
+{
+    create_basic_response(ERR_FS_INTERNAL, bulk_load_status::BLS_DOWNLOADING, 0);
+    auto response = _resp;
+    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
+}
+
+TEST_F(bulk_load_partition_bulk_load_test, downloading_corrupt)
+{
+    mock_response_progress(ERR_CORRUPTION, false, 0);
+    auto response = _resp;
+    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
+}
+
+TEST_F(bulk_load_partition_bulk_load_test, downloading)
+{
+    mock_response_progress(ERR_OK, false, 0);
+    auto response = _resp;
+    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
+}
+
+TEST_F(bulk_load_partition_bulk_load_test, finish_download)
+{
+    for (int i = 0; i < _partition_count; ++i) {
+        mock_response_progress(ERR_OK, true, i);
+        auto response = _resp;
+        bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    }
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADED);
+}
+
+TEST_F(bulk_load_partition_bulk_load_test, cleanup_half)
+{
+    mock_response_progress(ERR_CORRUPTION, false, 0);
+    auto response = _resp;
+    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
+
+    mock_response_cleanup_flag(false, 0);
+    auto resp = _resp;
+    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(resp), _resp.pid, _primary);
+    wait_all();
+}
+
+TEST_F(bulk_load_partition_bulk_load_test, finish_cleanup)
+{
+    mock_response_progress(ERR_CORRUPTION, false, 0);
+    auto response = _resp;
+    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
+
+    for (int i = 0; i < _partition_count; ++i) {
+        mock_response_cleanup_flag(true, i);
+        auto resp = _resp;
+        bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(resp), _resp.pid, _primary);
+    }
+    wait_all();
+    std::shared_ptr<app_state> app = find_app(NAME);
     ASSERT_EQ(app->is_bulk_loading, false);
 }
 
