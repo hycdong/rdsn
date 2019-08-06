@@ -847,20 +847,13 @@ void meta_service::ddd_diagnose(ddd_diagnose_rpc rpc)
     response.err = ERR_OK;
 }
 
-/// ==================================== ///
-/// ============== split =============== ///
-/// ==================================== ///
-
 void meta_service::on_app_partition_split(app_partition_split_rpc rpc)
 {
     RPC_CHECK_STATUS(rpc.dsn_request(), rpc.response());
 
     tasking::enqueue(LPC_META_STATE_NORMAL,
                      tracker(),
-                     [this, rpc]() {
-                         dassert(_split_svc, "meta_split_service is uninitialized");
-                         _split_svc->app_partition_split(std::move(rpc));
-                     },
+                     [this, rpc]() { _split_svc->app_partition_split(std::move(rpc)); },
                      server_state::sStateHash);
 }
 

@@ -1,12 +1,12 @@
 #include <dsn/service_api_c.h>
 
 #include "dist/replication/meta_server/meta_service.h"
-#include "dist/replication/meta_server/meta_split_service.h"
+//#include "dist/replication/meta_server/meta_split_service.h"
 
 using namespace ::dsn::replication;
 
-#define NAME "app"
-#define PARTITION_COUNT 8
+#define TNAME "app"
+#define COUNT 8
 
 // create a fake app
 inline dsn::app_info create_mock_app_info()
@@ -15,9 +15,9 @@ inline dsn::app_info create_mock_app_info()
     info.is_stateful = true;
     info.app_id = 1;
     info.app_type = "simple_kv";
-    info.app_name = NAME;
+    info.app_name = TNAME;
     info.max_replica_count = 3;
-    info.partition_count = PARTITION_COUNT;
+    info.partition_count = COUNT;
     info.status = dsn::app_status::AS_CREATING;
     info.envs.clear();
     return info;
@@ -99,11 +99,11 @@ inline app_partition_split_response send_request(dsn::task_code rpc_code,
 // mock partition_config while test pause/restart single partition split
 inline void mock_partition_config(std::shared_ptr<app_state> app)
 {
-    for (int i = 0; i < PARTITION_COUNT; ++i) {
+    for (int i = 0; i < COUNT; ++i) {
         dsn::partition_configuration config;
         config.pid = dsn::gpid(app->app_id, i);
         config.partition_flags = 0;
-        config.ballot = (i < PARTITION_COUNT / 2) ? 3 : -1;
+        config.ballot = (i < COUNT / 2) ? 3 : -1;
         app->partitions[i] = config;
     }
 }

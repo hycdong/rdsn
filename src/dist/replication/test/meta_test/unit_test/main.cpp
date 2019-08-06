@@ -63,8 +63,6 @@ TEST(meta, backup_service_test) { g_app->backup_service_test(); }
 
 TEST(meta, app_envs_basic_test) { g_app->app_envs_basic_test(); }
 
-TEST(meta, app_partition_split_test) { g_app->app_partition_split_test(); }
-
 TEST(meta, register_child_test) { g_app->register_child_test(); }
 
 TEST(meta, query_child_state_test) { g_app->on_query_child_state_test(); }

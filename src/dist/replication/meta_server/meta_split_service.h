@@ -37,8 +37,6 @@ public:
 
     // client -> meta to start split
     void app_partition_split(app_partition_split_rpc rpc);
-    // change partition count on remote storage
-    void do_app_partition_split(std::shared_ptr<app_state> app, app_partition_split_rpc rpc);
 
     // client -> meta to pause/restart single partition split
     void control_single_partition_split(control_single_partition_split_rpc rpc);
@@ -68,6 +66,9 @@ public:
     dsn::task_ptr add_child_on_remote_storage(register_child_rpc rpc, bool create_new);
     void
     on_add_child_on_remote_storage_reply(error_code ec, register_child_rpc rpc, bool create_new);
+
+private:
+    void do_app_partition_split(std::shared_ptr<app_state> app, app_partition_split_rpc rpc);
 
 private:
     meta_service *_meta_svc;
