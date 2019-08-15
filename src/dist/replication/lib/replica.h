@@ -343,6 +343,7 @@ private:
     friend class ::dsn::replication::mutation_queue;
     friend class ::dsn::replication::replica_stub;
     friend class mock_replica;
+    friend class replica_bulk_load_test;
 
     // replica configuration, updated by update_local_configuration ONLY
     replica_configuration _config;

@@ -565,6 +565,7 @@ public:
 
 private:
     friend class ::dsn::replication::replica;
+    friend class replica_bulk_load_test;
 
     bulk_load_status::type _status;
     uint64_t _file_total_size;

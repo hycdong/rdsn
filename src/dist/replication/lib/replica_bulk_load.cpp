@@ -1,28 +1,6 @@
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2015 Microsoft Corporation
- *
- * -=- Robust Distributed System Nucleus (rDSN) -=-
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// Copyright (c) 2017-present, Xiaomi, Inc.  All rights reserved.
+// This source code is licensed under the Apache License Version 2.0, which
+// can be found in the LICENSE file in the root directory of this source tree.
 
 #include <fstream>
 #include <dsn/dist/block_service.h>
@@ -305,13 +283,14 @@ void replica::do_download(const std::string &remote_file_dir,
                     }
                     download_file = true;
                 } else if (current_md5 != bf->get_md5sum()) {
-                    ddebug_f("{}: local file({}) is not same with remote file({}), md5: local{} VS "
-                             "remote{}, redownload it",
-                             name(),
-                             local_file.c_str(),
-                             bf->file_name().c_str(),
-                             current_md5.c_str(),
-                             bf->get_md5sum().c_str());
+                    ddebug_f(
+                        "{}: local file({}) is not same with remote file({}), md5: local({}) VS "
+                        "remote({}), redownload it",
+                        name(),
+                        local_file.c_str(),
+                        bf->file_name().c_str(),
+                        current_md5.c_str(),
+                        bf->get_md5sum().c_str());
                     download_file = true;
                 } else {
                     ddebug_f("{}: local file({}) has been downloaded", name(), local_file.c_str());
@@ -409,6 +388,11 @@ bool replica::verify_sst_files(const file_meta &f_meta, const std::string &dir)
 // TODO(heyuchen): move to context.cpp
 void replica::update_download_progress()
 {
+    // TODO(heyuchen):delete
+    ddebug_f("total_size = {}, cur_download_size = {}",
+             _bulk_load_context._file_total_size,
+             _bulk_load_context._cur_download_size.load());
+
     if (_bulk_load_context._file_total_size <= 0) {
         // have not be initialized, just return 0
         return;
