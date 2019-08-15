@@ -110,14 +110,33 @@ public:
                               tracker);
     }
 
+    bool test_verify_sst_files(const file_meta &f_meta, const std::string &dir)
+    {
+        return _replica->verify_sst_files(f_meta, dir);
+    }
+
+    void test_update_group_download_progress(bulk_load_response &response)
+    {
+        _replica->update_group_download_progress(response);
+    }
+
+    void test_update_group_context_clean_flag(bulk_load_response &response)
+    {
+        _replica->update_group_context_clean_flag(response);
+    }
+
+    void test_handle_bulk_load_error() { _replica->handle_bulk_load_error(); }
+
     void set_bulk_load_context(uint64_t file_total_size,
                                uint64_t cur_download_size = 0,
                                int32_t download_progress = 0,
+                               bulk_load_status::type status = bulk_load_status::BLS_INVALID,
                                bool clean_up = false)
     {
         _replica->_bulk_load_context._file_total_size = file_total_size;
         _replica->_bulk_load_context._cur_download_size = cur_download_size;
         _replica->_bulk_load_context._download_progress = download_progress;
+        _replica->_bulk_load_context._status = status;
         _replica->_bulk_load_context._clean_up = clean_up;
     }
 
@@ -130,6 +149,36 @@ public:
     {
         return _replica->_bulk_load_context._download_progress.load();
     }
+    bool get_clean_up_flag() { return _replica->_bulk_load_context._clean_up; }
+
+    void mock_primary_states(bool mock_download_progress = true, bool mock_cleanup_flag = true)
+    {
+        partition_configuration config;
+        config.max_replica_count = 3;
+        config.pid = PID;
+        config.primary = rpc_address("127.0.0.2", 34801);
+        config.secondaries.emplace_back(rpc_address("127.0.0.3", 34801));
+        config.secondaries.emplace_back(rpc_address("127.0.0.4", 34801));
+        _replica->_primary_states.membership = config;
+
+        if (mock_download_progress) {
+            partition_download_progress mock_progress;
+            mock_progress.pid = PID;
+            mock_progress.progress = 0;
+            _replica->_primary_states.group_download_progress[rpc_address("127.0.0.3", 34801)] =
+                mock_progress;
+            _replica->_primary_states.group_download_progress[rpc_address("127.0.0.4", 34801)] =
+                mock_progress;
+            _replica->_bld_progress.pid = PID;
+            _replica->_bld_progress.progress = 100;
+        }
+        if (mock_cleanup_flag) {
+            _replica->_primary_states
+                .group_bulk_load_context_flag[rpc_address("127.0.0.3", 34801)] = true;
+            _replica->_primary_states
+                .group_bulk_load_context_flag[rpc_address("127.0.0.4", 34801)] = false;
+        }
+    }
 
 public:
     std::unique_ptr<mock_replica_stub> _stub;
@@ -141,7 +190,7 @@ public:
     std::string APP_NAME = "replica";
     std::string CLUSTER = "cluster";
     std::string PROVIDER = "local_service";
-    std::string LOCAL_DIR = "bulk_load";
+    std::string LOCAL_DIR = ".bulk_load";
     std::string METADATA = "bulk_load_metadata";
     std::string FILE_NAME = "test_sst_file";
     gpid PID = gpid(1, 0);
@@ -245,6 +294,76 @@ TEST_F(replica_bulk_load_test, do_download_succeed)
     error_code ec;
     test_do_download(PROVIDER, LOCAL_DIR, FILE_NAME, false, ec);
     ASSERT_EQ(ec, ERR_OK);
+}
+
+TEST_F(replica_bulk_load_test, verify_file_failed)
+{
+    std::string file_name = utils::filesystem::path_combine(LOCAL_DIR, FILE_NAME);
+    utils::filesystem::create_file(file_name);
+    std::string md5;
+    utils::filesystem::md5sum(file_name, md5);
+    int64_t size;
+    utils::filesystem::file_size(file_name, size);
+
+    file_meta f_meta;
+    f_meta.name = FILE_NAME;
+    f_meta.md5 = "wrongmd5";
+    f_meta.size = size;
+
+    bool flag = test_verify_sst_files(f_meta, LOCAL_DIR);
+    ASSERT_FALSE(flag);
+}
+
+TEST_F(replica_bulk_load_test, verify_file_succeed)
+{
+    std::string file_name = utils::filesystem::path_combine(LOCAL_DIR, FILE_NAME);
+    utils::filesystem::create_file(file_name);
+    std::string md5;
+    utils::filesystem::md5sum(file_name, md5);
+    int64_t size;
+    utils::filesystem::file_size(file_name, size);
+
+    file_meta f_meta;
+    f_meta.name = FILE_NAME;
+    f_meta.md5 = md5;
+    f_meta.size = size;
+
+    bool flag = test_verify_sst_files(f_meta, LOCAL_DIR);
+    ASSERT_TRUE(flag);
+}
+
+TEST_F(replica_bulk_load_test, update_group_download_progress)
+{
+    _replica->as_primary();
+    mock_primary_states(true, false);
+
+    bulk_load_response response;
+    response.pid = PID;
+    test_update_group_download_progress(response);
+    ASSERT_EQ(response.download_progresses.size(), 3);
+    ASSERT_EQ(response.total_download_progress, 33);
+}
+
+TEST_F(replica_bulk_load_test, update_group_context_clean_flag)
+{
+    _replica->as_primary();
+    mock_primary_states(false, true);
+
+    bulk_load_response response;
+    response.pid = PID;
+
+    test_update_group_context_clean_flag(response);
+    ASSERT_TRUE(response.context_clean_flags[rpc_address("127.0.0.3", 34801)]);
+    ASSERT_FALSE(response.context_clean_flags[rpc_address("127.0.0.4", 34801)]);
+}
+
+TEST_F(replica_bulk_load_test, handle_bulk_load_error)
+{
+    set_bulk_load_context(1000, 100, 10, bulk_load_status::BLS_DOWNLOADING, false);
+
+    test_handle_bulk_load_error();
+    ASSERT_TRUE(get_clean_up_flag());
+    ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
 }
 
 } // namespace replication
