@@ -1145,11 +1145,10 @@ void replica::check_partition_state(int partition_count, const partition_configu
                 partition_count,
                 _child_gpid.get_app_id(),
                 _child_gpid.get_partition_index());
-            _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
-                           _child_gpid,
-                           std::bind(&replica::handle_splitting_error,
-                                     std::placeholders::_1,
-                                     "admin cancel partition split"));
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::handle_splitting_error,
+                                                         std::placeholders::_1,
+                                                         "admin cancel partition split"));
             _child_gpid.set_app_id(0);
         }
         return;
@@ -1167,11 +1166,10 @@ void replica::check_partition_state(int partition_count, const partition_configu
                  _child_gpid.get_app_id(),
                  _child_gpid.get_partition_index());
         if (_child_gpid.get_app_id() > 0) {
-            _stub->on_exec(LPC_SPLIT_PARTITION_ERROR,
-                           _child_gpid,
-                           std::bind(&replica::handle_splitting_error,
-                                     std::placeholders::_1,
-                                     "admin pause single partition split"));
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::handle_splitting_error,
+                                                         std::placeholders::_1,
+                                                         "admin pause single partition split"));
             _child_gpid.set_app_id(0);
         }
         return;
@@ -1286,7 +1284,7 @@ void replica::on_query_child_state_reply(error_code ec,
             "{} failed to query child state, error is {}, please retry", name(), ec.to_string());
 
         _primary_states.query_child_state_task = tasking::enqueue(
-            LPC_SPLIT_PARTITION,
+            LPC_PARTITION_SPLIT,
             tracker(),
             [this, request]() {
                 dsn::rpc_address meta_address(_stub->_failure_detector->get_servers());
@@ -1319,7 +1317,7 @@ void replica::on_query_child_state_reply(error_code ec,
                 name(),
                 partition_count);
         _primary_states.query_child_state_task = tasking::enqueue(
-            LPC_SPLIT_PARTITION,
+            LPC_PARTITION_SPLIT,
             tracker(),
             [this, request]() {
                 dsn::rpc_address meta_address(_stub->_failure_detector->get_servers());

@@ -166,10 +166,12 @@ struct group_check_request
     2:dsn.rpc_address       node;
     3:replica_configuration config;
     4:i64                   last_committed_decree;
+
     // Used to sync duplication progress between primaries
     // and secondaries, so that secondaries can be allowed to GC
     // their WALs after this decree.
     5:optional i64          confirmed_decree;
+
     // Used to deliver child gpid from primaries to secondaries
     6:optional dsn.gpid     child_gpid;
 }

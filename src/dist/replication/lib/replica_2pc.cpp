@@ -770,27 +770,28 @@ void replica::copy_mutation(mutation_ptr &mu)
 {
     dassert(_child_gpid.get_app_id() > 0, "%s child_gpid is invalid", name());
 
-    task_code code = LPC_SPLIT_PARTITION;
+    task_code code = LPC_PARTITION_SPLIT;
     if (!mu->is_split() && mu->get_sync_to_child()) {
-        code = LPC_SPLIT_PARTITION;
+        code = LPC_PARTITION_SPLIT;
         mu->set_is_split();
     }
 
     mutation_ptr new_mu = new mutation(mu);
-    _stub->on_exec(
-        code, _child_gpid, std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
+    // TODO(heyuchen): task code should be LPC_PARTITION_SPLIT, not LPC_PARTITION_SPLIT_ERROR
+    _stub->split_replica_error_handler(
+        _child_gpid, std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
 }
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
     if (mu->get_sync_to_child()) {
-        _stub->on_exec(LPC_SPLIT_PARTITION,
-                       _split_states.parent_gpid,
-                       std::bind(&replica::on_copy_mutation_reply,
-                                 std::placeholders::_1,
-                                 ec,
-                                 mu->data.header.ballot,
-                                 mu->data.header.decree));
+        // LPC_PARTITION_SPLIT, rename this function
+        _stub->split_replica_error_handler(_split_states.parent_gpid,
+                                           std::bind(&replica::on_copy_mutation_reply,
+                                                     std::placeholders::_1,
+                                                     ec,
+                                                     mu->data.header.ballot,
+                                                     mu->data.header.decree));
     } else {
         derror_f("{} failed to ack parent, mutation is {}, sync_to_child is {}",
                  name(),

@@ -25,24 +25,24 @@ public:
     void write_current_chkpt_file_test();
 
     // test for replica_split
-    void on_add_child_test();
-    void init_child_replica_test();
-    void check_child_state_test();
-    void prepare_copy_parent_state_test();
-    void copy_parent_state_test();
-    void apply_parent_state_test();
-    void child_catch_up_test();
+    //    void on_add_child_test();
+    //    void init_child_replica_test();
+    //    void check_child_state_test();
+    //    void prepare_copy_parent_state_test();
+    //    void copy_parent_state_test();
+    //    void apply_parent_state_test();
+    //    void child_catch_up_test();
 
-    void notify_primary_split_catch_up_test();
-    void on_notify_primary_split_catch_up_test();
-    void check_sync_point_test();
-    void update_group_partition_count_test();
-    void on_update_group_partition_count_test();
-    void on_update_group_partition_count_reply_test();
-    void register_child_on_meta_test();
-    void on_register_child_on_meta_reply_test();
+    //    void notify_primary_split_catch_up_test();
+    //    void on_notify_primary_split_catch_up_test();
+    //    void check_sync_point_test();
+    //    void update_group_partition_count_test();
+    //    void on_update_group_partition_count_test();
+    //    void on_update_group_partition_count_reply_test();
+    //    void register_child_on_meta_test();
+    //    void on_register_child_on_meta_reply_test();
 
-    void check_partition_state_test();
-    void query_child_state_test();
-    void on_query_child_state_reply_test();
+    //    void check_partition_state_test();
+    //    void query_child_state_test();
+    //    void on_query_child_state_reply_test();
 };

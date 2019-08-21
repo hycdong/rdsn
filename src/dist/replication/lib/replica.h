@@ -79,6 +79,7 @@ public:
     //    routines for replica stub
     //
     static replica *load(replica_stub *stub, const char *dir);
+    // {parent_dir} is used in partition split for get_child_dir in replica_stub
     static replica *newr(replica_stub *stub,
                          gpid gpid,
                          const app_info &app,
@@ -314,8 +315,10 @@ private:
     //
     //      partition split
     //
-    // parent replica recevie group_check and try to create a new replica instance on this stub
+    // TODO(heyuchen): remove virtual
+    // parent partition create child
     virtual void on_add_child(const group_check_request &request);
+
     // child replica initialize config and state info
     virtual void
     init_child_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
@@ -411,6 +414,9 @@ private:
     // handle child partitions error
     void handle_splitting_error(std::string err_msg);
 
+    // parent reset child information when partition split failed
+    void clean_up_parent_split_context();
+
 private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;
@@ -420,6 +426,7 @@ private:
     friend class ::replication_service_test_app;
     friend class ::replica_split_mock;
     friend class ::replica_stub_mock;
+    friend class replica_split_test;
 
     // replica configuration, updated by update_local_configuration ONLY
     replica_configuration _config;
@@ -492,10 +499,12 @@ private:
     throttling_controller _write_throttling_controller;
 
     // partition split
-    // during partition split: _child_gpid(app_id, partition_index+partition_count)
-    // not during partition split: _child_gpid.app_id = 0
-    dsn::gpid _child_gpid;
-    ballot _child_ballot; // ballot when starting partition split
+    // _child_gpid = gpid({app_id},{pidx}+{old_partition_count}) for parent partition
+    // _child_gpid.app_id = 0 for parent partition not during partition split and child partition
+    dsn::gpid _child_gpid{0, 0};
+    // ballot when starting partition split because split will stop if ballot changed
+    // _child_init_ballot = 0 if partition not during partition split
+    ballot _child_init_ballot{0};
     // _partition_version = partition_count-1, _partition_version = -1 when reject read/write
     std::atomic<int> _partition_version;
 

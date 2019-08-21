@@ -44,7 +44,12 @@ public:
     {
     }
 
-    ~mock_replica() override {}
+    ~mock_replica() override { _config.status = partition_status::PS_INACTIVE; }
+
+    /// helper functions
+    void set_replica_config(replica_configuration &config) { _config = config; }
+    void set_partition_status(partition_status::type status) { _config.status = status; }
+    void set_child_gpid(gpid pid) { _child_gpid = pid; }
 };
 
 inline std::unique_ptr<mock_replica> create_mock_replica(replica_stub *stub,
@@ -66,6 +71,24 @@ public:
     mock_replica_stub() = default;
 
     ~mock_replica_stub() override = default;
+
+    /// helper functions
+    std::unique_ptr<mock_replica>
+    generate_replica(app_info info,
+                     gpid pid,
+                     partition_status::type status = partition_status::PS_INACTIVE,
+                     ballot b = 5)
+    {
+        replica_configuration config;
+        config.ballot = b;
+        config.pid = pid;
+        config.status = status;
+
+        std::unique_ptr<mock_replica> rep =
+            make_unique<mock_replica>(this, pid, std::move(info), "./");
+        rep->set_replica_config(config);
+        return rep;
+    }
 };
 
 } // namespace replication

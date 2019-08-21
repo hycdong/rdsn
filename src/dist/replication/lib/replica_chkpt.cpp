@@ -342,7 +342,7 @@ void replica::catch_up_with_private_logs(partition_status::type s)
                                  get_gpid().thread_hash());
         _potential_secondary_states.learn_remote_files_completed_task->enqueue();
     } else if (s == partition_status::PS_PARTITION_SPLIT) {
-        _split_states.async_learn_task = tasking::enqueue(LPC_SPLIT_PARTITION,
+        _split_states.async_learn_task = tasking::enqueue(LPC_PARTITION_SPLIT,
                                                           tracker(),
                                                           std::bind(&replica::child_catch_up, this),
                                                           get_gpid().thread_hash());
