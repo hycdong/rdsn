@@ -332,8 +332,9 @@ private:
                      dsn::task_tracker &tracker);
     dsn::error_code read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
     void update_group_download_progress(bulk_load_response &response);
-    // TODO(heyuchen): consider rename this function
     void handle_bulk_load_error();
+    void handle_bulk_load_succeed(const bulk_load_request &request);
+    void cleanup_bulk_load_context(bulk_load_status::type new_status);
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
     void update_group_context_clean_flag(bulk_load_response &response);
 

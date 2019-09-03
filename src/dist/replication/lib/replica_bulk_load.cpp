@@ -53,6 +53,27 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         update_group_download_progress(response);
     }
 
+    if (request.partition_bl_info.status == bulk_load_status::BLS_INGESTING &&
+        _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
+        _bulk_load_context.set_status(request.partition_bl_info.status);
+        if (status() == partition_status::PS_PRIMARY) {
+            send_download_request_to_secondaries(request);
+        }
+    }
+
+    if (request.partition_bl_info.status == bulk_load_status::BLS_FINISH) {
+        if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED ||
+            _bulk_load_context.get_status() == bulk_load_status::BLS_INGESTING) {
+            handle_bulk_load_succeed(request);
+        } else {
+            cleanup_bulk_load_context(bulk_load_status::BLS_FINISH);
+            if (status() == partition_status::PS_PRIMARY) {
+                send_download_request_to_secondaries(request);
+                update_group_context_clean_flag(response);
+            }
+        }
+    }
+
     if (request.app_bl_status == bulk_load_status::BLS_FAILED &&
         request.partition_bl_info.status == bulk_load_status::BLS_FAILED) {
         handle_bulk_load_error();
@@ -402,6 +423,11 @@ void replica::update_download_progress()
     _bulk_load_context._download_progress.store(
         static_cast<int32_t>((cur_download_size / total_size) * 100));
     _bld_progress.progress = _bulk_load_context._download_progress.load();
+    if (_bulk_load_context._download_progress.load() == 100 &&
+        _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING) {
+        // update bulk load status to downloaded
+        _bulk_load_context.set_status(bulk_load_status::BLS_DOWNLOADED);
+    }
 }
 
 void replica::send_download_request_to_secondaries(const bulk_load_request &request)
@@ -452,18 +478,21 @@ void replica::update_group_download_progress(bulk_load_response &response)
     response.total_download_progress = total_progress;
 }
 
-void replica::handle_bulk_load_error()
+void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 {
     if (_bulk_load_context.is_cleanup()) {
         ddebug_f("{}: bulk load context has been cleaned up", name());
         return;
     }
 
-    // set bulk load status to failure
+    // set bulk load status
     auto old_status = _bulk_load_context.get_status();
-    auto new_status = bulk_load_status::BLS_FAILED;
-    _bulk_load_context.set_status(new_status);
-    dwarn_f("{}: bulk load failed, old status={}", name(), enum_to_string(old_status));
+    if (new_status == bulk_load_status::BLS_FAILED) {
+        _bulk_load_context.set_status(new_status);
+        dwarn_f("{}: bulk load failed, old status={}", name(), enum_to_string(old_status));
+    } else {
+        ddebug_f("{}: bulk load succeed, old_status={}", name(), enum_to_string(old_status));
+    }
 
     if (old_status == bulk_load_status::BLS_DOWNLOADING ||
         old_status == bulk_load_status::BLS_DOWNLOADED) {
@@ -495,6 +524,38 @@ void replica::handle_bulk_load_error()
     // clean up bulk_load_context
     _bulk_load_context.cleanup();
 }
+
+void replica::handle_bulk_load_succeed(const bulk_load_request &request)
+{
+    auto old_status = _bulk_load_context.get_status();
+    if (old_status == bulk_load_status::BLS_DOWNLOADING ||
+        old_status == bulk_load_status::BLS_DOWNLOADED) {
+        // stop bulk load download tasks
+        for (auto iter = _bulk_load_download_task.begin(); iter != _bulk_load_download_task.end();
+             iter++) {
+            auto download_task = iter->second;
+            if (download_task != nullptr) {
+                download_task->cancel(false);
+            }
+            _bulk_load_download_task.erase(iter);
+        }
+        // reset bulk load download progress
+        _bld_progress.progress = 0;
+        _bld_progress.status = ERR_OK;
+    }
+
+    if (status() == partition_status::PS_PRIMARY) {
+        // gurantee secondary commit ingestion request
+        mutation_ptr mu = new_mutation(invalid_decree);
+        mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
+        init_prepare(mu, false);
+        send_download_request_to_secondaries(request);
+    }
+
+    _bulk_load_context.set_status(bulk_load_status::BLS_FINISH);
+}
+
+void replica::handle_bulk_load_error() { cleanup_bulk_load_context(bulk_load_status::BLS_FAILED); }
 
 // - ERR_FILE_OPERATION_FAILED: remove folder failed
 dsn::error_code replica::remove_local_bulk_load_dir(const std::string &bulk_load_dir)

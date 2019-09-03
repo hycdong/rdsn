@@ -92,13 +92,28 @@ private:
 
     // helper function for on_partition_bulk_load_reply
     // hanlde situation when response.error is ERR_OK during downloading status
-    bool handle_partition_bulk_load_downloading(bulk_load_response &response,
+    void handle_partition_bulk_load_downloading(bulk_load_response &response,
                                                 const rpc_address &primary_addr); // private
 
     // helper function for on_partition_bulk_load_reply
     // hanlde situation when response.error is ERR_OK during failed status
     void handle_partition_bulk_load_failed(bulk_load_response &response,
                                            const rpc_address &primary_addr); // private
+
+    void handle_partition_bulk_load_ingest(bulk_load_response &response,
+                                           const rpc_address &primary_addr);
+
+    void handle_partition_bulk_load_succeed(bulk_load_response &response,
+                                            const rpc_address &primary_addr); // private
+
+    // create ingestion request and send it to primary
+    void partition_ingestion(gpid pid);
+
+    // receive ingestion response from primary
+    void on_partition_ingestion_reply(dsn::error_code err,
+                                      ingestion_response &&resp,
+                                      const std::string &app_name,
+                                      gpid pid);
 
     // clear bulk load service local variety
     void clear_app_bulk_load_context(uint32_t app_id); // private

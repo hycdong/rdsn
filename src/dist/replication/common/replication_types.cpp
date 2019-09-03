@@ -14277,5 +14277,258 @@ void bulk_load_response::printTo(std::ostream &out) const
     (__isset.context_clean_flags ? (out << to_string(context_clean_flags)) : (out << "<null>"));
     out << ")";
 }
+
+ingestion_request::~ingestion_request() throw() {}
+
+void ingestion_request::__set_app_name(const std::string &val) { this->app_name = val; }
+
+uint32_t ingestion_request::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->app_name);
+                this->__isset.app_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t ingestion_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("ingestion_request");
+
+    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(ingestion_request &a, ingestion_request &b)
+{
+    using ::std::swap;
+    swap(a.app_name, b.app_name);
+    swap(a.__isset, b.__isset);
+}
+
+ingestion_request::ingestion_request(const ingestion_request &other641)
+{
+    app_name = other641.app_name;
+    __isset = other641.__isset;
+}
+ingestion_request::ingestion_request(ingestion_request &&other642)
+{
+    app_name = std::move(other642.app_name);
+    __isset = std::move(other642.__isset);
+}
+ingestion_request &ingestion_request::operator=(const ingestion_request &other643)
+{
+    app_name = other643.app_name;
+    __isset = other643.__isset;
+    return *this;
+}
+ingestion_request &ingestion_request::operator=(ingestion_request &&other644)
+{
+    app_name = std::move(other644.app_name);
+    __isset = std::move(other644.__isset);
+    return *this;
+}
+void ingestion_request::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "ingestion_request(";
+    out << "app_name=" << to_string(app_name);
+    out << ")";
+}
+
+ingestion_response::~ingestion_response() throw() {}
+
+void ingestion_response::__set_error(const int32_t val) { this->error = val; }
+
+void ingestion_response::__set_app_id(const int32_t val) { this->app_id = val; }
+
+void ingestion_response::__set_partition_index(const int32_t val) { this->partition_index = val; }
+
+void ingestion_response::__set_decree(const int64_t val) { this->decree = val; }
+
+uint32_t ingestion_response::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->error);
+                this->__isset.error = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->app_id);
+                this->__isset.app_id = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->partition_index);
+                this->__isset.partition_index = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 4:
+            if (ftype == ::apache::thrift::protocol::T_I64) {
+                xfer += iprot->readI64(this->decree);
+                this->__isset.decree = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t ingestion_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("ingestion_response");
+
+    xfer += oprot->writeFieldBegin("error", ::apache::thrift::protocol::T_I32, 1);
+    xfer += oprot->writeI32(this->error);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("app_id", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeI32(this->app_id);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("partition_index", ::apache::thrift::protocol::T_I32, 3);
+    xfer += oprot->writeI32(this->partition_index);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("decree", ::apache::thrift::protocol::T_I64, 4);
+    xfer += oprot->writeI64(this->decree);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(ingestion_response &a, ingestion_response &b)
+{
+    using ::std::swap;
+    swap(a.error, b.error);
+    swap(a.app_id, b.app_id);
+    swap(a.partition_index, b.partition_index);
+    swap(a.decree, b.decree);
+    swap(a.__isset, b.__isset);
+}
+
+ingestion_response::ingestion_response(const ingestion_response &other645)
+{
+    error = other645.error;
+    app_id = other645.app_id;
+    partition_index = other645.partition_index;
+    decree = other645.decree;
+    __isset = other645.__isset;
+}
+ingestion_response::ingestion_response(ingestion_response &&other646)
+{
+    error = std::move(other646.error);
+    app_id = std::move(other646.app_id);
+    partition_index = std::move(other646.partition_index);
+    decree = std::move(other646.decree);
+    __isset = std::move(other646.__isset);
+}
+ingestion_response &ingestion_response::operator=(const ingestion_response &other647)
+{
+    error = other647.error;
+    app_id = other647.app_id;
+    partition_index = other647.partition_index;
+    decree = other647.decree;
+    __isset = other647.__isset;
+    return *this;
+}
+ingestion_response &ingestion_response::operator=(ingestion_response &&other648)
+{
+    error = std::move(other648.error);
+    app_id = std::move(other648.app_id);
+    partition_index = std::move(other648.partition_index);
+    decree = std::move(other648.decree);
+    __isset = std::move(other648.__isset);
+    return *this;
+}
+void ingestion_response::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "ingestion_response(";
+    out << "error=" << to_string(error);
+    out << ", "
+        << "app_id=" << to_string(app_id);
+    out << ", "
+        << "partition_index=" << to_string(partition_index);
+    out << ", "
+        << "decree=" << to_string(decree);
+    out << ")";
+}
 }
 } // namespace

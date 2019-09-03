@@ -339,6 +339,10 @@ class bulk_load_request;
 
 class bulk_load_response;
 
+class ingestion_request;
+
+class ingestion_response;
+
 typedef struct _mutation_header__isset
 {
     _mutation_header__isset()
@@ -6017,6 +6021,119 @@ public:
 void swap(bulk_load_response &a, bulk_load_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const bulk_load_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _ingestion_request__isset
+{
+    _ingestion_request__isset() : app_name(false) {}
+    bool app_name : 1;
+} _ingestion_request__isset;
+
+class ingestion_request
+{
+public:
+    ingestion_request(const ingestion_request &);
+    ingestion_request(ingestion_request &&);
+    ingestion_request &operator=(const ingestion_request &);
+    ingestion_request &operator=(ingestion_request &&);
+    ingestion_request() : app_name() {}
+
+    virtual ~ingestion_request() throw();
+    std::string app_name;
+
+    _ingestion_request__isset __isset;
+
+    void __set_app_name(const std::string &val);
+
+    bool operator==(const ingestion_request &rhs) const
+    {
+        if (!(app_name == rhs.app_name))
+            return false;
+        return true;
+    }
+    bool operator!=(const ingestion_request &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const ingestion_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(ingestion_request &a, ingestion_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const ingestion_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _ingestion_response__isset
+{
+    _ingestion_response__isset()
+        : error(false), app_id(false), partition_index(false), decree(false)
+    {
+    }
+    bool error : 1;
+    bool app_id : 1;
+    bool partition_index : 1;
+    bool decree : 1;
+} _ingestion_response__isset;
+
+class ingestion_response
+{
+public:
+    ingestion_response(const ingestion_response &);
+    ingestion_response(ingestion_response &&);
+    ingestion_response &operator=(const ingestion_response &);
+    ingestion_response &operator=(ingestion_response &&);
+    ingestion_response() : error(0), app_id(0), partition_index(0), decree(0) {}
+
+    virtual ~ingestion_response() throw();
+    int32_t error;
+    int32_t app_id;
+    int32_t partition_index;
+    int64_t decree;
+
+    _ingestion_response__isset __isset;
+
+    void __set_error(const int32_t val);
+
+    void __set_app_id(const int32_t val);
+
+    void __set_partition_index(const int32_t val);
+
+    void __set_decree(const int64_t val);
+
+    bool operator==(const ingestion_response &rhs) const
+    {
+        if (!(error == rhs.error))
+            return false;
+        if (!(app_id == rhs.app_id))
+            return false;
+        if (!(partition_index == rhs.partition_index))
+            return false;
+        if (!(decree == rhs.decree))
+            return false;
+        return true;
+    }
+    bool operator!=(const ingestion_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const ingestion_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(ingestion_response &a, ingestion_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const ingestion_response &obj)
 {
     obj.printTo(out);
     return out;

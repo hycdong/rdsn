@@ -809,6 +809,19 @@ struct bulk_load_response
     7:optional map<dsn.rpc_address, bool> context_clean_flags;
 }
 
+struct ingestion_request
+{
+    1:string    app_name;
+}
+
+struct ingestion_response
+{
+    1:i32               error;
+    2:i32               app_id;
+    3:i32               partition_index;
+    4:i64               decree;
+}
+
 /*
 service replica_s
 {
