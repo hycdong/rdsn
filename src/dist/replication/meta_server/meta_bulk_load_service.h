@@ -10,6 +10,16 @@
 namespace dsn {
 namespace replication {
 
+struct bulk_load_info
+{
+    uint32_t app_id;
+    std::string app_name;
+    uint32_t partition_count;
+    int64_t create_time_ms;
+    DEFINE_JSON_SERIALIZATION(app_id, app_name, partition_count, create_time_ms)
+};
+
+// TODO(heyuchen): move it into thrift file
 struct app_bulk_load_info
 {
     uint32_t app_id;
@@ -17,26 +27,12 @@ struct app_bulk_load_info
     std::string app_name;
     std::string cluster_name;
     std::string file_provider_type;
-    // TODO(heyuchen): consider add bulk load status
     bulk_load_status::type status;
     DEFINE_JSON_SERIALIZATION(
         app_id, partition_count, app_name, cluster_name, file_provider_type, status)
 };
 
-// struct partition_bulk_load_info
-//{
-//    bulk_load_status::type status;
-//    DEFINE_JSON_SERIALIZATION(status)
-//};
-
-// struct bulk_load_info
-//{
-//    std::map<app_id, std::string> app_name;
-//    std::map<app_id, std::string> cluster_name;
-//    std::map<app_id, std::string> file_provider_type;
-//};
-
-// TODO(heyuchen): initialize it
+// TODO(heyuchen): initialize it and rename it
 struct bulk_load_context
 {
     std::map<app_id, uint32_t> apps_in_progress_count;
@@ -131,7 +127,7 @@ private:
     void create_partition_bulk_load_dir_with_rpc(const std::string &app_name,
                                                  gpid pid,
                                                  uint32_t partition_count,
-                                                 const std::string &bulk_load_path,
+                                                 const std::string &app_path,
                                                  start_bulk_load_rpc rpc); // private + zk
 
     // sync app bulk load info from remote storage
@@ -206,10 +202,10 @@ private:
     meta_service *_meta_svc;
     server_state *_state;
 
-    // bulk load root on remote stroage
+    // bulk load root on remote stroage: {cluster_root}/bulk_load
     std::string _bulk_load_root;
 
-    // app_id -> bulk_load_context
+    // app_id -> app_bulk_load_info
     std::map<app_id, app_bulk_load_info> _bulk_load_info;
 
     bulk_load_context _bulk_load_states;

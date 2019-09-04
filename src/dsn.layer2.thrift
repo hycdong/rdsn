@@ -3,6 +3,7 @@ include "dsn.thrift"
 
 namespace cpp dsn
 
+// TODO(heyuchen): move it into replication.thrift
 // for server supporting bulk load
 enum bulk_load_status
 {

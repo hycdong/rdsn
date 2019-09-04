@@ -59,21 +59,16 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
     // TODO(heyuchen): validate in bulk load info file
     // 1. check file existed
     // 2. check partition count
+    // verify bulk_load_info structure
+
     ddebug_f("start app {} bulk load, cluster_name={}, provider={}",
              request.app_name,
              request.cluster_name,
              request.file_provider_type);
 
-    // set meta level to steady
-    meta_function_level::type level = _meta_svc->get_function_level();
-    if (level != meta_function_level::fl_steady) {
-        _meta_svc->set_function_level(meta_function_level::fl_steady);
-        ddebug_f("change meta server function level from {} to {} to avoid possible balance",
-                 _meta_function_level_VALUES_TO_NAMES.find(level)->second,
-                 _meta_function_level_VALUES_TO_NAMES.find(meta_function_level::fl_steady)->second);
-    }
+    // avoid possible load balancing
+    _meta_svc->set_function_level(meta_function_level::fl_steady);
 
-    // set bulk_load_status to true on zk
     start_bulk_load_on_remote_storage(std::move(app), std::move(rpc));
 }
 
@@ -102,8 +97,9 @@ void bulk_load_service::start_bulk_load_on_remote_storage(std::shared_ptr<app_st
 void bulk_load_service::create_app_bulk_load_dir_with_rpc(std::shared_ptr<app_state> app,
                                                           start_bulk_load_rpc rpc)
 {
-    std::string bulk_load_path = get_app_bulk_load_path(app->app_id);
+    std::string app_path = get_app_bulk_load_path(app->app_id);
     const auto req = rpc.request();
+
     app_bulk_load_info ainfo;
     ainfo.app_id = app->app_id;
     ainfo.app_name = app->app_name;
@@ -111,19 +107,18 @@ void bulk_load_service::create_app_bulk_load_dir_with_rpc(std::shared_ptr<app_st
     ainfo.status = bulk_load_status::BLS_DOWNLOADING;
     ainfo.cluster_name = req.cluster_name;
     ainfo.file_provider_type = req.file_provider_type;
-    blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
-
     {
         zauto_write_lock l(_lock);
         _bulk_load_info[ainfo.app_id] = ainfo;
     }
+    blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
 
     _meta_svc->get_meta_storage()->create_node(
-        std::move(bulk_load_path), std::move(value), [app, rpc, bulk_load_path, this]() {
-            ddebug_f("create app {} bulk load dir", app->app_name);
+        std::move(app_path), std::move(value), [app, rpc, app_path, this]() {
+            ddebug_f("create app({}) bulk load dir", app->app_name);
             for (int i = 0; i < app->partition_count; ++i) {
                 create_partition_bulk_load_dir_with_rpc(
-                    app->app_name, gpid(app->app_id, i), app->partition_count, bulk_load_path, rpc);
+                    app->app_name, gpid(app->app_id, i), app->partition_count, app_path, rpc);
             }
         });
 }
@@ -131,7 +126,7 @@ void bulk_load_service::create_app_bulk_load_dir_with_rpc(std::shared_ptr<app_st
 void bulk_load_service::create_partition_bulk_load_dir_with_rpc(const std::string &app_name,
                                                                 gpid pid,
                                                                 uint32_t partition_count,
-                                                                const std::string &bulk_load_path,
+                                                                const std::string &app_path,
                                                                 start_bulk_load_rpc rpc)
 {
     partition_bulk_load_info pinfo;
@@ -139,18 +134,16 @@ void bulk_load_service::create_partition_bulk_load_dir_with_rpc(const std::strin
     blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
     _meta_svc->get_meta_storage()->create_node(
-        get_partition_bulk_load_path(bulk_load_path, pid.get_partition_index()),
+        get_partition_bulk_load_path(app_path, pid.get_partition_index()),
         std::move(value),
-        [app_name, pid, partition_count, bulk_load_path, rpc, pinfo, this]() {
+        [app_name, pid, partition_count, app_path, rpc, pinfo, this]() {
             ddebug_f(
-                "app {} create partition[{}] bulk_load_info", app_name, pid.get_partition_index());
+                "app({}) create partition[{}] bulk_load_info", app_name, pid.get_partition_index());
             {
                 zauto_write_lock l(_lock);
-                --_bulk_load_states.apps_in_progress_count[pid.get_app_id()];
                 _bulk_load_states.partitions_info[pid] = pinfo;
-
-                if (_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
-                    ddebug_f("app {} start bulk load succeed", app_name);
+                if (--_bulk_load_states.apps_in_progress_count[pid.get_app_id()] == 0) {
+                    ddebug_f("app({}) start bulk load succeed", app_name);
                     _bulk_load_states.apps_in_progress_count[pid.get_app_id()] = partition_count;
                     auto response = rpc.response();
                     response.err = ERR_OK;

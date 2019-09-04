@@ -753,9 +753,13 @@ struct ddd_diagnose_response
 }
 
 // bulk load
+// TODO(heyuchen): move bulk_load_metadata struct here
+
+
 struct partition_bulk_load_info
 {
     1:dsn.layer2.bulk_load_status  status;
+    // TODO(heyuchen): add bulk_load_metadata struct here
 }
 
 // client -> meta start bulk load, including downloading sst files and ingest them
@@ -794,12 +798,15 @@ struct bulk_load_request
     3:dsn.rpc_address               primary_addr;
     4:string                        remote_provider_name;
     5:string                        cluster_name;
-    6:dsn.layer2.bulk_load_status   app_bl_status;
+    6:dsn.layer2.bulk_load_status   app_bl_status; // TODO(heyuchen):rename
+    // TODO(heyuchen): use bulk_load_status here
     7:partition_bulk_load_info      partition_bl_info;
+    // TODO(heyuchen): add ballot
 }
 
 struct bulk_load_response
 {
+    // TODO(heyuchen): add ballot
     1:dsn.error_code    err;
     2:dsn.gpid  pid;
     3:string    app_name;
@@ -812,6 +819,7 @@ struct bulk_load_response
 struct ingestion_request
 {
     1:string    app_name;
+    // TODO(heyuchen): add bulk_load_metadata here
 }
 
 struct ingestion_response
