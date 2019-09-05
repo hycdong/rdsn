@@ -37,29 +37,28 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
 
         app = _state->get_app(request.app_name);
         if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
-            derror_f("app {} is not existed or not available", request.app_name);
+            derror_f("app({}) is not existed or not available", request.app_name);
             response.err = app == nullptr ? ERR_APP_NOT_EXIST : ERR_APP_DROPPED;
             return;
         }
 
         if (app->is_bulk_loading) {
-            derror_f("app {} is already executing bulk load, please wait", app->app_name.c_str());
+            derror_f("app({}) is already executing bulk load, please wait", app->app_name.c_str());
             response.err = ERR_BUSY;
-            return;
-        }
-
-        if (_meta_svc->get_block_service_manager().get_block_filesystem(
-                request.file_provider_type) == nullptr) {
-            derror_f("invalid remote file provider type {}", request.file_provider_type);
-            response.err = ERR_INVALID_PARAMETERS;
             return;
         }
     }
 
-    // TODO(heyuchen): validate in bulk load info file
-    // 1. check file existed
-    // 2. check partition count
-    // verify bulk_load_info structure
+    // TODO(heyuchen): fix meta_bulk_load ut fail (refactor ut using fail_point)
+    error_code e = request_params_check(request.app_name,
+                                        request.cluster_name,
+                                        request.file_provider_type,
+                                        app->app_id,
+                                        app->partition_count);
+    if (e != ERR_OK) {
+        response.err = e;
+        return;
+    }
 
     ddebug_f("start app {} bulk load, cluster_name={}, provider={}",
              request.app_name,
@@ -70,6 +69,84 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
     _meta_svc->set_function_level(meta_function_level::fl_steady);
 
     start_bulk_load_on_remote_storage(std::move(app), std::move(rpc));
+}
+
+// - ERR_OK: pass params check
+// - ERR_INVALID_PARAMETERS: wrong file_provider type
+// - ERR_FILE_OPERATION_FAILED: file_provider error
+// - ERR_OBJECT_NOT_FOUNT: bulk_load_info not exist, may wrong cluster_name or app_name
+// - ERR_INCOMPLETE_DATA: bulk_load_info is damaged on file_provider
+// - ERR_INCONSISTENT_STATE: app_id or partition_count inconsistent
+dsn::error_code bulk_load_service::request_params_check(const std::string &app_name,
+                                                        const std::string &cluster_name,
+                                                        const std::string &file_provider,
+                                                        uint32_t app_id,
+                                                        uint32_t partition_count)
+{
+    // check file provider
+    dsn::dist::block_service::block_filesystem *blk_fs =
+        _meta_svc->get_block_service_manager().get_block_filesystem(file_provider);
+    if (blk_fs == nullptr) {
+        derror_f("invalid remote file provider type {}", file_provider);
+        return ERR_INVALID_PARAMETERS;
+    }
+
+    // sync get bulk_load_info file_handler
+    std::string remote_path = get_bulk_load_info_path(app_name, cluster_name);
+    dsn::dist::block_service::create_file_request cf_req;
+    cf_req.file_name = remote_path;
+    cf_req.ignore_metadata = true;
+    error_code err = ERR_OK;
+    dsn::dist::block_service::block_file_ptr file_handler = nullptr;
+    blk_fs
+        ->create_file(
+            cf_req,
+            TASK_CODE_EXEC_INLINED,
+            [&err, &file_handler](const dsn::dist::block_service::create_file_response &resp) {
+                err = resp.err;
+                file_handler = resp.file_handle;
+            })
+        ->wait();
+
+    if (err != ERR_OK || file_handler == nullptr) {
+        derror_f(
+            "failed to get file({}) handler on remote provider({})", remote_path, file_provider);
+        return ERR_FILE_OPERATION_FAILED;
+    }
+
+    // sync read bulk_load_info on file provider
+    dsn::dist::block_service::read_response r_resp;
+    file_handler
+        ->read(dsn::dist::block_service::read_request{0, -1},
+               TASK_CODE_EXEC_INLINED,
+               [&r_resp](const dsn::dist::block_service::read_response &resp) { r_resp = resp; })
+        ->wait();
+    if (r_resp.err != ERR_OK) {
+        derror_f("failed to read file({}) on remote provider({}), error={}",
+                 file_provider,
+                 remote_path,
+                 r_resp.err.to_string());
+        return r_resp.err;
+    }
+
+    bulk_load_info bl_info;
+    if (!::dsn::json::json_forwarder<bulk_load_info>::decode(r_resp.buffer, bl_info)) {
+        derror_f("file({}) is damaged on remote file provider({})", remote_path, file_provider);
+        return ERR_INCOMPLETE_DATA;
+    }
+
+    if (bl_info.app_id != app_id || bl_info.partition_count != partition_count) {
+        derror_f("app({}) information is inconsistent, local app_id({}) VS remote app_id({}), "
+                 "local partition_count({}) VS remote partition_count({})",
+                 app_name,
+                 app_id,
+                 bl_info.app_id,
+                 partition_count,
+                 bl_info.partition_count);
+        return ERR_INCONSISTENT_STATE;
+    }
+
+    return ERR_OK;
 }
 
 void bulk_load_service::start_bulk_load_on_remote_storage(std::shared_ptr<app_state> app,

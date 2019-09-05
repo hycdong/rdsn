@@ -15,8 +15,7 @@ struct bulk_load_info
     uint32_t app_id;
     std::string app_name;
     uint32_t partition_count;
-    int64_t create_time_ms;
-    DEFINE_JSON_SERIALIZATION(app_id, app_name, partition_count, create_time_ms)
+    DEFINE_JSON_SERIALIZATION(app_id, app_name, partition_count)
 };
 
 // TODO(heyuchen): move it into thrift file
@@ -77,6 +76,12 @@ public:
     void check_app_bulk_load_consistency(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
 private:
+    dsn::error_code request_params_check(const std::string &app_name,
+                                         const std::string &cluster_name,
+                                         const std::string &file_provider,
+                                         uint32_t app_id,
+                                         uint32_t partition_count);
+
     // check download status in progress, if all partitions download_status is ERR_OK, return
     // ERR_OK,
     // otherwise return the error_code NOT ERR_OK
@@ -194,6 +199,17 @@ private:
     bool is_app_bulk_loading(uint32_t app_id)
     {
         return (_bulk_load_app_id.find(app_id) == _bulk_load_app_id.end() ? false : true);
+    }
+
+    // TODO(heyuchen): move it to common.h/.cpp
+    std::string get_bulk_load_info_path(const std::string &app_name,
+                                        const std::string &cluster_name)
+    {
+        // TODO(heyuchen): change "bulk_load_test" from value in config
+        std::ostringstream oss;
+        oss << "bulk_load_test/" << cluster_name << "/" << app_name << "/"
+            << "bulk_load_info";
+        return oss.str();
     }
 
 private:
