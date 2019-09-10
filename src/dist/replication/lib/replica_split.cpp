@@ -84,8 +84,9 @@ void replica::init_child_replica(gpid parent_gpid,
 
     if (status() != partition_status::PS_INACTIVE) {
         dwarn_replica("wrong status {}", enum_to_string(status()));
-        _stub->split_replica_error_handler(parent_gpid,
-                                           [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, parent_gpid, [](replica_ptr r) {
+            r->_child_gpid.set_app_id(0);
+        });
         return;
     }
 
@@ -116,16 +117,18 @@ void replica::init_child_replica(gpid parent_gpid,
 
     ddebug_replica("init ballot is {}, parent gpid is ({})", init_ballot, parent_gpid);
 
-    _stub->split_replica_exec(_split_states.parent_gpid,
-                              std::bind(&replica::prepare_copy_parent_state,
-                                        std::placeholders::_1,
-                                        _app->learn_dir(),
-                                        get_gpid(),
-                                        get_ballot()),
-                              std::bind(&replica::handle_splitting_error,
-                                        std::placeholders::_1,
-                                        "init_child_replica coz invalid parent gpid"),
-                              get_gpid());
+    _stub->on_exec(LPC_PARTITION_SPLIT,
+                   _split_states.parent_gpid,
+                   std::bind(&replica::prepare_copy_parent_state,
+                             std::placeholders::_1,
+                             _app->learn_dir(),
+                             get_gpid(),
+                             get_ballot()),
+                   LPC_PARTITION_SPLIT_ERROR,
+                   get_gpid(),
+                   std::bind(&replica::handle_splitting_error,
+                             std::placeholders::_1,
+                             "init_child_replica coz invalid parent gpid"));
 }
 
 void replica::check_child_state() // on child
@@ -141,13 +144,15 @@ void replica::check_child_state() // on child
     ddebug_f("{} child partition state checked", name());
 
     // parent check its state
-    _stub->split_replica_exec(
+    _stub->on_exec(
+        LPC_PARTITION_SPLIT,
         _split_states.parent_gpid,
         std::bind(&replica::check_parent_state, std::placeholders::_1, get_gpid(), get_ballot()),
+        LPC_PARTITION_SPLIT_ERROR,
+        get_gpid(),
         std::bind(&replica::handle_splitting_error,
                   std::placeholders::_1,
-                  "check_child_state coz invalid parent gpid"),
-        get_gpid());
+                  "check_child_state coz invalid parent gpid"));
 
     // restart check_state_task
     // TODO(hyc): consider heartbeat interval
@@ -176,10 +181,11 @@ void replica::check_parent_state(gpid child_gpid, ballot child_ballot) // on par
                 _child_gpid.get_partition_index(),
                 get_ballot());
 
-        _stub->split_replica_error_handler(child_gpid,
-                                           std::bind(&replica::handle_splitting_error,
-                                                     std::placeholders::_1,
-                                                     "check_parent_state coz wrong parent state"));
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
+                       child_gpid,
+                       std::bind(&replica::handle_splitting_error,
+                                 std::placeholders::_1,
+                                 "check_parent_state coz wrong parent state"));
 
         _child_gpid.set_app_id(0);
     } else {
@@ -256,17 +262,19 @@ void replica::prepare_copy_parent_state(const std::string &dir,
     }
 
     // TODO(hyc): add missing_handler, parent replica delete plist object
-    _stub->split_replica_exec(_child_gpid,
-                              std::bind(&replica::copy_parent_state,
-                                        std::placeholders::_1,
-                                        ec,
-                                        copy_parent_state,
-                                        mutation_list,
-                                        files,
-                                        total_file_size,
-                                        plist),
-                              [plist](replica *r) { delete plist; },
-                              get_gpid());
+    _stub->on_exec(LPC_PARTITION_SPLIT,
+                   _child_gpid,
+                   std::bind(&replica::copy_parent_state,
+                             std::placeholders::_1,
+                             ec,
+                             copy_parent_state,
+                             mutation_list,
+                             files,
+                             total_file_size,
+                             plist),
+                   LPC_PARTITION_SPLIT_ERROR,
+                   get_gpid(),
+                   [plist](replica *r) { delete plist; });
 }
 
 void replica::copy_parent_state(error_code ec,
@@ -292,16 +300,18 @@ void replica::copy_parent_state(error_code ec,
                 ec.to_string(),
                 full_path);
         // TODO(heyuchen): add tasks to delay 1 seconds
-        _stub->split_replica_exec(_split_states.parent_gpid,
-                                  std::bind(&replica::prepare_copy_parent_state,
-                                            std::placeholders::_1,
-                                            _app->learn_dir(),
-                                            get_gpid(),
-                                            get_ballot()),
-                                  std::bind(&replica::handle_splitting_error,
-                                            std::placeholders::_1,
-                                            "check_parent_state coz invalid parent gpid"),
-                                  get_gpid());
+        _stub->on_exec(LPC_PARTITION_SPLIT,
+                       _split_states.parent_gpid,
+                       std::bind(&replica::prepare_copy_parent_state,
+                                 std::placeholders::_1,
+                                 _app->learn_dir(),
+                                 get_gpid(),
+                                 get_ballot()),
+                       LPC_PARTITION_SPLIT_ERROR,
+                       get_gpid(),
+                       std::bind(&replica::handle_splitting_error,
+                                 std::placeholders::_1,
+                                 "check_parent_state coz invalid parent gpid"));
         return;
     }
 
@@ -419,8 +429,9 @@ void replica::apply_parent_state(error_code ec,
 
     _split_states.async_learn_task = nullptr;
     if (error != ERR_OK) {
-        _stub->split_replica_error_handler(_split_states.parent_gpid,
-                                           [](replica *r) { r->_child_gpid.set_app_id(0); });
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [](replica *r) {
+            r->_child_gpid.set_app_id(0);
+        });
         handle_splitting_error("apply_parent_state coz sync checkpoint failed");
     } else {
         error = _app->update_init_info_ballot_and_decree(this);
@@ -650,8 +661,9 @@ void replica::notify_primary_split_catch_up() // on child
         } else if (ec != ERR_OK || response->err != ERR_OK) {
             error_code err = (ec == ERR_OK) ? response->err : ec;
             derror_f("{} failed to notify primary catch up, error is {}", name(), err.to_string());
-            _stub->split_replica_error_handler(_split_states.parent_gpid,
-                                               [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+            _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
+                r->_child_gpid.set_app_id(0);
+            });
             handle_splitting_error("notify_primary_split_catch_up");
         } else {
             ddebug_f("{} succeed to notify primary catch up", name());
@@ -786,11 +798,11 @@ void replica::update_group_partition_count(int new_partition_count,
                 _child_gpid.get_partition_index(),
                 _child_init_ballot,
                 get_ballot());
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica::handle_splitting_error,
-                      std::placeholders::_1,
-                      "update_group_partition_count coz out-dated request"));
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
+                       _child_gpid,
+                       std::bind(&replica::handle_splitting_error,
+                                 std::placeholders::_1,
+                                 "update_group_partition_count coz out-dated request"));
         _child_gpid.set_app_id(0);
         return;
     }
@@ -858,8 +870,9 @@ void replica::on_update_group_partition_count(
                 request.config.ballot,
                 get_ballot());
 
-        _stub->split_replica_error_handler(_split_states.parent_gpid,
-                                           [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
+            r->_child_gpid.set_app_id(0);
+        });
         handle_splitting_error("on_update_group_partition_count coz out-dated ballot");
 
         response.err = ERR_VERSION_OUTDATED;
@@ -980,10 +993,11 @@ void replica::on_update_group_partition_count_reply(
             dwarn_f("{} failed to execute on_update_group_partition_count_reply, error is {}",
                     name(),
                     error.to_string());
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::handle_splitting_error,
-                                                         std::placeholders::_1,
-                                                         "on_update_group_partition_count_reply"));
+            _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
+                           _child_gpid,
+                           std::bind(&replica::handle_splitting_error,
+                                     std::placeholders::_1,
+                                     "on_update_group_partition_count_reply"));
             _child_gpid.set_app_id(0);
             return;
         }
@@ -1120,11 +1134,11 @@ void replica::on_register_child_on_meta_reply(
                 name(),
                 request->child_config.pid.get_app_id(),
                 request->child_config.pid.get_partition_index());
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica::handle_splitting_error,
-                      std::placeholders::_1,
-                      "register child failed coz split paused or canceled"));
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
+                       _child_gpid,
+                       std::bind(&replica::handle_splitting_error,
+                                 std::placeholders::_1,
+                                 "register child failed coz split paused or canceled"));
         _child_gpid.set_app_id(0);
         return;
     }
@@ -1221,10 +1235,11 @@ void replica::on_register_child_on_meta_reply(
                 _app_info.partition_count,
                 response->app.partition_count);
         // make child replica become available
-        _stub->split_replica_error_handler(response->child_config.pid,
-                                           std::bind(&replica::child_partition_active,
-                                                     std::placeholders::_1,
-                                                     response->child_config));
+        _stub->on_exec(LPC_PARTITION_SPLIT,
+                       response->child_config.pid,
+                       std::bind(&replica::child_partition_active,
+                                 std::placeholders::_1,
+                                 response->child_config));
         update_group_partition_count(response->app.partition_count, false);
     }
 
@@ -1259,7 +1274,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                 mu->data.header.ballot,
                 mu->name());
 
-        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [mu](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });
@@ -1286,7 +1301,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                 get_ballot(),
                 mu->data.header.ballot,
                 mu->name());
-        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
+        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [mu](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });

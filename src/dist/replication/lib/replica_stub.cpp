@@ -2389,8 +2389,9 @@ void replica_stub::create_child_replica(rpc_address primary_address,
                          child_gpid.thread_hash());
     } else {
         dwarn_f("failed to create child replica ({}), ignore it and wait next run", child_gpid);
-        split_replica_error_handler(parent_gpid,
-                                    [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+        on_exec(LPC_PARTITION_SPLIT_ERROR, parent_gpid, [](replica_ptr r) {
+            r->_child_gpid.set_app_id(0);
+        });
     }
 }
 
@@ -2432,38 +2433,80 @@ replica_ptr replica_stub::create_child_replica_if_not_found(gpid child_pid,
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica_stub::split_replica_exec(gpid pid,
-                                      local_execution handler,
-                                      local_execution error_handler,
-                                      gpid error_handler_gpid)
+// void replica_stub::split_replica_exec(gpid pid,
+//                                      local_execution handler,
+//                                      local_execution error_handler,
+//                                      gpid error_handler_gpid)
+//{
+//    // app_id = 0 means child replica is invalid
+//    replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
+//    replica_ptr error_handler_replica =
+//        error_handler_gpid.get_app_id() == 0 ? nullptr : get_replica(error_handler_gpid);
+
+//    if (replica && handler) {
+//        handler(replica);
+//    } else if (error_handler_replica && error_handler) {
+//        ddebug_f("replica({}) is invalid, replica({}) will execute its handler)",
+//                 pid,
+//                 error_handler_gpid);
+//        error_handler(error_handler_replica);
+//    } else {
+//        dwarn_f(
+//            "both replica({}) and error handler replica({}) are invalid", pid,
+//            error_handler_gpid);
+//    }
+//}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+// void replica_stub::split_replica_error_handler(gpid pid, local_execution handler)
+//{
+//    // app_id = 0 means child replica is invalid
+//    replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
+//    if (replica && handler) {
+//        handler(replica);
+//    } else {
+//        dwarn_f("replica({}) is invalid", pid);
+//    }
+//}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_stub::on_exec(dsn::task_code code, gpid pid, local_execution handler)
 {
     // app_id = 0 means child replica is invalid
     replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
-    replica_ptr error_handler_replica =
-        error_handler_gpid.get_app_id() == 0 ? nullptr : get_replica(error_handler_gpid);
-
     if (replica && handler) {
-        handler(replica);
-    } else if (error_handler_replica && error_handler) {
-        ddebug_f("replica({}) is invalid, replica({}) will execute its handler)",
-                 pid,
-                 error_handler_gpid);
-        error_handler(error_handler_replica);
+        tasking::enqueue(
+            code, replica.get()->tracker(), [=]() { handler(replica); }, pid.thread_hash());
     } else {
-        dwarn_f(
-            "both replica({}) and error handler replica({}) are invalid", pid, error_handler_gpid);
+        dwarn_f("replica({}) is invalid", pid);
     }
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica_stub::split_replica_error_handler(gpid pid, local_execution handler)
+void replica_stub::on_exec(dsn::task_code code,
+                           gpid pid,
+                           local_execution handler,
+                           dsn::task_code err_handler_code,
+                           gpid err_handler_pid,
+                           local_execution error_handler)
 {
     // app_id = 0 means child replica is invalid
     replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
+    replica_ptr error_handler_replica =
+        err_handler_pid.get_app_id() == 0 ? nullptr : get_replica(err_handler_pid);
+
     if (replica && handler) {
-        handler(replica);
+        tasking::enqueue(
+            code, replica.get()->tracker(), [=]() { handler(replica); }, pid.thread_hash());
+    } else if (error_handler_replica && error_handler) {
+        ddebug_f(
+            "replica({}) is invalid, replica({}) will execute its handler)", pid, err_handler_pid);
+        tasking::enqueue(err_handler_code,
+                         error_handler_replica.get()->tracker(),
+                         [=]() { error_handler(error_handler_replica); },
+                         err_handler_pid.thread_hash());
     } else {
-        dwarn_f("replica({}) is invalid", pid);
+        dwarn_f("both replica({}) and error handler replica({}) are invalid", pid, err_handler_pid);
     }
 }
 

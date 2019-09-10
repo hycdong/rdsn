@@ -778,20 +778,22 @@ void replica::copy_mutation(mutation_ptr &mu)
 
     mutation_ptr new_mu = new mutation(mu);
     // TODO(heyuchen): task code should be LPC_PARTITION_SPLIT, not LPC_PARTITION_SPLIT_ERROR
-    _stub->split_replica_error_handler(
-        _child_gpid, std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
+    _stub->on_exec(LPC_PARTITION_SPLIT,
+                   _child_gpid,
+                   std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
 }
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
     if (mu->get_sync_to_child()) {
         // LPC_PARTITION_SPLIT, rename this function
-        _stub->split_replica_error_handler(_split_states.parent_gpid,
-                                           std::bind(&replica::on_copy_mutation_reply,
-                                                     std::placeholders::_1,
-                                                     ec,
-                                                     mu->data.header.ballot,
-                                                     mu->data.header.decree));
+        _stub->on_exec(LPC_PARTITION_SPLIT,
+                       _split_states.parent_gpid,
+                       std::bind(&replica::on_copy_mutation_reply,
+                                 std::placeholders::_1,
+                                 ec,
+                                 mu->data.header.ballot,
+                                 mu->data.header.decree));
     } else {
         derror_f("{} failed to ack parent, mutation is {}, sync_to_child is {}",
                  name(),

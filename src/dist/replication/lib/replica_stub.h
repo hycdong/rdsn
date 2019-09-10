@@ -191,15 +191,26 @@ public:
     // valid(<pid>.app_id>0) and existed, otherwise parent will execute <error_handler>
     // - case2. child want parent execute <handler>, parent will execute <handler> if parent
     // exist, otherwise child will execute <error_handler>
-    void split_replica_exec(gpid pid,
-                            local_execution handler,
-                            local_execution error_handler,
-                            gpid error_handler_gpid);
+    //    void split_replica_exec(gpid pid,
+    //                            local_execution handler,
+    //                            local_execution error_handler,
+    //                            gpid error_handler_gpid);
 
     // This function is used for partition split error handler, caller(replica)
     // if partition split meet error, parent/child may want child/parent execute error handler
     // if replica <pid> valid and exist, execute <handler>, otherwise return
-    void split_replica_error_handler(gpid pid, local_execution handler);
+    // void split_replica_error_handler(gpid pid, local_execution handler);
+
+    // TODO(heyuchen): consider split_replica_exec / split_replica_error_handler
+    // can not gurantee run one thread, change it
+    void on_exec(dsn::task_code code, gpid pid, local_execution handler);
+
+    void on_exec(dsn::task_code code,
+                 gpid pid,
+                 local_execution handler,
+                 dsn::task_code err_handler_code,
+                 gpid err_handler_pid,
+                 local_execution error_handler);
 
 private:
     enum replica_node_state
