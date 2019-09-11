@@ -3,6 +3,7 @@
 // can be found in the LICENSE file in the root directory of this source tree.
 
 #include <dsn/dist/fmt_logging.h>
+#include <dsn/utility/fail_point.h>
 
 #include "meta_bulk_load_service.h"
 
@@ -83,6 +84,9 @@ dsn::error_code bulk_load_service::request_params_check(const std::string &app_n
                                                         uint32_t app_id,
                                                         uint32_t partition_count)
 {
+    FAIL_POINT_INJECT_F("meta_bulk_load_request_params_check",
+                        [](dsn::string_view) -> dsn::error_code { return dsn::ERR_OK; });
+
     // check file provider
     dsn::dist::block_service::block_filesystem *blk_fs =
         _meta_svc->get_block_service_manager().get_block_filesystem(file_provider);

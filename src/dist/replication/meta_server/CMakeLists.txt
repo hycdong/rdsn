@@ -32,6 +32,8 @@ set(MY_PROJ_LIB_PATH
     ${POCO_LIB_DIR}
 )
 
+set(MY_BOOST_PACKAGES regex)
+
 # Extra files that will be installed
 set(MY_BINPLACES "")
 

@@ -25,6 +25,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <dsn/utility/fail_point.h>
 
 #include "dist/replication/meta_server/meta_server_failure_detector.h"
 #include "dist/replication/meta_server/meta_service.h"
@@ -265,9 +266,15 @@ public:
     {
         meta_bulk_load_service_test::SetUp();
         create_app(NAME);
+        fail::setup();
+        fail::cfg("meta_bulk_load_request_params_check", "return()");
     }
 
-    void TearDown() { meta_bulk_load_service_test::TearDown(); }
+    void TearDown()
+    {
+        fail::teardown();
+        meta_bulk_load_service_test::TearDown();
+    }
 };
 
 TEST_F(bulk_load_start_test, wrong_app)
@@ -276,13 +283,7 @@ TEST_F(bulk_load_start_test, wrong_app)
     ASSERT_EQ(resp.err, ERR_APP_NOT_EXIST);
 }
 
-TEST_F(bulk_load_start_test, wrong_provider)
-{
-    auto resp = start_bulk_load(NAME, CLUSTER, "provider_not_exist");
-    ASSERT_EQ(resp.err, ERR_INVALID_PARAMETERS);
-}
-
-// TODO(heyuchen): validate cluster_name and partition_count
+// TODO(heyuchen): add ut for request_params_check
 
 TEST_F(bulk_load_start_test, success)
 {
@@ -399,6 +400,8 @@ public:
         meta_bulk_load_service_test::SetUp();
         create_app(NAME);
         mock_funcs["partition_bulk_load"] = &partition_bulk_load_mock;
+        fail::setup();
+        fail::cfg("meta_bulk_load_request_params_check", "return()");
         auto resp = start_bulk_load(NAME, CLUSTER, PROVIDER);
         ASSERT_EQ(resp.err, ERR_OK);
         std::shared_ptr<app_state> app = find_app(NAME);
@@ -410,6 +413,7 @@ public:
     void TearDown()
     {
         mock_funcs.erase("partition_bulk_load");
+        fail::teardown();
         meta_bulk_load_service_test::TearDown();
     }
 

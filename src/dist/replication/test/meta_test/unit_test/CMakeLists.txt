@@ -30,7 +30,7 @@ set(MY_PROJ_LIBS dsn.replication.zookeeper_provider
 
 set(MY_PROJ_LIB_PATH "")
 
-set(MY_BOOST_PACKAGES system filesystem)
+set(MY_BOOST_PACKAGES system filesystem regex)
 
 # Extra files that will be installed
 set(MY_BINPLACES clear.sh run.sh config-ddl-test.ini config-test.ini suite1 suite2)
