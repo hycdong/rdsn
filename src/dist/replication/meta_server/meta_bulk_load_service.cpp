@@ -237,6 +237,8 @@ void bulk_load_service::create_partition_bulk_load_dir_with_rpc(const std::strin
 
 void bulk_load_service::partition_bulk_load(gpid pid)
 {
+    FAIL_POINT_INJECT_F("meta_bulk_load_partition_bulk_load", [](dsn::string_view) {});
+
     dsn::rpc_address primary_addr;
     std::string app_name;
     {

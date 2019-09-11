@@ -31,10 +31,6 @@
 
 using namespace ::dsn::replication;
 
-// function name -> mock function
-// when mock_funcs[$function_name] exist, using mock function, otherwise original function
-static std::map<std::string, void *> mock_funcs;
-
 #define NAME "bulk_load_table"
 #define PARTITION_COUNT 8
 #define CLUSTER "cluster"
@@ -47,20 +43,4 @@ public:
         : bulk_load_service(meta_svc, bulk_load_dir)
     {
     }
-
-    void partition_bulk_load(dsn::gpid pid);
 };
-
-void bulk_load_service_mock::partition_bulk_load(dsn::gpid pid)
-{
-    auto iter = mock_funcs.find("partition_bulk_load");
-
-    if (iter != mock_funcs.end()) {
-        if (iter->second != nullptr) {
-            auto call = (std::function<void(dsn::gpid)> *)iter->second;
-            (*call)(pid);
-        }
-    } else {
-        bulk_load_service::partition_bulk_load(pid);
-    }
-}

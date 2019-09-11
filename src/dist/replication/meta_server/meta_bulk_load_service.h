@@ -55,7 +55,7 @@ public:
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
 
     // meta sent bulk_load_request to each partition's primary
-    virtual void partition_bulk_load(gpid pid);
+    void partition_bulk_load(gpid pid);
 
     void on_partition_bulk_load_reply(dsn::error_code err,
                                       bulk_load_response &&response,

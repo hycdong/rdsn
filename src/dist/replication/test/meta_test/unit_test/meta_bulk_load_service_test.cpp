@@ -246,10 +246,6 @@ public:
     std::shared_ptr<server_state> _state;
     std::unique_ptr<meta_service> _meta_svc;
     std::string _app_root;
-    std::function<void(dsn::gpid)> partition_bulk_load_mock = [](gpid pid) {
-        std::cout << "send bulk load request to gpid(" << pid.get_app_id() << ","
-                  << pid.get_partition_index() << ")" << std::endl;
-    };
 
     bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
     {
@@ -287,14 +283,12 @@ TEST_F(bulk_load_start_test, wrong_app)
 
 TEST_F(bulk_load_start_test, success)
 {
-    mock_funcs["partition_bulk_load"] = &partition_bulk_load_mock;
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
 
     auto resp = start_bulk_load(NAME, CLUSTER, PROVIDER);
     ASSERT_EQ(resp.err, ERR_OK);
     std::shared_ptr<app_state> app = find_app(NAME);
     ASSERT_EQ(app->is_bulk_loading, true);
-
-    mock_funcs.erase("partition_bulk_load");
 }
 
 class bulk_load_query_test : public meta_bulk_load_service_test
@@ -341,11 +335,15 @@ class bulk_load_sync_apps_test : public meta_bulk_load_service_test
 public:
     bulk_load_sync_apps_test() {}
 
-    void SetUp() {}
+    void SetUp()
+    {
+        fail::setup();
+        fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+    }
 
     void TearDown()
     {
-        mock_funcs.erase("partition_bulk_load");
+        fail::teardown();
         meta_bulk_load_service_test::TearDown();
     }
 };
@@ -353,9 +351,6 @@ public:
 TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
 {
     meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, true);
-    mock_funcs["partition_bulk_load"] = &partition_bulk_load_mock;
-    // mock_app_half_bulk_load_downloading(true);
-
     bulk_svc()->create_bulk_load_dir_on_remote_stroage();
     wait_all();
 }
@@ -363,9 +358,6 @@ TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
 TEST_F(bulk_load_sync_apps_test, partition_bulk_load_half_exist)
 {
     meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, false);
-    mock_funcs["partition_bulk_load"] = &partition_bulk_load_mock;
-    // mock_app_half_bulk_load_downloading(false);
-
     bulk_svc()->create_bulk_load_dir_on_remote_stroage();
     wait_all();
 }
@@ -399,9 +391,11 @@ public:
     {
         meta_bulk_load_service_test::SetUp();
         create_app(NAME);
-        mock_funcs["partition_bulk_load"] = &partition_bulk_load_mock;
+
         fail::setup();
         fail::cfg("meta_bulk_load_request_params_check", "return()");
+        fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
         auto resp = start_bulk_load(NAME, CLUSTER, PROVIDER);
         ASSERT_EQ(resp.err, ERR_OK);
         std::shared_ptr<app_state> app = find_app(NAME);
@@ -412,7 +406,6 @@ public:
 
     void TearDown()
     {
-        mock_funcs.erase("partition_bulk_load");
         fail::teardown();
         meta_bulk_load_service_test::TearDown();
     }
