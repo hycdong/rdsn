@@ -18,7 +18,7 @@
 //    request.child_gpid = child_gpid;
 //    request.config.ballot = BALLOT;
 //    ASSERT_EQ(nullptr, stub->get_replica(child_gpid, false));
-//    mock_funcs["init_child_replica"] = nullptr;
+//    mock_funcs["child_init_replica"] = nullptr;
 
 //    std::cout << "case1. failed - ballot not match" << std::endl;
 //    {
@@ -62,10 +62,10 @@
 //        ASSERT_EQ(partition_count, child->get_app_info()->partition_count);
 //    }
 
-//    mock_funcs.erase("init_child_replica");
+//    mock_funcs.erase("child_init_replica");
 //}
 
-// void replication_service_test_app::init_child_replica_test()
+// void replication_service_test_app::child_init_replica_test()
 //{
 //    auto stub = new replica_stub_mock();
 //    auto parent_replica = stub->generate_replica(parent_gpid, partition_status::PS_PRIMARY);
@@ -80,7 +80,7 @@
 //        parent_replica->_child_gpid = child_gpid;
 //        child_replica->_config.status = partition_status::PS_SECONDARY;
 
-//        child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
+//        child_replica->child_init_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
 //        child_replica->tracker()->wait_outstanding_tasks();
 //        parent_replica->tracker()->wait_outstanding_tasks();
 //        ASSERT_EQ(0, parent_replica->_child_gpid.get_app_id());
@@ -116,7 +116,7 @@
 
 //    std::cout << "case1. failed - invalid child state" << std::endl;
 //    {
-//        child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
+//        child_replica->child_init_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
 //        child_replica->_config.status = partition_status::PS_INACTIVE;
 //        child_replica->tracker()->wait_outstanding_tasks();
 //        parent_replica->tracker()->wait_outstanding_tasks();
@@ -125,7 +125,7 @@
 
 //    std::cout << "case2. failed - invalid ballot" << std::endl;
 //    {
-//        child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT + 1);
+//        child_replica->child_init_replica(parent_gpid, ::dsn::rpc_address(), BALLOT + 1);
 //        child_replica->tracker()->wait_outstanding_tasks();
 //        parent_replica->tracker()->wait_outstanding_tasks();
 
@@ -137,7 +137,7 @@
 //    std::cout << "case3. failed - invalid child gpid" << std::endl;
 //    {
 //        child_replica->_config.status = partition_status::PS_INACTIVE;
-//        child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
+//        child_replica->child_init_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
 //        parent_replica->_child_gpid = parent_gpid;
 //        child_replica->tracker()->wait_outstanding_tasks();
 //        parent_replica->tracker()->wait_outstanding_tasks();
@@ -150,7 +150,7 @@
 //    std::cout << "case4. failed - invalid parent state" << std::endl;
 //    {
 //        child_replica->_config.status = partition_status::PS_INACTIVE;
-//        child_replica->init_child_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
+//        child_replica->child_init_replica(parent_gpid, ::dsn::rpc_address(), BALLOT);
 //        parent_replica->_config.status = partition_status::PS_POTENTIAL_SECONDARY;
 //        child_replica->tracker()->wait_outstanding_tasks();
 //        parent_replica->tracker()->wait_outstanding_tasks();

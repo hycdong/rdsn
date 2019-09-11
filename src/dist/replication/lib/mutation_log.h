@@ -42,9 +42,6 @@
 #include <dsn/perf_counter/perf_counter_wrapper.h>
 #include <dsn/dist/replication/replica_base.h>
 
-class log_file_mock;
-class mutation_log_private_mock;
-
 namespace dsn {
 namespace replication {
 
@@ -154,22 +151,13 @@ public:
         return false;
     }
 
-    // get mutation in memory, including pending and writing mutations
-    // return true if mutations is not empty, otherwise return false
-    virtual bool get_mutation_in_memory(decree start_decree,
-                                        ballot current_ballot,
-                                        std::vector<mutation_ptr> &mutations_list) const
+    // only for private log
+    // get in-memory mutations, including pending and writing mutations
+    virtual void get_in_memory_mutations(decree start_decree,
+                                         ballot current_ballot,
+                                         /*out*/ std::vector<mutation_ptr> &mutations_list) const
     {
-        return false;
     }
-
-    // only valid for private log, get mutations in memory and private log files
-    virtual void get_mutation_log_file(gpid pid,
-                                       decree start_decree,
-                                       ballot start_ballot,
-                                       std::vector<mutation_ptr> &mutation_list,
-                                       std::vector<std::string> &files,
-                                       uint64_t &total_file_size);
 
     // flush the pending buffer until all data is on disk
     // thread safe
@@ -277,6 +265,16 @@ public:
     //
     bool get_learn_state(gpid gpid, decree start, /*out*/ learn_state &state) const;
 
+    // only valid for private log
+    // get parent mutations in memory and private log files during partition split
+    // total_file_size is used for split perf-counter
+    void get_parent_mutations_and_logs(gpid pid,
+                                       decree start_decree,
+                                       ballot start_ballot,
+                                       /*out*/ std::vector<mutation_ptr> &mutation_list,
+                                       /*out*/ std::vector<std::string> &files,
+                                       /*out*/ uint64_t &total_file_size) const;
+
     //
     //  other inquiry routines
     //
@@ -300,6 +298,9 @@ public:
     // maximum decree that is garbage collected
     // thread safe
     decree max_gced_decree(gpid gpid, int64_t valid_start_offset) const;
+
+    // thread-safe
+    std::map<int, log_file_ptr> get_log_file_map() const;
 
     // check the consistence of valid_start_offset
     // thread safe
@@ -372,6 +373,8 @@ protected:
 
 private:
     friend class mutation_log_test;
+    friend class mock_mutation_log_private;
+    friend class mock_mutation_log_shared;
 
     ///////////////////////////////////////////////
     //// memory states
@@ -402,8 +405,6 @@ private:
         _private_max_commit_on_disk; // the max last_committed_decree of written mutations up to now
                                      // used for limiting garbage collection of shared log, because
                                      // the ending of private log should be covered by shared log
-
-    friend class ::mutation_log_private_mock;
 };
 typedef dsn::ref_ptr<mutation_log> mutation_log_ptr;
 
@@ -498,9 +499,11 @@ public:
     virtual bool get_learn_state_in_memory(decree start_decree,
                                            binary_writer &writer) const override;
 
-    virtual bool get_mutation_in_memory(decree start_decree,
-                                        ballot start_ballot,
-                                        std::vector<mutation_ptr> &mutation_list) const override;
+    // get in-memory mutations, including pending and writing mutations
+    virtual void
+    get_in_memory_mutations(decree start_decree,
+                            ballot start_ballot,
+                            /*out*/ std::vector<mutation_ptr> &mutation_list) const override;
 
     virtual void flush() override;
     virtual void flush_once() override;
@@ -659,6 +662,8 @@ private:
     log_file(const char *path, disk_file *handle, int index, int64_t start_offset, bool is_read);
 
 private:
+    friend class mock_log_file;
+
     uint32_t _crc32;
     int64_t _start_offset; // start offset in the global space
     std::atomic<int64_t>
@@ -676,8 +681,6 @@ private:
     // for read, the value is read from file header.
     // for write, the value is set by write_file_header().
     replica_log_info_map _previous_log_max_decrees;
-
-    friend class ::log_file_mock;
 };
 } // namespace replication
 } // namespace dsn

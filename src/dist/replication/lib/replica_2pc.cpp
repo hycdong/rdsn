@@ -158,7 +158,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     // check whether mutation should send to its child replica
     if (_primary_states.is_sync_to_child) {
         ddebug("%s: mutation %s should sync to child", name(), mu->name());
-        mu->set_sync_to_child(true);
+        mu->set_is_sync_to_child(true);
     }
 
     // check bounded staleness
@@ -324,7 +324,7 @@ void replica::on_prepare(dsn::message_ex *request)
         rpc_read_stream reader(request);
         unmarshall(reader, rconfig, DSF_THRIFT_BINARY);
         mu = mutation::read_from(reader, request);
-        mu->set_sync_to_child(rconfig.split_sync_to_child);
+        mu->set_is_sync_to_child(rconfig.split_sync_to_child);
         // set split_sync_to_child to false immediately
         rconfig.split_sync_to_child = false;
     }
@@ -771,12 +771,12 @@ void replica::copy_mutation(mutation_ptr &mu)
     dassert(_child_gpid.get_app_id() > 0, "%s child_gpid is invalid", name());
 
     task_code code = LPC_PARTITION_SPLIT;
-    if (!mu->is_split() && mu->get_sync_to_child()) {
+    if (!mu->is_split() && mu->is_sync_to_child()) {
         code = LPC_PARTITION_SPLIT;
         mu->set_is_split();
     }
 
-    mutation_ptr new_mu = new mutation(mu);
+    mutation_ptr new_mu = mutation::copy_no_reply(mu);
     // TODO(heyuchen): task code should be LPC_PARTITION_SPLIT, not LPC_PARTITION_SPLIT_ERROR
     _stub->on_exec(LPC_PARTITION_SPLIT,
                    _child_gpid,
@@ -785,7 +785,7 @@ void replica::copy_mutation(mutation_ptr &mu)
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
-    if (mu->get_sync_to_child()) {
+    if (mu->is_sync_to_child()) {
         // LPC_PARTITION_SPLIT, rename this function
         _stub->on_exec(LPC_PARTITION_SPLIT,
                        _split_states.parent_gpid,
@@ -798,7 +798,7 @@ void replica::ack_parent(error_code ec, mutation_ptr &mu)
         derror_f("{} failed to ack parent, mutation is {}, sync_to_child is {}",
                  name(),
                  mu->name(),
-                 mu->get_sync_to_child());
+                 mu->is_sync_to_child());
     }
 }
 

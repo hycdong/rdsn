@@ -30,7 +30,7 @@ TEST(cold_backup_context, write_current_chkpt_file) { app->write_current_chkpt_f
 
 // TEST(split, on_add_child) { app->on_add_child_test(); }
 
-// TEST(split, init_child_replica) { app->init_child_replica_test(); }
+// TEST(split, child_init_replica) { app->child_init_replica_test(); }
 
 // TEST(split, check_child_state) { app->check_child_state_test(); }
 

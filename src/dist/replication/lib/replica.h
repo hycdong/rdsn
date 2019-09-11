@@ -56,8 +56,6 @@
 #include "replica_context.h"
 #include "throttling_controller.h"
 
-class replica_split_mock;
-class replica_stub_mock;
 class replication_service_test_app;
 
 namespace dsn {
@@ -91,7 +89,7 @@ public:
     void reset_prepare_list_after_replay();
 
     // return false when update fails or replica is going to be closed
-    virtual bool update_local_configuration_with_no_ballot_change(partition_status::type status);
+    bool update_local_configuration_with_no_ballot_change(partition_status::type status);
     void set_inactive_state_transient(bool t);
     void check_state_completeness();
     // error_code check_and_fix_private_log_completeness();
@@ -317,22 +315,22 @@ private:
     //
     // TODO(heyuchen): remove virtual
     // parent partition create child
-    virtual void on_add_child(const group_check_request &request);
+    void on_add_child(const group_check_request &request);
 
     // child replica initialize config and state info
-    virtual void
-    init_child_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
+    void child_init_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
 
-    // parent replica prepare states to be copied
-    virtual void
-    prepare_copy_parent_state(const std::string &dir, gpid child_gpid, ballot child_ballot);
-    // child replica copy parent state(prepare list)
-    virtual void copy_parent_state(error_code ec,
-                                   learn_state lstate,
-                                   std::vector<mutation_ptr> mutation_list,
-                                   std::vector<std::string> files,
-                                   uint64_t total_file_size,
-                                   prepare_list *plist);
+    void parent_prepare_states(const std::string &dir);
+
+    // return true if parent status is valid
+    bool parent_check_states();
+
+    void child_copy_states(learn_state lstate,
+                           std::vector<mutation_ptr> mutation_list,
+                           std::vector<std::string> files,
+                           uint64_t total_file_size,
+                           std::shared_ptr<prepare_list> plist);
+
     // child replica async learn parent states(data, private log, mutations in memory)
     virtual void apply_parent_state(error_code ec,
                                     learn_state lstate,
@@ -393,7 +391,7 @@ private:
 
     // child and parent heartbeart to check states
     virtual void check_child_state();
-    virtual void check_parent_state(gpid child_gpid, ballot child_ballot);
+    //    virtual void check_parent_state(gpid child_gpid, ballot child_ballot);
 
     // parent copy mutations to child during partition split
     void copy_mutation(mutation_ptr &mu);
@@ -411,11 +409,10 @@ private:
     // child partitions have been registered on meta, could be active
     void child_partition_active(const partition_configuration &config);
 
-    // handle child partitions error
-    void handle_splitting_error(std::string err_msg);
-
     // parent reset child information when partition split failed
-    void clean_up_parent_split_context();
+    void parent_cleanup_split_context();
+    // child suicide when partition split failed
+    void child_handle_split_error(const std::string &error_msg);
 
 private:
     friend class ::dsn::replication::replication_checker;
@@ -424,8 +421,6 @@ private:
     friend class ::dsn::replication::replica_stub;
     friend class mock_replica;
     friend class ::replication_service_test_app;
-    friend class ::replica_split_mock;
-    friend class ::replica_stub_mock;
     friend class replica_split_test;
 
     // replica configuration, updated by update_local_configuration ONLY
@@ -500,10 +495,10 @@ private:
 
     // partition split
     // _child_gpid = gpid({app_id},{pidx}+{old_partition_count}) for parent partition
-    // _child_gpid.app_id = 0 for parent partition not during partition split and child partition
+    // _child_gpid.app_id = 0 for parent partition not in partition split and child partition
     dsn::gpid _child_gpid{0, 0};
     // ballot when starting partition split because split will stop if ballot changed
-    // _child_init_ballot = 0 if partition not during partition split
+    // _child_init_ballot = 0 if partition not in partition split
     ballot _child_init_ballot{0};
     // _partition_version = partition_count-1, _partition_version = -1 when reject read/write
     std::atomic<int> _partition_version;

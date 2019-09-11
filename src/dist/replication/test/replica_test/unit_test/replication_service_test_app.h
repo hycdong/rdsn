@@ -26,7 +26,7 @@ public:
 
     // test for replica_split
     //    void on_add_child_test();
-    //    void init_child_replica_test();
+    //    void child_init_replica_test();
     //    void check_child_state_test();
     //    void prepare_copy_parent_state_test();
     //    void copy_parent_state_test();

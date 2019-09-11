@@ -172,7 +172,7 @@ message_ex *message_ex::create_receive_message_with_standalone_header(const blob
     return msg;
 }
 
-message_ex *message_ex::create_receive_message_with_fresh_header(const message_ex &old_msg)
+message_ex *message_ex::copy_message_no_reply(const message_ex &old_msg)
 {
     message_ex *msg = new message_ex();
     std::shared_ptr<char> header_holder(
@@ -183,19 +183,15 @@ message_ex *message_ex::create_receive_message_with_fresh_header(const message_e
     msg->buffers.emplace_back(blob(std::move(header_holder), sizeof(message_header)));
 
     if (old_msg.buffers.size() == 1) {
-        dassert(old_msg.buffers[0].buffer_ptr(), "raw pointer is not allowed here");
+        // if old_msg only has header, consider its header as data
         msg->buffers.emplace_back(old_msg.buffers[0]);
-    } else if (old_msg.buffers.size() == 2) {
-        dassert(old_msg.buffers[1].buffer_ptr(), "raw pointer is not allowed here");
-        msg->buffers.emplace_back(old_msg.buffers[1]);
     } else {
-        dassert(false, "invalid buffer size %d", msg->buffers.size());
+        msg->buffers.emplace_back(old_msg.buffers[1]);
     }
 
     msg->header->body_length = msg->buffers[1].length();
     msg->_is_read = true;
     msg->_rw_index = 1;
-
     msg->local_rpc_code = old_msg.local_rpc_code;
     msg->header->context.u.serialize_format = old_msg.header->context.u.serialize_format;
     msg->add_ref();

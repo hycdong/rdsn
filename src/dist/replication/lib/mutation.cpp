@@ -52,26 +52,27 @@ mutation::mutation()
     _appro_data_bytes = sizeof(mutation_header);
     _create_ts_ns = dsn_now_ns();
     _tid = ++s_tid;
-    _sync_to_child = false;
+    _is_sync_to_child = false;
 }
 
-mutation::mutation(const mutation_ptr &old_mu)
+mutation_ptr mutation::copy_no_reply(const mutation_ptr &old_mu)
 {
-    strcpy(_name, old_mu->_name);
-    _appro_data_bytes = old_mu->_appro_data_bytes;
-    data = old_mu->data;
-    _private0 = old_mu->_private0;
-    client_requests = old_mu->client_requests;
-    dassert(data.updates.size() == client_requests.size(), "lack of requests");
-    _sync_to_child = old_mu->get_sync_to_child();
-
-    // replace msg with fresh header, so that it won't send reply to client
-    for (int i = 0; i < client_requests.size(); ++i) {
-        if (client_requests[i] != nullptr) {
-            client_requests[i] = message_ex::create_receive_message_with_fresh_header(
-                *(message_ex *)client_requests[i]);
+    mutation_ptr mu(new mutation());
+    mu->_private0 = old_mu->_private0;
+    strcpy(mu->_name, old_mu->_name);
+    mu->_appro_data_bytes = old_mu->_appro_data_bytes;
+    mu->data = old_mu->data;
+    mu->_is_sync_to_child = old_mu->is_sync_to_child();
+    // create a new message without client information, it will not rely
+    for (auto req : old_mu->client_requests) {
+        if (req != nullptr) {
+            dsn::message_ex *new_req = message_ex::copy_message_no_reply(*req);
+            mu->client_requests.emplace_back(new_req);
+        } else {
+            mu->client_requests.emplace_back(req);
         }
     }
+    return mu;
 }
 
 mutation::~mutation()

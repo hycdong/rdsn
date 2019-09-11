@@ -2381,7 +2381,7 @@ void replica_stub::create_child_replica(rpc_address primary_address,
         ddebug_f("create child replica ({}) succeed", child_gpid);
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          &_tracker,
-                         std::bind(&replica::init_child_replica,
+                         std::bind(&replica::child_init_replica,
                                    child_replica,
                                    parent_gpid,
                                    primary_address,
@@ -2472,6 +2472,15 @@ replica_ptr replica_stub::create_child_replica_if_not_found(gpid child_pid,
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_stub::on_exec(dsn::task_code code, gpid pid, local_execution handler)
 {
+
+    FAIL_POINT_INJECT_F("replica_stub_on_exec3", [=](dsn::string_view) {
+        replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
+        if (replica && handler) {
+            handler(replica);
+        }
+        ddebug_f("mock replica_stub_on_exec3 succeed");
+    });
+
     // app_id = 0 means child replica is invalid
     replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
     if (replica && handler) {
@@ -2490,6 +2499,18 @@ void replica_stub::on_exec(dsn::task_code code,
                            gpid err_handler_pid,
                            local_execution error_handler)
 {
+    FAIL_POINT_INJECT_F("replica_stub_on_exec6", [=](dsn::string_view) {
+        replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
+        replica_ptr error_handler_replica =
+            err_handler_pid.get_app_id() == 0 ? nullptr : get_replica(err_handler_pid);
+        if (replica && handler) {
+            handler(replica);
+        } else if (error_handler_replica && error_handler) {
+            error_handler(error_handler_replica);
+        }
+        ddebug_f("mock replica_stub_on_exec6 succeed");
+    });
+
     // app_id = 0 means child replica is invalid
     replica_ptr replica = pid.get_app_id() == 0 ? nullptr : get_replica(pid);
     replica_ptr error_handler_replica =
