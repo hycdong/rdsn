@@ -590,6 +590,13 @@ void bulk_load_service::update_partition_bulk_load_status(const std::string &app
 {
     zauto_read_lock l(_lock);
     partition_bulk_load_info pinfo = _bulk_load_states.partitions_info[pid];
+    if (pinfo.status == status) {
+        dwarn_f("pid({}) old status:{} VS new status:{}, ignore it",
+                pid.to_string(),
+                enum_to_string(pinfo.status),
+                enum_to_string(status));
+        return;
+    }
     pinfo.status = status;
     dsn::blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
