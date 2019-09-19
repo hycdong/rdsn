@@ -1008,6 +1008,17 @@ void bulk_load_service::partition_ingestion(gpid pid)
         primary_addr = app->partitions[pid.get_partition_index()].primary;
     }
 
+    // pid primary is invalid
+    if (primary_addr.is_invalid()) {
+        dwarn_f("app {} gpid({}.{}) primary is invalid, try it later");
+        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
+                         _meta_svc->tracker(),
+                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
+                         pid.thread_hash(),
+                         std::chrono::seconds(1));
+        return;
+    }
+
     ingestion_request req;
     req.app_name = app_name;
     message_ex *msg =
@@ -1019,7 +1030,10 @@ void bulk_load_service::partition_ingestion(gpid pid)
         [this, app_name, pid](error_code err, ingestion_response &&resp) {
             on_partition_ingestion_reply(err, std::move(resp), app_name, pid);
         });
-    ddebug_f("send request to app {} partition[{}]", app_name, pid.get_partition_index());
+    ddebug_f("send request to app {} partition[{}], primary_addr={}",
+             app_name,
+             pid.get_partition_index(),
+             primary_addr.to_string());
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 
@@ -1028,6 +1042,7 @@ void bulk_load_service::on_partition_ingestion_reply(dsn::error_code err,
                                                      const std::string &app_name,
                                                      gpid pid)
 {
+    // TODO(heyuchen):consider!!!
     if (err != ERR_OK) {
         derror_f("app {} partition[{}] failed to ingestion files, error is {}",
                  app_name,
@@ -1041,6 +1056,7 @@ void bulk_load_service::on_partition_ingestion_reply(dsn::error_code err,
         return;
     }
 
+    // TODO(heyuchen):consider!!!
     if (resp.error != 0) {
         derror_f("app {} partition[{}] failed to ingestion files, error is {}",
                  app_name,
