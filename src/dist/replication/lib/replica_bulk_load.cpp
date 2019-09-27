@@ -42,7 +42,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         ddebug_f("{}: try to download sst files", name());
         _bld_progress.pid = get_gpid();
         _bulk_load_context.set_status(request.partition_bl_info.status);
-        response.err = download_sst_files(request);
+        response.err = download_sst_files(request.app_name, request.cluster_name, request.remote_provider_name);
     }
 
     if ((_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
@@ -94,10 +94,11 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
 // - ERR_FS_INTERNAL - remote fs error
 // - ERR_CORRUPTION: file not exist or damaged
 //                   verify failed, fize not match, md5 not match, meta file not exist or damaged
-dsn::error_code replica::download_sst_files(const bulk_load_request &request)
+dsn::error_code replica::download_sst_files(const std::string &app_name,
+                                            const std::string &cluster_name,
+                                            const std::string &provider_name)
 {
-    std::string remote_dir = get_bulk_load_remote_dir(
-        request.app_name, request.cluster_name, request.pid.get_partition_index());
+    std::string remote_dir = get_bulk_load_remote_dir(app_name, cluster_name, get_gpid().get_partition_index());
 
     std::string local_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
     dsn::error_code err = create_local_bulk_load_dir(local_dir);
@@ -105,7 +106,7 @@ dsn::error_code replica::download_sst_files(const bulk_load_request &request)
         derror_f("{} failed to download sst files coz create local dir failed", name());
         return err;
     }
-    return do_download_sst_files(request.remote_provider_name, remote_dir, local_dir);
+    return do_download_sst_files(provider_name, remote_dir, local_dir);
 }
 
 std::string replica::get_bulk_load_remote_dir(const std::string &app_name,
