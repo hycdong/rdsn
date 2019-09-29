@@ -64,6 +64,14 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
         return;
     }
 
+    // bulk load ingestion request requires that all secondaries should be alive
+    if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD &&
+        static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
+            _primary_states.membership.max_replica_count) {
+        response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
+        return;
+    }
+
     if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
         _options->mutation_2pc_min_replica_count) {
         response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
@@ -116,6 +124,8 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
 
     error_code err = ERR_OK;
     uint8_t count = 0;
+    int request_count = static_cast<int>(mu->client_requests.size());
+    int i = 0;
     mu->data.header.last_committed_decree = last_committed_decree();
 
     dsn_log_level_t level = LOG_LEVEL_INFORMATION;
@@ -139,6 +149,20 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     // check bounded staleness
     if (mu->data.header.decree > last_committed_decree() + _options->staleness_for_commit) {
         err = ERR_CAPACITY_EXCEEDED;
+        goto ErrOut;
+    }
+
+    // stop prepare bulk load ingestion if there are secondaries unalive
+    for (i = 0; i < request_count; ++i) {
+        const mutation_update &update = mu->data.updates[i];
+        if (update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD &&
+            static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
+                _primary_states.membership.max_replica_count) {
+            err = ERR_NOT_ENOUGH_MEMBER;
+            break;
+        }
+    }
+    if (err != ERR_OK) {
         goto ErrOut;
     }
 
