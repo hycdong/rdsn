@@ -117,7 +117,7 @@ private:
                                       gpid pid);
 
     // clear bulk load service local variety
-    void clear_app_bulk_load_context(uint32_t app_id); // private
+    void clear_app_bulk_load_context(uint32_t app_id, const std::string &app_name); // private
 
     /// remote stroage functions
     // update app's is_bulk_loading = true
@@ -162,7 +162,7 @@ private:
                                             bulk_load_status::type new_status); // private + zk
 
     // remove app bulk load dir on remote stroage
-    void remove_app_bulk_load_dir(uint32_t app_id); // private + zk
+    void remove_app_bulk_load_dir(uint32_t app_id, const std::string &app_name); // private + zk
 
     // update app's is_bulk_loading to {is_bulk_loading} on remote_storage
     // need_remove is only used when trying to set is_bulk_loading to false
