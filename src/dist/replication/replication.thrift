@@ -795,7 +795,6 @@ struct bulk_load_request
     6:dsn.layer2.bulk_load_status   app_bl_status; // TODO(heyuchen):rename
     // TODO(heyuchen): use bulk_load_status here
     7:partition_bulk_load_info      partition_bl_info;
-    // TODO(heyuchen): add ballot
 }
 
 struct bulk_load_response
@@ -807,6 +806,7 @@ struct bulk_load_response
     4:dsn.layer2.bulk_load_status   partition_bl_status;
     5:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
     6:optional i32 total_download_progress;
+    // TODO(heyuchen): use group clean flags
     7:optional map<dsn.rpc_address, bool> context_clean_flags;
 }
 

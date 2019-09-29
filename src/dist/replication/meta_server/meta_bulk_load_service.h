@@ -10,6 +10,7 @@
 namespace dsn {
 namespace replication {
 
+// bulk_load_info is used for remote file provider
 struct bulk_load_info
 {
     uint32_t app_id;
@@ -29,18 +30,6 @@ struct app_bulk_load_info
     bulk_load_status::type status;
     DEFINE_JSON_SERIALIZATION(
         app_id, partition_count, app_name, cluster_name, file_provider_type, status)
-};
-
-// TODO(heyuchen): initialize it and rename it
-struct bulk_load_context
-{
-    std::map<app_id, uint32_t> apps_in_progress_count;
-    std::map<gpid, dsn::task_ptr> partitions_request;
-    std::map<gpid, partition_bulk_load_info> partitions_info;
-    std::map<gpid, std::map<dsn::rpc_address, partition_download_progress>>
-        partitions_download_progress;
-    std::map<gpid, int32_t> partitions_total_download_progress;
-    std::map<app_id, bool> apps_cleaning_up;
 };
 
 class bulk_load_service
@@ -173,7 +162,7 @@ private:
 
     /// helper functions
     template <typename T>
-    void erase_map_elem_by_id(uint32_t app_id, std::map<gpid, T> &mymap);
+    void erase_map_elem_by_id(uint32_t app_id, std::unordered_map<gpid, T> &mymap);
 
     std::string get_app_bulk_load_path(uint32_t app_id) const
     {
@@ -192,7 +181,7 @@ private:
 
     bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
     {
-        auto ainfo = _bulk_load_info[app_id];
+        auto ainfo = _app_bulk_load_info[app_id];
         return ainfo.status;
     }
 
@@ -218,21 +207,25 @@ private:
     meta_service *_meta_svc;
     server_state *_state;
 
+    zrwlock_nr &app_lock() const { return _state->_lock; }
+    zrwlock_nr _lock; // bulk load states lock
+
     // bulk load root on remote stroage: {cluster_root}/bulk_load
     std::string _bulk_load_root;
 
-    // app_id -> app_bulk_load_info
-    std::map<app_id, app_bulk_load_info> _bulk_load_info;
-
-    bulk_load_context _bulk_load_states;
-
+    /// bulk load states
     std::set<uint32_t> _bulk_load_app_id;
+    std::unordered_map<app_id, bool> _apps_cleaning_up;
+    std::unordered_map<app_id, app_bulk_load_info> _app_bulk_load_info;
 
-    // TODO(heyuchen): lock difference???
-    // app lock
-    zrwlock_nr &app_lock() const { return _state->_lock; }
-    // _bulk_load_states lock
-    zrwlock_nr _lock;
+    std::unordered_map<gpid, partition_bulk_load_info> _partition_bulk_load_info;
+    std::unordered_map<app_id, uint32_t> _apps_in_progress_count;
+    // inflight partition_request
+    std::unordered_map<gpid, dsn::task_ptr> _partitions_request;
+    // partition download progress while query bulk load status
+    std::unordered_map<gpid, std::map<dsn::rpc_address, partition_download_progress>>
+        _partitions_download_progress;
+    std::unordered_map<gpid, int32_t> _partitions_total_download_progress;
 };
 
 } // namespace replication
