@@ -153,13 +153,6 @@ struct group_check_request
     4:i64                   last_committed_decree;
 }
 
-struct partition_download_progress
-{
-    1:dsn.gpid          pid;
-    2:i32               progress;
-    3:dsn.error_code    status;
-}
-
 struct group_check_response
 {
     1:dsn.gpid pid;
@@ -169,11 +162,6 @@ struct group_check_response
     5:learner_status      learner_status_ = learner_status.LearningInvalid;
     6:i64                 learner_signature;
     7:dsn.rpc_address     node;
-
-    // add filed after supporting bulk load
-    // used when secondary downloading or downloaded
-    8:optional partition_download_progress bulk_load_download_progress;
-    9:optional bool bulk_load_context_cleaned;
 }
 
 /////////////////// meta server messages ////////////////////
@@ -755,11 +743,17 @@ struct ddd_diagnose_response
 // bulk load
 // TODO(heyuchen): move bulk_load_metadata struct here
 
-
 struct partition_bulk_load_info
 {
     1:dsn.layer2.bulk_load_status  status;
     // TODO(heyuchen): add bulk_load_metadata struct here
+}
+
+struct partition_download_progress
+{
+    1:dsn.gpid          pid;
+    2:i32               progress;
+    3:dsn.error_code    status;
 }
 
 // client -> meta start bulk load, including downloading sst files and ingest them
@@ -814,6 +808,28 @@ struct bulk_load_response
     5:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
     6:optional i32 total_download_progress;
     7:optional map<dsn.rpc_address, bool> context_clean_flags;
+}
+
+struct group_bulk_load_request
+{
+    1:dsn.layer2.app_info           app;
+    2:dsn.rpc_address               target_address;
+    3:replica_configuration         config;
+    4:dsn.layer2.bulk_load_status   meta_app_bulk_load_status;
+    5:dsn.layer2.bulk_load_status   meta_partition_bulk_load_status;
+    6:optional string               provider_name;
+    7:optional string               cluster_name;
+}
+
+struct group_bulk_load_response
+{
+    1:dsn.gpid                              pid;
+    2:dsn.error_code                        err;
+    3:dsn.rpc_address                       target_address;
+    4:dsn.layer2.bulk_load_status           status;
+    // used when secondary downloading or downloaded
+    5:optional partition_download_progress  download_progress;
+    6:optional bool                         is_bulk_load_context_cleaned;
 }
 
 struct ingestion_request

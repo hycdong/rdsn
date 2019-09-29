@@ -38,6 +38,7 @@
 #include "mutation_log.h"
 #include "mutation.h"
 #include <dsn/cpp/json_helper.h>
+#include <dsn/dist/fmt_logging.h>
 #include <dsn/utility/filesystem.h>
 #include <dsn/utility/rand.h>
 #include <dsn/utility/string_conv.h>
@@ -1915,6 +1916,7 @@ void replica_stub::open_service()
     register_rpc_handler(RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
     register_rpc_handler(RPC_COLD_BACKUP, "ColdBackup", &replica_stub::on_cold_backup);
     register_rpc_handler(RPC_BULK_LOAD, "BulkLoad", &replica_stub::on_bulk_load);
+    register_rpc_handler(RPC_GROUP_BULK_LOAD, "GroupBulkLoad", &replica_stub::on_group_bulk_load);
 
     _kill_partition_command = ::dsn::command_manager::instance().register_app_command(
         {"kill_partition"},
@@ -2266,6 +2268,33 @@ void replica_stub::on_bulk_load(const bulk_load_request &request, bulk_load_resp
     } else {
         derror(
             "gpid[%d.%d] not exist", request.pid.get_app_id(), request.pid.get_partition_index());
+        response.err = ERR_OBJECT_NOT_FOUND;
+    }
+}
+
+void replica_stub::on_group_bulk_load(const group_bulk_load_request &request,
+                                      /*out*/ group_bulk_load_response &response)
+{
+    if (!is_connected()) {
+        dwarn_f("{}@{}: received group bulk load: not connected, ignore",
+                request.config.pid.to_string(),
+                _primary_address_str);
+        return;
+    }
+
+    ddebug_f("{}@{}: received group bulk load request, primary={}, ballot={}, meta app "
+             "bulk_load_status={}, meta partition bulk_load_status={}",
+             request.config.pid.to_string(),
+             _primary_address_str,
+             request.config.primary.to_string(),
+             request.config.ballot,
+             enum_to_string(request.meta_app_bulk_load_status),
+             enum_to_string(request.meta_partition_bulk_load_status));
+
+    replica_ptr rep = get_replica(request.config.pid);
+    if (rep != nullptr) {
+        rep->on_group_bulk_load(request, response);
+    } else {
         response.err = ERR_OBJECT_NOT_FOUND;
     }
 }

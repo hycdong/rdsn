@@ -189,8 +189,6 @@ class learn_notify_response;
 
 class group_check_request;
 
-class partition_download_progress;
-
 class group_check_response;
 
 class node_info;
@@ -327,6 +325,8 @@ class ddd_diagnose_response;
 
 class partition_bulk_load_info;
 
+class partition_download_progress;
+
 class start_bulk_load_request;
 
 class start_bulk_load_response;
@@ -338,6 +338,10 @@ class configuration_query_bulk_load_response;
 class bulk_load_request;
 
 class bulk_load_response;
+
+class group_bulk_load_request;
+
+class group_bulk_load_response;
 
 class ingestion_request;
 
@@ -1306,64 +1310,6 @@ inline std::ostream &operator<<(std::ostream &out, const group_check_request &ob
     return out;
 }
 
-typedef struct _partition_download_progress__isset
-{
-    _partition_download_progress__isset() : pid(false), progress(false), status(false) {}
-    bool pid : 1;
-    bool progress : 1;
-    bool status : 1;
-} _partition_download_progress__isset;
-
-class partition_download_progress
-{
-public:
-    partition_download_progress(const partition_download_progress &);
-    partition_download_progress(partition_download_progress &&);
-    partition_download_progress &operator=(const partition_download_progress &);
-    partition_download_progress &operator=(partition_download_progress &&);
-    partition_download_progress() : progress(0) {}
-
-    virtual ~partition_download_progress() throw();
-    ::dsn::gpid pid;
-    int32_t progress;
-    ::dsn::error_code status;
-
-    _partition_download_progress__isset __isset;
-
-    void __set_pid(const ::dsn::gpid &val);
-
-    void __set_progress(const int32_t val);
-
-    void __set_status(const ::dsn::error_code &val);
-
-    bool operator==(const partition_download_progress &rhs) const
-    {
-        if (!(pid == rhs.pid))
-            return false;
-        if (!(progress == rhs.progress))
-            return false;
-        if (!(status == rhs.status))
-            return false;
-        return true;
-    }
-    bool operator!=(const partition_download_progress &rhs) const { return !(*this == rhs); }
-
-    bool operator<(const partition_download_progress &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(partition_download_progress &a, partition_download_progress &b);
-
-inline std::ostream &operator<<(std::ostream &out, const partition_download_progress &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
 typedef struct _group_check_response__isset
 {
     _group_check_response__isset()
@@ -1373,9 +1319,7 @@ typedef struct _group_check_response__isset
           last_committed_decree_in_prepare_list(false),
           learner_status_(true),
           learner_signature(false),
-          node(false),
-          bulk_load_download_progress(false),
-          bulk_load_context_cleaned(false)
+          node(false)
     {
     }
     bool pid : 1;
@@ -1385,8 +1329,6 @@ typedef struct _group_check_response__isset
     bool learner_status_ : 1;
     bool learner_signature : 1;
     bool node : 1;
-    bool bulk_load_download_progress : 1;
-    bool bulk_load_context_cleaned : 1;
 } _group_check_response__isset;
 
 class group_check_response
@@ -1400,8 +1342,7 @@ public:
         : last_committed_decree_in_app(0),
           last_committed_decree_in_prepare_list(0),
           learner_status_((learner_status::type)0),
-          learner_signature(0),
-          bulk_load_context_cleaned(0)
+          learner_signature(0)
     {
         learner_status_ = (learner_status::type)0;
     }
@@ -1414,8 +1355,6 @@ public:
     learner_status::type learner_status_;
     int64_t learner_signature;
     ::dsn::rpc_address node;
-    partition_download_progress bulk_load_download_progress;
-    bool bulk_load_context_cleaned;
 
     _group_check_response__isset __isset;
 
@@ -1433,10 +1372,6 @@ public:
 
     void __set_node(const ::dsn::rpc_address &val);
 
-    void __set_bulk_load_download_progress(const partition_download_progress &val);
-
-    void __set_bulk_load_context_cleaned(const bool val);
-
     bool operator==(const group_check_response &rhs) const
     {
         if (!(pid == rhs.pid))
@@ -1452,16 +1387,6 @@ public:
         if (!(learner_signature == rhs.learner_signature))
             return false;
         if (!(node == rhs.node))
-            return false;
-        if (__isset.bulk_load_download_progress != rhs.__isset.bulk_load_download_progress)
-            return false;
-        else if (__isset.bulk_load_download_progress &&
-                 !(bulk_load_download_progress == rhs.bulk_load_download_progress))
-            return false;
-        if (__isset.bulk_load_context_cleaned != rhs.__isset.bulk_load_context_cleaned)
-            return false;
-        else if (__isset.bulk_load_context_cleaned &&
-                 !(bulk_load_context_cleaned == rhs.bulk_load_context_cleaned))
             return false;
         return true;
     }
@@ -5574,6 +5499,64 @@ inline std::ostream &operator<<(std::ostream &out, const partition_bulk_load_inf
     return out;
 }
 
+typedef struct _partition_download_progress__isset
+{
+    _partition_download_progress__isset() : pid(false), progress(false), status(false) {}
+    bool pid : 1;
+    bool progress : 1;
+    bool status : 1;
+} _partition_download_progress__isset;
+
+class partition_download_progress
+{
+public:
+    partition_download_progress(const partition_download_progress &);
+    partition_download_progress(partition_download_progress &&);
+    partition_download_progress &operator=(const partition_download_progress &);
+    partition_download_progress &operator=(partition_download_progress &&);
+    partition_download_progress() : progress(0) {}
+
+    virtual ~partition_download_progress() throw();
+    ::dsn::gpid pid;
+    int32_t progress;
+    ::dsn::error_code status;
+
+    _partition_download_progress__isset __isset;
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    void __set_progress(const int32_t val);
+
+    void __set_status(const ::dsn::error_code &val);
+
+    bool operator==(const partition_download_progress &rhs) const
+    {
+        if (!(pid == rhs.pid))
+            return false;
+        if (!(progress == rhs.progress))
+            return false;
+        if (!(status == rhs.status))
+            return false;
+        return true;
+    }
+    bool operator!=(const partition_download_progress &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const partition_download_progress &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(partition_download_progress &a, partition_download_progress &b);
+
+inline std::ostream &operator<<(std::ostream &out, const partition_download_progress &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
 typedef struct _start_bulk_load_request__isset
 {
     _start_bulk_load_request__isset()
@@ -6021,6 +6004,199 @@ public:
 void swap(bulk_load_response &a, bulk_load_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const bulk_load_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _group_bulk_load_request__isset
+{
+    _group_bulk_load_request__isset()
+        : app(false),
+          target_address(false),
+          config(false),
+          meta_app_bulk_load_status(false),
+          meta_partition_bulk_load_status(false),
+          provider_name(false),
+          cluster_name(false)
+    {
+    }
+    bool app : 1;
+    bool target_address : 1;
+    bool config : 1;
+    bool meta_app_bulk_load_status : 1;
+    bool meta_partition_bulk_load_status : 1;
+    bool provider_name : 1;
+    bool cluster_name : 1;
+} _group_bulk_load_request__isset;
+
+class group_bulk_load_request
+{
+public:
+    group_bulk_load_request(const group_bulk_load_request &);
+    group_bulk_load_request(group_bulk_load_request &&);
+    group_bulk_load_request &operator=(const group_bulk_load_request &);
+    group_bulk_load_request &operator=(group_bulk_load_request &&);
+    group_bulk_load_request()
+        : meta_app_bulk_load_status((::dsn::bulk_load_status::type)0),
+          meta_partition_bulk_load_status((::dsn::bulk_load_status::type)0),
+          provider_name(),
+          cluster_name()
+    {
+    }
+
+    virtual ~group_bulk_load_request() throw();
+    ::dsn::app_info app;
+    ::dsn::rpc_address target_address;
+    replica_configuration config;
+    ::dsn::bulk_load_status::type meta_app_bulk_load_status;
+    ::dsn::bulk_load_status::type meta_partition_bulk_load_status;
+    std::string provider_name;
+    std::string cluster_name;
+
+    _group_bulk_load_request__isset __isset;
+
+    void __set_app(const ::dsn::app_info &val);
+
+    void __set_target_address(const ::dsn::rpc_address &val);
+
+    void __set_config(const replica_configuration &val);
+
+    void __set_meta_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
+
+    void __set_meta_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
+
+    void __set_provider_name(const std::string &val);
+
+    void __set_cluster_name(const std::string &val);
+
+    bool operator==(const group_bulk_load_request &rhs) const
+    {
+        if (!(app == rhs.app))
+            return false;
+        if (!(target_address == rhs.target_address))
+            return false;
+        if (!(config == rhs.config))
+            return false;
+        if (!(meta_app_bulk_load_status == rhs.meta_app_bulk_load_status))
+            return false;
+        if (!(meta_partition_bulk_load_status == rhs.meta_partition_bulk_load_status))
+            return false;
+        if (__isset.provider_name != rhs.__isset.provider_name)
+            return false;
+        else if (__isset.provider_name && !(provider_name == rhs.provider_name))
+            return false;
+        if (__isset.cluster_name != rhs.__isset.cluster_name)
+            return false;
+        else if (__isset.cluster_name && !(cluster_name == rhs.cluster_name))
+            return false;
+        return true;
+    }
+    bool operator!=(const group_bulk_load_request &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const group_bulk_load_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(group_bulk_load_request &a, group_bulk_load_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const group_bulk_load_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _group_bulk_load_response__isset
+{
+    _group_bulk_load_response__isset()
+        : pid(false),
+          err(false),
+          target_address(false),
+          status(false),
+          download_progress(false),
+          is_bulk_load_context_cleaned(false)
+    {
+    }
+    bool pid : 1;
+    bool err : 1;
+    bool target_address : 1;
+    bool status : 1;
+    bool download_progress : 1;
+    bool is_bulk_load_context_cleaned : 1;
+} _group_bulk_load_response__isset;
+
+class group_bulk_load_response
+{
+public:
+    group_bulk_load_response(const group_bulk_load_response &);
+    group_bulk_load_response(group_bulk_load_response &&);
+    group_bulk_load_response &operator=(const group_bulk_load_response &);
+    group_bulk_load_response &operator=(group_bulk_load_response &&);
+    group_bulk_load_response()
+        : status((::dsn::bulk_load_status::type)0), is_bulk_load_context_cleaned(0)
+    {
+    }
+
+    virtual ~group_bulk_load_response() throw();
+    ::dsn::gpid pid;
+    ::dsn::error_code err;
+    ::dsn::rpc_address target_address;
+    ::dsn::bulk_load_status::type status;
+    partition_download_progress download_progress;
+    bool is_bulk_load_context_cleaned;
+
+    _group_bulk_load_response__isset __isset;
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_target_address(const ::dsn::rpc_address &val);
+
+    void __set_status(const ::dsn::bulk_load_status::type val);
+
+    void __set_download_progress(const partition_download_progress &val);
+
+    void __set_is_bulk_load_context_cleaned(const bool val);
+
+    bool operator==(const group_bulk_load_response &rhs) const
+    {
+        if (!(pid == rhs.pid))
+            return false;
+        if (!(err == rhs.err))
+            return false;
+        if (!(target_address == rhs.target_address))
+            return false;
+        if (!(status == rhs.status))
+            return false;
+        if (__isset.download_progress != rhs.__isset.download_progress)
+            return false;
+        else if (__isset.download_progress && !(download_progress == rhs.download_progress))
+            return false;
+        if (__isset.is_bulk_load_context_cleaned != rhs.__isset.is_bulk_load_context_cleaned)
+            return false;
+        else if (__isset.is_bulk_load_context_cleaned &&
+                 !(is_bulk_load_context_cleaned == rhs.is_bulk_load_context_cleaned))
+            return false;
+        return true;
+    }
+    bool operator!=(const group_bulk_load_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const group_bulk_load_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(group_bulk_load_response &a, group_bulk_load_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const group_bulk_load_response &obj)
 {
     obj.printTo(out);
     return out;

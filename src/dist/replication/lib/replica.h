@@ -308,6 +308,13 @@ private:
     /////////////////////////////////////////////////////////////////
     // replica bulk load
     void on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response);
+    void broadcast_group_bulk_load(const bulk_load_request &meta_req);
+    void on_group_bulk_load(const group_bulk_load_request &request,
+                            /*out*/ group_bulk_load_response &response);
+    void on_group_bulk_load_reply(error_code err,
+                                  const std::shared_ptr<group_bulk_load_request> &req,
+                                  const std::shared_ptr<group_bulk_load_response> &resp);
+
     dsn::error_code download_sst_files(const std::string &app_name,
                                        const std::string &cluster_name,
                                        const std::string &provider_name);
@@ -335,10 +342,11 @@ private:
     dsn::error_code read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
     void update_group_download_progress(bulk_load_response &response);
     void handle_bulk_load_error();
-    void handle_bulk_load_succeed(const bulk_load_request &request);
+    // void handle_bulk_load_succeed(const bulk_load_request &request);
     void cleanup_bulk_load_context(bulk_load_status::type new_status);
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
     void update_group_context_clean_flag(bulk_load_response &response);
+    void handle_bulk_load_succeed();
 
 private:
     friend class ::dsn::replication::replication_checker;

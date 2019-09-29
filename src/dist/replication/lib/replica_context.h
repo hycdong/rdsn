@@ -112,10 +112,16 @@ public:
 
     uint64_t last_prepare_ts_ms;
 
+    /// bulk load
+    // calls broadcast_group_bulk_load()
+    // created in replica::on_bulk_load()
+    // cancelled in cleanup() when status changed from PRIMARY to others
+    // group bulk_load response tasks of RPC_GROUP_BULK_LOAD for each secondary replica
+    std::unordered_map<rpc_address, task_ptr> group_bulk_load_pending_replies;
     // bulk load download progress
-    std::map<rpc_address, partition_download_progress> group_download_progress;
+    std::unordered_map<rpc_address, partition_download_progress> group_download_progress;
     // bulk load cleanup flag
-    std::map<rpc_address, bool> group_bulk_load_context_flag;
+    std::unordered_map<rpc_address, bool> group_bulk_load_context_flag;
 };
 
 class secondary_context

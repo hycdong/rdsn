@@ -91,6 +91,12 @@ void primary_context::cleanup(bool clean_pending_mutations)
     // clean up checkpoint
     CLEANUP_TASK_ALWAYS(checkpoint_task)
 
+    for (auto it = group_bulk_load_pending_replies.begin();
+         it != group_bulk_load_pending_replies.end();
+         ++it) {
+        CLEANUP_TASK_ALWAYS(it->second)
+    }
+
     membership.ballot = 0;
 
     group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
@@ -102,7 +108,8 @@ void primary_context::cleanup(bool clean_pending_mutations)
 bool primary_context::is_cleaned()
 {
     return nullptr == group_check_task && nullptr == reconfiguration_task &&
-           nullptr == checkpoint_task && group_check_pending_replies.empty();
+           nullptr == checkpoint_task && group_check_pending_replies.empty() &&
+           group_bulk_load_pending_replies.empty();
 }
 
 void primary_context::do_cleanup_pending_mutations(bool clean_pending_mutations)

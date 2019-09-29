@@ -13,79 +13,277 @@
 namespace dsn {
 namespace replication {
 
-// TODO(heyuchen): refactor code, move some functions to replication_common & replica_context
 void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response &response)
 {
     _checker.only_one_thread_access();
 
-    if (status() != partition_status::PS_PRIMARY && status() != partition_status::PS_SECONDARY) {
-        dwarn_f("{} receive request with wrong status {}", name(), enum_to_string(status()));
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_f(
+            "{} receive bulk load request with wrong status {}", name(), enum_to_string(status()));
         response.err = ERR_INVALID_STATE;
         return;
     }
 
+    response.err = ERR_OK;
     response.pid = request.pid;
     response.app_name = request.app_name;
 
-    ddebug_f("{}: receive bulk load request, remote provider={}, cluster_name={}, app_name={}, "
-             "app_bulk_load_status={}, partition_bulk_load_status: remote={} VS local={}",
-             name(),
-             request.remote_provider_name,
-             request.cluster_name,
-             request.app_name,
-             enum_to_string(request.app_bl_status),
-             enum_to_string(request.partition_bl_info.status),
-             enum_to_string(_bulk_load_context.get_status()));
+    ddebug_f(
+        "{}: receive bulk load request, remote provider={}, cluster_name={}, app_name={}, "
+        "app_bulk_load_status={}, meta partition_bulk_load_status={} local bulk_load_status={}",
+        name(),
+        request.remote_provider_name,
+        request.cluster_name,
+        request.app_name,
+        enum_to_string(request.app_bl_status),
+        enum_to_string(request.partition_bl_info.status),
+        enum_to_string(_bulk_load_context.get_status()));
+
+    broadcast_group_bulk_load(request);
 
     if (_bulk_load_context.get_status() == bulk_load_status::BLS_INVALID &&
         request.partition_bl_info.status == bulk_load_status::BLS_DOWNLOADING) {
-        ddebug_f("{}: try to download sst files", name());
+
+        // update bulk load status
+        _bulk_load_context.set_status(bulk_load_status::BLS_DOWNLOADING);
+
+        // start download
+        ddebug_f("{}({}): try to download sst files", name(), enum_to_string(status()));
         _bld_progress.pid = get_gpid();
-        _bulk_load_context.set_status(request.partition_bl_info.status);
-        response.err = download_sst_files(request.app_name, request.cluster_name, request.remote_provider_name);
-    }
+        response.err = download_sst_files(
+            request.app_name, request.cluster_name, request.remote_provider_name);
 
-    if ((_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
-         _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) &&
-        status() == partition_status::PS_PRIMARY && response.err == ERR_OK) {
-        response.partition_bl_status = _bulk_load_context.get_status();
-        send_download_request_to_secondaries(request);
-        update_group_download_progress(response);
-    }
-
-    if (request.partition_bl_info.status == bulk_load_status::BLS_INGESTING &&
-        _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
-        _bulk_load_context.set_status(request.partition_bl_info.status);
-        if (status() == partition_status::PS_PRIMARY) {
-            send_download_request_to_secondaries(request);
+        // primary report to meta
+        if (response.err == ERR_OK) {
+            update_group_download_progress(response);
+        } else {
+            handle_bulk_load_error();
         }
     }
 
+    if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
+        _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
+        // primary set download status in response
+        update_group_download_progress(response);
+    }
+
     if (request.partition_bl_info.status == bulk_load_status::BLS_FINISH) {
-        if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED ||
-            _bulk_load_context.get_status() == bulk_load_status::BLS_INGESTING) {
-            handle_bulk_load_succeed(request);
+        if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
+            // primary and secondary update bulk load status to finish
+            handle_bulk_load_succeed();
         } else {
+            // handle cleanup
+            // set clean flags
             cleanup_bulk_load_context(bulk_load_status::BLS_FINISH);
-            if (status() == partition_status::PS_PRIMARY) {
-                send_download_request_to_secondaries(request);
-                update_group_context_clean_flag(response);
-            }
+            update_group_context_clean_flag(response);
         }
     }
 
     if (request.app_bl_status == bulk_load_status::BLS_FAILED &&
         request.partition_bl_info.status == bulk_load_status::BLS_FAILED) {
+        // handle cleanup
+        // set clean flags
         handle_bulk_load_error();
-        // send to secondary
-        if (status() == partition_status::PS_PRIMARY) {
-            send_download_request_to_secondaries(request);
-            update_group_context_clean_flag(response);
+        update_group_context_clean_flag(response);
+    }
+
+    response.partition_bl_status = _bulk_load_context.get_status();
+}
+
+// TODO(heyuchen): refactor group_bulk_load functions
+
+void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
+{
+    if (!_primary_states.learners.empty()) {
+        // replica has learners, do not send group_bulk_load request, because response status is
+        // useless
+        dwarn_replica("has learners, skip");
+        return;
+    }
+
+    if (_primary_states.group_bulk_load_pending_replies.size() > 0) {
+        dwarn_replica(
+            "{} group bulk_load replies are still pending when doing next round, cancel it first",
+            static_cast<int>(_primary_states.group_bulk_load_pending_replies.size()));
+
+        for (auto it = _primary_states.group_bulk_load_pending_replies.begin();
+             it != _primary_states.group_bulk_load_pending_replies.end();
+             ++it) {
+            it->second->cancel(true);
+        }
+        _primary_states.group_bulk_load_pending_replies.clear();
+    }
+
+    ddebug_replica("start to broadcast group bulk load", name());
+
+    for (const auto &addr : _primary_states.membership.secondaries) {
+        if (addr == _stub->_primary_address)
+            continue;
+
+        std::shared_ptr<group_bulk_load_request> request(new group_bulk_load_request);
+        request->app = _app_info;
+        request->target_address = addr;
+        _primary_states.get_replica_config(partition_status::PS_SECONDARY, request->config);
+        request->meta_app_bulk_load_status = meta_req.app_bl_status;
+        request->meta_partition_bulk_load_status = meta_req.partition_bl_info.status;
+        if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
+            bulk_load_status::BLS_DOWNLOADED) {
+            request->__isset.cluster_name = true;
+            request->cluster_name = meta_req.cluster_name;
+            request->__isset.provider_name = true;
+            request->provider_name = meta_req.remote_provider_name;
+        }
+
+        ddebug_replica("send group bulk load request to {}", addr.to_string());
+
+        dsn::task_ptr callback_task =
+            rpc::call(addr,
+                      RPC_GROUP_BULK_LOAD,
+                      *request,
+                      &_tracker,
+                      [=](error_code err, group_bulk_load_response &&resp) {
+                          auto response =
+                              std::make_shared<group_bulk_load_response>(std::move(resp));
+                          on_group_bulk_load_reply(err, request, response);
+                      },
+                      std::chrono::milliseconds(0),
+                      get_gpid().thread_hash());
+        _primary_states.group_bulk_load_pending_replies[addr] = callback_task;
+    }
+}
+
+void replica::on_group_bulk_load(const group_bulk_load_request &request,
+                                 /*out*/ group_bulk_load_response &response)
+{
+    _checker.only_one_thread_access();
+
+    ddebug_replica(
+        "process group bulk load request, primary={}, ballot={}, meta app "
+        "bulk_load_status={}, meta partition bulk_load_status= {}, local bulk_load_status={}",
+        request.config.primary.to_string(),
+        request.config.ballot,
+        enum_to_string(request.meta_app_bulk_load_status),
+        enum_to_string(request.meta_partition_bulk_load_status),
+        enum_to_string(_bulk_load_context.get_status()));
+
+    if (request.config.ballot < get_ballot()) {
+        response.err = ERR_VERSION_OUTDATED;
+        dwarn_replica(
+            "receive outdated group_bulk_load request, request ballot={} VS loca ballot={}",
+            request.config.ballot,
+            get_ballot());
+        return;
+    } else if (request.config.ballot > get_ballot()) {
+        response.err = ERR_INVALID_STATE;
+        dwarn_replica("receive group_bulk_load request, local ballot is outdated, request "
+                      "ballot={} VS loca ballot={}",
+                      request.config.ballot,
+                      get_ballot());
+        return;
+    } else if (status() != request.config.status) {
+        response.err = ERR_INVALID_STATE;
+        dwarn_replica("status changed, status should be {}, but {}",
+                      enum_to_string(request.config.status),
+                      enum_to_string(status()));
+        return;
+    }
+
+    response.err = ERR_OK;
+    response.pid = get_gpid();
+    response.target_address = _stub->_primary_address;
+
+    // TODO(heyuchen):
+    // do bulk load things
+    if (_bulk_load_context.get_status() == bulk_load_status::BLS_INVALID &&
+        request.meta_partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
+
+        // update bulk load status
+        _bulk_load_context.set_status(bulk_load_status::BLS_DOWNLOADING);
+
+        // start download
+        ddebug_f("{}({}): try to download sst files", name(), enum_to_string(status()));
+        _bld_progress.pid = get_gpid();
+        response.err =
+            download_sst_files(request.app.app_name, request.cluster_name, request.provider_name);
+
+        // primary report to meta
+        if (response.err == ERR_OK) {
+            response.__isset.download_progress = true;
+            response.download_progress = _bld_progress;
+        } else {
+            handle_bulk_load_error();
         }
     }
 
-    if (response.err != ERR_OK) {
+    if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
+        _bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
+        // secondary report to primary
+        response.__isset.download_progress = true;
+        response.download_progress = _bld_progress;
+    }
+
+    if (request.meta_partition_bulk_load_status == bulk_load_status::BLS_FINISH) {
+        if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
+            // primary and secondary update bulk load status to finish
+            handle_bulk_load_succeed();
+        } else {
+            // handle cleanup
+            // set clean flags
+            cleanup_bulk_load_context(bulk_load_status::BLS_FINISH);
+            response.__isset.is_bulk_load_context_cleaned = true;
+            response.is_bulk_load_context_cleaned = _bulk_load_context.is_cleanup();
+        }
+    }
+
+    if (request.meta_app_bulk_load_status == bulk_load_status::BLS_FAILED &&
+        request.meta_partition_bulk_load_status == bulk_load_status::BLS_FAILED) {
+        // handle cleanup
+        // set clean flags
         handle_bulk_load_error();
+        response.__isset.is_bulk_load_context_cleaned = true;
+        response.is_bulk_load_context_cleaned = _bulk_load_context.is_cleanup();
+    }
+
+    response.status = _bulk_load_context.get_status();
+}
+
+void replica::on_group_bulk_load_reply(error_code err,
+                                       const std::shared_ptr<group_bulk_load_request> &req,
+                                       const std::shared_ptr<group_bulk_load_response> &resp)
+{
+    _checker.only_one_thread_access();
+
+    if (partition_status::PS_PRIMARY != status() || req->config.ballot < get_ballot()) {
+        return;
+    }
+
+    _primary_states.group_bulk_load_pending_replies.erase(req->target_address);
+
+    if (err != ERR_OK) {
+        dwarn_replica("get group_bulk_load_reply failed, error={}", err);
+        return;
+    }
+
+    if (resp->err != ERR_OK) {
+        derror_replica("on_group_bulk_load failed, error={}", resp->err);
+        if (resp->__isset.download_progress) {
+            _primary_states.group_download_progress[req->target_address] = resp->download_progress;
+        }
+        if (resp->__isset.is_bulk_load_context_cleaned) {
+            _primary_states.group_bulk_load_context_flag[req->target_address] = false;
+        }
+    } else {
+        if (resp->__isset.download_progress) {
+            _primary_states.group_download_progress[req->target_address] = resp->download_progress;
+        }
+        if (resp->__isset.is_bulk_load_context_cleaned) {
+            _primary_states.group_bulk_load_context_flag[req->target_address] =
+                resp->is_bulk_load_context_cleaned;
+            // TODO(heyuchen): delete
+            ddebug_replica("secondary[{}] cleanup flag={}",
+                           req->target_address.to_string(),
+                           resp->is_bulk_load_context_cleaned);
+        }
     }
 }
 
@@ -98,7 +296,8 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
                                             const std::string &cluster_name,
                                             const std::string &provider_name)
 {
-    std::string remote_dir = get_bulk_load_remote_dir(app_name, cluster_name, get_gpid().get_partition_index());
+    std::string remote_dir =
+        get_bulk_load_remote_dir(app_name, cluster_name, get_gpid().get_partition_index());
 
     std::string local_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
     dsn::error_code err = create_local_bulk_load_dir(local_dir);
@@ -526,7 +725,8 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
     _bulk_load_context.cleanup();
 }
 
-void replica::handle_bulk_load_succeed(const bulk_load_request &request)
+// void replica::handle_bulk_load_succeed(const bulk_load_request &request)
+void replica::handle_bulk_load_succeed()
 {
     auto old_status = _bulk_load_context.get_status();
     if (old_status == bulk_load_status::BLS_DOWNLOADING ||
@@ -550,7 +750,7 @@ void replica::handle_bulk_load_succeed(const bulk_load_request &request)
         mutation_ptr mu = new_mutation(invalid_decree);
         mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
         init_prepare(mu, false);
-        send_download_request_to_secondaries(request);
+        // send_download_request_to_secondaries(request);
     }
 
     _bulk_load_context.set_status(bulk_load_status::BLS_FINISH);
