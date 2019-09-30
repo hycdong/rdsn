@@ -478,7 +478,7 @@ void bulk_load_service::handle_app_bulk_load_cleanup(bulk_load_response &respons
                 }
             }
             ddebug_f("app({}) all partitions cleanup bulk load context", response.app_name);
-            update_app_bulk_load_flag(app, false, true);
+            remove_app_bulk_load_dir(app, true);
         }
     }
 }
@@ -613,36 +613,38 @@ void bulk_load_service::update_app_bulk_load_status_unlock(uint32_t app_id,
         get_app_bulk_load_path(app_id), std::move(value), std::move(callback));
 }
 
+void bulk_load_service::remove_app_bulk_load_dir(std::shared_ptr<app_state> app,
+                                                 bool need_set_app_flag)
+{
+    std::string bulk_load_path = get_app_bulk_load_path(app->app_id);
+    _meta_svc->get_meta_storage()->delete_node_recursively(
+        std::move(bulk_load_path), [this, app, need_set_app_flag, bulk_load_path]() {
+            ddebug_f("remove app({}) bulk load dir {}", app->app_name, bulk_load_path);
+            clear_app_bulk_load_states(app->app_id, app->app_name);
+            if (need_set_app_flag) {
+                update_app_bulk_load_flag(app, false);
+            }
+        });
+}
+
 void bulk_load_service::update_app_bulk_load_flag(std::shared_ptr<app_state> app,
-                                                  bool is_bulk_loading,
-                                                  bool need_remove)
+                                                  bool is_bulk_loading)
 {
     app_info info = *app;
     info.is_bulk_loading = is_bulk_loading;
 
     blob value = dsn::json::json_forwarder<app_info>::encode(info);
     _meta_svc->get_meta_storage()->set_data(
-        _state->get_app_path(*app), std::move(value), [app, is_bulk_loading, need_remove, this]() {
+        _state->get_app_path(*app), std::move(value), [app, is_bulk_loading, this]() {
             {
                 zauto_write_lock l(app_lock());
                 app->is_bulk_loading = is_bulk_loading;
             }
             ddebug_f("app({}) update app is_bulk_loading to {}", app->app_name, is_bulk_loading);
-            if (!is_bulk_loading && need_remove) {
-                remove_app_bulk_load_dir(app->app_id, app->app_name);
+            if (!is_bulk_loading) {
+                zauto_write_lock l(_lock);
+                _bulk_load_app_id.erase(app->app_id);
             }
-        });
-}
-
-void bulk_load_service::remove_app_bulk_load_dir(uint32_t app_id, const std::string &app_name)
-{
-    std::string bulk_load_path = get_app_bulk_load_path(app_id);
-    _meta_svc->get_meta_storage()->delete_node_recursively(
-        std::move(bulk_load_path), [this, app_id, app_name, bulk_load_path]() {
-            ddebug_f("remove app({}) bulk load dir {}", app_name, bulk_load_path);
-            clear_app_bulk_load_states(app_id, app_name);
-            zauto_write_lock l(_lock);
-            _bulk_load_app_id.erase(app_id);
         });
 }
 
@@ -889,7 +891,7 @@ void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_stat
                             app->app_name,
                             app_path,
                             is_app_bulk_loading);
-                    update_app_bulk_load_flag(app, false, false);
+                    update_app_bulk_load_flag(app, false);
                     return;
                 }
                 if (err == ERR_OK && !is_app_bulk_loading) {
@@ -898,7 +900,7 @@ void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_stat
                             app->app_name,
                             app_path,
                             is_app_bulk_loading);
-                    remove_app_bulk_load_dir(app->app_id, app->app_name);
+                    remove_app_bulk_load_dir(app, false);
                     return;
                 }
             }
@@ -966,6 +968,7 @@ void bulk_load_service::partition_ingestion(gpid pid)
              primary_addr.to_string(),
              app_name,
              pid.to_string());
+
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 

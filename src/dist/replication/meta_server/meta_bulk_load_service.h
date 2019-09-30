@@ -148,14 +148,14 @@ private:
                                             bulk_load_status::type new_status); // private + zk
 
     // remove app bulk load dir on remote stroage
-    void remove_app_bulk_load_dir(uint32_t app_id, const std::string &app_name); // private + zk
+    // need_set_app_flag = true: update app's is_bulk_loading to false on remote_storage
+    void remove_app_bulk_load_dir(std::shared_ptr<app_state> app,
+                                  bool need_set_app_flag); // private + zk
 
     // update app's is_bulk_loading to {is_bulk_loading} on remote_storage
-    // need_remove is only used when trying to set is_bulk_loading to false
-    // need_remove = true: remove app bulk load dir on remote storage, otherwise not remove
+    // if is_bulk_loading = false: clear meta bulk load states
     void update_app_bulk_load_flag(std::shared_ptr<app_state> app,
-                                   bool is_bulk_loading,
-                                   bool need_remove); // private + zk
+                                   bool is_bulk_loading); // private + zk
 
     /// helper functions
     template <typename T>
