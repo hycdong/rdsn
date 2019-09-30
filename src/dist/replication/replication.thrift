@@ -792,10 +792,8 @@ struct bulk_load_request
     3:dsn.rpc_address               primary_addr;
     4:string                        remote_provider_name;
     5:string                        cluster_name;
-    6:dsn.layer2.bulk_load_status   app_bulk_load_status;
-
-    // TODO(heyuchen): delete it and add ballot
-    7:partition_bulk_load_info      partition_bl_info;
+    6:i64                           ballot;
+    7:dsn.layer2.bulk_load_status   app_bulk_load_status;
     8:dsn.layer2.bulk_load_status   partition_bulk_load_status;
 }
 

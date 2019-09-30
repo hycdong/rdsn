@@ -239,6 +239,7 @@ void bulk_load_service::partition_bulk_load(gpid pid)
 
     dsn::rpc_address primary_addr;
     std::string app_name;
+    ballot b;
     {
         zauto_read_lock l(app_lock());
         std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
@@ -250,6 +251,7 @@ void bulk_load_service::partition_bulk_load(gpid pid)
         }
         app_name = app->app_name;
         primary_addr = app->partitions[pid.get_partition_index()].primary;
+        b = app->partitions[pid.get_partition_index()].ballot;
     }
 
     // pid primary is invalid
@@ -280,6 +282,7 @@ void bulk_load_service::partition_bulk_load(gpid pid)
     req.remote_provider_name = ainfo.file_provider_type;
     req.cluster_name = ainfo.cluster_name;
     req.partition_bulk_load_status = pbl_info.status;
+    req.ballot = b;
 
     dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
     dsn::marshall(msg, req);
@@ -343,6 +346,8 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
             handle_partition_download_error(pid);
         }
     } else {
+        // TODO(heyuchen): add ballot check here
+        // if req.ballot == current ballot
         bulk_load_status::type app_status = get_app_bulk_load_status(response.pid.get_app_id());
         if (app_status == bulk_load_status::BLS_DOWNLOADING) {
             handle_app_bulk_load_downloading(response, primary_addr);
@@ -354,6 +359,7 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
         } else {
             // do nothing if during ingesting
         }
+        // TODO(heyuchen): handle ballot inconsistency
     }
 
     if (is_app_bulk_loading(pid.get_app_id())) {

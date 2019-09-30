@@ -5816,8 +5816,8 @@ typedef struct _bulk_load_request__isset
           primary_addr(false),
           remote_provider_name(false),
           cluster_name(false),
+          ballot(false),
           app_bulk_load_status(false),
-          partition_bl_info(false),
           partition_bulk_load_status(false)
     {
     }
@@ -5826,8 +5826,8 @@ typedef struct _bulk_load_request__isset
     bool primary_addr : 1;
     bool remote_provider_name : 1;
     bool cluster_name : 1;
+    bool ballot : 1;
     bool app_bulk_load_status : 1;
-    bool partition_bl_info : 1;
     bool partition_bulk_load_status : 1;
 } _bulk_load_request__isset;
 
@@ -5842,6 +5842,7 @@ public:
         : app_name(),
           remote_provider_name(),
           cluster_name(),
+          ballot(0),
           app_bulk_load_status((::dsn::bulk_load_status::type)0),
           partition_bulk_load_status((::dsn::bulk_load_status::type)0)
     {
@@ -5853,8 +5854,8 @@ public:
     ::dsn::rpc_address primary_addr;
     std::string remote_provider_name;
     std::string cluster_name;
+    int64_t ballot;
     ::dsn::bulk_load_status::type app_bulk_load_status;
-    partition_bulk_load_info partition_bl_info;
     ::dsn::bulk_load_status::type partition_bulk_load_status;
 
     _bulk_load_request__isset __isset;
@@ -5869,9 +5870,9 @@ public:
 
     void __set_cluster_name(const std::string &val);
 
-    void __set_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
+    void __set_ballot(const int64_t val);
 
-    void __set_partition_bl_info(const partition_bulk_load_info &val);
+    void __set_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
     void __set_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
@@ -5887,9 +5888,9 @@ public:
             return false;
         if (!(cluster_name == rhs.cluster_name))
             return false;
-        if (!(app_bulk_load_status == rhs.app_bulk_load_status))
+        if (!(ballot == rhs.ballot))
             return false;
-        if (!(partition_bl_info == rhs.partition_bl_info))
+        if (!(app_bulk_load_status == rhs.app_bulk_load_status))
             return false;
         if (!(partition_bulk_load_status == rhs.partition_bulk_load_status))
             return false;

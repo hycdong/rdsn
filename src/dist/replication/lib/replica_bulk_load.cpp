@@ -23,6 +23,8 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         return;
     }
 
+    // TODO(heyuchen): add ballot check here
+
     response.err = ERR_OK;
     response.pid = request.pid;
     response.app_name = request.app_name;
