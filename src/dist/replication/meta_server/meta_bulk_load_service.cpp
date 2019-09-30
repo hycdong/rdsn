@@ -345,13 +345,14 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
     } else {
         bulk_load_status::type app_status = get_app_bulk_load_status(response.pid.get_app_id());
         if (app_status == bulk_load_status::BLS_DOWNLOADING) {
-            handle_partition_bulk_load_downloading(response, primary_addr);
+            handle_app_bulk_load_downloading(response, primary_addr);
         } else if (app_status == bulk_load_status::BLS_DOWNLOADED) {
-            handle_partition_bulk_load_ingest(response, primary_addr);
-        } else if (app_status == bulk_load_status::BLS_FAILED) {
-            handle_partition_bulk_load_failed(response, primary_addr);
-        } else if (app_status == bulk_load_status::BLS_FINISH) {
-            handle_partition_bulk_load_succeed(response, primary_addr);
+            handle_app_bulk_load_downloaded(response, primary_addr);
+        } else if (app_status == bulk_load_status::BLS_FINISH ||
+                   app_status == bulk_load_status::BLS_FAILED) {
+            handle_app_bulk_load_cleanup(response, primary_addr);
+        } else {
+            // do nothing if during ingesting
         }
     }
 
@@ -365,8 +366,8 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
     }
 }
 
-void bulk_load_service::handle_partition_bulk_load_downloading(bulk_load_response &response,
-                                                               const rpc_address &primary_addr)
+void bulk_load_service::handle_app_bulk_load_downloading(bulk_load_response &response,
+                                                         const rpc_address &primary_addr)
 {
     std::string app_name = response.app_name;
     gpid pid = response.pid;
@@ -425,107 +426,63 @@ void bulk_load_service::handle_partition_bulk_load_downloading(bulk_load_respons
     }
 }
 
+void bulk_load_service::handle_app_bulk_load_cleanup(bulk_load_response &response,
+                                                     const rpc_address &primary_addr)
+{
+    gpid pid = response.pid;
+    if (!response.__isset.is_group_bulk_load_context_cleaned) {
+        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), primary status = "
+                "{}, but "
+                "not checking cleanup",
+                primary_addr.to_string(),
+                response.app_name,
+                pid.to_string(),
+                enum_to_string(response.partition_bl_status));
+        return;
+    }
+
+    bool all_clean_up = response.is_group_bulk_load_context_cleaned;
+    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
+             "group_bulk_load_context_cleaned = {}",
+             primary_addr.to_string(),
+             response.app_name,
+             pid.to_string(),
+             enum_to_string(response.partition_bl_status),
+             all_clean_up);
+    {
+        zauto_write_lock l(_lock);
+        _partitions_cleaned_up[pid] = all_clean_up;
+    }
+
+    if (all_clean_up) {
+        int count;
+        std::shared_ptr<app_state> app;
+        {
+            zauto_write_lock l(_lock);
+            count = --_apps_in_progress_count[pid.get_app_id()];
+        }
+        if (count == 0) {
+            {
+                zauto_read_lock l(app_lock());
+                app = _state->get_app(pid.get_app_id());
+                if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
+                    dwarn_f("app({}) is not existed, set bulk load finish", app->app_name);
+                    // TODO(heyuchen): handler it
+                    return;
+                }
+            }
+            ddebug_f("app({}) all partitions cleanup bulk load context", response.app_name);
+            update_app_bulk_load_flag(app, false, true);
+        }
+    }
+}
+
 void bulk_load_service::handle_partition_download_error(gpid pid)
 {
     zauto_write_lock l(_lock);
     if (!_apps_cleaning_up[pid.get_app_id()]) {
         _apps_cleaning_up[pid.get_app_id()] = true;
         update_app_bulk_load_status_unlock(pid.get_app_id(), bulk_load_status::BLS_FAILED);
-    }
-}
-
-// TODO(heyuchen): diff failed and succeed, same?
-void bulk_load_service::handle_partition_bulk_load_failed(bulk_load_response &response,
-                                                          const rpc_address &primary_addr)
-{
-    gpid pid = response.pid;
-    if (!response.__isset.is_group_bulk_load_context_cleaned) {
-        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), primary status = "
-                "{}, but "
-                "not checking cleanup",
-                primary_addr.to_string(),
-                response.app_name,
-                pid.to_string(),
-                enum_to_string(response.partition_bl_status));
-        return;
-    }
-
-    bool all_clean_up = response.is_group_bulk_load_context_cleaned;
-    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
-             "group_bulk_load_context_cleaned = {}",
-             primary_addr.to_string(),
-             response.app_name,
-             pid.to_string(),
-             enum_to_string(response.partition_bl_status),
-             all_clean_up);
-
-    if (all_clean_up) {
-        int count;
-        std::shared_ptr<app_state> app;
-        {
-            zauto_write_lock l(_lock);
-            count = --_apps_in_progress_count[pid.get_app_id()];
-        }
-        if (count == 0) {
-            {
-                zauto_read_lock l(app_lock());
-                app = _state->get_app(pid.get_app_id());
-                if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
-                    dwarn_f("app({}) is not existed, set bulk load finish", app->app_name);
-                    // TODO(heyuchen): handler it
-                    return;
-                }
-            }
-            ddebug_f("app({}) all partitions cleanup bulk load context", response.app_name);
-            update_app_bulk_load_flag(app, false, true);
-        }
-    }
-}
-
-void bulk_load_service::handle_partition_bulk_load_succeed(bulk_load_response &response,
-                                                           const rpc_address &primary_addr)
-{
-    gpid pid = response.pid;
-    if (!response.__isset.is_group_bulk_load_context_cleaned) {
-        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), primary status = "
-                "{}, but "
-                "not checking cleanup",
-                primary_addr.to_string(),
-                response.app_name,
-                pid.to_string(),
-                enum_to_string(response.partition_bl_status));
-        return;
-    }
-
-    bool all_clean_up = response.is_group_bulk_load_context_cleaned;
-    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
-             "group_bulk_load_context_cleaned = {}",
-             primary_addr.to_string(),
-             response.app_name,
-             pid.to_string(),
-             enum_to_string(response.partition_bl_status),
-             all_clean_up);
-
-    if (all_clean_up) {
-        int count;
-        std::shared_ptr<app_state> app;
-        {
-            zauto_write_lock l(_lock);
-            count = --_apps_in_progress_count[pid.get_app_id()];
-        }
-        if (count == 0) {
-            {
-                zauto_read_lock l(app_lock());
-                app = _state->get_app(pid.get_app_id());
-                if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
-                    dwarn_f("app({}) is not existed, set bulk load finish", app->app_name);
-                    // TODO(heyuchen): handler it
-                    return;
-                }
-            }
-            ddebug_f("app({}) all partitions cleanup bulk load context", response.app_name);
-            update_app_bulk_load_flag(app, false, true);
-        }
     }
 }
 
@@ -677,13 +634,13 @@ void bulk_load_service::remove_app_bulk_load_dir(uint32_t app_id, const std::str
     _meta_svc->get_meta_storage()->delete_node_recursively(
         std::move(bulk_load_path), [this, app_id, app_name, bulk_load_path]() {
             ddebug_f("remove app({}) bulk load dir {}", app_name, bulk_load_path);
-            clear_app_bulk_load_context(app_id, app_name);
+            clear_app_bulk_load_states(app_id, app_name);
             zauto_write_lock l(_lock);
             _bulk_load_app_id.erase(app_id);
         });
 }
 
-void bulk_load_service::clear_app_bulk_load_context(uint32_t app_id, const std::string &app_name)
+void bulk_load_service::clear_app_bulk_load_states(uint32_t app_id, const std::string &app_name)
 {
     zauto_write_lock l(_lock);
     _app_bulk_load_info.erase(app_id);
@@ -692,6 +649,7 @@ void bulk_load_service::clear_app_bulk_load_context(uint32_t app_id, const std::
     erase_map_elem_by_id(app_id, _partition_bulk_load_info);
     erase_map_elem_by_id(app_id, _partitions_request);
     erase_map_elem_by_id(app_id, _partitions_total_download_progress);
+    erase_map_elem_by_id(app_id, _partitions_cleaned_up);
     _apps_cleaning_up.erase(app_id);
     ddebug_f("clear app({}) bulk load context", app_name);
 }
@@ -941,8 +899,8 @@ void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_stat
         });
 }
 
-void bulk_load_service::handle_partition_bulk_load_ingest(bulk_load_response &response,
-                                                          const rpc_address &primary_addr)
+void bulk_load_service::handle_app_bulk_load_downloaded(bulk_load_response &response,
+                                                        const rpc_address &primary_addr)
 {
     gpid pid = response.pid;
     ddebug_f(

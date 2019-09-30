@@ -82,19 +82,16 @@ private:
 
     // helper function for on_partition_bulk_load_reply
     // hanlde situation when response.error is ERR_OK during downloading status
-    void handle_partition_bulk_load_downloading(bulk_load_response &response,
-                                                const rpc_address &primary_addr); // private
+    void handle_app_bulk_load_downloading(bulk_load_response &response,
+                                          const rpc_address &primary_addr); // private
+
+    void handle_app_bulk_load_downloaded(bulk_load_response &response,
+                                         const rpc_address &primary_addr);
 
     // helper function for on_partition_bulk_load_reply
-    // hanlde situation when response.error is ERR_OK during failed status
-    void handle_partition_bulk_load_failed(bulk_load_response &response,
-                                           const rpc_address &primary_addr); // private
-
-    void handle_partition_bulk_load_ingest(bulk_load_response &response,
-                                           const rpc_address &primary_addr);
-
-    void handle_partition_bulk_load_succeed(bulk_load_response &response,
-                                            const rpc_address &primary_addr); // private
+    // hanlde situation when response.error is ERR_OK during failed status or finish status
+    void handle_app_bulk_load_cleanup(bulk_load_response &response,
+                                      const rpc_address &primary_addr); // private
 
     // create ingestion request and send it to primary
     void partition_ingestion(gpid pid);
@@ -106,7 +103,7 @@ private:
                                       gpid pid);
 
     // clear bulk load service local variety
-    void clear_app_bulk_load_context(uint32_t app_id, const std::string &app_name); // private
+    void clear_app_bulk_load_states(uint32_t app_id, const std::string &app_name); // private
 
     /// remote stroage functions
     // update app's is_bulk_loading = true
@@ -226,6 +223,8 @@ private:
     std::unordered_map<gpid, std::map<dsn::rpc_address, partition_download_progress>>
         _partitions_download_progress;
     std::unordered_map<gpid, int32_t> _partitions_total_download_progress;
+    // TODO(heyuchen): used for query bulk load status(distinguish finish and cleanup) and failover
+    std::unordered_map<gpid, bool> _partitions_cleaned_up;
 };
 
 } // namespace replication
