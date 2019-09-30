@@ -1646,7 +1646,7 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
         return resp.err;
     }
 
-    int partition_count = resp.partition_status.size();
+    int partition_count = resp.partitions_status.size();
     if (pidx < -1 || pidx >= partition_count) {
         std::cout << "app(" << app_name << ") partition_count(" << partition_count << ")"
                   << std::endl;
@@ -1698,11 +1698,11 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
                 for (int i = 0; i < partition_count; ++i) {
                     if (!print_progress) {
                         std::cout << std::setw(width) << std::left << i << std::setw(width)
-                                  << std::left << get_short_status(resp.partition_status[i])
+                                  << std::left << get_short_status(resp.partitions_status[i])
                                   << std::endl;
                     } else {
                         std::cout << std::setw(width) << std::left << i << std::setw(width)
-                                  << std::left << get_short_status(resp.partition_status[i])
+                                  << std::left << get_short_status(resp.partitions_status[i])
                                   << std::setw(width) << std::left << partitions_progress[i]
                                   << std::endl;
                     }

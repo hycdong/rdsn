@@ -5719,7 +5719,7 @@ typedef struct _configuration_query_bulk_load_response__isset
         : err(false),
           app_name(false),
           app_status(false),
-          partition_status(false),
+          partitions_status(false),
           max_replica_count(false),
           download_progresses(false)
     {
@@ -5727,7 +5727,7 @@ typedef struct _configuration_query_bulk_load_response__isset
     bool err : 1;
     bool app_name : 1;
     bool app_status : 1;
-    bool partition_status : 1;
+    bool partitions_status : 1;
     bool max_replica_count : 1;
     bool download_progresses : 1;
 } _configuration_query_bulk_load_response__isset;
@@ -5749,7 +5749,7 @@ public:
     ::dsn::error_code err;
     std::string app_name;
     ::dsn::bulk_load_status::type app_status;
-    std::vector<::dsn::bulk_load_status::type> partition_status;
+    std::vector<::dsn::bulk_load_status::type> partitions_status;
     int32_t max_replica_count;
     std::vector<std::map<::dsn::rpc_address, partition_download_progress>> download_progresses;
 
@@ -5761,7 +5761,7 @@ public:
 
     void __set_app_status(const ::dsn::bulk_load_status::type val);
 
-    void __set_partition_status(const std::vector<::dsn::bulk_load_status::type> &val);
+    void __set_partitions_status(const std::vector<::dsn::bulk_load_status::type> &val);
 
     void __set_max_replica_count(const int32_t val);
 
@@ -5776,7 +5776,7 @@ public:
             return false;
         if (!(app_status == rhs.app_status))
             return false;
-        if (!(partition_status == rhs.partition_status))
+        if (!(partitions_status == rhs.partitions_status))
             return false;
         if (!(max_replica_count == rhs.max_replica_count))
             return false;
@@ -5816,8 +5816,9 @@ typedef struct _bulk_load_request__isset
           primary_addr(false),
           remote_provider_name(false),
           cluster_name(false),
-          app_bl_status(false),
-          partition_bl_info(false)
+          app_bulk_load_status(false),
+          partition_bl_info(false),
+          partition_bulk_load_status(false)
     {
     }
     bool pid : 1;
@@ -5825,8 +5826,9 @@ typedef struct _bulk_load_request__isset
     bool primary_addr : 1;
     bool remote_provider_name : 1;
     bool cluster_name : 1;
-    bool app_bl_status : 1;
+    bool app_bulk_load_status : 1;
     bool partition_bl_info : 1;
+    bool partition_bulk_load_status : 1;
 } _bulk_load_request__isset;
 
 class bulk_load_request
@@ -5840,7 +5842,8 @@ public:
         : app_name(),
           remote_provider_name(),
           cluster_name(),
-          app_bl_status((::dsn::bulk_load_status::type)0)
+          app_bulk_load_status((::dsn::bulk_load_status::type)0),
+          partition_bulk_load_status((::dsn::bulk_load_status::type)0)
     {
     }
 
@@ -5850,8 +5853,9 @@ public:
     ::dsn::rpc_address primary_addr;
     std::string remote_provider_name;
     std::string cluster_name;
-    ::dsn::bulk_load_status::type app_bl_status;
+    ::dsn::bulk_load_status::type app_bulk_load_status;
     partition_bulk_load_info partition_bl_info;
+    ::dsn::bulk_load_status::type partition_bulk_load_status;
 
     _bulk_load_request__isset __isset;
 
@@ -5865,9 +5869,11 @@ public:
 
     void __set_cluster_name(const std::string &val);
 
-    void __set_app_bl_status(const ::dsn::bulk_load_status::type val);
+    void __set_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
     void __set_partition_bl_info(const partition_bulk_load_info &val);
+
+    void __set_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
     bool operator==(const bulk_load_request &rhs) const
     {
@@ -5881,9 +5887,11 @@ public:
             return false;
         if (!(cluster_name == rhs.cluster_name))
             return false;
-        if (!(app_bl_status == rhs.app_bl_status))
+        if (!(app_bulk_load_status == rhs.app_bulk_load_status))
             return false;
         if (!(partition_bl_info == rhs.partition_bl_info))
+            return false;
+        if (!(partition_bulk_load_status == rhs.partition_bulk_load_status))
             return false;
         return true;
     }
@@ -5911,7 +5919,7 @@ typedef struct _bulk_load_response__isset
         : err(false),
           pid(false),
           app_name(false),
-          partition_bl_status(false),
+          primary_bulk_load_status(false),
           download_progresses(false),
           total_download_progress(false),
           is_group_bulk_load_context_cleaned(false)
@@ -5920,7 +5928,7 @@ typedef struct _bulk_load_response__isset
     bool err : 1;
     bool pid : 1;
     bool app_name : 1;
-    bool partition_bl_status : 1;
+    bool primary_bulk_load_status : 1;
     bool download_progresses : 1;
     bool total_download_progress : 1;
     bool is_group_bulk_load_context_cleaned : 1;
@@ -5935,7 +5943,7 @@ public:
     bulk_load_response &operator=(bulk_load_response &&);
     bulk_load_response()
         : app_name(),
-          partition_bl_status((::dsn::bulk_load_status::type)0),
+          primary_bulk_load_status((::dsn::bulk_load_status::type)0),
           total_download_progress(0),
           is_group_bulk_load_context_cleaned(0)
     {
@@ -5945,7 +5953,7 @@ public:
     ::dsn::error_code err;
     ::dsn::gpid pid;
     std::string app_name;
-    ::dsn::bulk_load_status::type partition_bl_status;
+    ::dsn::bulk_load_status::type primary_bulk_load_status;
     std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
     int32_t total_download_progress;
     bool is_group_bulk_load_context_cleaned;
@@ -5958,7 +5966,7 @@ public:
 
     void __set_app_name(const std::string &val);
 
-    void __set_partition_bl_status(const ::dsn::bulk_load_status::type val);
+    void __set_primary_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
     void
     __set_download_progresses(const std::map<::dsn::rpc_address, partition_download_progress> &val);
@@ -5975,7 +5983,7 @@ public:
             return false;
         if (!(app_name == rhs.app_name))
             return false;
-        if (!(partition_bl_status == rhs.partition_bl_status))
+        if (!(primary_bulk_load_status == rhs.primary_bulk_load_status))
             return false;
         if (__isset.download_progresses != rhs.__isset.download_progresses)
             return false;

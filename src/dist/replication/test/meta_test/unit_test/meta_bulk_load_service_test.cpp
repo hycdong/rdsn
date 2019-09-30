@@ -415,7 +415,7 @@ public:
         _resp.app_name = NAME;
         _resp.pid = gpid(_app_id, pidx);
         _resp.err = err;
-        _resp.partition_bl_status = status;
+        _resp.primary_bulk_load_status = status;
     }
 
     void mock_response_progress(error_code progress_err, bool finish_download, uint32_t pidx)

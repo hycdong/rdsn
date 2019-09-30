@@ -780,7 +780,7 @@ struct configuration_query_bulk_load_response
     1:dsn.error_code                    err;
     2:string                            app_name;
     3:dsn.layer2.bulk_load_status       app_status;
-    4:list<dsn.layer2.bulk_load_status> partition_status;
+    4:list<dsn.layer2.bulk_load_status> partitions_status;
     5:i32                               max_replica_count;
     6:optional list<map<dsn.rpc_address, partition_download_progress>> download_progresses;
 }
@@ -792,22 +792,22 @@ struct bulk_load_request
     3:dsn.rpc_address               primary_addr;
     4:string                        remote_provider_name;
     5:string                        cluster_name;
-    6:dsn.layer2.bulk_load_status   app_bl_status; // TODO(heyuchen):rename
-    // TODO(heyuchen): use bulk_load_status here
+    6:dsn.layer2.bulk_load_status   app_bulk_load_status;
+
+    // TODO(heyuchen): delete it and add ballot
     7:partition_bulk_load_info      partition_bl_info;
+    8:dsn.layer2.bulk_load_status   partition_bulk_load_status;
 }
 
 struct bulk_load_response
 {
-    // TODO(heyuchen): add ballot
-    1:dsn.error_code    err;
-    2:dsn.gpid  pid;
-    3:string    app_name;
-    4:dsn.layer2.bulk_load_status   partition_bl_status;
-    5:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
-    6:optional i32 total_download_progress;
-    // TODO(heyuchen): use group clean flags
-    7:optional bool is_group_bulk_load_context_cleaned;
+    1:dsn.error_code                err;
+    2:dsn.gpid                      pid;
+    3:string                        app_name;
+    4:dsn.layer2.bulk_load_status   primary_bulk_load_status;
+    5:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
+    6:optional i32                  total_download_progress;
+    7:optional bool                 is_group_bulk_load_context_cleaned;
 }
 
 struct group_bulk_load_request

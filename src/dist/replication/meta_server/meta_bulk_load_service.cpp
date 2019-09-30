@@ -276,10 +276,10 @@ void bulk_load_service::partition_bulk_load(gpid pid)
     req.pid = pid;
     req.app_name = app_name;
     req.primary_addr = primary_addr;
-    req.app_bl_status = ainfo.status;
+    req.app_bulk_load_status = ainfo.status;
     req.remote_provider_name = ainfo.file_provider_type;
     req.cluster_name = ainfo.cluster_name;
-    req.partition_bl_info = pbl_info;
+    req.partition_bulk_load_status = pbl_info.status;
 
     dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
     dsn::marshall(msg, req);
@@ -298,7 +298,7 @@ void bulk_load_service::partition_bulk_load(gpid pid)
              primary_addr.to_string(),
              app_name,
              pid.to_string(),
-             enum_to_string(req.app_bl_status),
+             enum_to_string(req.app_bulk_load_status),
              enum_to_string(pbl_info.status),
              req.remote_provider_name,
              req.cluster_name);
@@ -324,7 +324,7 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                 response.err.to_string());
     } else if (response.err != ERR_OK) {
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
-        if (response.partition_bl_status == bulk_load_status::BLS_DOWNLOADING) {
+        if (response.primary_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
             if (response.err == ERR_CORRUPTION) {
                 derror_f("app(), partition({}) failed to download files from remote provider, "
                          "because files "
@@ -379,7 +379,7 @@ void bulk_load_service::handle_app_bulk_load_downloading(bulk_load_response &res
                 primary_addr.to_string(),
                 response.app_name,
                 pid.to_string(),
-                enum_to_string(response.partition_bl_status),
+                enum_to_string(response.primary_bulk_load_status),
                 ec.to_string());
         handle_partition_download_error(pid);
         return;
@@ -393,7 +393,7 @@ void bulk_load_service::handle_app_bulk_load_downloading(bulk_load_response &res
              primary_addr.to_string(),
              response.app_name,
              pid.to_string(),
-             enum_to_string(response.partition_bl_status),
+             enum_to_string(response.primary_bulk_load_status),
              total_progress);
     {
         zauto_write_lock l(_lock);
@@ -437,7 +437,7 @@ void bulk_load_service::handle_app_bulk_load_cleanup(bulk_load_response &respons
                 primary_addr.to_string(),
                 response.app_name,
                 pid.to_string(),
-                enum_to_string(response.partition_bl_status));
+                enum_to_string(response.primary_bulk_load_status));
         return;
     }
 
@@ -447,7 +447,7 @@ void bulk_load_service::handle_app_bulk_load_cleanup(bulk_load_response &respons
              primary_addr.to_string(),
              response.app_name,
              pid.to_string(),
-             enum_to_string(response.partition_bl_status),
+             enum_to_string(response.primary_bulk_load_status),
              all_clean_up);
     {
         zauto_write_lock l(_lock);
@@ -704,7 +704,7 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         zauto_read_lock l(_lock);
         response.max_replica_count = max_replica_count;
         response.app_status = get_app_bulk_load_status(app_id);
-        response.partition_status.resize(partition_count);
+        response.partitions_status.resize(partition_count);
         ddebug_f("query app({}) bulk_load_status({}) succeed",
                  app_name,
                  enum_to_string(response.app_status));
@@ -718,7 +718,7 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         for (auto iter = _partition_bulk_load_info.begin(); iter != _partition_bulk_load_info.end();
              iter++) {
             int idx = iter->first.get_partition_index();
-            response.partition_status[idx] = iter->second.status;
+            response.partitions_status[idx] = iter->second.status;
             if (response.__isset.download_progresses) {
                 response.download_progresses[idx] = _partitions_download_progress[iter->first];
             }
@@ -908,7 +908,7 @@ void bulk_load_service::handle_app_bulk_load_downloaded(bulk_load_response &resp
         primary_addr.to_string(),
         response.app_name,
         pid.to_string(),
-        enum_to_string(response.partition_bl_status));
+        enum_to_string(response.primary_bulk_load_status));
 
     std::string partition_bulk_load_path = get_partition_bulk_load_path(
         get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());

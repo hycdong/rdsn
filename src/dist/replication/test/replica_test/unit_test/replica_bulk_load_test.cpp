@@ -65,13 +65,10 @@ public:
     /// mock structure functions
     void mock_bulk_load_request()
     {
-        partition_bulk_load_info pinfo;
-        pinfo.status = bulk_load_status::BLS_INVALID;
-
-        _req.app_bl_status = bulk_load_status::BLS_INVALID;
+        _req.app_bulk_load_status = bulk_load_status::BLS_INVALID;
         _req.app_name = APP_NAME;
         _req.cluster_name = CLUSTER;
-        _req.partition_bl_info = pinfo;
+        _req.partition_bulk_load_status = bulk_load_status::BLS_INVALID;
         _req.pid = PID;
         _req.remote_provider_name = PROVIDER;
     }

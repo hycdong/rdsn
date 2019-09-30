@@ -34,14 +34,14 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         request.remote_provider_name,
         request.cluster_name,
         request.app_name,
-        enum_to_string(request.app_bl_status),
-        enum_to_string(request.partition_bl_info.status),
+        enum_to_string(request.app_bulk_load_status),
+        enum_to_string(request.partition_bulk_load_status),
         enum_to_string(_bulk_load_context.get_status()));
 
     broadcast_group_bulk_load(request);
 
     if (_bulk_load_context.get_status() == bulk_load_status::BLS_INVALID &&
-        request.partition_bl_info.status == bulk_load_status::BLS_DOWNLOADING) {
+        request.partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
         // update bulk load status
         _bulk_load_context.set_status(bulk_load_status::BLS_DOWNLOADING);
@@ -62,7 +62,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         update_group_download_progress(response);
     }
 
-    if (request.partition_bl_info.status == bulk_load_status::BLS_FINISH) {
+    if (request.partition_bulk_load_status == bulk_load_status::BLS_FINISH) {
         if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADED) {
             // primary and secondary update bulk load status to finish
             handle_bulk_load_succeed();
@@ -74,15 +74,15 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         }
     }
 
-    if (request.app_bl_status == bulk_load_status::BLS_FAILED &&
-        request.partition_bl_info.status == bulk_load_status::BLS_FAILED) {
+    if (request.app_bulk_load_status == bulk_load_status::BLS_FAILED &&
+        request.partition_bulk_load_status == bulk_load_status::BLS_FAILED) {
         // handle cleanup
         // set clean flags
         handle_bulk_load_error();
         update_group_context_clean_flag(response);
     }
 
-    response.partition_bl_status = _bulk_load_context.get_status();
+    response.primary_bulk_load_status = _bulk_load_context.get_status();
 }
 
 // TODO(heyuchen): refactor group_bulk_load functions
@@ -119,8 +119,8 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
         request->app = _app_info;
         request->target_address = addr;
         _primary_states.get_replica_config(partition_status::PS_SECONDARY, request->config);
-        request->meta_app_bulk_load_status = meta_req.app_bl_status;
-        request->meta_partition_bulk_load_status = meta_req.partition_bl_info.status;
+        request->meta_app_bulk_load_status = meta_req.app_bulk_load_status;
+        request->meta_partition_bulk_load_status = meta_req.partition_bulk_load_status;
         if (_bulk_load_context.get_status() == bulk_load_status::BLS_DOWNLOADING ||
             bulk_load_status::BLS_DOWNLOADED) {
             request->__isset.cluster_name = true;
