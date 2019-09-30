@@ -5914,7 +5914,7 @@ typedef struct _bulk_load_response__isset
           partition_bl_status(false),
           download_progresses(false),
           total_download_progress(false),
-          context_clean_flags(false)
+          is_group_bulk_load_context_cleaned(false)
     {
     }
     bool err : 1;
@@ -5923,7 +5923,7 @@ typedef struct _bulk_load_response__isset
     bool partition_bl_status : 1;
     bool download_progresses : 1;
     bool total_download_progress : 1;
-    bool context_clean_flags : 1;
+    bool is_group_bulk_load_context_cleaned : 1;
 } _bulk_load_response__isset;
 
 class bulk_load_response
@@ -5936,7 +5936,8 @@ public:
     bulk_load_response()
         : app_name(),
           partition_bl_status((::dsn::bulk_load_status::type)0),
-          total_download_progress(0)
+          total_download_progress(0),
+          is_group_bulk_load_context_cleaned(0)
     {
     }
 
@@ -5947,7 +5948,7 @@ public:
     ::dsn::bulk_load_status::type partition_bl_status;
     std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
     int32_t total_download_progress;
-    std::map<::dsn::rpc_address, bool> context_clean_flags;
+    bool is_group_bulk_load_context_cleaned;
 
     _bulk_load_response__isset __isset;
 
@@ -5964,7 +5965,7 @@ public:
 
     void __set_total_download_progress(const int32_t val);
 
-    void __set_context_clean_flags(const std::map<::dsn::rpc_address, bool> &val);
+    void __set_is_group_bulk_load_context_cleaned(const bool val);
 
     bool operator==(const bulk_load_response &rhs) const
     {
@@ -5985,9 +5986,11 @@ public:
         else if (__isset.total_download_progress &&
                  !(total_download_progress == rhs.total_download_progress))
             return false;
-        if (__isset.context_clean_flags != rhs.__isset.context_clean_flags)
+        if (__isset.is_group_bulk_load_context_cleaned !=
+            rhs.__isset.is_group_bulk_load_context_cleaned)
             return false;
-        else if (__isset.context_clean_flags && !(context_clean_flags == rhs.context_clean_flags))
+        else if (__isset.is_group_bulk_load_context_cleaned &&
+                 !(is_group_bulk_load_context_cleaned == rhs.is_group_bulk_load_context_cleaned))
             return false;
         return true;
     }

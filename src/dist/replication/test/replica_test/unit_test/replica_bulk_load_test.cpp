@@ -347,8 +347,7 @@ TEST_F(replica_bulk_load_test, update_group_context_clean_flag)
     response.pid = PID;
 
     test_update_group_context_clean_flag(response);
-    ASSERT_TRUE(response.context_clean_flags[rpc_address("127.0.0.3", 34801)]);
-    ASSERT_FALSE(response.context_clean_flags[rpc_address("127.0.0.4", 34801)]);
+    ASSERT_FALSE(response.is_group_bulk_load_context_cleaned);
 }
 
 TEST_F(replica_bulk_load_test, handle_bulk_load_error)

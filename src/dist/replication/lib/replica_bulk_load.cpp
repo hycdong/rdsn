@@ -751,21 +751,21 @@ void replica::update_group_context_clean_flag(bulk_load_response &response)
         return;
     }
 
-    response.__isset.context_clean_flags = true;
-    response.context_clean_flags[_primary_states.membership.primary] =
-        _bulk_load_context.is_cleanup();
     ddebug_replica("primary = {}, bulk_load_context cleanup = {}",
                    _primary_states.membership.primary.to_string(),
                    _bulk_load_context.is_cleanup());
 
+    bool group_flag = _bulk_load_context.is_cleanup();
     for (const auto &target_address : _primary_states.membership.secondaries) {
         bool is_clean_up = _primary_states.group_bulk_load_context_flag[target_address];
-        response.context_clean_flags[target_address] = is_clean_up;
-
         ddebug_replica("secondary = {}, bulk_load_context cleanup = {}",
                        target_address.to_string(),
                        is_clean_up);
+        group_flag = group_flag && is_clean_up;
     }
+
+    response.__isset.is_group_bulk_load_context_cleaned = true;
+    response.is_group_bulk_load_context_cleaned = group_flag;
 }
 
 } // namespace replication

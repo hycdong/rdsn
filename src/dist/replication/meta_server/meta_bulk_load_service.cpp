@@ -438,39 +438,28 @@ void bulk_load_service::handle_partition_download_error(gpid pid)
 void bulk_load_service::handle_partition_bulk_load_failed(bulk_load_response &response,
                                                           const rpc_address &primary_addr)
 {
-    if (!response.__isset.context_clean_flags) {
-        dwarn_f(
-            "recevie bulk load response from {} app({}) partition({}), primary status = {}, but "
-            "not checking cleanup",
-            primary_addr.to_string(),
-            response.app_name,
-            response.pid.to_string(),
-            enum_to_string(response.partition_bl_status));
+    gpid pid = response.pid;
+    if (!response.__isset.is_group_bulk_load_context_cleaned) {
+        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), primary status = "
+                "{}, but "
+                "not checking cleanup",
+                primary_addr.to_string(),
+                response.app_name,
+                pid.to_string(),
+                enum_to_string(response.partition_bl_status));
         return;
     }
 
-    gpid pid = response.pid;
-    bool all_clean_up = true;
-    ddebug_f("recevie bulk load response from {} app({}) partition({}), primary status = {}",
+    bool all_clean_up = response.is_group_bulk_load_context_cleaned;
+    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
+             "group_bulk_load_context_cleaned = {}",
              primary_addr.to_string(),
              response.app_name,
              pid.to_string(),
-             enum_to_string(response.partition_bl_status));
-    for (auto iter = response.context_clean_flags.begin();
-         iter != response.context_clean_flags.end();
-         ++iter) {
-        all_clean_up = all_clean_up && iter->second;
-        if (!all_clean_up) {
-            ddebug_f("app({}) partition({}) node({}) not cleanup bulk load context",
-                     response.app_name,
-                     pid.to_string(),
-                     iter->first.to_string());
-        }
-    }
-    if (all_clean_up) {
-        ddebug_f(
-            "app({}) partition({}) cleanup bulk load context", response.app_name, pid.to_string());
+             enum_to_string(response.partition_bl_status),
+             all_clean_up);
 
+    if (all_clean_up) {
         int count;
         std::shared_ptr<app_state> app;
         {
@@ -496,39 +485,28 @@ void bulk_load_service::handle_partition_bulk_load_failed(bulk_load_response &re
 void bulk_load_service::handle_partition_bulk_load_succeed(bulk_load_response &response,
                                                            const rpc_address &primary_addr)
 {
-    if (!response.__isset.context_clean_flags) {
-        dwarn_f(
-            "recevie bulk load response from {} app({}) partition({}), primary status = {}, but "
-            "not checking cleanup, retry",
-            primary_addr.to_string(),
-            response.app_name,
-            response.pid.to_string(),
-            enum_to_string(response.partition_bl_status));
+    gpid pid = response.pid;
+    if (!response.__isset.is_group_bulk_load_context_cleaned) {
+        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), primary status = "
+                "{}, but "
+                "not checking cleanup",
+                primary_addr.to_string(),
+                response.app_name,
+                pid.to_string(),
+                enum_to_string(response.partition_bl_status));
         return;
     }
 
-    gpid pid = response.pid;
-    bool all_clean_up = true;
-    ddebug_f("recevie bulk load response from {} app({}) partition({}), primary status={}",
+    bool all_clean_up = response.is_group_bulk_load_context_cleaned;
+    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
+             "group_bulk_load_context_cleaned = {}",
              primary_addr.to_string(),
              response.app_name,
              pid.to_string(),
-             enum_to_string(response.partition_bl_status));
-    for (auto iter = response.context_clean_flags.begin();
-         iter != response.context_clean_flags.end();
-         ++iter) {
-        all_clean_up = all_clean_up && iter->second;
-        if (!all_clean_up) {
-            ddebug_f("app({}) partition({}) node({}) not cleanup bulk load context",
-                     response.app_name,
-                     pid.to_string(),
-                     iter->first.to_string());
-        }
-    }
-    if (all_clean_up) {
-        ddebug_f(
-            "app({}) partition({}) cleanup bulk load context", response.app_name, pid.to_string());
+             enum_to_string(response.partition_bl_status),
+             all_clean_up);
 
+    if (all_clean_up) {
         int count;
         std::shared_ptr<app_state> app;
         {

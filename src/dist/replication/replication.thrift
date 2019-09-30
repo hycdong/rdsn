@@ -807,7 +807,7 @@ struct bulk_load_response
     5:optional map<dsn.rpc_address, partition_download_progress> download_progresses;
     6:optional i32 total_download_progress;
     // TODO(heyuchen): use group clean flags
-    7:optional map<dsn.rpc_address, bool> context_clean_flags;
+    7:optional bool is_group_bulk_load_context_cleaned;
 }
 
 struct group_bulk_load_request

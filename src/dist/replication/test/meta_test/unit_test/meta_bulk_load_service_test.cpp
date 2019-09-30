@@ -449,14 +449,8 @@ public:
     void mock_response_cleanup_flag(bool finish_cleanup, uint32_t pidx)
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_FAILED, pidx);
-        _resp.__isset.context_clean_flags = true;
-        _resp.context_clean_flags[rpc_address("127.0.0.1", 10085)] = true;
-        _resp.context_clean_flags[_primary] = true;
-        if (finish_cleanup) {
-            _resp.context_clean_flags[rpc_address("127.0.0.1", 10087)] = true;
-        } else {
-            _resp.context_clean_flags[rpc_address("127.0.0.1", 10085)] = false;
-        }
+        _resp.__isset.is_group_bulk_load_context_cleaned = true;
+        _resp.is_group_bulk_load_context_cleaned = finish_cleanup;
     }
 
     uint32_t _app_id;
