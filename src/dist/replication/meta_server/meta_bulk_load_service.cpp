@@ -770,6 +770,28 @@ void bulk_load_service::do_sync_app_bulk_load(uint32_t app_id, std::string app_p
                 app_path, ainfo.app_id, ainfo.app_name, ainfo.partition_count);
         });
 }
+// TODO(heyuchen):
+// 1. no children
+//    - downloading -> create all partition with downloading and send bulk load request
+//    - donwloaded/ingesting/finish + no children -> [error remove dir and reset flag]
+//    - failed + no children -> remove dir and reset flag
+//
+// 2. some partition has same status with app status, some not
+//    - app:downloading + not existed -> create not existed partition with downloading and send bulk load request
+//    - app:downloading + downloaded -> count = downloading count, send bulk load request (app aim -> downloaded)
+//    - app:downloaded + ingesting -> count = downloaded count, send bulk load request (app aim -> ingesting)
+//    - app:downloaded + not downloaded && not ingesting -> [error remove dir and reset flag]
+//    - app:ingesting + finish -> -> count = ingesting count, send bulk load request and ingestion request(app aim -> ingesting)
+//    - app:ingesting + not ingesting && not finish -> [error remove dir and reset flag]
+//    - app:finish + not finish -> [error remove dir and reset flag]
+//    - app:failed + not failed -> set partition failed, send bulk load request (app: cleanup)
+//
+// 3. all child partition status isconsistency with app (count = partition count)
+//    - downloading: send request
+//    - downloaded: send request
+//    - ingesting: send request and send ingestion
+//    - finish: send request
+//    - failed: send request
 
 void bulk_load_service::do_sync_partitions_bulk_load(std::string app_path,
                                                      uint32_t app_id,
