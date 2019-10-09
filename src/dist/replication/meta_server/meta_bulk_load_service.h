@@ -105,6 +105,16 @@ private:
     // clear bulk load service local variety
     void clear_app_bulk_load_states(uint32_t app_id, const std::string &app_name); // private
 
+    bool validate_partition_bulk_load_status(
+        const std::unordered_set<uint32_t> &different_pidx_set,
+        uint32_t same_count,
+        uint32_t invalid_count,
+        bulk_load_status::type app_status,
+        const std::string &app_name,
+        std::unordered_map<uint32_t, bulk_load_status::type> &partition_map);
+
+    bulk_load_status::type get_valid_partition_status(bulk_load_status::type app_status);
+
     /// remote stroage functions
     // update app's is_bulk_loading = true
     void start_bulk_load_on_remote_storage(std::shared_ptr<app_state> app,
@@ -127,10 +137,17 @@ private:
     // sync partition bulk load info from remote stroage
     // if partition bulk load info exist, send bulk load request to primary
     // otherwise, create partition bulk load info first, then send request to primary
-    void do_sync_partitions_bulk_load(std::string app_path,
-                                      uint32_t app_id,
-                                      std::string app_name,
-                                      uint32_t partition_count); // private + zk
+    void sync_partitions_bulk_load(std::string app_path,
+                                   uint32_t app_id,
+                                   std::string app_name,
+                                   uint32_t partition_count,
+                                   bulk_load_status::type app_status); // private + zk
+
+    void do_sync_partitions_bulk_load(const std::vector<std::string> &children,
+                                      uint32_t invalid_count,
+                                      bulk_load_status::type app_status,
+                                      std::shared_ptr<app_state> app,
+                                      const std::string &app_path);
 
     void create_partition_bulk_load_info(const std::string &app_name,
                                          gpid pid,
@@ -146,6 +163,9 @@ private:
     // update app's bulk load status to {new_status} on remote storage
     void update_app_bulk_load_status_unlock(uint32_t app_id,
                                             bulk_load_status::type new_status); // private + zk
+
+    // remove app bulk load dir on remote stroage
+    void remove_app_bulk_load_dir(int32_t app_id, const std::string &app_name);
 
     // remove app bulk load dir on remote stroage
     // need_set_app_flag = true: update app's is_bulk_loading to false on remote_storage

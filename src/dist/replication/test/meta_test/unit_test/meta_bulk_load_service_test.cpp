@@ -330,57 +330,57 @@ TEST_F(bulk_load_query_test, success)
     ASSERT_EQ(resp.err, ERR_OK);
 }
 
-class bulk_load_sync_apps_test : public meta_bulk_load_service_test
-{
-public:
-    bulk_load_sync_apps_test() {}
+//class bulk_load_sync_apps_test : public meta_bulk_load_service_test
+//{
+//public:
+//    bulk_load_sync_apps_test() {}
 
-    void SetUp()
-    {
-        fail::setup();
-        fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
-    }
+//    void SetUp()
+//    {
+//        fail::setup();
+//        fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+//    }
 
-    void TearDown()
-    {
-        fail::teardown();
-        meta_bulk_load_service_test::TearDown();
-    }
-};
+//    void TearDown()
+//    {
+//        fail::teardown();
+//        meta_bulk_load_service_test::TearDown();
+//    }
+//};
 
-TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
-{
-    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, true);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-    wait_all();
-}
+//TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
+//{
+//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, true);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
+//}
 
-TEST_F(bulk_load_sync_apps_test, partition_bulk_load_half_exist)
-{
-    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, false);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-    wait_all();
-}
+//TEST_F(bulk_load_sync_apps_test, partition_bulk_load_half_exist)
+//{
+//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, false);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
+//}
 
-TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_app_status)
-{
-    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, false, false);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-    wait_all();
+//TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_app_status)
+//{
+//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, false, false);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
 
-    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
-    ASSERT_EQ(app->is_bulk_loading, false);
-}
+//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
+//    ASSERT_EQ(app->is_bulk_loading, false);
+//}
 
-TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_bulk_load_dir)
-{
-    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(false, true, true);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-    wait_all();
+//TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_bulk_load_dir)
+//{
+//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(false, true, true);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
 
-    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
-    ASSERT_EQ(app->is_bulk_loading, false);
-}
+//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
+//    ASSERT_EQ(app->is_bulk_loading, false);
+//}
 
 class bulk_load_partition_bulk_load_test : public meta_bulk_load_service_test
 {
