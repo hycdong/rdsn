@@ -50,11 +50,11 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
         }
     }
 
-    error_code e = request_params_check(request.app_name,
-                                        request.cluster_name,
-                                        request.file_provider_type,
-                                        app->app_id,
-                                        app->partition_count);
+    error_code e = check_bulk_load_request_params(request.app_name,
+                                                  request.cluster_name,
+                                                  request.file_provider_type,
+                                                  app->app_id,
+                                                  app->partition_count);
     if (e != ERR_OK) {
         response.err = e;
         return;
@@ -77,14 +77,34 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
 // - ERR_OBJECT_NOT_FOUNT: bulk_load_info not exist, may wrong cluster_name or app_name
 // - ERR_INCOMPLETE_DATA: bulk_load_info is damaged on file_provider
 // - ERR_INCONSISTENT_STATE: app_id or partition_count inconsistent
-dsn::error_code bulk_load_service::request_params_check(const std::string &app_name,
-                                                        const std::string &cluster_name,
-                                                        const std::string &file_provider,
-                                                        uint32_t app_id,
-                                                        uint32_t partition_count)
+dsn::error_code bulk_load_service::check_bulk_load_request_params(const std::string &app_name,
+                                                                  const std::string &cluster_name,
+                                                                  const std::string &file_provider,
+                                                                  uint32_t app_id,
+                                                                  uint32_t partition_count)
 {
-    FAIL_POINT_INJECT_F("meta_bulk_load_request_params_check",
+    FAIL_POINT_INJECT_F("meta_check_bulk_load_request_params",
                         [](dsn::string_view) -> dsn::error_code { return dsn::ERR_OK; });
+    FAIL_POINT_INJECT_F(
+        "meta_check_bulk_load_request_params_file_failed",
+        [](dsn::string_view) -> dsn::error_code { return dsn::ERR_FILE_OPERATION_FAILED; });
+    FAIL_POINT_INJECT_F(
+        "meta_check_bulk_load_request_app_info_failed", [=](dsn::string_view) -> dsn::error_code {
+            int32_t invalid_app_id = 0;
+            int32_t invalid_partition_count = 9;
+            if (app_id != invalid_app_id || partition_count != invalid_partition_count) {
+                derror_f(
+                    "app({}) information is inconsistent, local app_id({}) VS remote app_id({}), "
+                    "local partition_count({}) VS remote partition_count({})",
+                    app_name,
+                    app_id,
+                    invalid_app_id,
+                    partition_count,
+                    invalid_partition_count);
+                return ERR_INCONSISTENT_STATE;
+            }
+            return ERR_OK;
+        });
 
     // check file provider
     dsn::dist::block_service::block_filesystem *blk_fs =
@@ -305,7 +325,6 @@ void bulk_load_service::partition_bulk_load(gpid pid)
              enum_to_string(pbl_info.status),
              req.remote_provider_name,
              req.cluster_name);
-    // TODO(heyuchen): tasking::enqueue send request
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 

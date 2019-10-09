@@ -195,6 +195,7 @@ private:
     friend class replication_checker;
     friend class test::test_checker;
     friend class ::meta_service_test_app;
+    friend class bulk_load_service_test;
 
     replication_options _opts;
     meta_options _meta_opts;
@@ -208,7 +209,6 @@ private:
     std::shared_ptr<server_load_balancer> _balancer;
     std::shared_ptr<backup_service> _backup_handler;
 
-    friend class meta_bulk_load_service_test;
     std::shared_ptr<bulk_load_service> _bulk_load_svc;
 
     // handle all the block filesystems for current meta service

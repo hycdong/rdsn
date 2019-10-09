@@ -65,11 +65,11 @@ public:
     void check_app_bulk_load_consistency(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
 private:
-    dsn::error_code request_params_check(const std::string &app_name,
-                                         const std::string &cluster_name,
-                                         const std::string &file_provider,
-                                         uint32_t app_id,
-                                         uint32_t partition_count);
+    dsn::error_code check_bulk_load_request_params(const std::string &app_name,
+                                                   const std::string &cluster_name,
+                                                   const std::string &file_provider,
+                                                   uint32_t app_id,
+                                                   uint32_t partition_count);
 
     // check download status in progress, if all partitions download_status is ERR_OK, return
     // ERR_OK,
@@ -219,7 +219,7 @@ private:
     }
 
 private:
-    friend class meta_bulk_load_service_test;
+    friend class bulk_load_service_test;
 
     meta_service *_meta_svc;
     server_state *_state;

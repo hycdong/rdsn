@@ -29,14 +29,15 @@
 
 #include "dist/replication/meta_server/meta_server_failure_detector.h"
 #include "dist/replication/meta_server/meta_service.h"
-#include "meta_bulk_load_service_test_helper.h"
+#include "dist/replication/meta_server/meta_bulk_load_service.h"
+#include "meta_service_test_app.h"
 
 namespace dsn {
 namespace replication {
-class meta_bulk_load_service_test : public ::testing::Test
+class bulk_load_service_test : public ::testing::Test
 {
 public:
-    meta_bulk_load_service_test() {}
+    bulk_load_service_test() {}
 
     void SetUp() override
     {
@@ -45,7 +46,7 @@ public:
         _meta_svc->_failure_detector.reset(new meta_server_failure_detector(_meta_svc.get()));
 
         // initialize bulk load service
-        _meta_svc->_bulk_load_svc.reset(new bulk_load_service_mock(
+        _meta_svc->_bulk_load_svc.reset(new bulk_load_service(
             _meta_svc.get(),
             meta_options::concat_path_unix_style(_meta_svc->_cluster_root, "bulk_load")));
         _meta_svc->_bulk_load_svc->create_bulk_load_dir_on_remote_stroage();
@@ -62,6 +63,26 @@ public:
 
         _state.reset();
         _meta_svc.reset(nullptr);
+    }
+
+    /// initialize functions
+    void create_app(const std::string &name)
+    {
+        configuration_create_app_request req;
+        configuration_create_app_response resp;
+        req.app_name = name;
+        req.options.app_type = "simple_kv";
+        req.options.partition_count = PARTITION_COUNT;
+        req.options.replica_count = 3;
+        req.options.success_if_exist = false;
+        req.options.is_stateful = true;
+
+        auto result = fake_create_app(_state.get(), req);
+        fake_wait_rpc(result, resp);
+        ASSERT_EQ(resp.err, ERR_OK) << resp.err.to_string() << " " << name;
+
+        // wait for the table to create
+        ASSERT_TRUE(_state->spin_wait_staging(30));
     }
 
     void setup_without_create_bulk_load_dir(bool is_bulk_loading,
@@ -81,7 +102,7 @@ public:
         _meta_svc.reset(meta_svc);
 
         // initialize bulk load service
-        _meta_svc->_bulk_load_svc.reset(new bulk_load_service_mock(
+        _meta_svc->_bulk_load_svc.reset(new bulk_load_service(
             _meta_svc.get(),
             meta_options::concat_path_unix_style(_meta_svc->_cluster_root, "bulk_load")));
         if (mock_app_bulk_load_dir) {
@@ -97,6 +118,7 @@ public:
         _state = _meta_svc->_state;
     }
 
+    /// mock structure functions
     void mock_app_half_bulk_load_downloading(bool all_partitions_not_bulk_load)
     {
         std::string path = bulk_svc()->_bulk_load_root;
@@ -203,35 +225,13 @@ public:
         wait_all();
     }
 
-    bulk_load_service *bulk_svc() { return _meta_svc->_bulk_load_svc.get(); }
-
-    void create_app(const std::string &name)
-    {
-        configuration_create_app_request req;
-        configuration_create_app_response resp;
-        req.app_name = name;
-        req.options.app_type = "simple_kv";
-        req.options.partition_count = PARTITION_COUNT;
-        req.options.replica_count = 3;
-        req.options.success_if_exist = false;
-        req.options.is_stateful = true;
-
-        auto result = fake_create_app(_state.get(), req);
-        fake_wait_rpc(result, resp);
-        ASSERT_EQ(resp.err, ERR_OK) << resp.err.to_string() << " " << name;
-
-        // wait for the table to create
-        ASSERT_TRUE(_state->spin_wait_staging(30));
-    }
-
-    start_bulk_load_response start_bulk_load(const std::string &app_name,
-                                             const std::string &cluster_name,
-                                             const std::string &file_provider)
+    /// bulk load functions
+    start_bulk_load_response start_bulk_load(const std::string &app_name)
     {
         auto request = dsn::make_unique<start_bulk_load_request>();
         request->app_name = app_name;
-        request->cluster_name = cluster_name;
-        request->file_provider_type = file_provider;
+        request->cluster_name = CLUSTER;
+        request->file_provider_type = PROVIDER;
 
         start_bulk_load_rpc rpc(std::move(request), RPC_CM_START_BULK_LOAD);
         bulk_svc()->on_start_bulk_load(rpc);
@@ -239,70 +239,13 @@ public:
         return rpc.response();
     }
 
-    std::shared_ptr<app_state> find_app(const std::string &name) { return _state->get_app(name); }
-
-    void wait_all() { _meta_svc->tracker()->wait_outstanding_tasks(); }
-
-    std::shared_ptr<server_state> _state;
-    std::unique_ptr<meta_service> _meta_svc;
-    std::string _app_root;
-
-    bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
+    error_code check_start_bulk_load_request_params(const std::string provider,
+                                                    int32_t app_id,
+                                                    int32_t partition_count)
     {
-        return bulk_svc()->get_app_bulk_load_status(app_id);
+        return bulk_svc()->check_bulk_load_request_params(
+            APP_NAME, CLUSTER, provider, app_id, partition_count);
     }
-};
-
-class bulk_load_start_test : public meta_bulk_load_service_test
-{
-public:
-    bulk_load_start_test() {}
-
-    void SetUp()
-    {
-        meta_bulk_load_service_test::SetUp();
-        create_app(NAME);
-        fail::setup();
-        fail::cfg("meta_bulk_load_request_params_check", "return()");
-    }
-
-    void TearDown()
-    {
-        fail::teardown();
-        meta_bulk_load_service_test::TearDown();
-    }
-};
-
-TEST_F(bulk_load_start_test, wrong_app)
-{
-    auto resp = start_bulk_load("table_not_exist", CLUSTER, PROVIDER);
-    ASSERT_EQ(resp.err, ERR_APP_NOT_EXIST);
-}
-
-// TODO(heyuchen): add ut for request_params_check
-
-TEST_F(bulk_load_start_test, success)
-{
-    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
-
-    auto resp = start_bulk_load(NAME, CLUSTER, PROVIDER);
-    ASSERT_EQ(resp.err, ERR_OK);
-    std::shared_ptr<app_state> app = find_app(NAME);
-    ASSERT_EQ(app->is_bulk_loading, true);
-}
-
-class bulk_load_query_test : public meta_bulk_load_service_test
-{
-public:
-    bulk_load_query_test() {}
-
-    void SetUp()
-    {
-        meta_bulk_load_service_test::SetUp();
-        create_app(NAME);
-    }
-
-    void TearDown() { meta_bulk_load_service_test::TearDown(); }
 
     configuration_query_bulk_load_response query_bulk_load(const std::string &app_name)
     {
@@ -314,25 +257,108 @@ public:
         wait_all();
         return rpc.response();
     }
+
+    /// helper functions
+    bulk_load_service *bulk_svc() { return _meta_svc->_bulk_load_svc.get(); }
+
+    bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
+    {
+        return bulk_svc()->get_app_bulk_load_status(app_id);
+    }
+    std::shared_ptr<app_state> find_app(const std::string &name) { return _state->get_app(name); }
+    void wait_all() { _meta_svc->tracker()->wait_outstanding_tasks(); }
+
+public:
+    std::string APP_NAME = "bulk_load_table";
+    int32_t PARTITION_COUNT = 8;
+    std::string CLUSTER = "cluster";
+    std::string PROVIDER = "local_service";
+
+    std::shared_ptr<server_state> _state;
+    std::unique_ptr<meta_service> _meta_svc;
+    std::string _app_root;
 };
 
-TEST_F(bulk_load_query_test, wrong_state)
+/// start bulk load unit tests
+TEST_F(bulk_load_service_test, start_bulk_load_with_not_existed_app)
 {
-    auto resp = query_bulk_load(NAME);
+    create_app(APP_NAME);
+    fail::setup();
+    fail::cfg("meta_check_bulk_load_request_params", "return()");
+
+    auto resp = start_bulk_load("table_not_exist");
+    ASSERT_EQ(resp.err, ERR_APP_NOT_EXIST);
+
+    fail::teardown();
+}
+
+TEST_F(bulk_load_service_test, start_bulk_load_with_wrong_provider)
+{
+    create_app(APP_NAME);
+    error_code err = check_start_bulk_load_request_params("wrong_provider", 1, PARTITION_COUNT);
+    ASSERT_EQ(err, ERR_INVALID_PARAMETERS);
+}
+
+TEST_F(bulk_load_service_test, start_bulk_load_with_file_error)
+{
+    create_app(APP_NAME);
+    fail::setup();
+    fail::cfg("meta_check_bulk_load_request_params_file_failed", "return()");
+
+    error_code err = check_start_bulk_load_request_params(PROVIDER, 1, PARTITION_COUNT);
+    ASSERT_EQ(err, ERR_FILE_OPERATION_FAILED);
+
+    fail::teardown();
+}
+
+TEST_F(bulk_load_service_test, start_bulk_load_with_inconsistent_app_info)
+{
+    create_app(APP_NAME);
+    fail::setup();
+    fail::cfg("meta_check_bulk_load_request_app_info_failed", "return()");
+
+    error_code err = check_start_bulk_load_request_params(PROVIDER, 1, PARTITION_COUNT);
+    ASSERT_EQ(err, ERR_INCONSISTENT_STATE);
+
+    fail::teardown();
+}
+
+TEST_F(bulk_load_service_test, start_bulk_load_succeed)
+{
+    create_app(APP_NAME);
+    fail::setup();
+    fail::cfg("meta_check_bulk_load_request_params", "return()");
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    auto resp = start_bulk_load(APP_NAME);
+    ASSERT_EQ(resp.err, ERR_OK);
+    std::shared_ptr<app_state> app = find_app(APP_NAME);
+    ASSERT_EQ(app->is_bulk_loading, true);
+
+    fail::teardown();
+}
+
+/// query bulk load status unit tests
+// TODO(heyuchen): add more ut
+TEST_F(bulk_load_service_test, query_bulk_load_status_with_wrong_state)
+{
+    create_app(APP_NAME);
+    auto resp = query_bulk_load(APP_NAME);
     ASSERT_EQ(resp.err, ERR_INVALID_STATE);
 }
 
-TEST_F(bulk_load_query_test, success)
+TEST_F(bulk_load_service_test, query_bulk_load_status_success)
 {
-    std::shared_ptr<app_state> app = find_app(NAME);
+    create_app(APP_NAME);
+    std::shared_ptr<app_state> app = find_app(APP_NAME);
     app->is_bulk_loading = true;
-    auto resp = query_bulk_load(NAME);
+    auto resp = query_bulk_load(APP_NAME);
     ASSERT_EQ(resp.err, ERR_OK);
 }
 
-//class bulk_load_sync_apps_test : public meta_bulk_load_service_test
+// class bulk_load_sync_apps_test : public bulk_load_service_test
 //{
-//public:
+// public:
 //    bulk_load_sync_apps_test() {}
 
 //    void SetUp()
@@ -344,37 +370,27 @@ TEST_F(bulk_load_query_test, success)
 //    void TearDown()
 //    {
 //        fail::teardown();
-//        meta_bulk_load_service_test::TearDown();
+//        bulk_load_service_test::TearDown();
 //    }
 //};
 
-//TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
+// TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
 //{
-//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, true);
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, true);
 //    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
 //    wait_all();
 //}
 
-//TEST_F(bulk_load_sync_apps_test, partition_bulk_load_half_exist)
+// TEST_F(bulk_load_sync_apps_test, partition_bulk_load_half_exist)
 //{
-//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, false);
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, false);
 //    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
 //    wait_all();
 //}
 
-//TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_app_status)
+// TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_app_status)
 //{
-//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(true, false, false);
-//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-//    wait_all();
-
-//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
-//    ASSERT_EQ(app->is_bulk_loading, false);
-//}
-
-//TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_bulk_load_dir)
-//{
-//    meta_bulk_load_service_test::setup_without_create_bulk_load_dir(false, true, true);
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, false, false);
 //    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
 //    wait_all();
 
@@ -382,23 +398,33 @@ TEST_F(bulk_load_query_test, success)
 //    ASSERT_EQ(app->is_bulk_loading, false);
 //}
 
-class bulk_load_partition_bulk_load_test : public meta_bulk_load_service_test
+// TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_bulk_load_dir)
+//{
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(false, true, true);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
+
+//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
+//    ASSERT_EQ(app->is_bulk_loading, false);
+//}
+
+class bulk_load_partition_bulk_load_test : public bulk_load_service_test
 {
 public:
     bulk_load_partition_bulk_load_test() {}
 
     void SetUp()
     {
-        meta_bulk_load_service_test::SetUp();
-        create_app(NAME);
+        bulk_load_service_test::SetUp();
+        create_app(APP_NAME);
 
         fail::setup();
-        fail::cfg("meta_bulk_load_request_params_check", "return()");
+        fail::cfg("meta_check_bulk_load_request_params", "return()");
         fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
 
-        auto resp = start_bulk_load(NAME, CLUSTER, PROVIDER);
+        auto resp = start_bulk_load(APP_NAME);
         ASSERT_EQ(resp.err, ERR_OK);
-        std::shared_ptr<app_state> app = find_app(NAME);
+        std::shared_ptr<app_state> app = find_app(APP_NAME);
         _app_id = app->app_id;
         _partition_count = app->partition_count;
         ASSERT_EQ(app->is_bulk_loading, true);
@@ -407,12 +433,12 @@ public:
     void TearDown()
     {
         fail::teardown();
-        meta_bulk_load_service_test::TearDown();
+        bulk_load_service_test::TearDown();
     }
 
     void create_basic_response(error_code err, bulk_load_status::type status, uint32_t pidx)
     {
-        _resp.app_name = NAME;
+        _resp.app_name = APP_NAME;
         _resp.pid = gpid(_app_id, pidx);
         _resp.err = err;
         _resp.primary_bulk_load_status = status;
@@ -525,7 +551,7 @@ TEST_F(bulk_load_partition_bulk_load_test, finish_cleanup)
         bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(resp), _resp.pid, _primary);
     }
     wait_all();
-    std::shared_ptr<app_state> app = find_app(NAME);
+    std::shared_ptr<app_state> app = find_app(APP_NAME);
     ASSERT_EQ(app->is_bulk_loading, false);
 }
 
