@@ -25,6 +25,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <dsn/dist/fmt_logging.h>
 #include <dsn/utility/fail_point.h>
 
 #include "dist/replication/meta_server/meta_server_failure_detector.h"
@@ -85,6 +86,41 @@ public:
         ASSERT_TRUE(_state->spin_wait_staging(30));
     }
 
+//    void initialize_during_bulk_load(int32_t app_id,
+//                                     int32_t partition_count,
+//                                     bulk_load_status::type app_bulk_load_status)
+//    {
+//        // initialize meta service
+//        auto meta_svc = new fake_receiver_meta_service();
+//        meta_svc->remote_storage_initialize();
+
+//        // initialize server_state
+//        auto state = meta_svc->_state;
+//        state->initialize(meta_svc, meta_svc->_cluster_root + "/apps");
+//        _app_root = state->_apps_root;
+//        meta_svc->_started = true;
+
+//        _meta_svc.reset(meta_svc);
+
+//        // initialize bulk load service
+//        _meta_svc->_bulk_load_svc.reset(new bulk_load_service(
+//            _meta_svc.get(),
+//            meta_options::concat_path_unix_style(_meta_svc->_cluster_root, "bulk_load")));
+//        mock_app_bulk_load_info_on_remote_stroage(app_id, partition_count, app_bulk_load_status);
+
+//        // mock a app
+//        mock_app_on_remote_stroage(app_id, partition_count, APP_NAME, true);
+//        state->initialize_data_structure();
+
+//        _meta_svc->set_function_level(meta_function_level::fl_steady);
+//        _meta_svc->_failure_detector.reset(new meta_server_failure_detector(_meta_svc.get()));
+//        _state = _meta_svc->_state;
+
+//        // mock bulk load status
+//        bulk_svc()->_bulk_load_app_id.insert(app_id);
+//        bulk_svc()->_apps_in_progress_count[app_id] = partition_count;
+//    }
+
     void setup_without_create_bulk_load_dir(bool is_bulk_loading,
                                             bool mock_app_bulk_load_dir,
                                             bool all_partitions_not_bulk_load)
@@ -110,15 +146,65 @@ public:
         }
 
         // mock a app
-        mock_app_on_remote_stroage(is_bulk_loading);
+        mock_app_on_remote_stroage(7, 4, "half_bulk_load_downloading", is_bulk_loading);
         state->initialize_data_structure();
 
         _meta_svc->set_function_level(meta_function_level::fl_steady);
         _meta_svc->_failure_detector.reset(new meta_server_failure_detector(_meta_svc.get()));
-        _state = _meta_svc->_state;
+        _state = _meta_svc->_state;        
     }
 
     /// mock structure functions
+//    void mock_app_bulk_load_info_on_remote_stroage(int32_t app_id,
+//                                                   int32_t partition_count,
+//                                                   bulk_load_status::type app_bulk_load_status)
+//    {
+//        std::string path = bulk_svc()->_bulk_load_root;
+//        blob value = blob();
+//        // create bulk_load_root
+//        _meta_svc->get_meta_storage()->create_node(
+//            std::move(path), std::move(value), [this, app_id, partition_count, app_bulk_load_status]() {
+//                app_bulk_load_info ainfo;
+//                ainfo.app_id = app_id;
+//                ainfo.partition_count = partition_count;
+//                ainfo.app_name = APP_NAME;
+//                ainfo.cluster_name = CLUSTER;
+//                ainfo.file_provider_type = PROVIDER;
+//                ainfo.status = app_bulk_load_status;
+//                blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
+//                std::string app_path = bulk_svc()->get_app_bulk_load_path(ainfo.app_id);
+//                // create app_bulk_load_info
+//                _meta_svc->get_meta_storage()->create_node(
+//                    std::move(app_path),
+//                    std::move(value),
+//                    [this, app_path, app_id, partition_count, ainfo, app_bulk_load_status]() {
+//                        ddebug_f("create app({},id={}) bulk load dir, bulk_load_status={}", APP_NAME, app_id, enum_to_string(app_bulk_load_status));
+//                        bulk_svc()->_app_bulk_load_info[app_id] = ainfo;
+//                        // create partition_bulk_load_info
+//                        for(int i = 0; i < partition_count; ++i){
+//                            mock_partition_bulk_load_info_on_remote_stroage(app_path, app_bulk_load_status, app_id, i);
+//                        }
+//                    });
+//            });
+//        wait_all();
+//    }
+
+//    void mock_partition_bulk_load_info_on_remote_stroage(std::string app_path, bulk_load_status::type partition_status, int32_t app_id, int32_t pidx)
+//    {
+//        partition_bulk_load_info pinfo;
+//        pinfo.status = partition_status;
+//        blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
+//        _meta_svc->get_meta_storage()->create_node(
+//            bulk_svc()->get_partition_bulk_load_path(app_path, 0),
+//            std::move(value),
+//            [this, partition_status, app_id, pidx, pinfo]() {
+//                gpid pid = gpid(app_id, pidx);
+//                ddebug_f("create partition[{}] bulk load dir, bulk_load_status={}", pid.to_string(), enum_to_string(partition_status));
+//                bulk_svc()->_partition_bulk_load_info[pid] = pinfo;
+//            });
+//    }
+
+    // TODO(heyuchen): refactor
     void mock_app_half_bulk_load_downloading(bool all_partitions_not_bulk_load)
     {
         std::string path = bulk_svc()->_bulk_load_root;
@@ -148,6 +234,7 @@ public:
         wait_all();
     }
 
+    // TODO(heyuchen): refactor
     void mock_partition_half_bulk_load_downloading(std::string app_path,
                                                    bool all_partitions_not_bulk_load)
     {
@@ -173,7 +260,7 @@ public:
         }
     }
 
-    void mock_app_on_remote_stroage(bool is_bulk_loading)
+    void mock_app_on_remote_stroage(int32_t app_id, int32_t partition_count, std::string app_name, bool is_bulk_loading)
     {
         static const char *lock_state = "lock";
         static const char *unlock_state = "unlock";
@@ -181,18 +268,18 @@ public:
 
         _meta_svc->get_meta_storage()->create_node(
             std::move(path), blob(lock_state, 0, strlen(lock_state)), [is_bulk_loading, this]() {
-                std::cout << "create app root" << _app_root << std::endl;
+                ddebug_f("create app root {}", _app_root);
             });
         wait_all();
 
         app_info info;
-        info.app_id = 7;
-        info.app_name = "half_bulk_load_downloading";
+        info.app_id = app_id;
+        info.app_name = app_name;
         info.app_type = "pegasus";
         info.is_stateful = true;
         info.is_bulk_loading = is_bulk_loading;
         info.max_replica_count = 3;
-        info.partition_count = 4;
+        info.partition_count = partition_count;
         info.status = app_status::AS_AVAILABLE;
         blob value = dsn::json::json_forwarder<app_info>::encode(info);
 
@@ -200,8 +287,7 @@ public:
             _app_root + "/" + boost::lexical_cast<std::string>(info.app_id),
             std::move(value),
             [info, this]() {
-                std::cout << "create app " << info.app_name << "(" << info.app_id << ") dir succeed"
-                          << std::endl;
+                ddebug_f("create app({}) app_id={}, dir succeed", info.app_name, info.app_id);
                 for (int i = 0; i < info.partition_count; ++i) {
                     partition_configuration config;
                     config.max_replica_count = 3;
@@ -212,8 +298,7 @@ public:
                             boost::lexical_cast<std::string>(i),
                         std::move(v),
                         [info, i, this]() {
-                            std::cout << "create app " << info.app_name << " gpid(" << info.app_id
-                                      << "." << i << ") dir succeed" << std::endl;
+                            ddebug_f("create app({}), partition({}.{}) dir succeed", info.app_name, info.app_id, i);
                         });
                 }
             });
@@ -223,6 +308,17 @@ public:
         _meta_svc->get_meta_storage()->set_data(
             std::move(app_root), blob(unlock_state, 0, strlen(unlock_state)), []() {});
         wait_all();
+    }
+
+    void mock_meta_bulk_load_context(int32_t app_id, int32_t partition_count, bulk_load_status::type status){
+        bulk_svc()->_bulk_load_app_id.insert(app_id);
+        bulk_svc()->_apps_in_progress_count[app_id] = partition_count;
+        bulk_svc()->_app_bulk_load_info[app_id].status = status;
+        for(int i = 0; i < partition_count; ++i){
+            gpid pid = gpid(app_id, i);
+            bulk_svc()->_partition_bulk_load_info[pid].status = status;
+        }
+
     }
 
     /// bulk load functions
@@ -258,13 +354,17 @@ public:
         return rpc.response();
     }
 
-    /// helper functions
-    bulk_load_service *bulk_svc() { return _meta_svc->_bulk_load_svc.get(); }
-
     bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
     {
         return bulk_svc()->get_app_bulk_load_status(app_id);
     }
+
+    void handle_app_bulk_load_downloaded(bulk_load_response &resp, rpc_address &primary_addr){
+        bulk_svc()->handle_app_bulk_load_downloaded(resp, primary_addr);
+    }
+
+    /// helper functions
+    bulk_load_service *bulk_svc() { return _meta_svc->_bulk_load_svc.get(); }
     std::shared_ptr<app_state> find_app(const std::string &name) { return _state->get_app(name); }
     void wait_all() { _meta_svc->tracker()->wait_outstanding_tasks(); }
 
@@ -356,66 +456,15 @@ TEST_F(bulk_load_service_test, query_bulk_load_status_success)
     ASSERT_EQ(resp.err, ERR_OK);
 }
 
-// class bulk_load_sync_apps_test : public bulk_load_service_test
-//{
-// public:
-//    bulk_load_sync_apps_test() {}
-
-//    void SetUp()
-//    {
-//        fail::setup();
-//        fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
-//    }
-
-//    void TearDown()
-//    {
-//        fail::teardown();
-//        bulk_load_service_test::TearDown();
-//    }
-//};
-
-// TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
-//{
-//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, true);
-//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-//    wait_all();
-//}
-
-// TEST_F(bulk_load_sync_apps_test, partition_bulk_load_half_exist)
-//{
-//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, false);
-//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-//    wait_all();
-//}
-
-// TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_app_status)
-//{
-//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, false, false);
-//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-//    wait_all();
-
-//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
-//    ASSERT_EQ(app->is_bulk_loading, false);
-//}
-
-// TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_bulk_load_dir)
-//{
-//    bulk_load_service_test::setup_without_create_bulk_load_dir(false, true, true);
-//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
-//    wait_all();
-
-//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
-//    ASSERT_EQ(app->is_bulk_loading, false);
-//}
-
-class bulk_load_partition_bulk_load_test : public bulk_load_service_test
+/// bulk load process unit tests
+class bulk_load_process_test : public bulk_load_service_test
 {
 public:
-    bulk_load_partition_bulk_load_test() {}
+    bulk_load_process_test() {}
 
     void SetUp()
     {
-        bulk_load_service_test::SetUp();
+         bulk_load_service_test::SetUp();
         create_app(APP_NAME);
 
         fail::setup();
@@ -479,13 +528,13 @@ public:
         _resp.is_group_bulk_load_context_cleaned = finish_cleanup;
     }
 
-    uint32_t _app_id;
-    uint32_t _partition_count;
+    uint32_t _app_id = 3;
+    uint32_t _partition_count = 4;
     bulk_load_response _resp;
     rpc_address _primary = rpc_address("127.0.0.1", 10086);
 };
 
-TEST_F(bulk_load_partition_bulk_load_test, response_fs_error)
+TEST_F(bulk_load_process_test, downloading_fs_error)
 {
     create_basic_response(ERR_FS_INTERNAL, bulk_load_status::BLS_DOWNLOADING, 0);
     auto response = _resp;
@@ -494,7 +543,7 @@ TEST_F(bulk_load_partition_bulk_load_test, response_fs_error)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
 }
 
-TEST_F(bulk_load_partition_bulk_load_test, downloading_corrupt)
+TEST_F(bulk_load_process_test, downloading_corrupt)
 {
     mock_response_progress(ERR_CORRUPTION, false, 0);
     auto response = _resp;
@@ -503,7 +552,7 @@ TEST_F(bulk_load_partition_bulk_load_test, downloading_corrupt)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
 }
 
-TEST_F(bulk_load_partition_bulk_load_test, downloading)
+TEST_F(bulk_load_process_test, normal_downloading)
 {
     mock_response_progress(ERR_OK, false, 0);
     auto response = _resp;
@@ -512,7 +561,7 @@ TEST_F(bulk_load_partition_bulk_load_test, downloading)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
 }
 
-TEST_F(bulk_load_partition_bulk_load_test, finish_download)
+TEST_F(bulk_load_process_test, downloaded_succeed)
 {
     for (int i = 0; i < _partition_count; ++i) {
         mock_response_progress(ERR_OK, true, i);
@@ -523,28 +572,31 @@ TEST_F(bulk_load_partition_bulk_load_test, finish_download)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADED);
 }
 
-TEST_F(bulk_load_partition_bulk_load_test, cleanup_half)
+TEST_F(bulk_load_process_test, normal_ingesting)
 {
-    mock_response_progress(ERR_CORRUPTION, false, 0);
-    auto response = _resp;
-    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    fail::cfg("meta_bulk_load_partition_ingestion", "return()");
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_DOWNLOADED);
+    for (int i = 0; i < _partition_count; ++i) {
+        mock_response_progress(ERR_OK, true, i);
+        auto response = _resp;
+        bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
+    }
     wait_all();
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_INGESTING);
+}
 
+TEST_F(bulk_load_process_test, half_cleanup)
+{
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_FAILED);
     mock_response_cleanup_flag(false, 0);
     auto resp = _resp;
     bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(resp), _resp.pid, _primary);
     wait_all();
 }
 
-TEST_F(bulk_load_partition_bulk_load_test, finish_cleanup)
+TEST_F(bulk_load_process_test, cleanup_succeed)
 {
-    mock_response_progress(ERR_CORRUPTION, false, 0);
-    auto response = _resp;
-    bulk_svc()->on_partition_bulk_load_reply(ERR_OK, std::move(response), _resp.pid, _primary);
-    wait_all();
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
-
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_FINISH);
     for (int i = 0; i < _partition_count; ++i) {
         mock_response_cleanup_flag(true, i);
         auto resp = _resp;
@@ -554,6 +606,58 @@ TEST_F(bulk_load_partition_bulk_load_test, finish_cleanup)
     std::shared_ptr<app_state> app = find_app(APP_NAME);
     ASSERT_EQ(app->is_bulk_loading, false);
 }
+
+// class bulk_load_sync_apps_test : public bulk_load_service_test
+//{
+// public:
+//    bulk_load_sync_apps_test() {}
+
+//    void SetUp()
+//    {
+//        fail::setup();
+//        fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+//    }
+
+//    void TearDown()
+//    {
+//        fail::teardown();
+//        bulk_load_service_test::TearDown();
+//    }
+//};
+
+// TEST_F(bulk_load_sync_apps_test, only_app_bulk_load_exist)
+//{
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, true);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
+//}
+
+// TEST_F(bulk_load_sync_apps_test, partition_bulk_load_half_exist)
+//{
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, true, false);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
+//}
+
+// TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_app_status)
+//{
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(true, false, false);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
+
+//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
+//    ASSERT_EQ(app->is_bulk_loading, false);
+//}
+
+// TEST_F(bulk_load_sync_apps_test, status_inconsistency_wrong_bulk_load_dir)
+//{
+//    bulk_load_service_test::setup_without_create_bulk_load_dir(false, true, true);
+//    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+//    wait_all();
+
+//    std::shared_ptr<app_state> app = find_app("half_bulk_load_downloading");
+//    ASSERT_EQ(app->is_bulk_loading, false);
+//}
 
 } // namespace replication
 } // namespace dsn

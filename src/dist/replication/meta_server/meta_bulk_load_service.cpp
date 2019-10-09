@@ -328,6 +328,7 @@ void bulk_load_service::partition_bulk_load(gpid pid)
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 
+// TODO(heyuchen): add ballot check while consider replica failover
 void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
                                                      bulk_load_response &&response,
                                                      gpid pid,
@@ -348,16 +349,14 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
         if (response.primary_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
             if (response.err == ERR_CORRUPTION) {
-                derror_f("app(), partition({}) failed to download files from remote provider, "
-                         "because files "
-                         "are damaged, error = {}",
+                derror_f("app({}), partition({}) failed to download files from remote provider, "
+                         "because files are damaged, error = {}",
                          response.app_name,
                          pid.to_string(),
                          response.err.to_string());
             } else {
-                dwarn_f("app(), partition({}) failed to download files from remote provider, "
-                        "because file "
-                        "system error, error = {}",
+                dwarn_f("app({}), partition({}) failed to download files from remote provider, "
+                        "because file system error, error = {}",
                         response.app_name,
                         pid.to_string(),
                         response.err.to_string());
@@ -378,7 +377,6 @@ void bulk_load_service::on_partition_bulk_load_reply(dsn::error_code err,
         } else {
             // do nothing if during ingesting
         }
-        // TODO(heyuchen): handle ballot inconsistency
     }
 
     if (is_app_bulk_loading(pid.get_app_id())) {
@@ -699,6 +697,113 @@ void bulk_load_service::erase_map_elem_by_id(uint32_t app_id, std::unordered_map
             mymap.erase(iter++);
         }
     }
+}
+
+void bulk_load_service::handle_app_bulk_load_downloaded(bulk_load_response &response,
+                                                        const rpc_address &primary_addr)
+{
+    gpid pid = response.pid;
+    ddebug_f(
+        "recevie bulk load response from node({}) app({}) partition({}), bulk load status = {}",
+        primary_addr.to_string(),
+        response.app_name,
+        pid.to_string(),
+        enum_to_string(response.primary_bulk_load_status));
+
+    std::string partition_bulk_load_path = get_partition_bulk_load_path(
+        get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
+    update_partition_bulk_load_status(
+        response.app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_INGESTING);
+}
+
+void bulk_load_service::partition_ingestion(gpid pid)
+{
+    FAIL_POINT_INJECT_F("meta_bulk_load_partition_ingestion", [](dsn::string_view) {});
+
+    dsn::rpc_address primary_addr;
+    std::string app_name;
+    {
+        zauto_read_lock l(app_lock());
+        std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
+        // app not existed or not available now
+        if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
+            dwarn_f("app({}) is not existed, set bulk load finish", app->app_name);
+            // TODO(heyuchen): handler it
+            return;
+        }
+        app_name = app->app_name;
+        primary_addr = app->partitions[pid.get_partition_index()].primary;
+    }
+
+    // pid primary is invalid
+    if (primary_addr.is_invalid()) {
+        dwarn_f(
+            "app({}) partition({}) primary is invalid, try it later", app_name, pid.to_string());
+        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
+                         _meta_svc->tracker(),
+                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
+                         pid.thread_hash(),
+                         std::chrono::seconds(1));
+        return;
+    }
+
+    ingestion_request req;
+    req.app_name = app_name;
+    message_ex *msg =
+        dsn::message_ex::create_client_request(dsn::apps::RPC_RRDB_RRDB_BULK_LOAD, pid);
+    dsn::marshall(msg, req);
+    dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
+        msg,
+        _meta_svc->tracker(),
+        [this, app_name, pid](error_code err, ingestion_response &&resp) {
+            on_partition_ingestion_reply(err, std::move(resp), app_name, pid);
+        });
+    ddebug_f("send ingest request to replica server({}), app({}) partition({})",
+             primary_addr.to_string(),
+             app_name,
+             pid.to_string());
+
+    _meta_svc->send_request(msg, primary_addr, rpc_callback);
+}
+
+void bulk_load_service::on_partition_ingestion_reply(dsn::error_code err,
+                                                     ingestion_response &&resp,
+                                                     const std::string &app_name,
+                                                     gpid pid)
+{
+    // TODO(heyuchen):consider!!!
+    if (err != ERR_OK) {
+        derror_f("app({}) partition({}) failed to ingestion files, error = {}",
+                 app_name,
+                 pid.to_string(),
+                 err.to_string());
+        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
+                         _meta_svc->tracker(),
+                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
+                         pid.thread_hash(),
+                         std::chrono::seconds(1));
+        return;
+    }
+
+    // TODO(heyuchen):consider!!!
+    if (resp.error != 0) {
+        derror_f("app({}) partition({}) failed to ingestion files, error = {}",
+                 app_name,
+                 pid.to_string(),
+                 resp.error);
+        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
+                         _meta_svc->tracker(),
+                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
+                         pid.thread_hash(),
+                         std::chrono::seconds(1));
+        return;
+    }
+
+    ddebug_f("app({}) partition({}) ingestion files succeed", app_name, pid.to_string());
+    std::string partition_bulk_load_path = get_partition_bulk_load_path(
+        get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
+    update_partition_bulk_load_status(
+        app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_FINISH);
 }
 
 void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
@@ -1164,111 +1269,6 @@ void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_stat
                 }
             }
         });
-}
-
-void bulk_load_service::handle_app_bulk_load_downloaded(bulk_load_response &response,
-                                                        const rpc_address &primary_addr)
-{
-    gpid pid = response.pid;
-    ddebug_f(
-        "recevie bulk load response from node({}) app({}) partition({}), bulk load status = {}",
-        primary_addr.to_string(),
-        response.app_name,
-        pid.to_string(),
-        enum_to_string(response.primary_bulk_load_status));
-
-    std::string partition_bulk_load_path = get_partition_bulk_load_path(
-        get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
-    update_partition_bulk_load_status(
-        response.app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_INGESTING);
-}
-
-void bulk_load_service::partition_ingestion(gpid pid)
-{
-    dsn::rpc_address primary_addr;
-    std::string app_name;
-    {
-        zauto_read_lock l(app_lock());
-        std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
-        // app not existed or not available now
-        if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
-            dwarn_f("app({}) is not existed, set bulk load finish", app->app_name);
-            // TODO(heyuchen): handler it
-            return;
-        }
-        app_name = app->app_name;
-        primary_addr = app->partitions[pid.get_partition_index()].primary;
-    }
-
-    // pid primary is invalid
-    if (primary_addr.is_invalid()) {
-        dwarn_f(
-            "app({}) partition({}) primary is invalid, try it later", app_name, pid.to_string());
-        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
-                         _meta_svc->tracker(),
-                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
-                         pid.thread_hash(),
-                         std::chrono::seconds(1));
-        return;
-    }
-
-    ingestion_request req;
-    req.app_name = app_name;
-    message_ex *msg =
-        dsn::message_ex::create_client_request(dsn::apps::RPC_RRDB_RRDB_BULK_LOAD, pid);
-    dsn::marshall(msg, req);
-    dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
-        msg,
-        _meta_svc->tracker(),
-        [this, app_name, pid](error_code err, ingestion_response &&resp) {
-            on_partition_ingestion_reply(err, std::move(resp), app_name, pid);
-        });
-    ddebug_f("send ingest request to replica server({}), app({}) partition({})",
-             primary_addr.to_string(),
-             app_name,
-             pid.to_string());
-
-    _meta_svc->send_request(msg, primary_addr, rpc_callback);
-}
-
-void bulk_load_service::on_partition_ingestion_reply(dsn::error_code err,
-                                                     ingestion_response &&resp,
-                                                     const std::string &app_name,
-                                                     gpid pid)
-{
-    // TODO(heyuchen):consider!!!
-    if (err != ERR_OK) {
-        derror_f("app({}) partition({}) failed to ingestion files, error = {}",
-                 app_name,
-                 pid.to_string(),
-                 err.to_string());
-        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
-                         _meta_svc->tracker(),
-                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
-                         pid.thread_hash(),
-                         std::chrono::seconds(1));
-        return;
-    }
-
-    // TODO(heyuchen):consider!!!
-    if (resp.error != 0) {
-        derror_f("app({}) partition({}) failed to ingestion files, error = {}",
-                 app_name,
-                 pid.to_string(),
-                 resp.error);
-        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
-                         _meta_svc->tracker(),
-                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
-                         pid.thread_hash(),
-                         std::chrono::seconds(1));
-        return;
-    }
-
-    ddebug_f("app({}) partition({}) ingestion files succeed", app_name, pid.to_string());
-    std::string partition_bulk_load_path = get_partition_bulk_load_path(
-        get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
-    update_partition_bulk_load_status(
-        app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_FINISH);
 }
 
 } // namespace replication
