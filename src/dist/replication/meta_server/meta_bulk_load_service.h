@@ -13,17 +13,17 @@ namespace replication {
 // bulk_load_info is used for remote file provider
 struct bulk_load_info
 {
-    uint32_t app_id;
+    int32_t app_id;
     std::string app_name;
-    uint32_t partition_count;
+    int32_t partition_count;
     DEFINE_JSON_SERIALIZATION(app_id, app_name, partition_count)
 };
 
 // TODO(heyuchen): move it into thrift file
 struct app_bulk_load_info
 {
-    uint32_t app_id;
-    uint32_t partition_count;
+    int32_t app_id;
+    int32_t partition_count;
     std::string app_name;
     std::string cluster_name;
     std::string file_provider_type;
@@ -44,19 +44,19 @@ public:
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
 
     // meta sent bulk_load_request to each partition's primary
-    void partition_bulk_load(gpid pid);
+    void partition_bulk_load(const gpid &pid);
 
-    void on_partition_bulk_load_reply(dsn::error_code err,
+    void on_partition_bulk_load_reply(error_code err,
                                       bulk_load_response &&response,
-                                      gpid pid,
-                                      const dsn::rpc_address &primary_addr);
+                                      const gpid &pid,
+                                      const rpc_address &primary_addr);
 
     void create_bulk_load_root_dir(error_code &err, task_tracker &tracker);
 
     // Called when service initialize and meta service leader switch
     // sync app's bulk load status from remote stroage
     // if bulk load dir exist, restart bulk load
-    void sync_apps_bulk_load(error_code &err, dsn::task_tracker &tracker);
+    void sync_apps_bulk_load(error_code &err, task_tracker &tracker);
 
     // Called when sync_apps_from_remote_stroage, check bulk load state consistency
     // If app->is_bulk_loading = true, app_bulk_load_info should be existed on remote stroage
@@ -67,45 +67,45 @@ public:
     void check_app_bulk_load_consistency(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
 private:
-    dsn::error_code check_bulk_load_request_params(const std::string &app_name,
-                                                   const std::string &cluster_name,
-                                                   const std::string &file_provider,
-                                                   uint32_t app_id,
-                                                   uint32_t partition_count);
+    error_code check_bulk_load_request_params(const std::string &app_name,
+                                              const std::string &cluster_name,
+                                              const std::string &file_provider,
+                                              const int32_t app_id,
+                                              const int32_t partition_count);
 
     // check download status in progress, if all partitions download_status is ERR_OK, return
     // ERR_OK,
     // otherwise return the error_code NOT ERR_OK
-    dsn::error_code check_download_status(bulk_load_response &response); // private
+    error_code check_download_status(const bulk_load_response &response); // private
 
     // helper function for on_partition_bulk_load_reply
     // handle situation when response.error is NOT ERR_OK during downloading status
-    void handle_partition_download_error(gpid pid); // private
+    void handle_partition_download_error(const gpid &pid); // private
 
     // helper function for on_partition_bulk_load_reply
     // hanlde situation when response.error is ERR_OK during downloading status
-    void handle_app_bulk_load_downloading(bulk_load_response &response,
+    void handle_app_bulk_load_downloading(const bulk_load_response &response,
                                           const rpc_address &primary_addr); // private
 
-    void handle_app_bulk_load_downloaded(bulk_load_response &response,
+    void handle_app_bulk_load_downloaded(const bulk_load_response &response,
                                          const rpc_address &primary_addr);
 
     // helper function for on_partition_bulk_load_reply
     // hanlde situation when response.error is ERR_OK during failed status or finish status
-    void handle_app_bulk_load_cleanup(bulk_load_response &response,
+    void handle_app_bulk_load_cleanup(const bulk_load_response &response,
                                       const rpc_address &primary_addr); // private
 
     // create ingestion request and send it to primary
-    void partition_ingestion(gpid pid);
+    void partition_ingestion(const gpid &pid);
 
     // receive ingestion response from primary
-    void on_partition_ingestion_reply(dsn::error_code err,
+    void on_partition_ingestion_reply(error_code err,
                                       ingestion_response &&resp,
                                       const std::string &app_name,
-                                      gpid pid);
+                                      const gpid &pid);
 
     // clear bulk load service local variety
-    void clear_app_bulk_load_states(uint32_t app_id, const std::string &app_name); // private
+    void clear_app_bulk_load_states(int32_t app_id, const std::string &app_name); // private
 
     // continue bulk load
     void try_to_continue_bulk_load();
@@ -121,21 +121,21 @@ private:
     bool check_continue_bulk_load(
         int32_t app_id,
         int32_t partition_count,
-        app_bulk_load_info ainfo,
+        const app_bulk_load_info &ainfo,
         std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
-        std::unordered_set<uint32_t> &different_status_pidx_set);
+        std::unordered_set<int32_t> &different_status_pidx_set);
 
     bool validate_partition_bulk_load_status(
-        app_bulk_load_info &ainfo,
+        const app_bulk_load_info &ainfo,
         std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
-        std::unordered_set<uint32_t> &different_status_pidx_set);
+        std::unordered_set<int32_t> &different_status_pidx_set);
 
     bulk_load_status::type get_valid_partition_status(bulk_load_status::type app_status);
 
     void continue_app_bulk_load(
         const app_bulk_load_info &ainfo,
         std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
-        std::unordered_set<uint32_t> different_status_pidx_set);
+        std::unordered_set<int32_t> different_status_pidx_set);
 
     /// remote stroage functions
     // update app's is_bulk_loading = true
@@ -148,42 +148,42 @@ private:
     // create partition bulk load dir on remote stroage
     // path: {_bulk_load_root}/{app_id}/{<partition_index>}, value type: partition_bulk_load_info
     void create_partition_bulk_load_dir_with_rpc(const std::string &app_name,
-                                                 gpid pid,
-                                                 uint32_t partition_count,
+                                                 const gpid &pid,
+                                                 int32_t partition_count,
                                                  const std::string &app_path,
                                                  start_bulk_load_rpc rpc); // private + zk
 
     // sync app bulk load info from remote storage
-    void do_sync_app_bulk_load(uint32_t app_id,
+    void do_sync_app_bulk_load(int32_t app_id,
                                error_code &err,
-                               dsn::task_tracker &tracker); // private + zk
+                               task_tracker &tracker); // private + zk
 
     // sync partition bulk load info from remote stroage
     // if partition bulk load info exist, send bulk load request to primary
     // otherwise, create partition bulk load info first, then send request to primary
-    void sync_partitions_bulk_load(uint32_t app_id,
-                                   std::string app_name,
+    void sync_partitions_bulk_load(int32_t app_id,
+                                   const std::string &app_name,
                                    error_code &err,
-                                   dsn::task_tracker &tracker); // private + zk
+                                   task_tracker &tracker); // private + zk
 
-    void do_sync_partition_bulk_load(gpid pid,
-                                     std::string app_name,
-                                     std::string partition_path,
+    void do_sync_partition_bulk_load(const gpid &pid,
+                                     const std::string &app_name,
+                                     const std::string &partition_path,
                                      error_code &err,
-                                     dsn::task_tracker &tracker);
+                                     task_tracker &tracker);
 
     void create_partition_bulk_load_info(const std::string &app_name,
-                                         gpid pid,
-                                         uint32_t partition_count); // private + zk
+                                         const gpid &pid,
+                                         int32_t partition_count); // private + zk
 
     // update partition's bulk load status to {status} on remote storage
     void update_partition_bulk_load_status(const std::string &app_name,
-                                           dsn::gpid pid,
+                                           const gpid &pid,
                                            std::string &path,
                                            bulk_load_status::type status); // private + zk
 
     // update app's bulk load status to {new_status} on remote storage
-    void update_app_bulk_load_status_unlock(uint32_t app_id,
+    void update_app_bulk_load_status_unlock(int32_t app_id,
                                             bulk_load_status::type new_status); // private + zk
 
     // remove app bulk load dir on remote stroage
@@ -201,9 +201,9 @@ private:
 
     /// helper functions
     template <typename T>
-    void erase_map_elem_by_id(uint32_t app_id, std::unordered_map<gpid, T> &mymap);
+    void erase_map_elem_by_id(int32_t app_id, std::unordered_map<gpid, T> &mymap);
 
-    std::string get_app_bulk_load_path(uint32_t app_id) const
+    std::string get_app_bulk_load_path(int32_t app_id) const
     {
         std::stringstream oss;
         oss << _bulk_load_root << "/" << app_id;
@@ -218,13 +218,13 @@ private:
         return oss.str();
     }
 
-    bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
+    bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
     {
         auto ainfo = _app_bulk_load_info[app_id];
         return ainfo.status;
     }
 
-    bool is_app_bulk_loading(uint32_t app_id)
+    bool is_app_bulk_loading(int32_t app_id)
     {
         return (_bulk_load_app_id.find(app_id) == _bulk_load_app_id.end() ? false : true);
     }
@@ -253,16 +253,16 @@ private:
     std::string _bulk_load_root;
 
     /// bulk load states
-    std::set<uint32_t> _bulk_load_app_id;
+    std::unordered_set<int32_t> _bulk_load_app_id;
     std::unordered_map<app_id, bool> _apps_cleaning_up;
     std::unordered_map<app_id, app_bulk_load_info> _app_bulk_load_info;
 
     std::unordered_map<gpid, partition_bulk_load_info> _partition_bulk_load_info;
-    std::unordered_map<app_id, uint32_t> _apps_in_progress_count;
+    std::unordered_map<app_id, int32_t> _apps_in_progress_count;
     // inflight partition_request
     std::unordered_map<gpid, dsn::task_ptr> _partitions_request;
     // partition download progress while query bulk load status
-    std::unordered_map<gpid, std::map<dsn::rpc_address, partition_download_progress>>
+    std::unordered_map<gpid, std::map<rpc_address, partition_download_progress>>
         _partitions_download_progress;
     std::unordered_map<gpid, int32_t> _partitions_total_download_progress;
     // TODO(heyuchen): used for query bulk load status(distinguish finish and cleanup) and failover

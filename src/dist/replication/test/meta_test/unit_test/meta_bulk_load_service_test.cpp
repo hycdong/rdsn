@@ -103,7 +103,7 @@ public:
     }
 
     void initialize_with_mock_bulk_load(
-        std::set<uint32_t> app_id_set,
+        std::unordered_set<int32_t> app_id_set,
         std::unordered_map<app_id, app_bulk_load_info> app_bulk_load_info_map,
         std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
             partition_bulk_load_info_map,
@@ -140,7 +140,7 @@ public:
     }
 
     void initialize_bulk_load_service(
-        std::set<uint32_t> app_id_set,
+        std::unordered_set<int32_t> app_id_set,
         std::unordered_map<app_id, app_bulk_load_info> app_bulk_load_info_map,
         std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
             partition_bulk_load_info_map)
@@ -258,26 +258,6 @@ public:
         }
     }
 
-    //    void set_meta_bulk_load_context(std::set<uint32_t> app_id_set,
-    //                                     std::unordered_map<app_id, app_bulk_load_info>
-    //                                     app_bulk_load_info_map,
-    //                                     std::unordered_map<app_id, std::unordered_map<int32_t,
-    //                                     partition_bulk_load_info>> partition_bulk_load_info_map)
-    //    {
-    //        std::unordered_map<gpid, partition_bulk_load_info> pinfo_map;
-    //        for(auto iter = partition_bulk_load_info_map.begin(); iter !=
-    //        partition_bulk_load_info_map.end(); ++iter){
-    //            std::unordered_map<int32_t, partition_bulk_load_info> temp = iter->second;
-    //            for(auto it = temp.begin(); it != temp.end(); ++it){
-    //                pinfo_map[gpid(iter->first, it->first)] = it->second;
-    //            }
-    //        }
-    //        zauto_write_lock l(bulk_svc()->_lock);
-    //        bulk_svc()->_bulk_load_app_id = app_id_set;
-    //        bulk_svc()->_app_bulk_load_info = app_bulk_load_info_map;
-    //        bulk_svc()->_partition_bulk_load_info = pinfo_map;
-    //    }
-
     /// bulk load functions
     start_bulk_load_response start_bulk_load(const std::string &app_name)
     {
@@ -321,7 +301,7 @@ public:
     bool check_partition_bulk_load_status(
         app_bulk_load_info &ainfo,
         std::unordered_map<int32_t, bulk_load_status::type> &partition_bulk_load_status_map,
-        std::unordered_set<uint32_t> &different_status_pidx_set)
+        std::unordered_set<int32_t> &different_status_pidx_set)
     {
 
         std::unordered_map<int32_t, partition_bulk_load_info> partition_bulk_load_info_map;
@@ -336,7 +316,7 @@ public:
             ainfo, partition_bulk_load_info_map, different_status_pidx_set);
     }
 
-    bulk_load_status::type get_app_bulk_load_status(uint32_t app_id)
+    bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
     {
         return bulk_svc()->get_app_bulk_load_status(app_id);
     }
@@ -488,7 +468,7 @@ public:
         bulk_load_service_test::TearDown();
     }
 
-    void create_basic_response(error_code err, bulk_load_status::type status, uint32_t pidx)
+    void create_basic_response(error_code err, bulk_load_status::type status, int32_t pidx)
     {
         _resp.app_name = APP_NAME;
         _resp.pid = gpid(_app_id, pidx);
@@ -496,7 +476,7 @@ public:
         _resp.primary_bulk_load_status = status;
     }
 
-    void mock_response_progress(error_code progress_err, bool finish_download, uint32_t pidx)
+    void mock_response_progress(error_code progress_err, bool finish_download, int32_t pidx)
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_DOWNLOADING, pidx);
         partition_download_progress progress;
@@ -524,15 +504,15 @@ public:
         }
     }
 
-    void mock_response_cleanup_flag(bool finish_cleanup, uint32_t pidx)
+    void mock_response_cleanup_flag(bool finish_cleanup, int32_t pidx)
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_FAILED, pidx);
         _resp.__isset.is_group_bulk_load_context_cleaned = true;
         _resp.is_group_bulk_load_context_cleaned = finish_cleanup;
     }
 
-    uint32_t _app_id = 3;
-    uint32_t _partition_count = 4;
+    int32_t _app_id = 3;
+    int32_t _partition_count = 4;
     bulk_load_response _resp;
     rpc_address _primary = rpc_address("127.0.0.1", 10086);
 };
@@ -692,7 +672,7 @@ public:
     }
 
     std::vector<app_info> _app_info;
-    std::set<uint32_t> _app_id_set;
+    std::unordered_set<int32_t> _app_id_set;
     std::unordered_map<app_id, app_bulk_load_info> _app_bulk_load_info_map;
     std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
         _partition_bulk_load_info_map;
@@ -1339,7 +1319,7 @@ TEST_F(bulk_load_failover_test, downloading_invalid_partition_not_exist)
     partition_bulk_load_status_map[1] = bulk_load_status::BLS_DOWNLOADING;
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_DOWNLOADED;
 
-    std::unordered_set<uint32_t> different_status_pidx_set;
+    std::unordered_set<int32_t> different_status_pidx_set;
     ASSERT_FALSE(check_partition_bulk_load_status(_app_bulk_load_info_map[SYNC_APP_ID],
                                                   partition_bulk_load_status_map,
                                                   different_status_pidx_set));
@@ -1358,7 +1338,7 @@ TEST_F(bulk_load_failover_test, downloading_invalid_partition_ingesting)
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_DOWNLOADED;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_INGESTING;
 
-    std::unordered_set<uint32_t> different_status_pidx_set;
+    std::unordered_set<int32_t> different_status_pidx_set;
     ASSERT_FALSE(check_partition_bulk_load_status(_app_bulk_load_info_map[SYNC_APP_ID],
                                                   partition_bulk_load_status_map,
                                                   different_status_pidx_set));
@@ -1377,7 +1357,7 @@ TEST_F(bulk_load_failover_test, downloading_invalid_partition_finish)
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_DOWNLOADING;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_FINISH;
 
-    std::unordered_set<uint32_t> different_status_pidx_set;
+    std::unordered_set<int32_t> different_status_pidx_set;
     ASSERT_FALSE(check_partition_bulk_load_status(_app_bulk_load_info_map[SYNC_APP_ID],
                                                   partition_bulk_load_status_map,
                                                   different_status_pidx_set));
@@ -1396,7 +1376,7 @@ TEST_F(bulk_load_failover_test, downloaded_invalid_partition_failed)
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_INGESTING;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_DOWNLOADING;
 
-    std::unordered_set<uint32_t> different_status_pidx_set;
+    std::unordered_set<int32_t> different_status_pidx_set;
     ASSERT_FALSE(check_partition_bulk_load_status(_app_bulk_load_info_map[SYNC_APP_ID],
                                                   partition_bulk_load_status_map,
                                                   different_status_pidx_set));
@@ -1415,7 +1395,7 @@ TEST_F(bulk_load_failover_test, ingesting_invalid_partition_failed)
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_INGESTING;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_DOWNLOADED;
 
-    std::unordered_set<uint32_t> different_status_pidx_set;
+    std::unordered_set<int32_t> different_status_pidx_set;
     ASSERT_FALSE(check_partition_bulk_load_status(_app_bulk_load_info_map[SYNC_APP_ID],
                                                   partition_bulk_load_status_map,
                                                   different_status_pidx_set));
@@ -1435,7 +1415,7 @@ TEST_F(bulk_load_failover_test, finish_invalid_partition)
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_INGESTING;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_FAILED;
 
-    std::unordered_set<uint32_t> different_status_pidx_set;
+    std::unordered_set<int32_t> different_status_pidx_set;
     ASSERT_FALSE(check_partition_bulk_load_status(_app_bulk_load_info_map[SYNC_APP_ID],
                                                   partition_bulk_load_status_map,
                                                   different_status_pidx_set));
@@ -1455,7 +1435,7 @@ TEST_F(bulk_load_failover_test, failed_valid_partition)
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_INGESTING;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_DOWNLOADING;
 
-    std::unordered_set<uint32_t> different_status_pidx_set;
+    std::unordered_set<int32_t> different_status_pidx_set;
     ASSERT_TRUE(check_partition_bulk_load_status(_app_bulk_load_info_map[SYNC_APP_ID],
                                                  partition_bulk_load_status_map,
                                                  different_status_pidx_set));
