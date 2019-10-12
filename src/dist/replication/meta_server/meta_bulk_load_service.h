@@ -32,31 +32,13 @@ struct app_bulk_load_info
         app_id, partition_count, app_name, cluster_name, file_provider_type, status)
 };
 
+// TODO(heyuchen): add comments for functions
 class bulk_load_service
 {
 public:
     explicit bulk_load_service(meta_service *meta_svc, const std::string &bulk_load_dir);
+
     void initialize_bulk_load_service();
-
-    // client -> meta server to start bulk load
-    void on_start_bulk_load(start_bulk_load_rpc rpc);
-    // client -> meta server to query bulk load status
-    void on_query_bulk_load_status(query_bulk_load_rpc rpc);
-
-    // meta sent bulk_load_request to each partition's primary
-    void partition_bulk_load(const gpid &pid);
-
-    void on_partition_bulk_load_reply(error_code err,
-                                      bulk_load_response &&response,
-                                      const gpid &pid,
-                                      const rpc_address &primary_addr);
-
-    void create_bulk_load_root_dir(error_code &err, task_tracker &tracker);
-
-    // Called when service initialize and meta service leader switch
-    // sync app's bulk load status from remote stroage
-    // if bulk load dir exist, restart bulk load
-    void sync_apps_bulk_load(error_code &err, task_tracker &tracker);
 
     // Called when sync_apps_from_remote_stroage, check bulk load state consistency
     // If app->is_bulk_loading = true, app_bulk_load_info should be existed on remote stroage
@@ -66,7 +48,13 @@ public:
     // on remote stroage
     void check_app_bulk_load_consistency(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
+    // client -> meta server to start bulk load
+    void on_start_bulk_load(start_bulk_load_rpc rpc);
+    // client -> meta server to query bulk load status
+    void on_query_bulk_load_status(query_bulk_load_rpc rpc);
+
 private:
+    //
     error_code check_bulk_load_request_params(const std::string &app_name,
                                               const std::string &cluster_name,
                                               const std::string &file_provider,
@@ -103,6 +91,14 @@ private:
                                       ingestion_response &&resp,
                                       const std::string &app_name,
                                       const gpid &pid);
+
+    // meta sent bulk_load_request to each partition's primary
+    void partition_bulk_load(const gpid &pid);
+
+    void on_partition_bulk_load_reply(error_code err,
+                                      bulk_load_response &&response,
+                                      const gpid &pid,
+                                      const rpc_address &primary_addr);
 
     // clear bulk load service local variety
     void clear_app_bulk_load_states(int32_t app_id, const std::string &app_name); // private
@@ -152,6 +148,13 @@ private:
                                                  int32_t partition_count,
                                                  const std::string &app_path,
                                                  start_bulk_load_rpc rpc); // private + zk
+
+    void create_bulk_load_root_dir(error_code &err, task_tracker &tracker);
+
+    // Called when service initialize and meta service leader switch
+    // sync app's bulk load status from remote stroage
+    // if bulk load dir exist, restart bulk load
+    void sync_apps_bulk_load(error_code &err, task_tracker &tracker);
 
     // sync app bulk load info from remote storage
     void do_sync_app_bulk_load(int32_t app_id,
