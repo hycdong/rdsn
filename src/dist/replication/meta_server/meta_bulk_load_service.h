@@ -36,7 +36,7 @@ class bulk_load_service
 {
 public:
     explicit bulk_load_service(meta_service *meta_svc, const std::string &bulk_load_dir);
-    void create_bulk_load_dir_on_remote_stroage();
+    void initialize_bulk_load_service();
 
     // client -> meta server to start bulk load
     void on_start_bulk_load(start_bulk_load_rpc rpc);
@@ -51,10 +51,12 @@ public:
                                       gpid pid,
                                       const dsn::rpc_address &primary_addr);
 
+    void create_bulk_load_root_dir(error_code &err, task_tracker &tracker);
+
     // Called when service initialize and meta service leader switch
     // sync app's bulk load status from remote stroage
     // if bulk load dir exist, restart bulk load
-    void start_sync_apps_bulk_load(error_code &err, dsn::task_tracker &tracker);
+    void sync_apps_bulk_load(error_code &err, dsn::task_tracker &tracker);
 
     // Called when sync_apps_from_remote_stroage, check bulk load state consistency
     // If app->is_bulk_loading = true, app_bulk_load_info should be existed on remote stroage
@@ -152,21 +154,23 @@ private:
                                                  start_bulk_load_rpc rpc); // private + zk
 
     // sync app bulk load info from remote storage
-    void do_sync_app_bulk_load(uint32_t app_id, std::string app_path, error_code &err, dsn::task_tracker &tracker); // private + zk
+    void do_sync_app_bulk_load(uint32_t app_id,
+                               error_code &err,
+                               dsn::task_tracker &tracker); // private + zk
 
     // sync partition bulk load info from remote stroage
     // if partition bulk load info exist, send bulk load request to primary
     // otherwise, create partition bulk load info first, then send request to primary
-    void sync_partitions_bulk_load(std::string app_path,
-                                   uint32_t app_id,
+    void sync_partitions_bulk_load(uint32_t app_id,
                                    std::string app_name,
-                                   error_code &err, dsn::task_tracker &tracker); // private + zk
+                                   error_code &err,
+                                   dsn::task_tracker &tracker); // private + zk
 
-    void do_sync_partitions_bulk_load(const std::vector<std::string> &children,
-                                      uint32_t invalid_count,
-                                      bulk_load_status::type app_status,
-                                      std::shared_ptr<app_state> app,
-                                      const std::string &app_path);
+    void do_sync_partition_bulk_load(gpid pid,
+                                     std::string app_name,
+                                     std::string partition_path,
+                                     error_code &err,
+                                     dsn::task_tracker &tracker);
 
     void create_partition_bulk_load_info(const std::string &app_name,
                                          gpid pid,

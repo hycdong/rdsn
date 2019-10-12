@@ -50,7 +50,7 @@ public:
         _meta_svc->_bulk_load_svc.reset(new bulk_load_service(
             _meta_svc.get(),
             meta_options::concat_path_unix_style(_meta_svc->_cluster_root, "bulk_load")));
-        _meta_svc->_bulk_load_svc->create_bulk_load_dir_on_remote_stroage();
+        _meta_svc->_bulk_load_svc->initialize_bulk_load_service();
 
         _state = _meta_svc->_state;
         _app_root = _state->_apps_root;
@@ -96,7 +96,7 @@ public:
         _meta_svc->_bulk_load_svc.reset(new bulk_load_service(
             _meta_svc.get(),
             meta_options::concat_path_unix_style(_meta_svc->_cluster_root, "bulk_load")));
-        _meta_svc->_bulk_load_svc->create_bulk_load_dir_on_remote_stroage();
+        _meta_svc->_bulk_load_svc->initialize_bulk_load_service();
 
         _state = _meta_svc->_state;
         _app_root = _state->_apps_root;
@@ -125,7 +125,7 @@ public:
         _meta_svc->_bulk_load_svc.reset(new bulk_load_service(
             _meta_svc.get(),
             meta_options::concat_path_unix_style(_meta_svc->_cluster_root, "bulk_load")));
-        create_bulk_load_dir_on_remote_stroage(
+        initialize_bulk_load_service(
             app_id_set, app_bulk_load_info_map, partition_bulk_load_info_map);
 
         // mock app
@@ -139,7 +139,7 @@ public:
         _state = _meta_svc->_state;
     }
 
-    void create_bulk_load_dir_on_remote_stroage(
+    void initialize_bulk_load_service(
         std::set<uint32_t> app_id_set,
         std::unordered_map<app_id, app_bulk_load_info> app_bulk_load_info_map,
         std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
@@ -724,7 +724,7 @@ TEST_F(bulk_load_failover_test, sync_bulk_load)
 
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_id_set_size(), 2);
@@ -746,7 +746,7 @@ TEST_F(bulk_load_failover_test, status_inconsistency_wrong_app_status)
     add_app_info(SYNC_APP_ID, SYNC_PARTITION_COUNT, SYNC_APP_NAME, true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -764,7 +764,7 @@ TEST_F(bulk_load_failover_test, status_inconsistency_wrong_bulk_load_dir)
                               false);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -786,7 +786,7 @@ TEST_F(bulk_load_failover_test, app_info_inconsistency)
     _app_bulk_load_info_map[SYNC_APP_ID].partition_count = SYNC_PARTITION_COUNT;
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -806,7 +806,7 @@ TEST_F(bulk_load_failover_test, downloaded_with_lack_of_partition)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -825,7 +825,7 @@ TEST_F(bulk_load_failover_test, ingesting_with_lack_of_partition)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -846,7 +846,7 @@ TEST_F(bulk_load_failover_test, finish_with_lack_of_partition)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -868,7 +868,7 @@ TEST_F(bulk_load_failover_test, failed_with_lack_of_partition)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -894,7 +894,7 @@ TEST_F(bulk_load_failover_test, downloading_with_partition_all_downloading)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
@@ -922,7 +922,7 @@ TEST_F(bulk_load_failover_test, downloading_with_partition_all_downloaded)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), 0);
@@ -951,7 +951,7 @@ TEST_F(bulk_load_failover_test, downloading_with_partition_mixed)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), 3);
@@ -976,7 +976,7 @@ TEST_F(bulk_load_failover_test, downloading_with_partition_all_not_exist)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
@@ -1003,7 +1003,7 @@ TEST_F(bulk_load_failover_test, downloading_with_partition_half_not_exist)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
@@ -1031,7 +1031,7 @@ TEST_F(bulk_load_failover_test, downloading_with_partition_mix_wrong_status)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -1058,7 +1058,7 @@ TEST_F(bulk_load_failover_test, downloaded_with_partition_all_downloaded)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
@@ -1086,7 +1086,7 @@ TEST_F(bulk_load_failover_test, downloaded_with_partition_all_ingesting)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), 0);
@@ -1115,7 +1115,7 @@ TEST_F(bulk_load_failover_test, downloaded_with_partition_mixed)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), 1);
@@ -1144,7 +1144,7 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_all_ingesting)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
@@ -1173,7 +1173,7 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_all_finish)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), 0);
@@ -1203,7 +1203,7 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_mixed)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), 3);
@@ -1231,7 +1231,7 @@ TEST_F(bulk_load_failover_test, finish_with_partition_all_finish)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
@@ -1260,7 +1260,7 @@ TEST_F(bulk_load_failover_test, finish_with_partition_failed)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     std::shared_ptr<app_state> app = find_app(SYNC_APP_NAME);
@@ -1287,7 +1287,7 @@ TEST_F(bulk_load_failover_test, failed_with_partition_all_failed)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
@@ -1316,7 +1316,7 @@ TEST_F(bulk_load_failover_test, failed_with_partition_mixed)
                               true);
     initialize_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
-    bulk_svc()->create_bulk_load_dir_on_remote_stroage();
+    bulk_svc()->initialize_bulk_load_service();
     wait_all();
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);

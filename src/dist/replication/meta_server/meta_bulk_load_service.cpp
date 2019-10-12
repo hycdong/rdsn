@@ -16,41 +16,17 @@ bulk_load_service::bulk_load_service(meta_service *meta_svc, const std::string &
     _state = _meta_svc->get_server_state();
 }
 
-void bulk_load_service::create_bulk_load_dir_on_remote_stroage()
+void bulk_load_service::initialize_bulk_load_service()
 {
-    std::string path = _bulk_load_root;
-    blob value = blob();
-//    _meta_svc->get_meta_storage()->create_node(std::move(path), std::move(value), [this]() {
-//        ddebug_f("create bulk load root({}) succeed", _bulk_load_root);
-//        start_sync_apps_bulk_load();
-//    });
-
     dsn::task_tracker tracker;
     error_code err = ERR_OK;
 
-    _meta_svc->get_remote_storage()->create_node(path, LPC_META_CALLBACK, [this, &err, &tracker](error_code ec){
-        if (ERR_OK == ec || ERR_NODE_ALREADY_EXIST == ec) {
-            ddebug_f("create bulk load root({}) succeed", _bulk_load_root);
-            start_sync_apps_bulk_load(err, tracker);
-        } else if (ERR_TIMEOUT == ec) {
-            dwarn_f("create bulk load root({}) failed, retry later", _bulk_load_root);
-            tasking::enqueue(
-                LPC_META_STATE_HIGH,
-                nullptr,
-                std::bind(&bulk_load_service::create_bulk_load_dir_on_remote_stroage, this),
-                0,
-                std::chrono::milliseconds(1000));
-        } else {
-            dfatal_f("create bulk load root({}) failed, error={}",
-                     _bulk_load_root,
-                     ec.to_string());
-            err = ec;
-        }
-    }, value, &tracker);
+    create_bulk_load_root_dir(err, tracker);
     tracker.wait_outstanding_tasks();
 
-    //_meta_svc->tracker()->wait_outstanding_tasks();
-    try_to_continue_bulk_load();
+    if (err == ERR_OK) {
+        try_to_continue_bulk_load();
+    }
 }
 
 void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
@@ -895,32 +871,43 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
     }
 }
 
-void bulk_load_service::start_sync_apps_bulk_load(error_code &err, dsn::task_tracker &tracker)
+void bulk_load_service::create_bulk_load_root_dir(error_code &err, task_tracker &tracker)
+{
+    blob value = blob();
+    _meta_svc->get_remote_storage()->create_node(
+        _bulk_load_root,
+        LPC_META_CALLBACK,
+        [this, &err, &tracker](error_code ec) {
+            if (ERR_OK == ec || ERR_NODE_ALREADY_EXIST == ec) {
+                ddebug_f("create bulk load root({}) succeed", _bulk_load_root);
+                sync_apps_bulk_load(err, tracker);
+            } else if (ERR_TIMEOUT == ec) {
+                dwarn_f("create bulk load root({}) failed, retry later", _bulk_load_root);
+                tasking::enqueue(
+                    LPC_META_CALLBACK,
+                    nullptr,
+                    std::bind(&bulk_load_service::create_bulk_load_root_dir, this, err, tracker),
+                    0,
+                    std::chrono::milliseconds(1000));
+            } else {
+                err = ec;
+                dfatal_f(
+                    "create bulk load root({}) failed, error={}", _bulk_load_root, ec.to_string());
+            }
+        },
+        value,
+        &tracker);
+}
+
+void bulk_load_service::sync_apps_bulk_load(error_code &err, dsn::task_tracker &tracker)
 {
     std::string path = _bulk_load_root;
-
-//    _meta_svc->get_meta_storage()->get_children(
-//        std::move(path), [this, path](bool flag, const std::vector<std::string> &children) {
-//            if (!flag) {
-//                ddebug_f("get path({}) children failed", path);
-//                return;
-//            }
-//            if (children.size() > 0) {
-//                ddebug_f("There are {} apps need to sync bulk load status", children.size());
-//                for (auto &elem : children) {
-//                    uint32_t app_id = boost::lexical_cast<uint32_t>(elem);
-//                    ddebug_f("start to sync app({}) bulk load status", app_id);
-//                    do_sync_app_bulk_load(app_id, get_app_bulk_load_path(app_id));
-//                }
-//            }
-//        });
-
     _meta_svc->get_remote_storage()->get_children(
         path,
         LPC_META_CALLBACK,
-        [this, path, &err, &tracker](error_code ec, const std::vector<std::string> &children) {
-            if(ec != ERR_OK){
-                derror_f("get path({}) children failed, err = {}", path, ec.to_string());
+        [this, &err, &tracker](error_code ec, const std::vector<std::string> &children) {
+            if (ec != ERR_OK) {
+                derror_f("get path({}) children failed, err = {}", _bulk_load_root, ec.to_string());
                 err = ec;
                 return;
             }
@@ -929,29 +916,19 @@ void bulk_load_service::start_sync_apps_bulk_load(error_code &err, dsn::task_tra
                 for (auto &elem : children) {
                     uint32_t app_id = boost::lexical_cast<uint32_t>(elem);
                     ddebug_f("start to sync app({}) bulk load status", app_id);
-                    do_sync_app_bulk_load(app_id, get_app_bulk_load_path(app_id), err, tracker);
+                    do_sync_app_bulk_load(app_id, err, tracker);
                 }
             }
         },
         &tracker);
 }
 
-void bulk_load_service::do_sync_app_bulk_load(uint32_t app_id, std::string app_path, error_code &err, dsn::task_tracker &tracker)
+void bulk_load_service::do_sync_app_bulk_load(uint32_t app_id,
+                                              error_code &err,
+                                              dsn::task_tracker &tracker)
 {
+    std::string app_path = get_app_bulk_load_path(app_id);
     // get app_bulk_load_info
-//    _meta_svc->get_meta_storage()->get_data(
-//        std::move(app_path), [this, app_id, app_path](const blob &value) {
-//            app_bulk_load_info ainfo;
-//            dsn::json::json_forwarder<app_bulk_load_info>::decode(value, ainfo);
-//            {
-//                zauto_write_lock l(_lock);
-//                _bulk_load_app_id.insert(app_id);
-//                _app_bulk_load_info[app_id] = ainfo;
-//            }
-//            sync_partitions_bulk_load(
-//                app_path, ainfo.app_id, ainfo.app_name, ainfo.partition_count, ainfo.status);
-//        });
-
     _meta_svc->get_remote_storage()->get_data(
         app_path,
         LPC_META_CALLBACK,
@@ -964,60 +941,29 @@ void bulk_load_service::do_sync_app_bulk_load(uint32_t app_id, std::string app_p
                     _bulk_load_app_id.insert(app_id);
                     _app_bulk_load_info[app_id] = ainfo;
                 }
-                sync_partitions_bulk_load(
-                    app_path, ainfo.app_id, ainfo.app_name, err, tracker);
+                sync_partitions_bulk_load(ainfo.app_id, ainfo.app_name, err, tracker);
             } else {
-                derror_f("get app bulk load bulk from remote stroage failed, path = {}, err = {}",
-                       app_path,
-                       ec.to_string());
+                derror_f("get app bulk load info from remote stroage failed, path = {}, err = {}",
+                         app_path,
+                         ec.to_string());
                 err = ec;
             }
         },
         &tracker);
 }
 
-void bulk_load_service::sync_partitions_bulk_load(std::string app_path,
-                                                  uint32_t app_id,
+void bulk_load_service::sync_partitions_bulk_load(uint32_t app_id,
                                                   std::string app_name,
                                                   error_code &err,
                                                   dsn::task_tracker &tracker)
 {
-//    _meta_svc->get_meta_storage()->get_children(
-//        std::move(app_path),
-//        [this, app_path, app_id, app_name, partition_count, app_status](
-//            bool flag, const std::vector<std::string> &children) {
-//            // app bulk load dir is not existed
-//            if (!flag) {
-//                derror_f("failed to get bulk load path({})", app_path);
-//                return;
-//            }
-//            // sync_partitions_bulk_load
-//            ddebug_f("app(name={},app_id={}) has {} partition bulk load info to be synced",
-//                     app_name,
-//                     app_id,
-//                     children.size());
-//            for (const auto &child_pidx : children) {
-//                uint32_t partition_index = boost::lexical_cast<uint32_t>(child_pidx);
-//                std::string partition_path =
-//                    get_partition_bulk_load_path(app_path, partition_index);
-//                _meta_svc->get_meta_storage()->get_data(
-//                    std::move(partition_path), [this, app_id, partition_index](const blob &value) {
-//                        partition_bulk_load_info pinfo;
-//                        dsn::json::json_forwarder<partition_bulk_load_info>::decode(value, pinfo);
-//                        gpid pid = gpid(app_id, partition_index);
-//                        {
-//                            zauto_write_lock l(_lock);
-//                            _partition_bulk_load_info[pid] = pinfo;
-//                        }
-//                    });
-//            }
-//        });
-
+    std::string app_path = get_app_bulk_load_path(app_id);
     _meta_svc->get_remote_storage()->get_children(
         app_path,
         LPC_META_CALLBACK,
-        [this, app_path, app_id, app_name, &err, &tracker](error_code ec, const std::vector<std::string> &children) {
-            if(ec != ERR_OK){
+        [this, app_path, app_id, app_name, &err, &tracker](
+            error_code ec, const std::vector<std::string> &children) {
+            if (ec != ERR_OK) {
                 derror_f("get path({}) children failed, err = {}", app_path, ec.to_string());
                 err = ec;
                 return;
@@ -1028,29 +974,40 @@ void bulk_load_service::sync_partitions_bulk_load(std::string app_path,
                      app_id,
                      children.size());
             for (const auto &child_pidx : children) {
-                uint32_t partition_index = boost::lexical_cast<uint32_t>(child_pidx);
-                std::string partition_path =
-                    get_partition_bulk_load_path(app_path, partition_index);
-                _meta_svc->get_remote_storage()->get_data(
-                    partition_path,
-                    LPC_META_CALLBACK,
-                    [this, app_id, partition_index, partition_path, &err](error_code ec, const blob &value) {
-                        if (ec == ERR_OK) {
-                            partition_bulk_load_info pinfo;
-                            dsn::json::json_forwarder<partition_bulk_load_info>::decode(value, pinfo);
-                            gpid pid = gpid(app_id, partition_index);
-                            {
-                                zauto_write_lock l(_lock);
-                                _partition_bulk_load_info[pid] = pinfo;
-                            }
-                        } else {
-                            derror_f("get partition bulk load bulk from remote stroage failed, path = {}, err = {}",
-                                   partition_path,
-                                   ec.to_string());
-                            err = ec;
-                        }
-                    },
-                    &tracker);
+                uint32_t pidx = boost::lexical_cast<uint32_t>(child_pidx);
+                std::string partition_path = get_partition_bulk_load_path(app_path, pidx);
+                do_sync_partition_bulk_load(
+                    gpid(app_id, pidx), app_name, partition_path, err, tracker);
+            }
+        },
+        &tracker);
+}
+
+void bulk_load_service::do_sync_partition_bulk_load(gpid pid,
+                                                    std::string app_name,
+                                                    std::string partition_path,
+                                                    error_code &err,
+                                                    dsn::task_tracker &tracker)
+{
+    _meta_svc->get_remote_storage()->get_data(
+        partition_path,
+        LPC_META_STATE_NORMAL,
+        [this, pid, app_name, partition_path, &err](error_code ec, const blob &value) {
+            if (ec == ERR_OK) {
+                partition_bulk_load_info pinfo;
+                dsn::json::json_forwarder<partition_bulk_load_info>::decode(value, pinfo);
+                {
+                    zauto_write_lock l(_lock);
+                    _partition_bulk_load_info[pid] = pinfo;
+                }
+            } else {
+                derror_f("get app({}) partition({}) bulk load bulk from remote stroage failed, "
+                         "path={}, err={}",
+                         app_name,
+                         pid.to_string(),
+                         partition_path,
+                         ec.to_string());
+                err = ec;
             }
         },
         &tracker);
@@ -1116,6 +1073,39 @@ void bulk_load_service::try_to_continue_app_bulk_load(
     continue_app_bulk_load(ainfo, partition_bulk_load_info_map, different_status_pidx_set);
 }
 
+/// meta bulk load failover cases
+/// 1. no children
+///     1 - downloading
+///         create all partition with downloading and send bulk load request
+///     2 - donwloaded/ingesting/finish + no children
+///         remove dir and reset flag
+///     3 - failed + no children
+///         remove dir and reset flag
+/// 2. some partition has same status with app status, some not
+///     1 - app:downloading + not existed
+///         create not existed partition with downloading and send bulk load request
+///     2 - app:downloading + downloaded
+///         count = downloading count, send bulk load request (app aim-> downloaded)
+///     3 - app:downloaded + ingesting
+///         count = downloaded count, send bulk load request (app aim -> ingesting)
+///     4 - app:downloaded + not downloaded && not ingesting
+///         remove dir and reset flag
+///     5 - app:ingesting + finish
+///         count = ingesting count, send bulk load request and ingestion request(app aim ->
+///         ingesting)
+///     6 - app:ingesting + not ingesting && not finish
+///         remove dir and reset flag
+///     7 - app:finish + not finish
+///         remove dir and reset flag
+///     8 - app:failed + not failed
+///         set partition failed, send bulk load request (app aim cleanup)
+/// 3. all child partition status isconsistency with app (count = partition count)
+///     1 - downloading: send request
+///     2 - downloaded: send request
+///     3 - ingesting: send request and send ingestion
+///     4 - finish: send request
+///     5 - failed: send request
+///
 bool bulk_load_service::check_continue_bulk_load(
     int32_t app_id,
     int32_t partition_count,
@@ -1322,152 +1312,6 @@ void bulk_load_service::continue_app_bulk_load(
     }
 }
 
-// TODO(heyuchen):
-// 1. no children
-//    1 - downloading -> create all partition with downloading and send bulk load request
-//    2 - donwloaded/ingesting/finish + no children -> [error remove dir and reset flag]
-//    3 - failed + no children -> remove dir and reset flag
-//
-// 2. some partition has same status with app status, some not
-//    1 - app:downloading + not existed -> create not existed partition with downloading and send
-//    bulk load request
-//    2 - app:downloading + downloaded -> count = downloading count, send bulk load request (app aim
-//    -> downloaded)
-//    3 - app:downloaded + ingesting -> count = downloaded count, send bulk load request (app aim ->
-//    ingesting)
-//    4 - app:downloaded + not downloaded && not ingesting -> [error remove dir and reset flag]
-//    5 - app:ingesting + finish -> -> count = ingesting count, send bulk load request and ingestion
-//    request(app aim -> ingesting)
-//    6 - app:ingesting + not ingesting && not finish -> [error remove dir and reset flag]
-//    7 - app:finish + not finish -> [error remove dir and reset flag]
-//    8 - app:failed + not failed -> set partition failed, send bulk load request (app: cleanup)
-//
-// 3. all child partition status isconsistency with app (count = partition count)
-//    1 - downloading: send request
-//    2 - downloaded: send request
-//    3 - ingesting: send request and send ingestion
-//    4 - finish: send request
-//    5 - failed: send request
-
-// TODO(heyuchen): delete this function
-void bulk_load_service::do_sync_partitions_bulk_load(const std::vector<std::string> &children,
-                                                     uint32_t invalid_count,
-                                                     bulk_load_status::type app_status,
-                                                     std::shared_ptr<app_state> app,
-                                                     const std::string &app_path)
-{
-    //    int32_t app_id = app->app_id;
-    //    int32_t partition_count = app->partition_count;
-    //    std::string app_name = app->app_name;
-
-    //    // pidx -> partition bulk load status(invalid means bulk load info not existed on remote
-    //    // stroage)
-    //    std::unordered_map<uint32_t, bulk_load_status::type> partition_map;
-    //    for (int i = 0; i < partition_count; ++i) {
-    //        partition_map[i] = bulk_load_status::BLS_INVALID;
-    //    }
-
-    //    std::unordered_set<uint32_t> pidx_same_as_app;
-    //    std::unordered_set<uint32_t> pidx_different_from_app;
-    //    for (const auto &child_pidx : children) {
-    //        uint32_t partition_index = boost::lexical_cast<uint32_t>(child_pidx);
-    //        std::string partition_path = get_partition_bulk_load_path(app_path, partition_index);
-    //        // sync partition bulk load info from remote_stroage
-    //        //TODO(heyuchen): delete
-    //        ddebug_f("hyc gpid({}.{}) path={}", app_id, partition_index, partition_path);
-    //        _meta_svc->get_meta_storage()->get_data(
-    //            std::move(partition_path),
-    //            [=](const blob &value) mutable {
-    //                //TODO(heyuchen): delete
-    //                ddebug_f("hyc gpid({}.{})", app_id, partition_index);
-    //                partition_bulk_load_info pinfo;
-    //                dsn::json::json_forwarder<partition_bulk_load_info>::decode(value, pinfo);
-    //                gpid pid = gpid(app_id, partition_index);
-    //                {
-    //                    zauto_write_lock l(_lock);
-    //                    _partition_bulk_load_info[pid] = pinfo;
-    //                }
-    //                partition_map[partition_index] = pinfo.status;
-
-    //                if (pinfo.status == app_status) {
-    //                    pidx_same_as_app.insert(partition_index);
-    //                } else if (pinfo.status != bulk_load_status::BLS_INVALID) {
-    //                    pidx_different_from_app.insert(partition_index);
-    //                }
-    //            });
-    //    }
-
-    //    uint32_t same_count = pidx_same_as_app.size();
-    //    uint32_t different_count = pidx_different_from_app.size();
-
-    //    ddebug_f("app({}), status={}, invalid_count={}, same_count={}, different_count={}",
-    //             app_name,
-    //             enum_to_string(app_status),
-    //             invalid_count,
-    //             same_count,
-    //             different_count);
-
-    //    if (!validate_partition_bulk_load_status(pidx_different_from_app,
-    //                                             same_count,
-    //                                             invalid_count,
-    //                                             app_status,
-    //                                             app_name,
-    //                                             partition_map)) {
-    //        remove_app_bulk_load_dir(app, true);
-    //        return;
-    //    }
-
-    //    // TODO(heyuchen): split code below to function 'continue bulk load'
-    //    // get in_sync_progress partition count
-    //    int in_progress_partition_count = partition_count;
-    //    if (app_status == bulk_load_status::BLS_DOWNLOADING) {
-    //        in_progress_partition_count = invalid_count > 0 ? invalid_count : same_count;
-    //    } else if (app_status == bulk_load_status::BLS_DOWNLOADED) {
-    //        in_progress_partition_count = same_count;
-    //    } else if (app_status == bulk_load_status::BLS_INGESTING ||
-    //               app_status == bulk_load_status::BLS_FINISH) {
-    //        in_progress_partition_count = same_count;
-    //    }
-    //    {
-    //        zauto_write_lock l(_lock);
-    //        _apps_in_progress_count[app_id] = in_progress_partition_count;
-    //    }
-
-    //    // if app status is failed, set all partition status to failed
-    //    if (app_status == bulk_load_status::BLS_FAILED && different_count > 0) {
-    //        for (auto iter = pidx_different_from_app.begin(); iter !=
-    //        pidx_different_from_app.end();
-    //             ++iter) {
-    //            uint32_t pidx = *iter;
-    //            std::string path = get_partition_bulk_load_path(get_app_bulk_load_path(app_id),
-    //            pidx);
-    //            update_partition_bulk_load_status(
-    //                app_name, gpid(app_id, pidx), path, bulk_load_status::BLS_FAILED);
-    //        }
-    //    }
-
-    //    // send bulk_load_request to primary
-    //    for (int i = 0; i < partition_count; ++i) {
-    //        gpid pid = gpid(app_id, i);
-    //        if (app_status == bulk_load_status::BLS_DOWNLOADING &&
-    //            partition_map[i] == bulk_load_status::BLS_INVALID) {
-    //            // partition dir not exist on remote storage
-    //            // case1.1, case2.1
-    //            create_partition_bulk_load_info(app_name, pid, partition_count, app_path);
-    //        } else if (app_status == bulk_load_status::BLS_DOWNLOADING ||
-    //                   app_status == bulk_load_status::BLS_DOWNLOADED ||
-    //                   app_status == bulk_load_status::BLS_INGESTING ||
-    //                   app_status == bulk_load_status::BLS_FINISH ||
-    //                   app_status == bulk_load_status::BLS_FAILED) {
-    //            // case2.2~2.8, case3.1~3.5
-    //            partition_bulk_load(pid);
-    //        }
-    //        if (app_status == bulk_load_status::BLS_INGESTING) {
-    //            partition_ingestion(pid);
-    //        }
-    //    }
-}
-
 void bulk_load_service::create_partition_bulk_load_info(const std::string &app_name,
                                                         gpid pid,
                                                         uint32_t partition_count)
@@ -1500,8 +1344,6 @@ void bulk_load_service::create_partition_bulk_load_info(const std::string &app_n
 void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_state> app,
                                                         bool is_app_bulk_loading)
 {
-    ddebug_f("hyc - start check_app_bulk_load_consistency");
-
     std::string app_path = get_app_bulk_load_path(app->app_id);
     // TODO(heyuchen): create node_exist function in mms
     _meta_svc->get_remote_storage()->node_exist(
@@ -1540,8 +1382,6 @@ void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_stat
                     return;
                 }
             }
-
-            ddebug_f("hyc - check_app_bulk_load_consistency callback finish");
         });
 }
 

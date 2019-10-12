@@ -206,11 +206,11 @@ void meta_service::start_service()
     }
 
     if (_bulk_load_svc.get()) {
-        ddebug("start to create bulk load dir");
-        tasking::enqueue(LPC_META_STATE_NORMAL,
-                         nullptr,
-                         std::bind(&bulk_load_service::create_bulk_load_dir_on_remote_stroage,
-                                   _bulk_load_svc.get()));
+        ddebug("start bulk load service");
+        tasking::enqueue(
+            LPC_META_STATE_NORMAL,
+            nullptr,
+            std::bind(&bulk_load_service::initialize_bulk_load_service, _bulk_load_svc.get()));
     }
 }
 
