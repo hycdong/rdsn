@@ -283,7 +283,7 @@ void bulk_load_service::partition_bulk_load(const gpid &pid)
     if (primary_addr.is_invalid()) {
         dwarn_f(
             "app({}) partition({}) primary is invalid, try it later", app_name, pid.to_string());
-        tasking::enqueue(LPC_META_STATE_NORMAL,
+        tasking::enqueue(LPC_META_CALLBACK,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_bulk_load, this, pid),
                          0,
@@ -386,7 +386,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
 
     if (is_app_bulk_loading(pid.get_app_id())) {
         // TODO(heyuchen): delay time to config
-        tasking::enqueue(LPC_META_STATE_NORMAL,
+        tasking::enqueue(LPC_META_CALLBACK,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_bulk_load, this, pid),
                          0,
@@ -993,7 +993,7 @@ void bulk_load_service::do_sync_partition_bulk_load(const gpid &pid,
 {
     _meta_svc->get_remote_storage()->get_data(
         partition_path,
-        LPC_META_STATE_NORMAL,
+        LPC_META_CALLBACK,
         [this, pid, app_name, partition_path, &err](error_code ec, const blob &value) {
             if (ec == ERR_OK) {
                 partition_bulk_load_info pinfo;
