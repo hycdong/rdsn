@@ -203,7 +203,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         response.err =
             download_sst_files(request.app.app_name, request.cluster_name, request.provider_name);
 
-        // primary report to meta
+        // secondary report to primary
         if (response.err == ERR_OK) {
             response.__isset.download_progress = true;
             response.download_progress = _bld_progress;
@@ -251,6 +251,12 @@ void replica::on_group_bulk_load_reply(error_code err,
     _checker.only_one_thread_access();
 
     if (partition_status::PS_PRIMARY != status() || req->config.ballot < get_ballot()) {
+        derror_replica("is not {} or recevied out-dated reply, status={}, request ballot={}, "
+                       "current ballot={}",
+                       enum_to_string(partition_status::PS_PRIMARY),
+                       enum_to_string(status()),
+                       req->config.ballot,
+                       get_ballot());
         return;
     }
 
@@ -615,13 +621,6 @@ void replica::update_download_progress()
     }
 }
 
-void replica::send_download_request_to_secondaries(const bulk_load_request &request)
-{
-    for (const auto &target_address : _primary_states.membership.secondaries) {
-        rpc::call_one_way_typed(target_address, RPC_BULK_LOAD, request, get_gpid().thread_hash());
-    }
-}
-
 void replica::update_group_download_progress(bulk_load_response &response)
 {
     if (status() != partition_status::PS_PRIMARY) {
@@ -700,7 +699,6 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
     _bulk_load_context.cleanup();
 }
 
-// void replica::handle_bulk_load_succeed(const bulk_load_request &request)
 void replica::handle_bulk_load_succeed()
 {
     auto old_status = _bulk_load_context.get_status();
@@ -725,7 +723,6 @@ void replica::handle_bulk_load_succeed()
         mutation_ptr mu = new_mutation(invalid_decree);
         mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
         init_prepare(mu, false);
-        // send_download_request_to_secondaries(request);
     }
 
     _bulk_load_context.set_status(bulk_load_status::BLS_FINISH);

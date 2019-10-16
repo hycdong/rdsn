@@ -323,8 +323,6 @@ private:
                                           const std::string &remote_file_dir,
                                           const std::string &local_file_dir);
 
-    void send_download_request_to_secondaries(const bulk_load_request &request);
-
     bool verify_sst_files(const file_meta &f_meta, const std::string &dir);
 
     std::string get_bulk_load_remote_dir(const std::string &app_name,
@@ -342,7 +340,6 @@ private:
     dsn::error_code read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
     void update_group_download_progress(bulk_load_response &response);
     void handle_bulk_load_error();
-    // void handle_bulk_load_succeed(const bulk_load_request &request);
     void cleanup_bulk_load_context(bulk_load_status::type new_status);
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
     void update_group_context_clean_flag(bulk_load_response &response);
@@ -421,7 +418,7 @@ private:
     //                                data, so skip the damaged partition
     dsn::error_code _restore_status;
 
-    // bulk load
+    // bulk load (TODO(heyuchen)):
     // TODO(heyuchen): init it
     partition_download_progress _bld_progress;
     // file_name -> downloading task
