@@ -179,8 +179,8 @@ public:
                 mock_progress;
             _replica->_primary_states.group_download_progress[rpc_address("127.0.0.4", 34801)] =
                 mock_progress;
-            _replica->_bld_progress.pid = PID;
-            _replica->_bld_progress.progress = 100;
+            _replica->_bulk_load_download_progress.pid = PID;
+            _replica->_bulk_load_download_progress.progress = 100;
         }
         if (mock_cleanup_flag) {
             _replica->_primary_states

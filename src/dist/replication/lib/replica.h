@@ -345,6 +345,18 @@ private:
     void update_group_context_clean_flag(bulk_load_response &response);
     void handle_bulk_load_succeed();
 
+    bulk_load_status::type get_bulk_load_status() { return _bulk_load_context._status; }
+    void set_bulk_load_status(bulk_load_status::type status)
+    {
+        _bulk_load_context._status = status;
+    }
+    void reset_bulk_load_download_progress()
+    {
+        _bulk_load_download_progress.pid = get_gpid();
+        _bulk_load_download_progress.progress = 0;
+        _bulk_load_download_progress.status = ERR_OK;
+    }
+
 private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;
@@ -420,9 +432,7 @@ private:
 
     // bulk load (TODO(heyuchen)):
     // TODO(heyuchen): init it
-    partition_download_progress _bld_progress;
-    // file_name -> downloading task
-    std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
+    partition_download_progress _bulk_load_download_progress;
 
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true
     bool _is_initializing;       // when initializing, switching to primary need to update ballot

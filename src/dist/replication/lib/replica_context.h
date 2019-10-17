@@ -564,8 +564,7 @@ public:
     {
     }
 
-    bulk_load_status::type get_status() { return _status; }
-    void set_status(bulk_load_status::type status) { _status = status; }
+    void cleanup_download_task();
     void cleanup();
     bool is_cleanup() { return _clean_up; }
 
@@ -577,6 +576,8 @@ private:
     uint64_t _file_total_size;
     std::atomic<uint64_t> _cur_download_size;
     std::atomic<int32_t> _download_progress;
+    // file_name -> downloading task
+    std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
     bool _clean_up;
 };
 
