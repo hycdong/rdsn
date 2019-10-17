@@ -174,6 +174,34 @@ bool primary_context::check_exist(::dsn::rpc_address node, partition_status::typ
     }
 }
 
+void primary_context::set_node_bulk_load_context(
+    const std::shared_ptr<group_bulk_load_response> &resp, const rpc_address &node)
+{
+    if (resp->__isset.download_progress) {
+        group_download_progress[node] = resp->download_progress;
+    }
+    if (resp->__isset.is_bulk_load_context_cleaned) {
+        group_bulk_load_context_flag[node] = resp->is_bulk_load_context_cleaned;
+    }
+}
+
+void primary_context::reset_node_bulk_load_context(const rpc_address &node,
+                                                   const gpid &pid,
+                                                   bool reset_progress,
+                                                   bool reset_flag)
+{
+    if (reset_progress) {
+        partition_download_progress download_progress;
+        download_progress.pid = pid;
+        download_progress.progress = 0;
+        download_progress.status = ERR_OK;
+        group_download_progress[node] = download_progress;
+    }
+    if (reset_flag) {
+        group_bulk_load_context_flag[node] = false;
+    }
+}
+
 bool secondary_context::cleanup(bool force)
 {
     CLEANUP_TASK(checkpoint_task, force)

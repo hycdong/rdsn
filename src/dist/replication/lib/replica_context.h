@@ -82,6 +82,14 @@ public:
 
     void do_cleanup_pending_mutations(bool clean_pending_mutations = true);
 
+    void set_node_bulk_load_context(const std::shared_ptr<group_bulk_load_response> &resp,
+                                    const rpc_address &node);
+
+    void reset_node_bulk_load_context(const rpc_address &node,
+                                      const gpid &pid,
+                                      bool reset_progress,
+                                      bool reset_flag);
+
 public:
     // membership mgr, including learners
     partition_configuration membership;

@@ -241,13 +241,20 @@ void replica::on_group_bulk_load_reply(error_code err,
 {
     _checker.only_one_thread_access();
 
-    if (partition_status::PS_PRIMARY != status() || req->config.ballot < get_ballot()) {
-        derror_replica("is not {} or recevied out-dated reply, status={}, request ballot={}, "
-                       "current ballot={}",
-                       enum_to_string(partition_status::PS_PRIMARY),
+    if (partition_status::PS_PRIMARY != status()) {
+        derror_replica("replica status={}, should be {}",
                        enum_to_string(status()),
-                       req->config.ballot,
-                       get_ballot());
+                       enum_to_string(partition_status::PS_PRIMARY));
+        return;
+    }
+
+    if (req->config.ballot < get_ballot()) {
+        derror_replica(
+            "recevied out-dated on_group_bulk_load_reply, request ballot={}, current ballot={}",
+            req->config.ballot,
+            get_ballot());
+        // TODO(heyuchen): consider here
+        _primary_states.reset_node_bulk_load_context(req->target_address, get_gpid(), true, true);
         return;
     }
 
@@ -255,25 +262,31 @@ void replica::on_group_bulk_load_reply(error_code err,
 
     if (err != ERR_OK) {
         dwarn_replica("get group_bulk_load_reply failed, error = {}", err);
+        // TODO(heyuchen): refactor
+        bulk_load_status::type status = req->meta_app_bulk_load_status;
+        bool reset_download_progress = (status == bulk_load_status::type::BLS_DOWNLOADING ||
+                                        status == bulk_load_status::type::BLS_DOWNLOADED);
+        bool reset_is_context_clean = (status == bulk_load_status::type::BLS_FINISH ||
+                                       status == bulk_load_status::type::BLS_FAILED);
+        _primary_states.reset_node_bulk_load_context(
+            req->target_address, get_gpid(), reset_download_progress, reset_is_context_clean);
+
         return;
     }
 
     if (resp->err != ERR_OK) {
         derror_replica("on_group_bulk_load failed, error = {}", resp->err);
-        if (resp->__isset.download_progress) {
-            _primary_states.group_download_progress[req->target_address] = resp->download_progress;
-        }
-        if (resp->__isset.is_bulk_load_context_cleaned) {
-            _primary_states.group_bulk_load_context_flag[req->target_address] = false;
-        }
+        // TODO(heyuchen): refactor
+        bulk_load_status::type status = req->meta_app_bulk_load_status;
+        bool reset_download_progress = (status == bulk_load_status::type::BLS_DOWNLOADING ||
+                                        status == bulk_load_status::type::BLS_DOWNLOADED);
+        bool reset_is_context_clean = (status == bulk_load_status::type::BLS_FINISH ||
+                                       status == bulk_load_status::type::BLS_FAILED);
+        _primary_states.reset_node_bulk_load_context(
+            req->target_address, get_gpid(), reset_download_progress, reset_is_context_clean);
+
     } else {
-        if (resp->__isset.download_progress) {
-            _primary_states.group_download_progress[req->target_address] = resp->download_progress;
-        }
-        if (resp->__isset.is_bulk_load_context_cleaned) {
-            _primary_states.group_bulk_load_context_flag[req->target_address] =
-                resp->is_bulk_load_context_cleaned;
-        }
+        _primary_states.set_node_bulk_load_context(resp, req->target_address);
     }
 }
 
