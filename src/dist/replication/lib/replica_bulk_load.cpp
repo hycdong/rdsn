@@ -23,7 +23,14 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         return;
     }
 
-    // TODO(heyuchen): add ballot check here
+    if (request.ballot != get_ballot()) {
+        dwarn_replica(
+            "receive bulk load request with wrong version, remote ballot={}, local ballot={}",
+            request.ballot,
+            get_ballot());
+        response.err = ERR_INVALID_STATE;
+        return;
+    }
 
     response.err = ERR_OK;
     response.pid = request.pid;
