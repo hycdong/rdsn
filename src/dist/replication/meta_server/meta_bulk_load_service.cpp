@@ -575,7 +575,8 @@ error_code bulk_load_service::check_download_status(const bulk_load_response &re
 void bulk_load_service::update_partition_bulk_load_status(const std::string &app_name,
                                                           const gpid &pid,
                                                           std::string &path,
-                                                          bulk_load_status::type status)
+                                                          bulk_load_status::type status,
+                                                          bool send_request)
 {
     zauto_read_lock l(_lock);
     partition_bulk_load_info pinfo = _partition_bulk_load_info[pid];
@@ -591,7 +592,7 @@ void bulk_load_service::update_partition_bulk_load_status(const std::string &app
     blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
     _meta_svc->get_meta_storage()->set_data(
-        std::move(path), std::move(value), [this, app_name, pid, path, status]() {
+        std::move(path), std::move(value), [this, app_name, pid, path, status, send_request]() {
             zauto_write_lock l(_lock);
             {
                 bulk_load_status::type old_status = _partition_bulk_load_info[pid].status;
@@ -623,7 +624,7 @@ void bulk_load_service::update_partition_bulk_load_status(const std::string &app
                     // do nothing
                 }
             }
-            if (status == bulk_load_status::BLS_DOWNLOADING) {
+            if (status == bulk_load_status::BLS_DOWNLOADING && send_request) {
                 partition_bulk_load(pid);
             }
         });
@@ -1130,7 +1131,7 @@ void bulk_load_service::try_to_continue_app_bulk_load(
 ///     1 - app:downloading + not existed
 ///         create not existed partition with downloading and send bulk load request
 ///     2 - app:downloading + downloaded
-///         count = downloading count, send bulk load request (app aim-> downloaded)
+///         count = not downloading count, send bulk load request (app aim-> downloaded)
 ///     3 - app:downloaded + ingesting
 ///         count = downloaded count, send bulk load request (app aim -> ingesting)
 ///     4 - app:downloaded + not downloaded && not ingesting
@@ -1144,6 +1145,8 @@ void bulk_load_service::try_to_continue_app_bulk_load(
 ///         remove dir and reset flag
 ///     8 - app:failed + not failed
 ///         set partition failed, send bulk load request (app aim cleanup)
+///     9 - app:downloading + not downloading && not downloaded
+///         count = not downloading count, send bulk load request
 /// 3. all child partition status isconsistency with app (count = partition count)
 ///     1 - downloading: send request
 ///     2 - downloaded: send request
@@ -1223,8 +1226,7 @@ bool bulk_load_service::validate_partition_bulk_load_status(
         return false;
     }
 
-    if (app_status == bulk_load_status::BLS_DOWNLOADING ||
-        app_status == bulk_load_status::BLS_DOWNLOADED ||
+    if (app_status == bulk_load_status::BLS_DOWNLOADED ||
         app_status == bulk_load_status::BLS_INGESTING) {
         bulk_load_status::type valid_status = get_valid_partition_status(app_status);
         ddebug_f("app({}) bulk_load_status={}, valid partition status may be {} or {}",
@@ -1261,8 +1263,9 @@ bool bulk_load_service::validate_partition_bulk_load_status(
         return false;
     }
 
-    // if app status is failed, partition status can be any status
-    if (app_status == bulk_load_status::BLS_FAILED) {
+    // if app status is downloading or failed, partition status can be any status
+    if (app_status == bulk_load_status::BLS_DOWNLOADING ||
+        app_status == bulk_load_status::BLS_FAILED) {
         return true;
     }
 
@@ -1273,16 +1276,15 @@ bool bulk_load_service::validate_partition_bulk_load_status(
 bulk_load_status::type
 bulk_load_service::get_valid_partition_status(bulk_load_status::type app_status)
 {
-    if (app_status == bulk_load_status::BLS_DOWNLOADING) {
-        return bulk_load_status::BLS_DOWNLOADED;
-    } else if (app_status == bulk_load_status::BLS_DOWNLOADED) {
+    if (app_status == bulk_load_status::BLS_DOWNLOADED) {
         return bulk_load_status::BLS_INGESTING;
     } else if (app_status == bulk_load_status::BLS_INGESTING ||
                app_status == bulk_load_status::BLS_FINISH) {
         return bulk_load_status::BLS_FINISH;
     } else {
-        // TODO(heyuchen): handle paused and canceled
-        return app_status; // BLS_FAILED
+        // BLS_DOWNLOADING, BLS_FAILED no limit
+        // TODO(heyuchen): consider paused and cancel
+        return app_status;
     }
 }
 
@@ -1310,12 +1312,15 @@ void bulk_load_service::continue_app_bulk_load(
              different_count);
 
     // get in_progress_partition_count
-    int in_progress_partition_count = partition_count; // failed
+    int in_progress_partition_count = partition_count; // failed or all downloading
     if (app_status == bulk_load_status::BLS_DOWNLOADING) {
-        in_progress_partition_count = invalid_count > 0 ? invalid_count : same_count;
-    } else if (app_status == bulk_load_status::BLS_DOWNLOADED) {
-        in_progress_partition_count = same_count;
-    } else if (app_status == bulk_load_status::BLS_INGESTING ||
+        if (invalid_count > 0) {
+            in_progress_partition_count = invalid_count;
+        } else if (different_count > 0) {
+            in_progress_partition_count = different_count;
+        }
+    } else if (app_status == bulk_load_status::BLS_DOWNLOADED ||
+               app_status == bulk_load_status::BLS_INGESTING ||
                app_status == bulk_load_status::BLS_FINISH) {
         in_progress_partition_count = same_count;
     }
@@ -1324,14 +1329,17 @@ void bulk_load_service::continue_app_bulk_load(
         _apps_in_progress_count[app_id] = in_progress_partition_count;
     }
 
+    // if app status is downloading and all partition exist, set all partition status to downloading
     // if app status is failed, set all partition status to failed
-    if (app_status == bulk_load_status::BLS_FAILED && different_count > 0) {
+    if ((app_status == bulk_load_status::BLS_FAILED ||
+         (app_status == bulk_load_status::BLS_DOWNLOADING && invalid_count == 0)) &&
+        different_count > 0) {
         for (auto iter = different_status_pidx_set.begin(); iter != different_status_pidx_set.end();
              ++iter) {
             int32_t pidx = *iter;
             std::string path = get_partition_bulk_load_path(get_app_bulk_load_path(app_id), pidx);
             update_partition_bulk_load_status(
-                ainfo.app_name, gpid(app_id, pidx), path, bulk_load_status::BLS_FAILED);
+                ainfo.app_name, gpid(app_id, pidx), path, app_status, false);
         }
     }
 
