@@ -96,9 +96,12 @@ private:
     void partition_bulk_load(const gpid &pid);
 
     void on_partition_bulk_load_reply(error_code err,
+                                      ballot req_ballot,
                                       bulk_load_response &&response,
                                       const gpid &pid,
                                       const rpc_address &primary_addr);
+
+    void rollback_to_downloading(int32_t app_id);
 
     // clear bulk load service local variety
     void clear_app_bulk_load_states(int32_t app_id, const std::string &app_name); // private
