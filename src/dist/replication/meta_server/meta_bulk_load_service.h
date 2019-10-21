@@ -186,8 +186,7 @@ private:
     void update_partition_bulk_load_status(const std::string &app_name,
                                            const gpid &pid,
                                            std::string &path,
-                                           bulk_load_status::type status,
-                                           bool send_request = true); // private + zk
+                                           bulk_load_status::type status); // private + zk
 
     // update app's bulk load status to {new_status} on remote storage
     void update_app_bulk_load_status_unlock(int32_t app_id,
