@@ -17,9 +17,12 @@ set(MY_PROJ_LIBS
     dsn.failure_detector.multimaster
     dsn_nfs
     dsn_cli
+    dsn_runtime
     )
 
 set(MY_PROJ_LIB_PATH "")
+
+set(MY_BOOST_PACKAGES regex)
 
 # Extra files that will be installed
 set(MY_BINPLACES "")

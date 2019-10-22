@@ -187,9 +187,13 @@ void primary_context::set_node_bulk_load_context(
 
 void primary_context::reset_node_bulk_load_context(const rpc_address &node,
                                                    const gpid &pid,
-                                                   bool reset_progress,
-                                                   bool reset_flag)
+                                                   bulk_load_status::type status)
 {
+    bool reset_progress = (status == bulk_load_status::type::BLS_DOWNLOADING ||
+                           status == bulk_load_status::type::BLS_DOWNLOADED ||
+                           status == bulk_load_status::type::BLS_FINISH);
+    bool reset_flag = (status == bulk_load_status::type::BLS_FINISH ||
+                       status == bulk_load_status::type::BLS_FAILED);
     if (reset_progress) {
         partition_download_progress download_progress;
         download_progress.pid = pid;

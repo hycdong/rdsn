@@ -87,8 +87,7 @@ public:
 
     void reset_node_bulk_load_context(const rpc_address &node,
                                       const gpid &pid,
-                                      bool reset_progress,
-                                      bool reset_flag);
+                                      bulk_load_status::type status);
 
 public:
     // membership mgr, including learners

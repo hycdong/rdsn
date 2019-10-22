@@ -6,6 +6,7 @@
 #include <dsn/dist/block_service.h>
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/utility/filesystem.h>
+#include <dsn/utility/fail_point.h>
 
 #include "replica.h"
 #include "replica_stub.h"
@@ -98,6 +99,8 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
 
 void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
 {
+    FAIL_POINT_INJECT_F("replica_broadcast_group_bulk_load", [](dsn::string_view) {});
+
     if (!_primary_states.learners.empty()) {
         // replica has learners, do not send group_bulk_load request, because response status is
         // useless
@@ -255,45 +258,35 @@ void replica::on_group_bulk_load_reply(error_code err,
         return;
     }
 
-    if (req->config.ballot < get_ballot()) {
-        derror_replica(
-            "recevied out-dated on_group_bulk_load_reply, request ballot={}, current ballot={}",
-            req->config.ballot,
-            get_ballot());
-        // TODO(heyuchen): consider here
-        _primary_states.reset_node_bulk_load_context(req->target_address, get_gpid(), true, true);
-        return;
-    }
-
     _primary_states.group_bulk_load_pending_replies.erase(req->target_address);
 
     if (err != ERR_OK) {
         dwarn_replica("get group_bulk_load_reply failed, error = {}", err);
-        // TODO(heyuchen): refactor
-        bulk_load_status::type status = req->meta_app_bulk_load_status;
-        bool reset_download_progress = (status == bulk_load_status::type::BLS_DOWNLOADING ||
-                                        status == bulk_load_status::type::BLS_DOWNLOADED);
-        bool reset_is_context_clean = (status == bulk_load_status::type::BLS_FINISH ||
-                                       status == bulk_load_status::type::BLS_FAILED);
         _primary_states.reset_node_bulk_load_context(
-            req->target_address, get_gpid(), reset_download_progress, reset_is_context_clean);
+            req->target_address, get_gpid(), req->meta_app_bulk_load_status);
 
         return;
     }
 
     if (resp->err != ERR_OK) {
         derror_replica("on_group_bulk_load failed, error = {}", resp->err);
-        // TODO(heyuchen): refactor
-        bulk_load_status::type status = req->meta_app_bulk_load_status;
-        bool reset_download_progress = (status == bulk_load_status::type::BLS_DOWNLOADING ||
-                                        status == bulk_load_status::type::BLS_DOWNLOADED);
-        bool reset_is_context_clean = (status == bulk_load_status::type::BLS_FINISH ||
-                                       status == bulk_load_status::type::BLS_FAILED);
         _primary_states.reset_node_bulk_load_context(
-            req->target_address, get_gpid(), reset_download_progress, reset_is_context_clean);
-
+            req->target_address, get_gpid(), req->meta_app_bulk_load_status);
+    } else if (req->config.ballot != get_ballot()) {
+        derror_replica(
+            "recevied wrong on_group_bulk_load_reply, request ballot={}, current ballot={}",
+            req->config.ballot,
+            get_ballot());
+        // TODO(heyuchen): consider here
+        _primary_states.reset_node_bulk_load_context(
+            req->target_address, get_gpid(), req->meta_app_bulk_load_status);
+        return;
     } else {
         _primary_states.set_node_bulk_load_context(resp, req->target_address);
+
+        // TODO(heyuchen):delete
+        // ddebug_replica("node={}, flag={}, progress={}", req->target_address.to_string(),
+        // resp->is_bulk_load_context_cleaned, resp->download_progress.progress);
     }
 }
 
@@ -306,6 +299,11 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
                                             const std::string &cluster_name,
                                             const std::string &provider_name)
 {
+    FAIL_POINT_INJECT_F("replica_bulk_load_download_sst_files",
+                        [](dsn::string_view) -> error_code { return ERR_OK; });
+    FAIL_POINT_INJECT_F("replica_bulk_load_download_sst_files_fs_error",
+                        [](dsn::string_view) -> error_code { return ERR_FS_INTERNAL; });
+
     std::string remote_dir =
         get_bulk_load_remote_dir(app_name, cluster_name, get_gpid().get_partition_index());
 
@@ -664,6 +662,9 @@ void replica::update_group_download_progress(bulk_load_response &response)
 
 void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 {
+    FAIL_POINT_INJECT_F("replica_cleanup_bulk_load_context",
+                        [=](dsn::string_view) { set_bulk_load_status(new_status); });
+
     if (_bulk_load_context.is_cleanup()) {
         ddebug_replica("bulk load context has been cleaned up");
         return;
@@ -703,6 +704,10 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 
 void replica::handle_bulk_load_succeed()
 {
+    FAIL_POINT_INJECT_F("replica_handle_bulk_load_succeed", [this](dsn::string_view) {
+        set_bulk_load_status(bulk_load_status::BLS_FINISH);
+    });
+
     auto old_status = get_bulk_load_status();
     if (old_status == bulk_load_status::BLS_DOWNLOADING ||
         old_status == bulk_load_status::BLS_DOWNLOADED) {
