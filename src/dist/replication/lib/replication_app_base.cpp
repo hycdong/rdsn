@@ -479,6 +479,7 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
     dassert(mu->data.updates.size() > 0, "");
 
     int request_count = static_cast<int>(mu->client_requests.size());
+    bool has_ingestion_request = false;
     dsn::message_ex **batched_requests =
         (dsn::message_ex **)alloca(sizeof(dsn::message_ex *) * request_count);
     dsn::message_ex **faked_requests =
@@ -505,6 +506,9 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
             }
 
             batched_requests[batched_count++] = req;
+            if(update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD){
+                has_ingestion_request = true;
+            }
         } else {
             // empty mutation write
             dinfo("%s: mutation %s #%d: dispatch rpc call %s",
@@ -525,7 +529,10 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
 
     if (perror != 0) {
         derror("%s: mutation %s: get internal error %d", _replica->name(), mu->name(), perror);
-        return ERR_LOCAL_APP_FAILURE;
+        // TODO(heyuchen): add perror comment
+        if(!has_ingestion_request || (has_ingestion_request && perror != 4)){
+            return ERR_LOCAL_APP_FAILURE;
+        }
     }
 
     ++_last_committed_decree;
