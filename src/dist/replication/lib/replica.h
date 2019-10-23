@@ -355,6 +355,7 @@ private:
         _bulk_load_download_progress.pid = get_gpid();
         _bulk_load_download_progress.progress = 0;
         _bulk_load_download_progress.status = ERR_OK;
+        _bulk_load_context.cleanup_download_prgress();
     }
 
 private:

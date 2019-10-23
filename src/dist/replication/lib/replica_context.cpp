@@ -96,6 +96,7 @@ void primary_context::cleanup(bool clean_pending_mutations)
          ++it) {
         CLEANUP_TASK_ALWAYS(it->second)
     }
+    group_bulk_load_pending_replies.clear();
 
     membership.ballot = 0;
 
@@ -1341,12 +1342,18 @@ void bulk_load_context::cleanup_download_task()
     _bulk_load_download_task.clear();
 }
 
-void bulk_load_context::cleanup()
+void bulk_load_context::cleanup_download_prgress()
 {
-    _status = bulk_load_status::BLS_INVALID;
     _file_total_size = 0;
     _cur_download_size.store(0);
     _download_progress.store(0);
+}
+
+void bulk_load_context::cleanup()
+{
+    _status = bulk_load_status::BLS_INVALID;
+    cleanup_download_task();
+    cleanup_download_prgress();
     _clean_up = true;
 }
 

@@ -50,7 +50,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
 
     broadcast_group_bulk_load(request);
 
-    if (get_bulk_load_status() == bulk_load_status::BLS_INVALID &&
+    if ((get_bulk_load_status() == bulk_load_status::BLS_INVALID || get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
         request.partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
         // update bulk load status
@@ -199,7 +199,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
 
     // TODO(heyuchen):
     // do bulk load things
-    if (get_bulk_load_status() == bulk_load_status::BLS_INVALID &&
+    if ((get_bulk_load_status() == bulk_load_status::BLS_INVALID || get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
         request.meta_partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
         // update bulk load status

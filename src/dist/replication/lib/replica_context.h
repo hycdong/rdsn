@@ -124,7 +124,7 @@ public:
     // created in replica::on_bulk_load()
     // cancelled in cleanup() when status changed from PRIMARY to others
     // group bulk_load response tasks of RPC_GROUP_BULK_LOAD for each secondary replica
-    std::unordered_map<rpc_address, task_ptr> group_bulk_load_pending_replies;
+    node_tasks group_bulk_load_pending_replies;
     // bulk load download progress
     std::unordered_map<rpc_address, partition_download_progress> group_download_progress;
     // bulk load cleanup flag
@@ -572,6 +572,7 @@ public:
     }
 
     void cleanup_download_task();
+    void cleanup_download_prgress();
     void cleanup();
     bool is_cleanup() { return _clean_up; }
 
