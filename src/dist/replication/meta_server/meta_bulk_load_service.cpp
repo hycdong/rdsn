@@ -548,6 +548,7 @@ void bulk_load_service::handle_partition_download_error(const gpid &pid)
 error_code bulk_load_service::check_download_status(const bulk_load_response &response)
 {
     // download_progresses filed is not set
+    // TODO(heyuchen): consider it!!! or ok???
     if (!response.__isset.download_progresses) {
         return ERR_INVALID_STATE;
     }
@@ -577,7 +578,7 @@ void bulk_load_service::update_partition_bulk_load_status(const std::string &app
 {
     zauto_read_lock l(_lock);
     partition_bulk_load_info pinfo = _partition_bulk_load_info[pid];
-    if (pinfo.status == status) {
+    if (pinfo.status == status && status != bulk_load_status::BLS_DOWNLOADING) {
         dwarn_f("app({}) partition({}) old status:{} VS new status:{}, ignore it",
                 app_name,
                 pid.to_string(),
@@ -591,35 +592,36 @@ void bulk_load_service::update_partition_bulk_load_status(const std::string &app
     _meta_svc->get_meta_storage()->set_data(
         std::move(path), std::move(value), [this, app_name, pid, path, status]() {
             zauto_write_lock l(_lock);
-            {
-                bulk_load_status::type old_status = _partition_bulk_load_info[pid].status;
-                ddebug_f("app({}) update partition({}) status from {} to {}",
-                         app_name,
-                         pid.to_string(),
-                         enum_to_string(old_status),
-                         enum_to_string(status));
+            bulk_load_status::type old_status = _partition_bulk_load_info[pid].status;
+            ddebug_f("app({}) update partition({}) status from {} to {}",
+                     app_name,
+                     pid.to_string(),
+                     enum_to_string(old_status),
+                     enum_to_string(status));
 
-                _partition_bulk_load_info[pid].status = status;
+            _partition_bulk_load_info[pid].status = status;
 
-                if (status == bulk_load_status::BLS_DOWNLOADED) {
-                    _partitions_request[pid] = nullptr;
-                    if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
-                        update_app_bulk_load_status_unlock(pid.get_app_id(), status);
-                    }
-                } else if (status == bulk_load_status::BLS_INGESTING ||
-                           status == bulk_load_status::BLS_FINISH) {
-                    if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
-                        update_app_bulk_load_status_unlock(pid.get_app_id(), status);
-                    }
-                } else if (status == bulk_load_status::BLS_DOWNLOADING) {
-                    if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
-                        _apps_in_progress_count[pid.get_app_id()] =
-                            _app_bulk_load_info[pid.get_app_id()].partition_count;
-                        ddebug_f("app({}) restart to bulk load", app_name);
-                    }
-                } else if (status == bulk_load_status::BLS_FAILED) {
-                    // do nothing
+            if (status == bulk_load_status::BLS_DOWNLOADED) {
+                _partitions_request[pid] = nullptr;
+                if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
+                    update_app_bulk_load_status_unlock(pid.get_app_id(), status);
                 }
+            } else if (status == bulk_load_status::BLS_INGESTING ||
+                       status == bulk_load_status::BLS_FINISH) {
+                if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
+                    update_app_bulk_load_status_unlock(pid.get_app_id(), status);
+                }
+            } else if (status == bulk_load_status::BLS_DOWNLOADING) {
+                // TODO(heyuchen): consider
+                _partitions_download_progress[pid].clear();
+                _partitions_total_download_progress[pid] = 0;
+                if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
+                    _apps_in_progress_count[pid.get_app_id()] =
+                        _app_bulk_load_info[pid.get_app_id()].partition_count;
+                    ddebug_f("app({}) restart to bulk load", app_name);
+                }
+            } else if (status == bulk_load_status::BLS_FAILED) {
+                // do nothing
             }
         });
 }
@@ -629,7 +631,8 @@ void bulk_load_service::update_app_bulk_load_status_unlock(int32_t app_id,
 {
     app_bulk_load_info ainfo = _app_bulk_load_info[app_id];
     auto old_status = ainfo.status;
-    if (old_status == new_status) {
+    // TODO(heyuchen): handle app downloading and some downloaded
+    if (old_status == new_status && new_status != bulk_load_status::BLS_DOWNLOADING) {
         dwarn_f("app({}) old status:{} VS new status:{}, ignore it",
                 ainfo.app_name,
                 enum_to_string(old_status),
@@ -820,11 +823,11 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
                  app_name,
                  pid.to_string(),
                  err.to_string());
-        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
-                         _meta_svc->tracker(),
-                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
-                         pid.thread_hash(),
-                         std::chrono::seconds(1));
+        //        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
+        //                         _meta_svc->tracker(),
+        //                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
+        //                         pid.thread_hash(),
+        //                         std::chrono::seconds(1));
         return;
     }
 
@@ -834,11 +837,11 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
                  app_name,
                  pid.to_string(),
                  resp.error);
-        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
-                         _meta_svc->tracker(),
-                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
-                         pid.thread_hash(),
-                         std::chrono::seconds(1));
+        //        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
+        //                         _meta_svc->tracker(),
+        //                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
+        //                         pid.thread_hash(),
+        //                         std::chrono::seconds(1));
         return;
     }
 
