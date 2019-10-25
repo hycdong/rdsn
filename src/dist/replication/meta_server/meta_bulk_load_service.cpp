@@ -631,7 +631,7 @@ void bulk_load_service::update_app_bulk_load_status_unlock(int32_t app_id,
 {
     app_bulk_load_info ainfo = _app_bulk_load_info[app_id];
     auto old_status = ainfo.status;
-    // TODO(heyuchen): handle app downloading and some downloaded
+    // TODO(heyuchen): consider! handle app downloading and some downloaded
     if (old_status == new_status && new_status != bulk_load_status::BLS_DOWNLOADING) {
         dwarn_f("app({}) old status:{} VS new status:{}, ignore it",
                 ainfo.app_name,
@@ -818,16 +818,12 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
                                                      const gpid &pid)
 {
     // TODO(heyuchen):consider!!!
+    // if meet error, ingesting will rollback to downloading, no need to retry here
     if (err != ERR_OK) {
         derror_f("app({}) partition({}) failed to ingestion files, error = {}",
                  app_name,
                  pid.to_string(),
                  err.to_string());
-        //        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
-        //                         _meta_svc->tracker(),
-        //                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
-        //                         pid.thread_hash(),
-        //                         std::chrono::seconds(1));
         return;
     }
 
@@ -837,11 +833,6 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
                  app_name,
                  pid.to_string(),
                  resp.error);
-        //        tasking::enqueue(LPC_BULK_LOAD_INGESTION,
-        //                         _meta_svc->tracker(),
-        //                         std::bind(&bulk_load_service::partition_ingestion, this, pid),
-        //                         pid.thread_hash(),
-        //                         std::chrono::seconds(1));
         return;
     }
 

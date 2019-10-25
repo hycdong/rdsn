@@ -198,7 +198,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
     response.pid = get_gpid();
     response.target_address = _stub->_primary_address;
 
-    // TODO(heyuchen):
+    // TODO(heyuchen): refactor
     // do bulk load things
     if ((get_bulk_load_status() == bulk_load_status::BLS_INVALID ||
          get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
@@ -285,10 +285,6 @@ void replica::on_group_bulk_load_reply(error_code err,
         return;
     } else {
         _primary_states.set_node_bulk_load_context(resp, req->target_address);
-
-        // TODO(heyuchen):delete
-        // ddebug_replica("node={}, flag={}, progress={}", req->target_address.to_string(),
-        // resp->is_bulk_load_context_cleaned, resp->download_progress.progress);
     }
 }
 
@@ -611,7 +607,7 @@ bool replica::verify_sst_files(const file_meta &f_meta, const std::string &dir)
 // TODO(heyuchen): move to context.cpp
 void replica::update_download_progress()
 {
-    // TODO(heyuchen):delete
+    // TODO(heyuchen):delete???
     ddebug_replica("total_size = {}, cur_download_size = {}",
                    _bulk_load_context._file_total_size,
                    _bulk_load_context._cur_download_size.load());
