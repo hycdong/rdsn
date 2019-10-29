@@ -1354,7 +1354,13 @@ void bulk_load_context::cleanup()
     _status = bulk_load_status::BLS_INVALID;
     cleanup_download_task();
     cleanup_download_prgress();
-    _clean_up = true;
+}
+
+bool bulk_load_context::is_cleanup()
+{
+    return _status == bulk_load_status::type::BLS_INVALID && _file_total_size == 0 &&
+           _cur_download_size.load() == 0 && _download_progress.load() == 0 &&
+           _bulk_load_download_task.size() == 0;
 }
 
 } // namespace replication

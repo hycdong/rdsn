@@ -566,15 +566,14 @@ public:
         : _status(bulk_load_status::BLS_INVALID),
           _file_total_size(0),
           _cur_download_size(0),
-          _download_progress(0),
-          _clean_up(false)
+          _download_progress(0)
     {
     }
 
     void cleanup_download_task();
     void cleanup_download_prgress();
     void cleanup();
-    bool is_cleanup() { return _clean_up; }
+    bool is_cleanup();
 
 private:
     friend class ::dsn::replication::replica;
@@ -586,7 +585,6 @@ private:
     std::atomic<int32_t> _download_progress;
     // file_name -> downloading task
     std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
-    bool _clean_up;
 };
 
 //---------------inline impl----------------------------------------------------------------
