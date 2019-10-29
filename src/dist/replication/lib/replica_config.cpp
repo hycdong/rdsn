@@ -784,6 +784,8 @@ bool replica::update_local_configuration(const replica_configuration &config,
             break;
         case partition_status::PS_INACTIVE:
             _primary_states.cleanup(old_ballot != config.ballot);
+            // TODO(heyuchen): consider cleanup bulk load
+            _bulk_load_context.cleanup();
             // here we use wheather ballot changes and wheather disconnecting with meta to
             // distinguish different case above mentioned
             if (old_ballot == config.ballot && _stub->is_connected()) {
@@ -793,7 +795,6 @@ bool replica::update_local_configuration(const replica_configuration &config,
                 set_backup_context_cancel();
                 clear_cold_backup_state();
             }
-            // TODO(heyuchen): consider handle bulk load
             break;
         case partition_status::PS_SECONDARY:
         case partition_status::PS_ERROR:
@@ -814,8 +815,9 @@ bool replica::update_local_configuration(const replica_configuration &config,
         }
         break;
     case partition_status::PS_SECONDARY:
-        // TODO(heyuchen): handle bulk load cleanup
         cleanup_preparing_mutations(false);
+        // TODO(heyuchen): consider cleanup bulk load
+        _bulk_load_context.cleanup();
         if (config.status != partition_status::PS_SECONDARY) {
             // if primary change the ballot, secondary will update ballot from A to
             // A+1, we don't need clear cold backup context when this case
