@@ -159,21 +159,6 @@ public:
     static const std::string WRITE_THROTTLING;
 };
 
-struct file_meta
-{
-    std::string name;
-    int64_t size;
-    std::string md5;
-    DEFINE_JSON_SERIALIZATION(name, size, md5)
-};
-
-struct bulk_load_metadata
-{
-    std::vector<file_meta> files;
-    int64_t file_total_size;
-    DEFINE_JSON_SERIALIZATION(files, file_total_size)
-};
-
 namespace cold_backup {
 //
 //  Attention: when compose the path on block service, we use appname_appid, because appname_appid

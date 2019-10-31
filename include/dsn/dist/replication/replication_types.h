@@ -283,6 +283,8 @@ class configuration_query_backup_policy_request;
 
 class configuration_query_backup_policy_response;
 
+class file_meta;
+
 class configuration_report_restore_status_request;
 
 class configuration_report_restore_status_response;
@@ -322,6 +324,8 @@ class ddd_node_info;
 class ddd_partition_info;
 
 class ddd_diagnose_response;
+
+class bulk_load_metadata;
 
 class partition_bulk_load_info;
 
@@ -4254,6 +4258,64 @@ inline std::ostream &operator<<(std::ostream &out,
     return out;
 }
 
+typedef struct _file_meta__isset
+{
+    _file_meta__isset() : name(false), size(false), md5(false) {}
+    bool name : 1;
+    bool size : 1;
+    bool md5 : 1;
+} _file_meta__isset;
+
+class file_meta
+{
+public:
+    file_meta(const file_meta &);
+    file_meta(file_meta &&);
+    file_meta &operator=(const file_meta &);
+    file_meta &operator=(file_meta &&);
+    file_meta() : name(), size(0), md5() {}
+
+    virtual ~file_meta() throw();
+    std::string name;
+    int64_t size;
+    std::string md5;
+
+    _file_meta__isset __isset;
+
+    void __set_name(const std::string &val);
+
+    void __set_size(const int64_t val);
+
+    void __set_md5(const std::string &val);
+
+    bool operator==(const file_meta &rhs) const
+    {
+        if (!(name == rhs.name))
+            return false;
+        if (!(size == rhs.size))
+            return false;
+        if (!(md5 == rhs.md5))
+            return false;
+        return true;
+    }
+    bool operator!=(const file_meta &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const file_meta &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(file_meta &a, file_meta &b);
+
+inline std::ostream &operator<<(std::ostream &out, const file_meta &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
 typedef struct _configuration_report_restore_status_request__isset
 {
     _configuration_report_restore_status_request__isset()
@@ -5448,6 +5510,58 @@ public:
 void swap(ddd_diagnose_response &a, ddd_diagnose_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const ddd_diagnose_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _bulk_load_metadata__isset
+{
+    _bulk_load_metadata__isset() : files(false), file_total_size(false) {}
+    bool files : 1;
+    bool file_total_size : 1;
+} _bulk_load_metadata__isset;
+
+class bulk_load_metadata
+{
+public:
+    bulk_load_metadata(const bulk_load_metadata &);
+    bulk_load_metadata(bulk_load_metadata &&);
+    bulk_load_metadata &operator=(const bulk_load_metadata &);
+    bulk_load_metadata &operator=(bulk_load_metadata &&);
+    bulk_load_metadata() : file_total_size(0) {}
+
+    virtual ~bulk_load_metadata() throw();
+    std::vector<file_meta> files;
+    int64_t file_total_size;
+
+    _bulk_load_metadata__isset __isset;
+
+    void __set_files(const std::vector<file_meta> &val);
+
+    void __set_file_total_size(const int64_t val);
+
+    bool operator==(const bulk_load_metadata &rhs) const
+    {
+        if (!(files == rhs.files))
+            return false;
+        if (!(file_total_size == rhs.file_total_size))
+            return false;
+        return true;
+    }
+    bool operator!=(const bulk_load_metadata &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const bulk_load_metadata &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(bulk_load_metadata &a, bulk_load_metadata &b);
+
+inline std::ostream &operator<<(std::ostream &out, const bulk_load_metadata &obj)
 {
     obj.printTo(out);
     return out;
