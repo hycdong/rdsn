@@ -230,13 +230,13 @@ enum cold_backup_status
 };
 const char *cold_backup_status_to_string(cold_backup_status status);
 
-struct file_meta
-{
-    std::string name;
-    int64_t size;
-    std::string md5;
-    DEFINE_JSON_SERIALIZATION(name, size, md5)
-};
+// struct file_meta
+//{
+//    std::string name;
+//    int64_t size;
+//    std::string md5;
+//    DEFINE_JSON_SERIALIZATION(name, size, md5)
+//};
 
 struct cold_backup_metadata
 {
@@ -540,17 +540,6 @@ private:
 };
 
 typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
-
-// enum replica_bulk_load_status
-//{
-//    BulkLoadInvalid = 0,
-//    BulkLoadDownloading,
-//    BulkLoadDownloaded,
-//    BulkLoadIngesting,
-//    BulkLoadFinish,
-//    BulkLoadPaused,
-//    BulkLoadCanceled
-//};
 
 struct bulk_load_metadata
 {
