@@ -547,13 +547,6 @@ struct configuration_query_backup_policy_response
     4:optional string           hint_msg;
 }
 
-struct file_meta
-{
-    1:string    name;
-    2:i64       size;
-    3:string    md5;
-}
-
 struct configuration_report_restore_status_request
 {
     1:dsn.gpid  pid;
@@ -748,8 +741,7 @@ struct ddd_diagnose_response
 }
 
 // bulk load
-// TODO(heyuchen): move bulk_load_metadata struct here
-
+// TODO(heyuchen): remove partition_bulk_load_info
 struct partition_bulk_load_info
 {
     1:dsn.layer2.bulk_load_status  status;

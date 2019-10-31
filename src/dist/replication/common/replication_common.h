@@ -37,6 +37,7 @@
 
 #include <dsn/dist/replication.h>
 #include <string>
+#include <dsn/cpp/json_helper.h>
 
 namespace dsn {
 namespace replication {
@@ -156,6 +157,21 @@ class replica_envs
 public:
     static const std::string DENY_CLIENT_WRITE;
     static const std::string WRITE_THROTTLING;
+};
+
+struct file_meta
+{
+    std::string name;
+    int64_t size;
+    std::string md5;
+    DEFINE_JSON_SERIALIZATION(name, size, md5)
+};
+
+struct bulk_load_metadata
+{
+    std::vector<file_meta> files;
+    int64_t file_total_size;
+    DEFINE_JSON_SERIALIZATION(files, file_total_size)
 };
 
 namespace cold_backup {

@@ -230,14 +230,6 @@ enum cold_backup_status
 };
 const char *cold_backup_status_to_string(cold_backup_status status);
 
-// struct file_meta
-//{
-//    std::string name;
-//    int64_t size;
-//    std::string md5;
-//    DEFINE_JSON_SERIALIZATION(name, size, md5)
-//};
-
 struct cold_backup_metadata
 {
     int64_t checkpoint_decree;
@@ -540,13 +532,6 @@ private:
 };
 
 typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
-
-struct bulk_load_metadata
-{
-    std::vector<file_meta> files;
-    int64_t file_total_size;
-    DEFINE_JSON_SERIALIZATION(files, file_total_size)
-};
 
 class bulk_load_context
 {

@@ -352,8 +352,6 @@ inline void json_encode(JsonWriter &out, const dsn::app_info &info);
 inline bool json_decode(const JsonObject &in, dsn::app_info &info);
 inline void json_encode(JsonWriter &out, const dsn::replication::partition_bulk_load_info &info);
 inline bool json_decode(const JsonObject &in, dsn::replication::partition_bulk_load_info &info);
-inline void json_encode(JsonWriter &out, const dsn::replication::file_meta &f_meta);
-inline bool json_decode(const JsonObject &in, dsn::replication::file_meta &f_meta);
 
 template <typename T>
 inline void json_encode_iterable(JsonWriter &out, const T &t)
@@ -617,11 +615,6 @@ NON_MEMBER_JSON_SERIALIZATION(dsn::app_info,
                               create_second,
                               drop_second,
                               is_bulk_loading)
-
-NON_MEMBER_JSON_SERIALIZATION(dsn::replication::file_meta,
-                              name,
-                              size,
-                              md5)
 
 NON_MEMBER_JSON_SERIALIZATION(dsn::replication::partition_bulk_load_info, status)
 } // namespace json
