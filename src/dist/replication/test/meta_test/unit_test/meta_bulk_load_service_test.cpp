@@ -436,7 +436,6 @@ TEST_F(bulk_load_service_test, start_bulk_load_succeed)
 }
 
 /// query bulk load status unit tests
-// TODO(heyuchen): add more ut
 TEST_F(bulk_load_service_test, query_bulk_load_status_with_wrong_state)
 {
     create_app(APP_NAME);

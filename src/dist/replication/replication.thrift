@@ -783,6 +783,7 @@ struct configuration_query_bulk_load_response
     4:list<dsn.layer2.bulk_load_status> partitions_status;
     5:i32                               max_replica_count;
     6:optional list<map<dsn.rpc_address, partition_download_progress>> download_progresses;
+    7:optional list<bool>               cleanup_flags;
 }
 
 struct bulk_load_request

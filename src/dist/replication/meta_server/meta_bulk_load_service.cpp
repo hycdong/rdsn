@@ -894,12 +894,21 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
             response.download_progresses.resize(partition_count);
         }
 
+        if (response.app_status == bulk_load_status::BLS_FINISH ||
+            response.app_status == bulk_load_status::BLS_FAILED) {
+            response.__isset.cleanup_flags = true;
+            response.cleanup_flags.resize(partition_count);
+        }
+
         for (auto iter = _partition_bulk_load_info.begin(); iter != _partition_bulk_load_info.end();
              iter++) {
             int idx = iter->first.get_partition_index();
             response.partitions_status[idx] = iter->second.status;
             if (response.__isset.download_progresses) {
                 response.download_progresses[idx] = _partitions_download_progress[iter->first];
+            }
+            if (response.__isset.cleanup_flags) {
+                response.cleanup_flags[idx] = _partitions_cleaned_up[iter->first];
             }
         }
     }

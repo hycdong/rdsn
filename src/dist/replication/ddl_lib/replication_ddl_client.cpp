@@ -1618,6 +1618,17 @@ static std::string get_short_status(bulk_load_status::type status)
     return str;
 }
 
+static std::string bool_to_string(bool flag) { return flag ? "yes" : "no"; }
+
+/// case1. downloading or downloaded
+/// - pidx>0 && detailed=true: show single partition all replicas download progress
+/// - pidx>0 && detailed=false: show single partition total download progress
+/// - pidx=-1 && detailed=true: show all partitions and table total download progress
+/// - pidx=-1 && detailed=false: show table total download progress
+/// case2. finish or failed
+/// - pidx>0: show single partition cleanup flag
+/// - pidx=-1 && detailed=true: show all partitions and table cleanup flag
+/// - pidx=-1 && detailed=false: show table cleanup flag
 dsn::error_code
 replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pidx, bool detailed)
 {
@@ -1628,7 +1639,6 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
     auto resp_task =
         request_meta<configuration_query_bulk_load_request>(RPC_CM_QUERY_BULK_LOAD_STATUS, req);
     resp_task->wait();
-
     if (resp_task->error() != dsn::ERR_OK) {
         return resp_task->error();
     }
@@ -1639,10 +1649,10 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
     if (resp.err == ERR_OBJECT_NOT_FOUND || resp.err == ERR_APP_DROPPED) {
         std::cout << "app(" << app_name << ") not existed or not available" << std::endl;
         return resp.err;
-    }
-
-    else if (resp.err == ERR_INVALID_STATE) {
+    } else if (resp.err == ERR_INVALID_STATE) {
         std::cout << "app(" << app_name << ") not during bulk load" << std::endl;
+        return resp.err;
+    } else if (resp.err != ERR_OK) {
         return resp.err;
     }
 
@@ -1654,8 +1664,7 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
     }
 
     bool print_progress = resp.__isset.download_progresses;
-    // pidx -> partition_progress
-    std::map<int32_t, int32_t> partitions_progress;
+    std::unordered_map<int32_t, int32_t> partitions_progress;
     int total_progress = 0;
     if (print_progress) {
         for (int i = 0; i < partition_count; ++i) {
@@ -1671,43 +1680,42 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
         total_progress /= partition_count;
     }
 
-    // pidx = -1 means not print specific pidx progress
-    bool print_single_pidx = (pidx > -1 && resp.__isset.download_progresses);
+    bool print_cleanup = resp.__isset.cleanup_flags;
+    bool total_cleanup = true;
+    std::vector<bool> partitions_cleanup_flag;
+    if (print_cleanup) {
+        partitions_cleanup_flag = resp.cleanup_flags;
+        for (auto iter = partitions_cleanup_flag.begin(); iter != partitions_cleanup_flag.end();
+             ++iter) {
+            if (!(*iter)) {
+                total_cleanup = false;
+                break;
+            }
+        }
+    }
+    // pidx = -1 means print all partition status
+    bool print_single_pidx = (pidx > -1 && (print_progress || print_cleanup));
 
-    if (resp.err == ERR_OK) {
-        if (!detailed) {
-            std::cout << "app(" << app_name << ") bulk load status is "
-                      << enum_to_string(resp.app_status) << std::endl;
-        } else {
-            // TODO(heyuchen): add download status, every partition status
-            int width = strlen("bulk_load_status");
-            if (!print_progress) {
-                std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
-                          << "status" << std::endl;
-            } else if (!print_single_pidx) {
-                std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
-                          << "status" << std::setw(width) << std::left << "total_progress(%)"
-                          << std::endl;
-            } else {
+    ddebug("app %s, status=%s, progress=%d, cleanup=%d, single=%d, detailed=%d",
+           resp.app_name,
+           get_short_status(resp.app_status),
+           print_progress,
+           print_cleanup,
+           print_single_pidx,
+           detailed);
+
+    int width = strlen("bulk_load_status");
+    if (print_single_pidx) {
+        if (print_cleanup) {
+            std::cout << "partition[" << pidx << "] bulk load status is "
+                      << get_short_status(resp.partitions_status[pidx]) << std::endl;
+            std::cout << "partition[" << pidx << "] cleanup flag is "
+                      << bool_to_string(partitions_cleanup_flag[pidx]) << std::endl;
+        } else if (print_progress) {
+            if (detailed) {
                 std::cout << std::setw(width) << std::left << "pid" << std::setw(25) << std::left
                           << "node_address" << std::setw(width) << std::left
                           << "download_progress(%)" << std::endl;
-            }
-
-            if (!print_single_pidx) {
-                for (int i = 0; i < partition_count; ++i) {
-                    if (!print_progress) {
-                        std::cout << std::setw(width) << std::left << i << std::setw(width)
-                                  << std::left << get_short_status(resp.partitions_status[i])
-                                  << std::endl;
-                    } else {
-                        std::cout << std::setw(width) << std::left << i << std::setw(width)
-                                  << std::left << get_short_status(resp.partitions_status[i])
-                                  << std::setw(width) << std::left << partitions_progress[i]
-                                  << std::endl;
-                    }
-                }
-            } else {
                 for (auto iter = resp.download_progresses[pidx].begin();
                      iter != resp.download_progresses[pidx].end();
                      iter++) {
@@ -1716,20 +1724,53 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
                               << iter->second.progress << std::endl;
                 }
             }
+            std::cout << "partition[" << pidx << "] bulk load status is "
+                      << get_short_status(resp.partitions_status[pidx]) << std::endl;
+            std::cout << "partition[" << pidx << "] total download progress is "
+                      << partitions_progress[pidx] << "%" << std::endl;
         }
-
+    } else {
         if (print_progress) {
-            if (!print_single_pidx) {
-                std::cout << "app(" << app_name << ") total download progress is " << total_progress
-                          << "%" << std::endl;
-            } else {
-                std::cout << "pidx(" << pidx << ") total download progress is "
-                          << partitions_progress[pidx] << "%" << std::endl;
+            if (detailed) {
+                std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
+                          << "status" << std::setw(width) << std::left << "total_progress(%)"
+                          << std::endl;
+                for (int i = 0; i < partition_count; ++i) {
+                    std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
+                              << get_short_status(resp.partitions_status[i]) << std::setw(width)
+                              << std::left << partitions_progress[i] << std::endl;
+                }
+            }
+            std::cout << "app(" << app_name << ") total download progress is " << total_progress
+                      << "%" << std::endl;
+        } else if (print_cleanup) {
+            if (detailed) {
+                std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
+                          << "status" << std::setw(width) << std::left << "context_cleanuped"
+                          << std::endl;
+                for (int i = 0; i < partition_count; ++i) {
+                    std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
+                              << get_short_status(resp.partitions_status[i]) << std::setw(width)
+                              << std::left << bool_to_string(partitions_cleanup_flag[i])
+                              << std::endl;
+                }
+            }
+            std::cout << "app(" << app_name << ") total cleanup flag is "
+                      << bool_to_string(total_cleanup) << std::endl;
+        } else if (detailed) {
+            std::cout << std::setw(width) << std::left << "pid" << std::setw(width) << std::left
+                      << "status" << std::endl;
+            for (int i = 0; i < partition_count; ++i) {
+                std::cout << std::setw(width) << std::left << i << std::setw(width) << std::left
+                          << get_short_status(resp.partitions_status[i]) << std::endl;
             }
         }
     }
+    // print app bulk load status
+    std::cout << "app(" << app_name << ") bulk load status is " << get_short_status(resp.app_status)
+              << std::endl;
 
     return resp.err;
 }
-}
-} // namespace
+} // namespace replication
+} // namespace dsn

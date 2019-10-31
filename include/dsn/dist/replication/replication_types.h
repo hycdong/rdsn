@@ -5721,7 +5721,8 @@ typedef struct _configuration_query_bulk_load_response__isset
           app_status(false),
           partitions_status(false),
           max_replica_count(false),
-          download_progresses(false)
+          download_progresses(false),
+          cleanup_flags(false)
     {
     }
     bool err : 1;
@@ -5730,6 +5731,7 @@ typedef struct _configuration_query_bulk_load_response__isset
     bool partitions_status : 1;
     bool max_replica_count : 1;
     bool download_progresses : 1;
+    bool cleanup_flags : 1;
 } _configuration_query_bulk_load_response__isset;
 
 class configuration_query_bulk_load_response
@@ -5752,6 +5754,7 @@ public:
     std::vector<::dsn::bulk_load_status::type> partitions_status;
     int32_t max_replica_count;
     std::vector<std::map<::dsn::rpc_address, partition_download_progress>> download_progresses;
+    std::vector<bool> cleanup_flags;
 
     _configuration_query_bulk_load_response__isset __isset;
 
@@ -5768,6 +5771,8 @@ public:
     void __set_download_progresses(
         const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val);
 
+    void __set_cleanup_flags(const std::vector<bool> &val);
+
     bool operator==(const configuration_query_bulk_load_response &rhs) const
     {
         if (!(err == rhs.err))
@@ -5783,6 +5788,10 @@ public:
         if (__isset.download_progresses != rhs.__isset.download_progresses)
             return false;
         else if (__isset.download_progresses && !(download_progresses == rhs.download_progresses))
+            return false;
+        if (__isset.cleanup_flags != rhs.__isset.cleanup_flags)
+            return false;
+        else if (__isset.cleanup_flags && !(cleanup_flags == rhs.cleanup_flags))
             return false;
         return true;
     }
