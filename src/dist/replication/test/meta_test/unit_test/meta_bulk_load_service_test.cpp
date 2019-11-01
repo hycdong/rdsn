@@ -355,6 +355,11 @@ public:
         return find_app(app_name)->is_bulk_loading;
     }
 
+    bool need_update_metadata(gpid pid)
+    {
+        return bulk_svc()->need_update_partition_bulk_load_metadata(pid);
+    }
+
     /// helper functions
     bulk_load_service *bulk_svc() { return _meta_svc->_bulk_load_svc.get(); }
     std::shared_ptr<app_state> find_app(const std::string &name) { return _state->get_app(name); }
@@ -517,6 +522,23 @@ public:
         }
     }
 
+    void mock_bulk_load_metadata()
+    {
+        file_meta f_meta;
+        f_meta.name = "mock_remote_file";
+        f_meta.size = 100;
+        f_meta.md5 = "mock_md5";
+        _metadata.files.emplace_back(f_meta);
+        _metadata.file_total_size = 100;
+    }
+
+    void mock_response_bulk_load_metadata(int32_t pidx)
+    {
+        create_basic_response(ERR_OK, bulk_load_status::BLS_DOWNLOADING, pidx);
+        mock_bulk_load_metadata();
+        _resp.__set_metadata(_metadata);
+    }
+
     void mock_response_cleanup_flag(bool finish_cleanup, int32_t pidx)
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_FAILED, pidx);
@@ -528,6 +550,7 @@ public:
     int32_t _partition_count = 4;
     bulk_load_response _resp;
     rpc_address _primary = rpc_address("127.0.0.1", 10086);
+    bulk_load_metadata _metadata;
 };
 
 TEST_F(bulk_load_process_test, downloading_fs_error)
@@ -555,6 +578,18 @@ TEST_F(bulk_load_process_test, normal_downloading)
     on_partition_bulk_load_reply(ERR_OK, BALLOT, response, _resp.pid, _primary);
     wait_all();
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
+}
+
+TEST_F(bulk_load_process_test, downloading_report_metadata)
+{
+    mock_response_progress(ERR_OK, false, 0);
+    mock_response_bulk_load_metadata(0);
+    ASSERT_TRUE(need_update_metadata(_resp.pid));
+    auto response = _resp;
+    on_partition_bulk_load_reply(ERR_OK, BALLOT, response, _resp.pid, _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
+    ASSERT_FALSE(need_update_metadata(_resp.pid));
 }
 
 TEST_F(bulk_load_process_test, downloaded_succeed)

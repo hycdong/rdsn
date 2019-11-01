@@ -5569,8 +5569,9 @@ inline std::ostream &operator<<(std::ostream &out, const bulk_load_metadata &obj
 
 typedef struct _partition_bulk_load_info__isset
 {
-    _partition_bulk_load_info__isset() : status(false) {}
+    _partition_bulk_load_info__isset() : status(false), metadata(false) {}
     bool status : 1;
+    bool metadata : 1;
 } _partition_bulk_load_info__isset;
 
 class partition_bulk_load_info
@@ -5584,14 +5585,19 @@ public:
 
     virtual ~partition_bulk_load_info() throw();
     ::dsn::bulk_load_status::type status;
+    bulk_load_metadata metadata;
 
     _partition_bulk_load_info__isset __isset;
 
     void __set_status(const ::dsn::bulk_load_status::type val);
 
+    void __set_metadata(const bulk_load_metadata &val);
+
     bool operator==(const partition_bulk_load_info &rhs) const
     {
         if (!(status == rhs.status))
+            return false;
+        if (!(metadata == rhs.metadata))
             return false;
         return true;
     }
@@ -5941,7 +5947,8 @@ typedef struct _bulk_load_request__isset
           cluster_name(false),
           ballot(false),
           app_bulk_load_status(false),
-          partition_bulk_load_status(false)
+          partition_bulk_load_status(false),
+          query_bulk_load_metadata(false)
     {
     }
     bool pid : 1;
@@ -5952,6 +5959,7 @@ typedef struct _bulk_load_request__isset
     bool ballot : 1;
     bool app_bulk_load_status : 1;
     bool partition_bulk_load_status : 1;
+    bool query_bulk_load_metadata : 1;
 } _bulk_load_request__isset;
 
 class bulk_load_request
@@ -5967,7 +5975,8 @@ public:
           cluster_name(),
           ballot(0),
           app_bulk_load_status((::dsn::bulk_load_status::type)0),
-          partition_bulk_load_status((::dsn::bulk_load_status::type)0)
+          partition_bulk_load_status((::dsn::bulk_load_status::type)0),
+          query_bulk_load_metadata(0)
     {
     }
 
@@ -5980,6 +5989,7 @@ public:
     int64_t ballot;
     ::dsn::bulk_load_status::type app_bulk_load_status;
     ::dsn::bulk_load_status::type partition_bulk_load_status;
+    bool query_bulk_load_metadata;
 
     _bulk_load_request__isset __isset;
 
@@ -5999,6 +6009,8 @@ public:
 
     void __set_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
+    void __set_query_bulk_load_metadata(const bool val);
+
     bool operator==(const bulk_load_request &rhs) const
     {
         if (!(pid == rhs.pid))
@@ -6016,6 +6028,8 @@ public:
         if (!(app_bulk_load_status == rhs.app_bulk_load_status))
             return false;
         if (!(partition_bulk_load_status == rhs.partition_bulk_load_status))
+            return false;
+        if (!(query_bulk_load_metadata == rhs.query_bulk_load_metadata))
             return false;
         return true;
     }
@@ -6046,7 +6060,8 @@ typedef struct _bulk_load_response__isset
           primary_bulk_load_status(false),
           download_progresses(false),
           total_download_progress(false),
-          is_group_bulk_load_context_cleaned(false)
+          is_group_bulk_load_context_cleaned(false),
+          metadata(false)
     {
     }
     bool err : 1;
@@ -6056,6 +6071,7 @@ typedef struct _bulk_load_response__isset
     bool download_progresses : 1;
     bool total_download_progress : 1;
     bool is_group_bulk_load_context_cleaned : 1;
+    bool metadata : 1;
 } _bulk_load_response__isset;
 
 class bulk_load_response
@@ -6081,6 +6097,7 @@ public:
     std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
     int32_t total_download_progress;
     bool is_group_bulk_load_context_cleaned;
+    bulk_load_metadata metadata;
 
     _bulk_load_response__isset __isset;
 
@@ -6098,6 +6115,8 @@ public:
     void __set_total_download_progress(const int32_t val);
 
     void __set_is_group_bulk_load_context_cleaned(const bool val);
+
+    void __set_metadata(const bulk_load_metadata &val);
 
     bool operator==(const bulk_load_response &rhs) const
     {
@@ -6123,6 +6142,10 @@ public:
             return false;
         else if (__isset.is_group_bulk_load_context_cleaned &&
                  !(is_group_bulk_load_context_cleaned == rhs.is_group_bulk_load_context_cleaned))
+            return false;
+        if (__isset.metadata != rhs.__isset.metadata)
+            return false;
+        else if (__isset.metadata && !(metadata == rhs.metadata))
             return false;
         return true;
     }

@@ -188,6 +188,10 @@ private:
                                            std::string &path,
                                            bulk_load_status::type status); // private + zk
 
+    void update_partition_bulk_load_metadata(std::string app_name,
+                                             gpid pid,
+                                             bulk_load_metadata metadata);
+
     // update app's bulk load status to {new_status} on remote storage
     void update_app_bulk_load_status_unlock(int32_t app_id,
                                             bulk_load_status::type new_status); // private + zk
@@ -244,6 +248,13 @@ private:
         oss << "bulk_load_test/" << cluster_name << "/" << app_name << "/"
             << "bulk_load_info";
         return oss.str();
+    }
+
+    bool need_update_partition_bulk_load_metadata(gpid pid)
+    {
+        zauto_read_lock l(_lock);
+        bulk_load_metadata metadata = _partition_bulk_load_info[pid].metadata;
+        return (metadata.files.size() == 0 && metadata.file_total_size == 0);
     }
 
 private:

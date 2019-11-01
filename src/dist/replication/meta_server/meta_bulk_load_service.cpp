@@ -308,6 +308,7 @@ void bulk_load_service::partition_bulk_load(const gpid &pid)
     req.cluster_name = ainfo.cluster_name;
     req.partition_bulk_load_status = pbl_info.status;
     req.ballot = b;
+    req.query_bulk_load_metadata = need_update_partition_bulk_load_metadata(pid);
 
     dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
     dsn::marshall(msg, req);
@@ -460,6 +461,10 @@ void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_respons
         if (response.__isset.download_progresses) {
             _partitions_download_progress[pid] = response.download_progresses;
         }
+    }
+
+    if (response.__isset.metadata && need_update_partition_bulk_load_metadata(pid)) {
+        update_partition_bulk_load_metadata(app_name, pid, response.metadata);
     }
 
     // TODO(heyuchen): change it to common value
@@ -676,6 +681,27 @@ void bulk_load_service::update_app_bulk_load_status_unlock(int32_t app_id,
         get_app_bulk_load_path(app_id), std::move(value), std::move(callback));
 }
 
+void bulk_load_service::update_partition_bulk_load_metadata(std::string app_name,
+                                                            gpid pid,
+                                                            bulk_load_metadata metadata)
+{
+    partition_bulk_load_info pinfo = _partition_bulk_load_info[pid];
+    pinfo.metadata = metadata;
+    blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
+    std::string path = get_partition_bulk_load_path(get_app_bulk_load_path(pid.get_app_id()),
+                                                    pid.get_partition_index());
+    _meta_svc->get_meta_storage()->set_data(
+        std::move(path), std::move(value), [this, app_name, pid, pinfo]() {
+            zauto_write_lock l(_lock);
+            _partition_bulk_load_info[pid] = pinfo;
+            ddebug_f("app({}) update partition({}) bulk load metadata, file count={}, file size={}",
+                     app_name,
+                     pid.to_string(),
+                     pinfo.metadata.files.size(),
+                     pinfo.metadata.file_total_size);
+        });
+}
+
 void bulk_load_service::remove_app_bulk_load_dir(int32_t app_id, const std::string &app_name)
 {
     std::string bulk_load_path = get_app_bulk_load_path(app_id);
@@ -732,6 +758,7 @@ void bulk_load_service::clear_app_bulk_load_states(int32_t app_id, const std::st
     erase_map_elem_by_id(app_id, _partitions_total_download_progress);
     erase_map_elem_by_id(app_id, _partitions_cleaned_up);
     _apps_cleaning_up.erase(app_id);
+    _bulk_load_app_id.erase(app_id);
     ddebug_f("clear app({}) bulk load context", app_name);
 }
 

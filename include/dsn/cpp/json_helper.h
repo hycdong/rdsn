@@ -624,6 +624,6 @@ NON_MEMBER_JSON_SERIALIZATION(dsn::replication::file_meta, name, size, md5)
 
 NON_MEMBER_JSON_SERIALIZATION(dsn::replication::bulk_load_metadata, files, file_total_size)
 
-NON_MEMBER_JSON_SERIALIZATION(dsn::replication::partition_bulk_load_info, status)
+NON_MEMBER_JSON_SERIALIZATION(dsn::replication::partition_bulk_load_info, status, metadata)
 } // namespace json
 } // namespace dsn

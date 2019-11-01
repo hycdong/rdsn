@@ -554,6 +554,8 @@ private:
     friend class replica_bulk_load_test;
 
     bulk_load_status::type _status;
+    bulk_load_metadata _metadata;
+    // TODO(heyuchen): consider delete this var
     uint64_t _file_total_size;
     std::atomic<uint64_t> _cur_download_size;
     std::atomic<int32_t> _download_progress;

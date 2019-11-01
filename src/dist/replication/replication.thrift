@@ -754,11 +754,10 @@ struct bulk_load_metadata
     2:i64               file_total_size;
 }
 
-// TODO(heyuchen): remove partition_bulk_load_info
 struct partition_bulk_load_info
 {
-    1:dsn.layer2.bulk_load_status  status;
-    // TODO(heyuchen): add bulk_load_metadata struct here
+    1:dsn.layer2.bulk_load_status   status;
+    2:bulk_load_metadata            metadata;
 }
 
 struct partition_download_progress
@@ -808,7 +807,7 @@ struct bulk_load_request
     6:i64                           ballot;
     7:dsn.layer2.bulk_load_status   app_bulk_load_status;
     8:dsn.layer2.bulk_load_status   partition_bulk_load_status;
-    // 9:bool                          query_bulk_load_metadata;
+    9:bool                          query_bulk_load_metadata;
 }
 
 struct bulk_load_response
@@ -820,7 +819,7 @@ struct bulk_load_response
     5:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
     6:optional i32                  total_download_progress;
     7:optional bool                 is_group_bulk_load_context_cleaned;
-    // 8:optioan bulk_load_metadata    metadata;
+    8:optional bulk_load_metadata    metadata;
 }
 
 struct group_bulk_load_request

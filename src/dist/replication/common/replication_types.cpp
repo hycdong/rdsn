@@ -13080,6 +13080,11 @@ void partition_bulk_load_info::__set_status(const ::dsn::bulk_load_status::type 
     this->status = val;
 }
 
+void partition_bulk_load_info::__set_metadata(const bulk_load_metadata &val)
+{
+    this->metadata = val;
+}
+
 uint32_t partition_bulk_load_info::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
@@ -13109,6 +13114,14 @@ uint32_t partition_bulk_load_info::read(::apache::thrift::protocol::TProtocol *i
                 xfer += iprot->skip(ftype);
             }
             break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->metadata.read(iprot);
+                this->__isset.metadata = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -13131,6 +13144,10 @@ uint32_t partition_bulk_load_info::write(::apache::thrift::protocol::TProtocol *
     xfer += oprot->writeI32((int32_t)this->status);
     xfer += oprot->writeFieldEnd();
 
+    xfer += oprot->writeFieldBegin("metadata", ::apache::thrift::protocol::T_STRUCT, 2);
+    xfer += this->metadata.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -13140,29 +13157,34 @@ void swap(partition_bulk_load_info &a, partition_bulk_load_info &b)
 {
     using ::std::swap;
     swap(a.status, b.status);
+    swap(a.metadata, b.metadata);
     swap(a.__isset, b.__isset);
 }
 
 partition_bulk_load_info::partition_bulk_load_info(const partition_bulk_load_info &other583)
 {
     status = other583.status;
+    metadata = other583.metadata;
     __isset = other583.__isset;
 }
 partition_bulk_load_info::partition_bulk_load_info(partition_bulk_load_info &&other584)
 {
     status = std::move(other584.status);
+    metadata = std::move(other584.metadata);
     __isset = std::move(other584.__isset);
 }
 partition_bulk_load_info &partition_bulk_load_info::
 operator=(const partition_bulk_load_info &other585)
 {
     status = other585.status;
+    metadata = other585.metadata;
     __isset = other585.__isset;
     return *this;
 }
 partition_bulk_load_info &partition_bulk_load_info::operator=(partition_bulk_load_info &&other586)
 {
     status = std::move(other586.status);
+    metadata = std::move(other586.metadata);
     __isset = std::move(other586.__isset);
     return *this;
 }
@@ -13171,6 +13193,8 @@ void partition_bulk_load_info::printTo(std::ostream &out) const
     using ::apache::thrift::to_string;
     out << "partition_bulk_load_info(";
     out << "status=" << to_string(status);
+    out << ", "
+        << "metadata=" << to_string(metadata);
     out << ")";
 }
 
@@ -14036,6 +14060,11 @@ void bulk_load_request::__set_partition_bulk_load_status(const ::dsn::bulk_load_
     this->partition_bulk_load_status = val;
 }
 
+void bulk_load_request::__set_query_bulk_load_metadata(const bool val)
+{
+    this->query_bulk_load_metadata = val;
+}
+
 uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
@@ -14123,6 +14152,14 @@ uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
+        case 9:
+            if (ftype == ::apache::thrift::protocol::T_BOOL) {
+                xfer += iprot->readBool(this->query_bulk_load_metadata);
+                this->__isset.query_bulk_load_metadata = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -14174,6 +14211,11 @@ uint32_t bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) 
     xfer += oprot->writeI32((int32_t)this->partition_bulk_load_status);
     xfer += oprot->writeFieldEnd();
 
+    xfer +=
+        oprot->writeFieldBegin("query_bulk_load_metadata", ::apache::thrift::protocol::T_BOOL, 9);
+    xfer += oprot->writeBool(this->query_bulk_load_metadata);
+    xfer += oprot->writeFieldEnd();
+
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -14190,6 +14232,7 @@ void swap(bulk_load_request &a, bulk_load_request &b)
     swap(a.ballot, b.ballot);
     swap(a.app_bulk_load_status, b.app_bulk_load_status);
     swap(a.partition_bulk_load_status, b.partition_bulk_load_status);
+    swap(a.query_bulk_load_metadata, b.query_bulk_load_metadata);
     swap(a.__isset, b.__isset);
 }
 
@@ -14203,6 +14246,7 @@ bulk_load_request::bulk_load_request(const bulk_load_request &other637)
     ballot = other637.ballot;
     app_bulk_load_status = other637.app_bulk_load_status;
     partition_bulk_load_status = other637.partition_bulk_load_status;
+    query_bulk_load_metadata = other637.query_bulk_load_metadata;
     __isset = other637.__isset;
 }
 bulk_load_request::bulk_load_request(bulk_load_request &&other638)
@@ -14215,6 +14259,7 @@ bulk_load_request::bulk_load_request(bulk_load_request &&other638)
     ballot = std::move(other638.ballot);
     app_bulk_load_status = std::move(other638.app_bulk_load_status);
     partition_bulk_load_status = std::move(other638.partition_bulk_load_status);
+    query_bulk_load_metadata = std::move(other638.query_bulk_load_metadata);
     __isset = std::move(other638.__isset);
 }
 bulk_load_request &bulk_load_request::operator=(const bulk_load_request &other639)
@@ -14227,6 +14272,7 @@ bulk_load_request &bulk_load_request::operator=(const bulk_load_request &other63
     ballot = other639.ballot;
     app_bulk_load_status = other639.app_bulk_load_status;
     partition_bulk_load_status = other639.partition_bulk_load_status;
+    query_bulk_load_metadata = other639.query_bulk_load_metadata;
     __isset = other639.__isset;
     return *this;
 }
@@ -14240,6 +14286,7 @@ bulk_load_request &bulk_load_request::operator=(bulk_load_request &&other640)
     ballot = std::move(other640.ballot);
     app_bulk_load_status = std::move(other640.app_bulk_load_status);
     partition_bulk_load_status = std::move(other640.partition_bulk_load_status);
+    query_bulk_load_metadata = std::move(other640.query_bulk_load_metadata);
     __isset = std::move(other640.__isset);
     return *this;
 }
@@ -14262,6 +14309,8 @@ void bulk_load_request::printTo(std::ostream &out) const
         << "app_bulk_load_status=" << to_string(app_bulk_load_status);
     out << ", "
         << "partition_bulk_load_status=" << to_string(partition_bulk_load_status);
+    out << ", "
+        << "query_bulk_load_metadata=" << to_string(query_bulk_load_metadata);
     out << ")";
 }
 
@@ -14295,6 +14344,12 @@ void bulk_load_response::__set_is_group_bulk_load_context_cleaned(const bool val
 {
     this->is_group_bulk_load_context_cleaned = val;
     __isset.is_group_bulk_load_context_cleaned = true;
+}
+
+void bulk_load_response::__set_metadata(const bulk_load_metadata &val)
+{
+    this->metadata = val;
+    __isset.metadata = true;
 }
 
 uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
@@ -14388,6 +14443,14 @@ uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
+        case 8:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->metadata.read(iprot);
+                this->__isset.metadata = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -14452,6 +14515,11 @@ uint32_t bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot)
         xfer += oprot->writeBool(this->is_group_bulk_load_context_cleaned);
         xfer += oprot->writeFieldEnd();
     }
+    if (this->__isset.metadata) {
+        xfer += oprot->writeFieldBegin("metadata", ::apache::thrift::protocol::T_STRUCT, 8);
+        xfer += this->metadata.write(oprot);
+        xfer += oprot->writeFieldEnd();
+    }
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -14467,6 +14535,7 @@ void swap(bulk_load_response &a, bulk_load_response &b)
     swap(a.download_progresses, b.download_progresses);
     swap(a.total_download_progress, b.total_download_progress);
     swap(a.is_group_bulk_load_context_cleaned, b.is_group_bulk_load_context_cleaned);
+    swap(a.metadata, b.metadata);
     swap(a.__isset, b.__isset);
 }
 
@@ -14479,6 +14548,7 @@ bulk_load_response::bulk_load_response(const bulk_load_response &other650)
     download_progresses = other650.download_progresses;
     total_download_progress = other650.total_download_progress;
     is_group_bulk_load_context_cleaned = other650.is_group_bulk_load_context_cleaned;
+    metadata = other650.metadata;
     __isset = other650.__isset;
 }
 bulk_load_response::bulk_load_response(bulk_load_response &&other651)
@@ -14490,6 +14560,7 @@ bulk_load_response::bulk_load_response(bulk_load_response &&other651)
     download_progresses = std::move(other651.download_progresses);
     total_download_progress = std::move(other651.total_download_progress);
     is_group_bulk_load_context_cleaned = std::move(other651.is_group_bulk_load_context_cleaned);
+    metadata = std::move(other651.metadata);
     __isset = std::move(other651.__isset);
 }
 bulk_load_response &bulk_load_response::operator=(const bulk_load_response &other652)
@@ -14501,6 +14572,7 @@ bulk_load_response &bulk_load_response::operator=(const bulk_load_response &othe
     download_progresses = other652.download_progresses;
     total_download_progress = other652.total_download_progress;
     is_group_bulk_load_context_cleaned = other652.is_group_bulk_load_context_cleaned;
+    metadata = other652.metadata;
     __isset = other652.__isset;
     return *this;
 }
@@ -14513,6 +14585,7 @@ bulk_load_response &bulk_load_response::operator=(bulk_load_response &&other653)
     download_progresses = std::move(other653.download_progresses);
     total_download_progress = std::move(other653.total_download_progress);
     is_group_bulk_load_context_cleaned = std::move(other653.is_group_bulk_load_context_cleaned);
+    metadata = std::move(other653.metadata);
     __isset = std::move(other653.__isset);
     return *this;
 }
@@ -14539,6 +14612,9 @@ void bulk_load_response::printTo(std::ostream &out) const
     (__isset.is_group_bulk_load_context_cleaned
          ? (out << to_string(is_group_bulk_load_context_cleaned))
          : (out << "<null>"));
+    out << ", "
+        << "metadata=";
+    (__isset.metadata ? (out << to_string(metadata)) : (out << "<null>"));
     out << ")";
 }
 

@@ -64,6 +64,9 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
             request.app_name, request.cluster_name, request.remote_provider_name);
         if (response.err != ERR_OK) {
             handle_bulk_load_error();
+        } else if (request.query_bulk_load_metadata &&
+                   _bulk_load_context._metadata.files.size() > 0) {
+            response.__set_metadata(_bulk_load_context._metadata);
         }
     }
 
@@ -373,6 +376,7 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
         derror_replica("parse bulk load metadata failed, error = {}", err.to_string());
         return err;
     }
+    _bulk_load_context._metadata = metadata;
     _bulk_load_context._file_total_size = metadata.file_total_size;
 
     // async download sst files
