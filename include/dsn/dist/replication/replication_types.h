@@ -6362,8 +6362,9 @@ inline std::ostream &operator<<(std::ostream &out, const group_bulk_load_respons
 
 typedef struct _ingestion_request__isset
 {
-    _ingestion_request__isset() : app_name(false) {}
+    _ingestion_request__isset() : app_name(false), metadata(false) {}
     bool app_name : 1;
+    bool metadata : 1;
 } _ingestion_request__isset;
 
 class ingestion_request
@@ -6377,14 +6378,19 @@ public:
 
     virtual ~ingestion_request() throw();
     std::string app_name;
+    bulk_load_metadata metadata;
 
     _ingestion_request__isset __isset;
 
     void __set_app_name(const std::string &val);
 
+    void __set_metadata(const bulk_load_metadata &val);
+
     bool operator==(const ingestion_request &rhs) const
     {
         if (!(app_name == rhs.app_name))
+            return false;
+        if (!(metadata == rhs.metadata))
             return false;
         return true;
     }
@@ -6409,10 +6415,11 @@ inline std::ostream &operator<<(std::ostream &out, const ingestion_request &obj)
 typedef struct _ingestion_response__isset
 {
     _ingestion_response__isset()
-        : error(false), app_id(false), partition_index(false), decree(false)
+        : err(false), rocksdb_error(false), app_id(false), partition_index(false), decree(false)
     {
     }
-    bool error : 1;
+    bool err : 1;
+    bool rocksdb_error : 1;
     bool app_id : 1;
     bool partition_index : 1;
     bool decree : 1;
@@ -6425,17 +6432,20 @@ public:
     ingestion_response(ingestion_response &&);
     ingestion_response &operator=(const ingestion_response &);
     ingestion_response &operator=(ingestion_response &&);
-    ingestion_response() : error(0), app_id(0), partition_index(0), decree(0) {}
+    ingestion_response() : rocksdb_error(0), app_id(0), partition_index(0), decree(0) {}
 
     virtual ~ingestion_response() throw();
-    int32_t error;
+    ::dsn::error_code err;
+    int32_t rocksdb_error;
     int32_t app_id;
     int32_t partition_index;
     int64_t decree;
 
     _ingestion_response__isset __isset;
 
-    void __set_error(const int32_t val);
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_rocksdb_error(const int32_t val);
 
     void __set_app_id(const int32_t val);
 
@@ -6445,7 +6455,9 @@ public:
 
     bool operator==(const ingestion_response &rhs) const
     {
-        if (!(error == rhs.error))
+        if (!(err == rhs.err))
+            return false;
+        if (!(rocksdb_error == rhs.rocksdb_error))
             return false;
         if (!(app_id == rhs.app_id))
             return false;

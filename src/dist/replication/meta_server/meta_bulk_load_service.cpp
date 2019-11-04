@@ -370,7 +370,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                         pid.to_string(),
                         response.err.to_string());
             }
-            handle_partition_download_error(pid);
+            handle_partition_bulk_load_error(pid);
         }
     } else {
         ballot current_ballot;
@@ -441,7 +441,7 @@ void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_respons
                 pid.to_string(),
                 enum_to_string(response.primary_bulk_load_status),
                 ec.to_string());
-        handle_partition_download_error(pid);
+        handle_partition_bulk_load_error(pid);
         return;
     }
 
@@ -541,7 +541,7 @@ void bulk_load_service::handle_app_bulk_load_cleanup(const bulk_load_response &r
     }
 }
 
-void bulk_load_service::handle_partition_download_error(const gpid &pid)
+void bulk_load_service::handle_partition_bulk_load_error(const gpid &pid)
 {
     zauto_write_lock l(_lock);
     if (!_apps_cleaning_up[pid.get_app_id()]) {
@@ -820,8 +820,18 @@ void bulk_load_service::partition_ingestion(const gpid &pid)
         return;
     }
 
+    if (need_update_partition_bulk_load_metadata(pid)) {
+        derror_f("app({}) doesn't have bulk load metadata, set bulk load failed", app_name);
+        handle_partition_bulk_load_error(pid);
+        return;
+    }
+
     ingestion_request req;
     req.app_name = app_name;
+    {
+        zauto_read_lock l(_lock);
+        req.metadata = _partition_bulk_load_info[pid].metadata;
+    }
     message_ex *msg =
         dsn::message_ex::create_client_request(dsn::apps::RPC_RRDB_RRDB_BULK_LOAD, pid);
     dsn::marshall(msg, req);
@@ -847,19 +857,32 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
     // TODO(heyuchen):consider!!!
     // if meet error, ingesting will rollback to downloading, no need to retry here
     if (err != ERR_OK) {
-        derror_f("app({}) partition({}) failed to ingestion files, error = {}",
+        derror_f("app({}) partition({}) ingestion files failed, error = {}",
                  app_name,
                  pid.to_string(),
                  err.to_string());
+        rollback_to_downloading(pid.get_app_id());
+        return;
+    }
+
+    if (resp.err == ERR_OK && resp.rocksdb_error != 0) {
+        derror_f(
+            "app({}) partition({}) ingestion files failed while empty write, rocksdb error = {}",
+            app_name,
+            pid.to_string(),
+            resp.rocksdb_error);
+        rollback_to_downloading(pid.get_app_id());
         return;
     }
 
     // TODO(heyuchen):consider!!!
-    if (resp.error != 0) {
-        derror_f("app({}) partition({}) failed to ingestion files, error = {}",
+    if (resp.err != ERR_OK || resp.rocksdb_error != 0) {
+        derror_f("app({}) partition({}) failed to ingestion files, error = {}, rocksdb error = {}",
                  app_name,
                  pid.to_string(),
-                 resp.error);
+                 resp.err.to_string(),
+                 resp.rocksdb_error);
+        handle_partition_bulk_load_error(pid);
         return;
     }
 

@@ -846,16 +846,17 @@ struct group_bulk_load_response
 
 struct ingestion_request
 {
-    1:string    app_name;
-    // TODO(heyuchen): add bulk_load_metadata here
+    1:string                app_name;
+    2:bulk_load_metadata    metadata;
 }
 
 struct ingestion_response
 {
-    1:i32               error;
-    2:i32               app_id;
-    3:i32               partition_index;
-    4:i64               decree;
+    1:dsn.error_code    err;
+    2:i32               rocksdb_error;
+    3:i32               app_id;
+    4:i32               partition_index;
+    5:i64               decree;
 }
 
 /*

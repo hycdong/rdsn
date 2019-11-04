@@ -68,7 +68,7 @@ private:
 
     // helper function for on_partition_bulk_load_reply
     // handle situation when response.error is NOT ERR_OK during downloading status
-    void handle_partition_download_error(const gpid &pid); // private
+    void handle_partition_bulk_load_error(const gpid &pid); // private
 
     // helper function for on_partition_bulk_load_reply
     // hanlde situation when response.error is ERR_OK during downloading status

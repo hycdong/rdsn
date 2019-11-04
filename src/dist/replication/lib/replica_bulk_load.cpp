@@ -266,7 +266,7 @@ void replica::on_group_bulk_load_reply(error_code err,
     _primary_states.group_bulk_load_pending_replies.erase(req->target_address);
 
     if (err != ERR_OK) {
-        dwarn_replica("get group_bulk_load_reply failed, error = {}", err);
+        dwarn_replica("get group_bulk_load_reply failed, error = {}", err.to_string());
         _primary_states.reset_node_bulk_load_context(
             req->target_address, get_gpid(), req->meta_app_bulk_load_status);
 

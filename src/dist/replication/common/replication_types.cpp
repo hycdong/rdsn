@@ -15096,6 +15096,8 @@ ingestion_request::~ingestion_request() throw() {}
 
 void ingestion_request::__set_app_name(const std::string &val) { this->app_name = val; }
 
+void ingestion_request::__set_metadata(const bulk_load_metadata &val) { this->metadata = val; }
+
 uint32_t ingestion_request::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
@@ -15123,6 +15125,14 @@ uint32_t ingestion_request::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->metadata.read(iprot);
+                this->__isset.metadata = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -15145,6 +15155,10 @@ uint32_t ingestion_request::write(::apache::thrift::protocol::TProtocol *oprot) 
     xfer += oprot->writeString(this->app_name);
     xfer += oprot->writeFieldEnd();
 
+    xfer += oprot->writeFieldBegin("metadata", ::apache::thrift::protocol::T_STRUCT, 2);
+    xfer += this->metadata.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -15154,28 +15168,33 @@ void swap(ingestion_request &a, ingestion_request &b)
 {
     using ::std::swap;
     swap(a.app_name, b.app_name);
+    swap(a.metadata, b.metadata);
     swap(a.__isset, b.__isset);
 }
 
 ingestion_request::ingestion_request(const ingestion_request &other665)
 {
     app_name = other665.app_name;
+    metadata = other665.metadata;
     __isset = other665.__isset;
 }
 ingestion_request::ingestion_request(ingestion_request &&other666)
 {
     app_name = std::move(other666.app_name);
+    metadata = std::move(other666.metadata);
     __isset = std::move(other666.__isset);
 }
 ingestion_request &ingestion_request::operator=(const ingestion_request &other667)
 {
     app_name = other667.app_name;
+    metadata = other667.metadata;
     __isset = other667.__isset;
     return *this;
 }
 ingestion_request &ingestion_request::operator=(ingestion_request &&other668)
 {
     app_name = std::move(other668.app_name);
+    metadata = std::move(other668.metadata);
     __isset = std::move(other668.__isset);
     return *this;
 }
@@ -15184,12 +15203,16 @@ void ingestion_request::printTo(std::ostream &out) const
     using ::apache::thrift::to_string;
     out << "ingestion_request(";
     out << "app_name=" << to_string(app_name);
+    out << ", "
+        << "metadata=" << to_string(metadata);
     out << ")";
 }
 
 ingestion_response::~ingestion_response() throw() {}
 
-void ingestion_response::__set_error(const int32_t val) { this->error = val; }
+void ingestion_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
+
+void ingestion_response::__set_rocksdb_error(const int32_t val) { this->rocksdb_error = val; }
 
 void ingestion_response::__set_app_id(const int32_t val) { this->app_id = val; }
 
@@ -15217,14 +15240,22 @@ uint32_t ingestion_response::read(::apache::thrift::protocol::TProtocol *iprot)
         }
         switch (fid) {
         case 1:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
-                xfer += iprot->readI32(this->error);
-                this->__isset.error = true;
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->err.read(iprot);
+                this->__isset.err = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
             break;
         case 2:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->rocksdb_error);
+                this->__isset.rocksdb_error = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 xfer += iprot->readI32(this->app_id);
                 this->__isset.app_id = true;
@@ -15232,7 +15263,7 @@ uint32_t ingestion_response::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 3:
+        case 4:
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 xfer += iprot->readI32(this->partition_index);
                 this->__isset.partition_index = true;
@@ -15240,7 +15271,7 @@ uint32_t ingestion_response::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 4:
+        case 5:
             if (ftype == ::apache::thrift::protocol::T_I64) {
                 xfer += iprot->readI64(this->decree);
                 this->__isset.decree = true;
@@ -15266,19 +15297,23 @@ uint32_t ingestion_response::write(::apache::thrift::protocol::TProtocol *oprot)
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
     xfer += oprot->writeStructBegin("ingestion_response");
 
-    xfer += oprot->writeFieldBegin("error", ::apache::thrift::protocol::T_I32, 1);
-    xfer += oprot->writeI32(this->error);
+    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->err.write(oprot);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("app_id", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeFieldBegin("rocksdb_error", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeI32(this->rocksdb_error);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("app_id", ::apache::thrift::protocol::T_I32, 3);
     xfer += oprot->writeI32(this->app_id);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("partition_index", ::apache::thrift::protocol::T_I32, 3);
+    xfer += oprot->writeFieldBegin("partition_index", ::apache::thrift::protocol::T_I32, 4);
     xfer += oprot->writeI32(this->partition_index);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("decree", ::apache::thrift::protocol::T_I64, 4);
+    xfer += oprot->writeFieldBegin("decree", ::apache::thrift::protocol::T_I64, 5);
     xfer += oprot->writeI64(this->decree);
     xfer += oprot->writeFieldEnd();
 
@@ -15290,7 +15325,8 @@ uint32_t ingestion_response::write(::apache::thrift::protocol::TProtocol *oprot)
 void swap(ingestion_response &a, ingestion_response &b)
 {
     using ::std::swap;
-    swap(a.error, b.error);
+    swap(a.err, b.err);
+    swap(a.rocksdb_error, b.rocksdb_error);
     swap(a.app_id, b.app_id);
     swap(a.partition_index, b.partition_index);
     swap(a.decree, b.decree);
@@ -15299,7 +15335,8 @@ void swap(ingestion_response &a, ingestion_response &b)
 
 ingestion_response::ingestion_response(const ingestion_response &other669)
 {
-    error = other669.error;
+    err = other669.err;
+    rocksdb_error = other669.rocksdb_error;
     app_id = other669.app_id;
     partition_index = other669.partition_index;
     decree = other669.decree;
@@ -15307,7 +15344,8 @@ ingestion_response::ingestion_response(const ingestion_response &other669)
 }
 ingestion_response::ingestion_response(ingestion_response &&other670)
 {
-    error = std::move(other670.error);
+    err = std::move(other670.err);
+    rocksdb_error = std::move(other670.rocksdb_error);
     app_id = std::move(other670.app_id);
     partition_index = std::move(other670.partition_index);
     decree = std::move(other670.decree);
@@ -15315,7 +15353,8 @@ ingestion_response::ingestion_response(ingestion_response &&other670)
 }
 ingestion_response &ingestion_response::operator=(const ingestion_response &other671)
 {
-    error = other671.error;
+    err = other671.err;
+    rocksdb_error = other671.rocksdb_error;
     app_id = other671.app_id;
     partition_index = other671.partition_index;
     decree = other671.decree;
@@ -15324,7 +15363,8 @@ ingestion_response &ingestion_response::operator=(const ingestion_response &othe
 }
 ingestion_response &ingestion_response::operator=(ingestion_response &&other672)
 {
-    error = std::move(other672.error);
+    err = std::move(other672.err);
+    rocksdb_error = std::move(other672.rocksdb_error);
     app_id = std::move(other672.app_id);
     partition_index = std::move(other672.partition_index);
     decree = std::move(other672.decree);
@@ -15335,7 +15375,9 @@ void ingestion_response::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
     out << "ingestion_response(";
-    out << "error=" << to_string(error);
+    out << "err=" << to_string(err);
+    out << ", "
+        << "rocksdb_error=" << to_string(rocksdb_error);
     out << ", "
         << "app_id=" << to_string(app_id);
     out << ", "
