@@ -433,6 +433,16 @@ void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_respons
     gpid pid = response.pid;
 
     error_code ec = check_download_status(response);
+    if (ec == ERR_INVALID_STATE) {
+        dwarn_f("recevie bulk load response from {} app({}), partition({}), primary status = {}, "
+                "but download progress is not set",
+                primary_addr.to_string(),
+                response.app_name,
+                pid.to_string(),
+                enum_to_string(response.primary_bulk_load_status));
+        return;
+    }
+
     if (ec != ERR_OK) {
         dwarn_f("recevie bulk load response from {} app({}), partition({}), primary status = {}, "
                 "download meet error: {}",
