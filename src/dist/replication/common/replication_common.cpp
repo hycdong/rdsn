@@ -571,6 +571,12 @@ const std::string backup_restore_constant::SKIP_BAD_PARTITION("restore.skip_bad_
 const std::string replica_envs::DENY_CLIENT_WRITE("replica.deny_client_write");
 const std::string replica_envs::WRITE_THROTTLING("replica.write_throttling");
 
+const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
+const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("bulk_load_test");
+const std::string bulk_load_constant::BULK_LOAD_METADATA("bulk_load_metadata");
+const std::string bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR(".bulk_load");
+const int32_t bulk_load_constant::PROGRESS_FINISHED = 100;
+
 namespace cold_backup {
 std::string get_policy_path(const std::string &root, const std::string &policy_name)
 {

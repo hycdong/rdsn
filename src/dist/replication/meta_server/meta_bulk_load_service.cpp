@@ -271,7 +271,7 @@ void bulk_load_service::partition_bulk_load(const gpid &pid)
         // app not existed or not available now
         if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
             dwarn_f("app(id={}) is not existed, set bulk load finish", pid.get_app_id());
-            // TODO(heyuchen): handler it
+            // TODO(heyuchen): delete table handler it
             return;
         }
         app_name = app->app_name;
@@ -380,7 +380,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
             // app not existed or not available now
             if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
                 dwarn_f("app(id={}) is not existed, set bulk load finish", pid.get_app_id());
-                // TODO(heyuchen): handler it
+                // TODO(heyuchen): delete table handler it
                 return;
             }
             current_ballot = app->partitions[pid.get_partition_index()].ballot;
@@ -411,7 +411,6 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
     }
 
     if (is_app_bulk_loading(pid.get_app_id())) {
-        // TODO(heyuchen): common - delay time to config
         tasking::enqueue(LPC_META_CALLBACK,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_bulk_load, this, pid),
@@ -477,9 +476,7 @@ void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_respons
         update_partition_bulk_load_metadata(app_name, pid, response.metadata);
     }
 
-    // TODO(heyuchen): common - change it to common value
-    int32_t max_progress = 100;
-    if (total_progress >= max_progress) {
+    if (total_progress >= bulk_load_constant::PROGRESS_FINISHED) {
         ddebug_f("app({}) partirion({}) download files from remote provider succeed",
                  app_name,
                  pid.to_string());
@@ -488,7 +485,7 @@ void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_respons
             std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
             if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
                 dwarn_f("app({}) is not existed, set bulk load finish", app_name);
-                // TODO(heyuchen): handler it
+                // TODO(heyuchen): delete table handler it
                 return;
             }
 
@@ -541,7 +538,7 @@ void bulk_load_service::handle_app_bulk_load_cleanup(const bulk_load_response &r
                 app = _state->get_app(pid.get_app_id());
                 if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
                     dwarn_f("app({}) is not existed, set bulk load finish", response.app_name);
-                    // TODO(heyuchen): handler it
+                    // TODO(heyuchen): delete table handler it
                     return;
                 }
             }
@@ -811,7 +808,7 @@ void bulk_load_service::partition_ingestion(const gpid &pid)
         // app not existed or not available now
         if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
             dwarn_f("app({}) is not existed, set bulk load finish", app->app_name);
-            // TODO(heyuchen): handler it
+            // TODO(heyuchen): delete table handler it
             return;
         }
         app_name = app->app_name;

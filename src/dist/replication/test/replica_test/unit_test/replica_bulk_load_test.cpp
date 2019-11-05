@@ -311,8 +311,8 @@ public:
     std::string APP_NAME = "replica";
     std::string CLUSTER = "cluster";
     std::string PROVIDER = "local_service";
-    std::string LOCAL_DIR = ".bulk_load";
-    std::string METADATA = "bulk_load_metadata";
+    std::string LOCAL_DIR = bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR;
+    std::string METADATA = bulk_load_constant::BULK_LOAD_METADATA;
     std::string FILE_NAME = "test_sst_file";
     gpid PID = gpid(1, 0);
     ballot BALLOT = 3;

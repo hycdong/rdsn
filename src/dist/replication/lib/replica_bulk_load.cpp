@@ -306,9 +306,8 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
 
     std::string remote_dir =
         get_bulk_load_remote_dir(app_name, cluster_name, get_gpid().get_partition_index());
-
-    // TODO(heyuchen): common - move '.bulk_load' to common const var
-    std::string local_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
+    std::string local_dir =
+        utils::filesystem::path_combine(_dir, bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR);
     dsn::error_code err = create_local_bulk_load_dir(local_dir);
     if (err != ERR_OK) {
         derror_replica("failed to download sst files because create local dir failed");
@@ -321,9 +320,9 @@ std::string replica::get_bulk_load_remote_dir(const std::string &app_name,
                                               const std::string &cluster_name,
                                               uint32_t pidx)
 {
-    // TODO(heyuchen): common - change "bulk_load_test" from value in config
     std::ostringstream oss;
-    oss << "bulk_load_test/" << cluster_name << "/" << app_name << "/" << pidx;
+    oss << bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT << "/" << cluster_name << "/"
+        << app_name << "/" << pidx;
     return oss.str();
 }
 
@@ -356,8 +355,7 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
 
     dsn::error_code err = ERR_OK;
     dsn::task_tracker tracker;
-    // TODO(heyuchen): common - change metadata file name in config or const
-    std::string meta_name = "bulk_load_metadata";
+    std::string meta_name = bulk_load_constant::BULK_LOAD_METADATA;
 
     // sync download metadata file
     do_download(remote_file_dir, local_file_dir, meta_name, fs, false, err, tracker);
@@ -609,7 +607,6 @@ bool replica::verify_sst_files(const file_meta &f_meta, const std::string &dir)
 
 void replica::update_download_progress()
 {
-    // TODO(heyuchen):delete???
     ddebug_replica("total_size = {}, cur_download_size = {}",
                    _bulk_load_context._file_total_size,
                    _bulk_load_context._cur_download_size.load());
@@ -623,7 +620,7 @@ void replica::update_download_progress()
     _bulk_load_context._download_progress.store(
         static_cast<int32_t>((cur_download_size / total_size) * 100));
     _bulk_load_download_progress.progress = _bulk_load_context._download_progress.load();
-    if (_bulk_load_context._download_progress.load() == 100 &&
+    if (_bulk_load_context._download_progress.load() == bulk_load_constant::PROGRESS_FINISHED &&
         get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
         // update bulk load status to downloaded
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADED);
@@ -688,7 +685,8 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
     }
 
     // remove local bulk load dir
-    std::string local_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
+    std::string local_dir =
+        utils::filesystem::path_combine(_dir, bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR);
     dsn::error_code err = remove_local_bulk_load_dir(local_dir);
     if (err != ERR_OK) {
         tasking::enqueue(LPC_BACKGROUND_BULK_LOAD, &_tracker, [this, local_dir]() {

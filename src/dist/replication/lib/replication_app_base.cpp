@@ -315,7 +315,8 @@ replication_app_base::replication_app_base(replica *replica)
     _dir_data = utils::filesystem::path_combine(replica->dir(), "data");
     _dir_learn = utils::filesystem::path_combine(replica->dir(), "learn");
     _dir_backup = utils::filesystem::path_combine(replica->dir(), "backup");
-    _dir_bulk_load = utils::filesystem::path_combine(replica->dir(), ".bulk_load");
+    _dir_bulk_load = utils::filesystem::path_combine(replica->dir(),
+                                                     bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR);
     _last_committed_decree = 0;
     _replica = replica;
 

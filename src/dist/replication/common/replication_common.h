@@ -159,6 +159,16 @@ public:
     static const std::string WRITE_THROTTLING;
 };
 
+class bulk_load_constant
+{
+public:
+    static const std::string BULK_LOAD_METADATA;
+    static const std::string BULK_LOAD_FILE_PROVIDER_ROOT;
+    static const std::string BULK_LOAD_INFO;
+    static const std::string BULK_LOAD_LOCAL_ROOT_DIR;
+    static const int32_t PROGRESS_FINISHED;
+};
+
 namespace cold_backup {
 //
 //  Attention: when compose the path on block service, we use appname_appid, because appname_appid

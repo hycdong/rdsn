@@ -10,7 +10,7 @@
 namespace dsn {
 namespace replication {
 
-// bulk_load_info is used for remote file provider
+// Used for remote file provider
 struct bulk_load_info
 {
     int32_t app_id;
@@ -219,6 +219,15 @@ private:
     template <typename T>
     void erase_map_elem_by_id(int32_t app_id, std::unordered_map<gpid, T> &mymap);
 
+    std::string get_bulk_load_info_path(const std::string &app_name,
+                                        const std::string &cluster_name)
+    {
+        std::ostringstream oss;
+        oss << bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT << "/" << cluster_name << "/"
+            << app_name << "/" << bulk_load_constant::BULK_LOAD_INFO;
+        return oss.str();
+    }
+
     std::string get_app_bulk_load_path(int32_t app_id) const
     {
         std::stringstream oss;
@@ -245,17 +254,6 @@ private:
         return (_bulk_load_app_id.find(app_id) == _bulk_load_app_id.end() ? false : true);
     }
 
-    // TODO(heyuchen): common - move it to common.h/.cpp
-    std::string get_bulk_load_info_path(const std::string &app_name,
-                                        const std::string &cluster_name)
-    {
-        // TODO(heyuchen): common - change "bulk_load_test" from value in config
-        std::ostringstream oss;
-        oss << "bulk_load_test/" << cluster_name << "/" << app_name << "/"
-            << "bulk_load_info";
-        return oss.str();
-    }
-
     bool need_update_partition_bulk_load_metadata(gpid pid)
     {
         zauto_read_lock l(_lock);
@@ -272,7 +270,7 @@ private:
     zrwlock_nr &app_lock() const { return _state->_lock; }
     zrwlock_nr _lock; // bulk load states lock
 
-    // bulk load root on remote stroage: {cluster_root}/bulk_load
+    // bulk load root on remote stroage: {_cluster_root}/bulk_load
     std::string _bulk_load_root;
 
     /// bulk load states
