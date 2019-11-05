@@ -1344,7 +1344,6 @@ void bulk_load_context::cleanup_download_task()
 
 void bulk_load_context::cleanup_download_prgress()
 {
-    // TODO(heyuchen): consider here
     _file_total_size = 0;
     _cur_download_size.store(0);
     _download_progress.store(0);

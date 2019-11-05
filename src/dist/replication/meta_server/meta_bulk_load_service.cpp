@@ -661,10 +661,11 @@ void bulk_load_service::update_app_bulk_load_status_unlock(int32_t app_id,
                  ainfo.app_name,
                  enum_to_string(old_status),
                  enum_to_string(new_status));
-
-        // TODO(heyuchen): add write lock here?
-        _app_bulk_load_info[app_id] = ainfo;
-        _apps_in_progress_count[app_id] = ainfo.partition_count;
+        {
+            zauto_write_lock l(_lock);
+            _app_bulk_load_info[app_id] = ainfo;
+            _apps_in_progress_count[app_id] = ainfo.partition_count;
+        }
 
         if (new_status == bulk_load_status::BLS_INGESTING) {
             for (int i = 0; i < ainfo.partition_count; ++i) {
