@@ -431,7 +431,6 @@ private:
     //                                data, so skip the damaged partition
     dsn::error_code _restore_status;
 
-    // TODO(heyuchen): init it
     partition_download_progress _bulk_load_download_progress;
 
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true

@@ -62,6 +62,7 @@ replica::replica(
     _options = &stub->options();
     init_state();
     _config.pid = gpid;
+    reset_bulk_load_download_progress();
 
     std::string counter_str = fmt::format("private.log.size(MB)@{}", gpid);
     _counter_private_log_size.init_app_counter(
