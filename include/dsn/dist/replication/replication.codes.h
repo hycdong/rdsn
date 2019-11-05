@@ -172,7 +172,7 @@ MAKE_EVENT_CODE(LPC_REPLICATION_LONG_COMMON, TASK_PRIORITY_COMMON)
 MAKE_EVENT_CODE(LPC_REPLICATION_LONG_HIGH, TASK_PRIORITY_HIGH)
 #undef CURRENT_THREAD_POOL
 
-// TODO(heyuchen): is it suitable???
+// TODO(heyuchen): consider - if it is suitable
 namespace dsn {
 namespace apps {
 DEFINE_STORAGE_WRITE_RPC_CODE(RPC_RRDB_RRDB_BULK_LOAD, false, true)

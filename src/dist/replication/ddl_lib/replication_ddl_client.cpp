@@ -1610,7 +1610,7 @@ dsn::error_code replication_ddl_client::start_bulk_load(const std::string &app_n
     return resp.err;
 }
 
-// TODO(heyuchen): change this function
+// TODO(heyuchen): refactor
 static std::string get_short_status(bulk_load_status::type status)
 {
     std::string str = enum_to_string(status);
@@ -1618,6 +1618,7 @@ static std::string get_short_status(bulk_load_status::type status)
     return str;
 }
 
+// TODO(heyuchen): refactor
 static std::string bool_to_string(bool flag) { return flag ? "yes" : "no"; }
 
 /// case1. downloading or downloaded

@@ -19,7 +19,6 @@ struct bulk_load_info
     DEFINE_JSON_SERIALIZATION(app_id, app_name, partition_count)
 };
 
-// TODO(heyuchen): move it into thrift file
 struct app_bulk_load_info
 {
     int32_t app_id;
@@ -30,6 +29,13 @@ struct app_bulk_load_info
     bulk_load_status::type status;
     DEFINE_JSON_SERIALIZATION(
         app_id, partition_count, app_name, cluster_name, file_provider_type, status)
+};
+
+struct partition_bulk_load_info
+{
+    bulk_load_status::type status;
+    bulk_load_metadata metadata;
+    DEFINE_JSON_SERIALIZATION(status, metadata)
 };
 
 // TODO(heyuchen): add comments for functions
@@ -239,11 +245,11 @@ private:
         return (_bulk_load_app_id.find(app_id) == _bulk_load_app_id.end() ? false : true);
     }
 
-    // TODO(heyuchen): move it to common.h/.cpp
+    // TODO(heyuchen): common - move it to common.h/.cpp
     std::string get_bulk_load_info_path(const std::string &app_name,
                                         const std::string &cluster_name)
     {
-        // TODO(heyuchen): change "bulk_load_test" from value in config
+        // TODO(heyuchen): common - change "bulk_load_test" from value in config
         std::ostringstream oss;
         oss << "bulk_load_test/" << cluster_name << "/" << app_name << "/"
             << "bulk_load_info";
@@ -282,7 +288,6 @@ private:
     std::unordered_map<gpid, std::map<rpc_address, partition_download_progress>>
         _partitions_download_progress;
     std::unordered_map<gpid, int32_t> _partitions_total_download_progress;
-    // TODO(heyuchen): used for query bulk load status(distinguish finish and cleanup) and failover
     std::unordered_map<gpid, bool> _partitions_cleaned_up;
 };
 

@@ -754,12 +754,6 @@ struct bulk_load_metadata
     2:i64               file_total_size;
 }
 
-struct partition_bulk_load_info
-{
-    1:dsn.layer2.bulk_load_status   status;
-    2:bulk_load_metadata            metadata;
-}
-
 struct partition_download_progress
 {
     1:dsn.gpid          pid;

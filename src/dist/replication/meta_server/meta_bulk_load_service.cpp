@@ -320,7 +320,7 @@ void bulk_load_service::partition_bulk_load(const gpid &pid)
         });
 
     zauto_write_lock l(_lock);
-    // TODO(heyuchen):consider usage
+    // TODO(heyuchen): consider usage
     _partitions_request[pid] = rpc_callback;
 
     ddebug_f("send bulk load request to replica server({}), app({}), partition({}), app status = "
@@ -411,7 +411,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
     }
 
     if (is_app_bulk_loading(pid.get_app_id())) {
-        // TODO(heyuchen): delay time to config
+        // TODO(heyuchen): common - delay time to config
         tasking::enqueue(LPC_META_CALLBACK,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_bulk_load, this, pid),
@@ -477,7 +477,7 @@ void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_respons
         update_partition_bulk_load_metadata(app_name, pid, response.metadata);
     }
 
-    // TODO(heyuchen): change it to common value
+    // TODO(heyuchen): common - change it to common value
     int32_t max_progress = 100;
     if (total_progress >= max_progress) {
         ddebug_f("app({}) partirion({}) download files from remote provider succeed",
@@ -563,7 +563,6 @@ void bulk_load_service::handle_partition_bulk_load_error(const gpid &pid)
 error_code bulk_load_service::check_download_status(const bulk_load_response &response)
 {
     // download_progresses filed is not set
-    // TODO(heyuchen): consider it!!! or ok???
     if (!response.__isset.download_progresses) {
         return ERR_INVALID_STATE;
     }
@@ -627,7 +626,7 @@ void bulk_load_service::update_partition_bulk_load_status(const std::string &app
                     update_app_bulk_load_status_unlock(pid.get_app_id(), status);
                 }
             } else if (status == bulk_load_status::BLS_DOWNLOADING) {
-                // TODO(heyuchen): consider
+                // TODO(heyuchen): consider here
                 _partitions_download_progress[pid].clear();
                 _partitions_total_download_progress[pid] = 0;
                 if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
@@ -864,7 +863,6 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
                                                      const std::string &app_name,
                                                      const gpid &pid)
 {
-    // TODO(heyuchen):consider!!!
     // if meet error, ingesting will rollback to downloading, no need to retry here
     if (err != ERR_OK) {
         derror_f("app({}) partition({}) ingestion files failed, error = {}",
@@ -885,7 +883,6 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         return;
     }
 
-    // TODO(heyuchen):consider!!!
     if (resp.err != ERR_OK || resp.rocksdb_error != 0) {
         derror_f("app({}) partition({}) failed to ingestion files, error = {}, rocksdb error = {}",
                  app_name,

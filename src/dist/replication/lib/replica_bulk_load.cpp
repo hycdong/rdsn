@@ -99,8 +99,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
     response.primary_bulk_load_status = get_bulk_load_status();
 }
 
-// TODO(heyuchen): refactor group_bulk_load functions
-
+// TODO(heyuchen): refactor
 void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
 {
     FAIL_POINT_INJECT_F("replica_broadcast_group_bulk_load", [](dsn::string_view) {});
@@ -308,7 +307,7 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
     std::string remote_dir =
         get_bulk_load_remote_dir(app_name, cluster_name, get_gpid().get_partition_index());
 
-    // TODO(heyuchen): move '.bulk_load' to common const var
+    // TODO(heyuchen): common - move '.bulk_load' to common const var
     std::string local_dir = utils::filesystem::path_combine(_dir, ".bulk_load");
     dsn::error_code err = create_local_bulk_load_dir(local_dir);
     if (err != ERR_OK) {
@@ -322,7 +321,7 @@ std::string replica::get_bulk_load_remote_dir(const std::string &app_name,
                                               const std::string &cluster_name,
                                               uint32_t pidx)
 {
-    // TODO(heyuchen): change "bulk_load_test" from value in config
+    // TODO(heyuchen): common - change "bulk_load_test" from value in config
     std::ostringstream oss;
     oss << "bulk_load_test/" << cluster_name << "/" << app_name << "/" << pidx;
     return oss.str();
@@ -357,7 +356,7 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
 
     dsn::error_code err = ERR_OK;
     dsn::task_tracker tracker;
-    // TODO(heyuchen): change metadata file name in config or const
+    // TODO(heyuchen): common - change metadata file name in config or const
     std::string meta_name = "bulk_load_metadata";
 
     // sync download metadata file
@@ -608,7 +607,6 @@ bool replica::verify_sst_files(const file_meta &f_meta, const std::string &dir)
     return true;
 }
 
-// TODO(heyuchen): move to context.cpp
 void replica::update_download_progress()
 {
     // TODO(heyuchen):delete???
