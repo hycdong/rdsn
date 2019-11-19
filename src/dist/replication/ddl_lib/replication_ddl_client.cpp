@@ -1696,15 +1696,6 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
     }
     // pidx = -1 means print all partition status
     bool print_single_pidx = (pidx > -1 && (print_progress || print_cleanup));
-
-    ddebug("app %s, status=%s, progress=%d, cleanup=%d, single=%d, detailed=%d",
-           resp.app_name,
-           get_short_status(resp.app_status),
-           print_progress,
-           print_cleanup,
-           print_single_pidx,
-           detailed);
-
     int width = strlen("bulk_load_status");
     if (print_single_pidx) {
         if (print_cleanup) {
