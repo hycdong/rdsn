@@ -1346,6 +1346,7 @@ void bulk_load_context::cleanup_download_prgress()
 {
     _file_total_size = 0;
     _cur_download_size.store(0);
+    _max_download_size.store(0);
     _download_progress.store(0);
 }
 
@@ -1356,6 +1357,7 @@ void bulk_load_context::cleanup()
     cleanup_download_prgress();
     _metadata.files.clear();
     _metadata.file_total_size = 0;
+    _bulk_load_start_time_ns = 0;
 }
 
 bool bulk_load_context::is_cleanup()

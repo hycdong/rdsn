@@ -350,6 +350,16 @@ private:
     {
         _bulk_load_context._status = status;
     }
+    uint64_t get_bulk_load_max_download_size()
+    {
+        return _bulk_load_context._max_download_size.load();
+    }
+    void try_set_bulk_load_max_download_size(uint64_t f_size)
+    {
+        if (f_size > _bulk_load_context._max_download_size.load()) {
+            _bulk_load_context._max_download_size.store(f_size);
+        }
+    }
     void reset_bulk_load_download_progress()
     {
         _bulk_load_download_progress.pid = get_gpid();

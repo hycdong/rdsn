@@ -54,8 +54,11 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
          get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
         request.partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
+        _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
+
         // update bulk load status
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
+        _stub->_counter_bulk_load_downloading_count->increment();
 
         // start download
         ddebug_replica("start to download sst files");
@@ -206,8 +209,11 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
          get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
         request.meta_partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
+        _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
+
         // update bulk load status
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
+        _stub->_counter_bulk_load_downloading_count->increment();
 
         // start download
         ddebug_replica("try to download sst files");
@@ -432,6 +438,7 @@ void replica::do_download(const std::string &remote_file_dir,
             } else {
                 err = resp.err;
             }
+            _stub->_counter_bulk_load_recent_download_file_fail_count->increment();
         } else {
             if (resp.downloaded_size != bf->get_size()) {
                 derror_replica(
@@ -440,6 +447,7 @@ void replica::do_download(const std::string &remote_file_dir,
                     bf->get_size(),
                     resp.downloaded_size);
                 err = ERR_CORRUPTION;
+                _stub->_counter_bulk_load_recent_download_file_fail_count->increment();
                 return;
             }
 
@@ -448,6 +456,7 @@ void replica::do_download(const std::string &remote_file_dir,
             if (e != dsn::ERR_OK) {
                 derror_replica("calculate file({}) md5 failed", local_file);
                 err = e;
+                _stub->_counter_bulk_load_recent_download_file_fail_count->increment();
             } else if (current_md5 != bf->get_md5sum()) {
                 derror_replica(
                     "local file({}) is not same with remote file({}), download failed, md5: "
@@ -457,15 +466,20 @@ void replica::do_download(const std::string &remote_file_dir,
                     current_md5.c_str(),
                     bf->get_md5sum().c_str());
                 err = ERR_CORRUPTION;
+                _stub->_counter_bulk_load_recent_download_file_fail_count->increment();
             } else {
+                uint64_t file_size = bf->get_size();
                 if (update_progress) {
-                    _bulk_load_context._cur_download_size.fetch_add(bf->get_size());
+                    _bulk_load_context._cur_download_size.fetch_add(file_size);
                     update_download_progress();
                 }
                 ddebug_replica("download file({}) succeed, file_size = {}, download_progress = {}%",
                                local_file.c_str(),
                                resp.downloaded_size,
                                _bulk_load_download_progress.progress);
+                _stub->_counter_bulk_load_recent_download_file_succ_count->increment();
+                _stub->_counter_bulk_load_recent_download_file_size->add(file_size);
+                try_set_bulk_load_max_download_size(file_size);
             }
         }
     };
@@ -723,9 +737,14 @@ void replica::handle_bulk_load_succeed()
     }
 
     set_bulk_load_status(bulk_load_status::BLS_FINISH);
+    _stub->_counter_bulk_load_finish_count->increment();
 }
 
-void replica::handle_bulk_load_error() { cleanup_bulk_load_context(bulk_load_status::BLS_FAILED); }
+void replica::handle_bulk_load_error()
+{
+    cleanup_bulk_load_context(bulk_load_status::BLS_FAILED);
+    _stub->_counter_bulk_load_failed_count->increment();
+}
 
 // - ERR_FILE_OPERATION_FAILED: remove folder failed
 dsn::error_code replica::remove_local_bulk_load_dir(const std::string &bulk_load_dir)
