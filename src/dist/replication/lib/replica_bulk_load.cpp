@@ -53,12 +53,12 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         request.partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
         if (_stub->_bulk_load_recent_downloading_replica_count >=
-            _options->max_concurrent_bulk_load_downloading_count) {
-            // TODO(heyuchen): remove hycdong
-            dwarn_replica("hycdong: node[{}] already has {} replica executing bulk load "
-                          "downloading, wait for next round",
-                          _stub->_primary_address_str,
-                          _stub->_bulk_load_recent_downloading_replica_count);
+            _stub->_max_concurrent_bulk_load_downloading_count) {
+            // TODO(heyuchen): remove concurrent
+            dwarn_replica(
+                "concurrent: node[{}] already has {} replica downloading, wait for next round",
+                _stub->_primary_address_str,
+                _stub->_bulk_load_recent_downloading_replica_count);
             response.err = ERR_BUSY;
             return;
         }
@@ -70,7 +70,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         _stub->_counter_bulk_load_downloading_count->increment();
         _stub->_bulk_load_recent_downloading_replica_count++;
         // TODO(heyuchen): delete this debug log
-        ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
                        _stub->_primary_address_str,
                        _stub->_bulk_load_recent_downloading_replica_count);
 
@@ -227,12 +227,12 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         request.meta_partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
         if (_stub->_bulk_load_recent_downloading_replica_count >=
-            _options->max_concurrent_bulk_load_downloading_count) {
-            // TODO(heyuchen): remove hycdong
-            dwarn_replica("hycdong: node[{}] already has {} replica executing bulk load "
-                          "downloading, wait for next round",
-                          _stub->_primary_address_str,
-                          _stub->_bulk_load_recent_downloading_replica_count);
+            _stub->_max_concurrent_bulk_load_downloading_count) {
+            // TODO(heyuchen): remove concurrent
+            dwarn_replica(
+                "concurrent: node[{}] already has {} replica downloading, wait for next round",
+                _stub->_primary_address_str,
+                _stub->_bulk_load_recent_downloading_replica_count);
             response.err = ERR_BUSY;
             return;
         }
@@ -244,7 +244,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         _stub->_counter_bulk_load_downloading_count->increment();
         _stub->_bulk_load_recent_downloading_replica_count++;
         // TODO(heyuchen): delete this debug log
-        ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
                        _stub->_primary_address_str,
                        _stub->_bulk_load_recent_downloading_replica_count);
 
@@ -313,9 +313,8 @@ void replica::on_group_bulk_load_reply(error_code err,
     }
 
     if (resp->err == ERR_BUSY) {
-        // TODO(heyuchen): remove hycdong
-        dwarn_replica("hycdong: node[{}] has enough replica executing bulk load downloading, wait "
-                      "for next round",
+        // TODO(heyuchen): remove concurrent
+        dwarn_replica("concurrent: node[{}] has enough replica downloading, wait for next round",
                       req->target_address.to_string());
         return;
     }
@@ -683,7 +682,7 @@ void replica::update_download_progress()
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADED);
         _stub->_bulk_load_recent_downloading_replica_count--;
         // TODO(heyuchen): delete this debug log
-        ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
                        _stub->_primary_address_str,
                        _stub->_bulk_load_recent_downloading_replica_count);
     }
@@ -839,7 +838,7 @@ void replica::handle_bulk_load_download_error()
 {
     _stub->_bulk_load_recent_downloading_replica_count--;
     // TODO(heyuchen): delete this debug log
-    ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+    ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
                    _stub->_primary_address_str,
                    _stub->_bulk_load_recent_downloading_replica_count);
     handle_bulk_load_error();

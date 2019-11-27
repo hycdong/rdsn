@@ -1619,7 +1619,7 @@ static std::string get_short_status(bulk_load_status::type status)
 }
 
 // TODO(heyuchen): refactor
-static std::string bool_to_string(bool flag) { return flag ? "yes" : "no"; }
+static std::string bool_to_string(bool flag) { return flag ? "YES" : "NO"; }
 
 /// case1. downloading or downloaded
 /// - pidx>0 && detailed=true: show single partition all replicas download progress

@@ -63,11 +63,13 @@ replica_stub::replica_stub(replica_state_subscriber subscriber /*= nullptr*/,
       _query_compact_command(nullptr),
       _query_app_envs_command(nullptr),
       _useless_dir_reserve_seconds_command(nullptr),
+      _max_concurrent_bulk_load_downloading_count_command(nullptr),
       _deny_client(false),
       _verbose_client_log(false),
       _verbose_commit_log(false),
       _gc_disk_error_replica_interval_seconds(3600),
       _gc_disk_garbage_replica_interval_seconds(3600),
+      _max_concurrent_bulk_load_downloading_count(5),
       _learn_app_concurrent_count(0),
       _fs_manager(false),
       _bulk_load_recent_downloading_replica_count(0)
@@ -355,6 +357,8 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
     _verbose_commit_log = _options.verbose_commit_log_on_start;
     _gc_disk_error_replica_interval_seconds = _options.gc_disk_error_replica_interval_seconds;
     _gc_disk_garbage_replica_interval_seconds = _options.gc_disk_garbage_replica_interval_seconds;
+    _max_concurrent_bulk_load_downloading_count =
+        _options.max_concurrent_bulk_load_downloading_count;
 
     // clear dirs if need
     if (clear) {
@@ -2085,6 +2089,32 @@ void replica_stub::open_service()
             }
             return result;
         });
+
+    _max_concurrent_bulk_load_downloading_count_command =
+        dsn::command_manager::instance().register_app_command(
+            {"max-concurrent-bulk-load-downloading-count"},
+            "max-concurrent-bulk-load-downloading-count [num | DEFAULT]",
+            "control stub max_concurrent_bulk_load_downloading_count",
+            [this](const std::vector<std::string> &args) {
+                std::string result("OK");
+                if (args.empty()) {
+                    result = "max_concurrent_bulk_load_downloading_count=" +
+                             std::to_string(_max_concurrent_bulk_load_downloading_count);
+                } else {
+                    if (args[0] == "DEFAULT") {
+                        _max_concurrent_bulk_load_downloading_count =
+                            _options.max_concurrent_bulk_load_downloading_count;
+                    } else {
+                        int32_t count = 0;
+                        if (!dsn::buf2int32(args[0], count) || count <= 0) {
+                            result = std::string("ERR: invalid arguments");
+                        } else {
+                            _max_concurrent_bulk_load_downloading_count = count;
+                        }
+                    }
+                }
+                return result;
+            });
 }
 
 std::string
@@ -2210,6 +2240,8 @@ void replica_stub::close()
     dsn::command_manager::instance().deregister_command(_query_compact_command);
     dsn::command_manager::instance().deregister_command(_query_app_envs_command);
     dsn::command_manager::instance().deregister_command(_useless_dir_reserve_seconds_command);
+    dsn::command_manager::instance().deregister_command(
+        _max_concurrent_bulk_load_downloading_count_command);
 
     _kill_partition_command = nullptr;
     _deny_client_command = nullptr;
@@ -2219,6 +2251,7 @@ void replica_stub::close()
     _query_compact_command = nullptr;
     _query_app_envs_command = nullptr;
     _useless_dir_reserve_seconds_command = nullptr;
+    _max_concurrent_bulk_load_downloading_count_command = nullptr;
 
     if (_config_sync_timer_task != nullptr) {
         _config_sync_timer_task->cancel(true);
