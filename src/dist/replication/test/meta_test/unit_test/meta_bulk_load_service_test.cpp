@@ -578,6 +578,15 @@ TEST_F(bulk_load_process_test, downloading_fs_error)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
 }
 
+TEST_F(bulk_load_process_test, downloading_busy)
+{
+    create_basic_response(ERR_BUSY, bulk_load_status::BLS_DOWNLOADING);
+    auto response = _resp;
+    on_partition_bulk_load_reply(ERR_OK, BALLOT, response, gpid(_app_id, _pidx), _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
+}
+
 TEST_F(bulk_load_process_test, downloading_corrupt)
 {
     mock_response_progress(ERR_CORRUPTION, false);

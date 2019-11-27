@@ -148,6 +148,15 @@ public:
         std::unique_ptr<block_service_mock> block_service = make_unique<block_service_mock>();
         return block_service;
     }
+
+    int32_t get_bulk_load_recent_downloading_replica_count()
+    {
+        return _bulk_load_recent_downloading_replica_count;
+    }
+    void set_bulk_load_recent_downloading_replica_count(int32_t count)
+    {
+        _bulk_load_recent_downloading_replica_count = count;
+    }
 };
 
 } // namespace replication

@@ -54,7 +54,7 @@ fi
 
 #./clear.sh
 #output_xml="${REPORT_DIR}/dsn.meta.test.1.xml"
-#GTEST_OUTPUT="xml:${output_xml}" GTEST_FILTER="bulk_load_failover_test.*" ./dsn.meta.test
+#GTEST_OUTPUT="xml:${output_xml}" GTEST_FILTER="bulk_load_process_test.downloading_busy" ./dsn.meta.test
 #if [ $? -ne 0 ]; then
 #    tail -n 100 data/log/log.1.txt
 #    if [ -f core ]; then
