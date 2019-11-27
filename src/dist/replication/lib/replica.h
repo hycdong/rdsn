@@ -344,6 +344,7 @@ private:
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
     void update_group_context_clean_flag(bulk_load_response &response);
     void handle_bulk_load_succeed();
+    void handle_bulk_load_download_error();
 
     bulk_load_status::type get_bulk_load_status() { return _bulk_load_context._status; }
     void set_bulk_load_status(bulk_load_status::type status)

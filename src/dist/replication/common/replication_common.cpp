@@ -103,6 +103,8 @@ replication_options::replication_options()
     learn_app_max_concurrent_count = 5;
 
     max_concurrent_uploading_file_count = 10;
+
+    max_concurrent_bulk_load_downloading_count = 5;
 }
 
 replication_options::~replication_options() {}
@@ -485,6 +487,12 @@ void replication_options::initialize()
                                              max_concurrent_uploading_file_count,
                                              "concurrent uploading file count");
 
+    max_concurrent_bulk_load_downloading_count =
+        (int32_t)dsn_config_get_value_uint64("replication",
+                                             "max_concurrent_bulk_load_downloading_count",
+                                             max_concurrent_bulk_load_downloading_count,
+                                             "concurrent bulk load downloading replica count");
+
     replica_helper::load_meta_servers(meta_servers);
 
     sanity_check();
@@ -573,8 +581,8 @@ const std::string replica_envs::WRITE_THROTTLING("replica.write_throttling");
 
 const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
 // TODO(heyuchen): update it
-// const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("bulk_load_test");
-const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("tmp/pegasus_bulkload_data");
+const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("bulk_load_test");
+// const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("tmp/pegasus_bulkload_data");
 const std::string bulk_load_constant::BULK_LOAD_METADATA("bulk_load_metadata");
 const std::string bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR(".bulk_load");
 const int32_t bulk_load_constant::PROGRESS_FINISHED = 100;

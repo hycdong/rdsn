@@ -354,6 +354,12 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                 primary_addr.to_string(),
                 response.err.to_string());
         rollback_to_downloading(pid.get_app_id());
+    } else if (response.err == ERR_BUSY) {
+        dwarn_f("node({}) has enough replicas executing bulk load downloading, wait to next round "
+                "to send bulk load request for app({}), partition({})",
+                primary_addr.to_string(),
+                response.app_name,
+                pid.to_string());
     } else if (response.err != ERR_OK) {
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
         if (response.primary_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {

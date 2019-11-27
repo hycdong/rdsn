@@ -48,17 +48,31 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         enum_to_string(request.partition_bulk_load_status),
         enum_to_string(get_bulk_load_status()));
 
-    broadcast_group_bulk_load(request);
-
     if ((get_bulk_load_status() == bulk_load_status::BLS_INVALID ||
          get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
         request.partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
+
+        if (_stub->_bulk_load_recent_downloading_replica_count >=
+            _options->max_concurrent_bulk_load_downloading_count) {
+            // TODO(heyuchen): remove hycdong
+            dwarn_replica("hycdong: node[{}] already has {} replica executing bulk load "
+                          "downloading, wait for next round",
+                          _stub->_primary_address_str,
+                          _stub->_bulk_load_recent_downloading_replica_count);
+            response.err = ERR_BUSY;
+            return;
+        }
 
         _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
 
         // update bulk load status
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
         _stub->_counter_bulk_load_downloading_count->increment();
+        _stub->_bulk_load_recent_downloading_replica_count++;
+        // TODO(heyuchen): delete this debug log
+        ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+                       _stub->_primary_address_str,
+                       _stub->_bulk_load_recent_downloading_replica_count);
 
         // start download
         ddebug_replica("start to download sst files");
@@ -66,7 +80,8 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         response.err = download_sst_files(
             request.app_name, request.cluster_name, request.remote_provider_name);
         if (response.err != ERR_OK) {
-            handle_bulk_load_error();
+            // handle_bulk_load_error();
+            handle_bulk_load_download_error();
         } else if (request.query_bulk_load_metadata &&
                    _bulk_load_context._metadata.files.size() > 0) {
             response.__set_metadata(_bulk_load_context._metadata);
@@ -100,6 +115,8 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
     }
 
     response.primary_bulk_load_status = get_bulk_load_status();
+
+    broadcast_group_bulk_load(request);
 }
 
 // TODO(heyuchen): refactor
@@ -209,11 +226,27 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
          get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
         request.meta_partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
+        if (_stub->_bulk_load_recent_downloading_replica_count >=
+            _options->max_concurrent_bulk_load_downloading_count) {
+            // TODO(heyuchen): remove hycdong
+            dwarn_replica("hycdong: node[{}] already has {} replica executing bulk load "
+                          "downloading, wait for next round",
+                          _stub->_primary_address_str,
+                          _stub->_bulk_load_recent_downloading_replica_count);
+            response.err = ERR_BUSY;
+            return;
+        }
+
         _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
 
         // update bulk load status
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
         _stub->_counter_bulk_load_downloading_count->increment();
+        _stub->_bulk_load_recent_downloading_replica_count++;
+        // TODO(heyuchen): delete this debug log
+        ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+                       _stub->_primary_address_str,
+                       _stub->_bulk_load_recent_downloading_replica_count);
 
         // start download
         ddebug_replica("try to download sst files");
@@ -222,7 +255,8 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
             download_sst_files(request.app.app_name, request.cluster_name, request.provider_name);
 
         if (response.err != ERR_OK) {
-            handle_bulk_load_error();
+            // handle_bulk_load_error();
+            handle_bulk_load_download_error();
         }
     }
 
@@ -275,6 +309,14 @@ void replica::on_group_bulk_load_reply(error_code err,
         _primary_states.reset_node_bulk_load_context(
             req->target_address, get_gpid(), req->meta_app_bulk_load_status);
 
+        return;
+    }
+
+    if (resp->err == ERR_BUSY) {
+        // TODO(heyuchen): remove hycdong
+        dwarn_replica("hycdong: node[{}] has enough replica executing bulk load downloading, wait "
+                      "for next round",
+                      req->target_address.to_string());
         return;
     }
 
@@ -403,7 +445,8 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
                 _bulk_load_download_progress.status = ec;
                 _bulk_load_context._bulk_load_download_task.erase(f_meta.name);
                 if (ec != ERR_OK) {
-                    handle_bulk_load_error();
+                    // handle_bulk_load_error();
+                    handle_bulk_load_download_error();
                 }
             });
         _bulk_load_context._bulk_load_download_task[f_meta.name] = bulk_load_download_task;
@@ -638,6 +681,11 @@ void replica::update_download_progress()
         get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
         // update bulk load status to downloaded
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADED);
+        _stub->_bulk_load_recent_downloading_replica_count--;
+        // TODO(heyuchen): delete this debug log
+        ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+                       _stub->_primary_address_str,
+                       _stub->_bulk_load_recent_downloading_replica_count);
     }
 }
 
@@ -785,6 +833,16 @@ void replica::update_group_context_clean_flag(bulk_load_response &response)
         group_flag = group_flag && is_clean_up;
     }
     response.__set_is_group_bulk_load_context_cleaned(group_flag);
+}
+
+void replica::handle_bulk_load_download_error()
+{
+    _stub->_bulk_load_recent_downloading_replica_count--;
+    // TODO(heyuchen): delete this debug log
+    ddebug_replica("hycdong: node[{}] recent_bulk_load_downloading_replica_count={}",
+                   _stub->_primary_address_str,
+                   _stub->_bulk_load_recent_downloading_replica_count);
+    handle_bulk_load_error();
 }
 
 } // namespace replication

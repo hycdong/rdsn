@@ -69,7 +69,8 @@ replica_stub::replica_stub(replica_state_subscriber subscriber /*= nullptr*/,
       _gc_disk_error_replica_interval_seconds(3600),
       _gc_disk_garbage_replica_interval_seconds(3600),
       _learn_app_concurrent_count(0),
-      _fs_manager(false)
+      _fs_manager(false),
+      _bulk_load_recent_downloading_replica_count(0)
 {
     _replica_state_subscriber = subscriber;
     _is_long_subscriber = is_long_subscriber;

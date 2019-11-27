@@ -280,6 +280,9 @@ private:
     // cli service
     std::unique_ptr<dsn::cli_service> _cli_service;
 
+    // bulk load
+    int32_t _bulk_load_recent_downloading_replica_count;
+
     // performance counters
     perf_counter_wrapper _counter_replicas_count;
     perf_counter_wrapper _counter_replicas_opening_count;

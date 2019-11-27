@@ -119,6 +119,8 @@ public:
     std::string cold_backup_root;
     int32_t max_concurrent_uploading_file_count;
 
+    int32_t max_concurrent_bulk_load_downloading_count;
+
 public:
     replication_options();
     void initialize();
