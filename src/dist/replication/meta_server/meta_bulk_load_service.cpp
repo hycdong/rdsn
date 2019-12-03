@@ -362,7 +362,8 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                 pid.to_string());
     } else if (response.err != ERR_OK) {
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
-        if (response.primary_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
+        if (response.primary_bulk_load_status == bulk_load_status::BLS_DOWNLOADING ||
+            response.primary_bulk_load_status == bulk_load_status::BLS_INVALID) {
             if (response.err == ERR_CORRUPTION) {
                 derror_f("app({}), partition({}) failed to download files from remote provider, "
                          "because files are damaged, error = {}",
