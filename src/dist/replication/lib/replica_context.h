@@ -546,7 +546,7 @@ public:
     {
     }
 
-    void cleanup_download_task();
+    bool cleanup_download_task();
     void cleanup_download_prgress();
     void cleanup();
     bool is_cleanup();

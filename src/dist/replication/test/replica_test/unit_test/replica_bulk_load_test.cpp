@@ -560,9 +560,9 @@ TEST_F(replica_bulk_load_test, on_bulk_load_downloading_error)
     test_on_bulk_load(resp);
 
     ASSERT_EQ(resp.err, ERR_FS_INTERNAL);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_FAILED);
+    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_DOWNLOADING);
     ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_FAILED);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
     ASSERT_EQ(get_stub_downloading_count(), 1);
 
     fail::teardown();
@@ -824,9 +824,9 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_start_downloading_failed)
     test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT, resp);
 
     ASSERT_EQ(resp.err, ERR_FS_INTERNAL);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_FAILED);
+    ASSERT_EQ(resp.status, bulk_load_status::BLS_DOWNLOADING);
     ASSERT_EQ(resp.download_progress.progress, 0);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_FAILED);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
     ASSERT_EQ(get_stub_downloading_count(), 0);
 
     fail::teardown();

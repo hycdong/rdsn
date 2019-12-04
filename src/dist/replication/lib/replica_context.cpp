@@ -1330,16 +1330,17 @@ void cold_backup_context::file_upload_complete(const std::string &filename)
     _file_status[filename] = file_status::FileUploadComplete;
 }
 
-void bulk_load_context::cleanup_download_task()
+bool bulk_load_context::cleanup_download_task()
 {
     for (auto iter = _bulk_load_download_task.begin(); iter != _bulk_load_download_task.end();
          iter++) {
         auto download_task = iter->second;
         if (download_task != nullptr) {
-            CLEANUP_TASK_ALWAYS(download_task);
+            CLEANUP_TASK(download_task, true);
         }
     }
     _bulk_load_download_task.clear();
+    return true;
 }
 
 void bulk_load_context::cleanup_download_prgress()

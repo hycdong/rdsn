@@ -320,7 +320,7 @@ void replica::on_group_bulk_load_reply(error_code err,
     }
 
     if (resp->err != ERR_OK) {
-        derror_replica("on_group_bulk_load failed, error = {}", resp->err);
+        derror_replica("on_group_bulk_load failed, error = {}", resp->err.to_string());
         _primary_states.reset_node_bulk_load_context(
             req->target_address, get_gpid(), req->meta_app_bulk_load_status);
     } else if (req->config.ballot != get_ballot()) {
@@ -441,11 +441,9 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
                         ddebug_replica("sst file({}) is verified", f_meta.name);
                     }
                 }
-                _bulk_load_download_progress.status = ec;
-                _bulk_load_context._bulk_load_download_task.erase(f_meta.name);
                 if (ec != ERR_OK) {
-                    // handle_bulk_load_error();
                     handle_bulk_load_download_error();
+                    _bulk_load_download_progress.status = ec;
                 }
             });
         _bulk_load_context._bulk_load_download_task[f_meta.name] = bulk_load_download_task;
@@ -698,9 +696,10 @@ void replica::update_group_download_progress(bulk_load_response &response)
 
     response.__isset.download_progresses = true;
     response.download_progresses[_primary_states.membership.primary] = _bulk_load_download_progress;
-    ddebug_replica("primary = {}, download progress = {}%",
+    ddebug_replica("primary = {}, download progress = {}%, status={}",
                    _primary_states.membership.primary.to_string(),
-                   _bulk_load_download_progress.progress);
+                   _bulk_load_download_progress.progress,
+                   _bulk_load_download_progress.status.to_string());
 
     int32_t total_progress = _bulk_load_download_progress.progress;
     for (const auto &target_address : _primary_states.membership.secondaries) {
@@ -708,9 +707,10 @@ void replica::update_group_download_progress(bulk_load_response &response)
             _primary_states.group_download_progress[target_address];
         response.download_progresses[target_address] = sprogress;
         total_progress += sprogress.progress;
-        ddebug_replica("secondary = {}, download progress = {}%",
+        ddebug_replica("secondary = {}, download progress = {}%, status={}",
                        target_address.to_string(),
-                       sprogress.progress);
+                       sprogress.progress,
+                       _bulk_load_download_progress.status.to_string());
     }
     total_progress /= _primary_states.membership.max_replica_count;
     ddebug_replica("total download progress = {}%", total_progress);
@@ -728,8 +728,7 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
         return;
     }
 
-    // set bulk load status
-    auto old_status = get_bulk_load_status();
+    bulk_load_status::type old_status = get_bulk_load_status();
     if (new_status == bulk_load_status::BLS_FAILED) {
         set_bulk_load_status(new_status);
         dwarn_replica("bulk load failed, original status = {}", enum_to_string(old_status));
@@ -739,9 +738,6 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 
     if (old_status == bulk_load_status::BLS_DOWNLOADING ||
         old_status == bulk_load_status::BLS_DOWNLOADED) {
-        // stop bulk load download tasks
-        _bulk_load_context.cleanup_download_task();
-        // reset bulk load download progress
         reset_bulk_load_download_progress();
     }
 
@@ -841,7 +837,7 @@ void replica::handle_bulk_load_download_error()
     ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
                    _stub->_primary_address_str,
                    _stub->_bulk_load_recent_downloading_replica_count);
-    handle_bulk_load_error();
+    _bulk_load_context.cleanup_download_task();
 }
 
 } // namespace replication
