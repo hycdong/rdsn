@@ -693,7 +693,7 @@ TEST_F(replica_bulk_load_test, on_bulk_load_finish_primary_cleanup)
     fail::teardown();
 }
 
-// request: finish; local:finish
+// request: finish; local: invalid
 TEST_F(replica_bulk_load_test, on_bulk_load_finish_all_cleanup)
 {
     fail::setup();
@@ -708,7 +708,7 @@ TEST_F(replica_bulk_load_test, on_bulk_load_finish_all_cleanup)
     ASSERT_EQ(resp.err, ERR_OK);
     ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INVALID);
     ASSERT_FALSE(resp.__isset.total_download_progress);
-    ASSERT_TRUE(resp.is_group_bulk_load_context_cleaned);
+    ASSERT_FALSE(resp.is_group_bulk_load_context_cleaned);
     ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
 
     fail::teardown();
@@ -750,7 +750,7 @@ TEST_F(replica_bulk_load_test, on_bulk_load_failed_all_cleanup)
     ASSERT_EQ(resp.err, ERR_OK);
     ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INVALID);
     ASSERT_FALSE(resp.__isset.total_download_progress);
-    ASSERT_TRUE(resp.is_group_bulk_load_context_cleaned);
+    ASSERT_FALSE(resp.is_group_bulk_load_context_cleaned);
     ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
 
     fail::teardown();
@@ -984,6 +984,7 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_busy)
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloading)
 {
     mock_primary_states(true, false);
+    mock_bulk_load_context(100, 0, 0, bulk_load_status::BLS_DOWNLOADING);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_DOWNLOADING, BALLOT, bulk_load_status::BLS_DOWNLOADING, 60, false);
     partition_download_progress download_progress;
@@ -994,6 +995,7 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloading)
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloading_with_one_downloaded)
 {
     mock_primary_states(true, false);
+    mock_bulk_load_context(100, 0, 0, bulk_load_status::BLS_DOWNLOADING);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_DOWNLOADING, BALLOT, bulk_load_status::BLS_DOWNLOADED, 100, false);
     partition_download_progress download_progress;
@@ -1004,6 +1006,7 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloading_with_one_dow
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded)
 {
     mock_primary_states(true, false, true);
+    mock_bulk_load_context(100, 100, 100, bulk_load_status::BLS_DOWNLOADED);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_DOWNLOADED, BALLOT, bulk_load_status::BLS_DOWNLOADED, 100, false);
     partition_download_progress download_progress;
@@ -1014,6 +1017,7 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded)
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded_with_one_finish)
 {
     mock_primary_states(true, false, true);
+    mock_bulk_load_context(100, 100, 100, bulk_load_status::BLS_DOWNLOADED);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_FINISH, BALLOT, bulk_load_status::BLS_DOWNLOADED, 100, false);
     bool is_context_cleaned = true;
@@ -1024,6 +1028,7 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded_with_one_fini
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_finish)
 {
     mock_primary_states(true, false, true);
+    mock_bulk_load_context(100, 100, 100, bulk_load_status::BLS_FINISH);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_FINISH, BALLOT, bulk_load_status::BLS_FINISH, 100, false);
     bool is_context_cleaned = true;
@@ -1034,8 +1039,9 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_finish)
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_failed)
 {
     mock_primary_states(false, true, false);
+    mock_bulk_load_context(100, 22, 22, bulk_load_status::BLS_FAILED);
     test_on_group_bulk_load_reply(
-        bulk_load_status::BLS_FAILED, BALLOT, bulk_load_status::BLS_FAILED, 0, true);
+        bulk_load_status::BLS_FAILED, BALLOT, bulk_load_status::BLS_FAILED, 22, true);
     bool is_context_cleaned = false;
     ASSERT_EQ(primary_get_node_context_clean_flag(is_context_cleaned), ERR_OK);
     ASSERT_TRUE(is_context_cleaned);

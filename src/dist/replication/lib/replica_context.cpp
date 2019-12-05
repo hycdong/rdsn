@@ -176,9 +176,11 @@ bool primary_context::check_exist(::dsn::rpc_address node, partition_status::typ
 }
 
 void primary_context::set_node_bulk_load_context(
-    const std::shared_ptr<group_bulk_load_response> &resp, const rpc_address &node)
+    const std::shared_ptr<group_bulk_load_response> &resp,
+    const rpc_address &node,
+    bool update_progress)
 {
-    if (resp->__isset.download_progress) {
+    if (resp->__isset.download_progress && update_progress) {
         group_download_progress[node] = resp->download_progress;
     }
     if (resp->__isset.is_bulk_load_context_cleaned) {
@@ -190,9 +192,10 @@ void primary_context::reset_node_bulk_load_context(const rpc_address &node,
                                                    const gpid &pid,
                                                    bulk_load_status::type status)
 {
-    bool reset_progress = (status == bulk_load_status::type::BLS_DOWNLOADING ||
-                           status == bulk_load_status::type::BLS_DOWNLOADED ||
-                           status == bulk_load_status::type::BLS_FINISH);
+    bool reset_progress =
+        (status == bulk_load_status::type::BLS_DOWNLOADING ||
+         status == bulk_load_status::type::BLS_DOWNLOADED ||
+         status == bulk_load_status::type::BLS_FINISH || status == bulk_load_status::BLS_FAILED);
     bool reset_flag = (status == bulk_load_status::type::BLS_FINISH ||
                        status == bulk_load_status::type::BLS_FAILED);
     if (reset_progress) {

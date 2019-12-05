@@ -578,8 +578,7 @@ error_code bulk_load_service::check_download_status(const bulk_load_response &re
             dwarn_f("app({}) partition({}) meet error during downloading sst files, address = {}, "
                     "error = {}",
                     response.app_name,
-                    progress.pid.get_app_id(),
-                    progress.pid.get_partition_index(),
+                    progress.pid.to_string(),
                     iter->first.to_string(),
                     progress.status.to_string());
             return progress.status;
