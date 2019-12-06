@@ -252,6 +252,9 @@ void replica::execute_mutation(mutation_ptr &mu)
           mu->name(),
           static_cast<int>(mu->client_requests.size()));
 
+    // TODO(heyuchen): delete
+    ddebug_replica("execute mutation({})", mu->name());
+
     error_code err = ERR_OK;
     decree d = mu->data.header.decree;
 

@@ -37,6 +37,7 @@
 #include "mutation.h"
 #include "mutation_log.h"
 #include "replica_stub.h"
+#include <dsn/dist/fmt_logging.h>
 #include <dsn/dist/replication/replication_app_base.h>
 
 namespace dsn {
@@ -70,6 +71,19 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
             _primary_states.membership.max_replica_count) {
         response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
         return;
+    }
+
+    if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
+        ddebug_replica("hyc: receive bulk load request");
+        // TODO(heyuchen):
+        // add count restriction, return error_busy
+
+        // bulk load ingestion request requires that all secondaries should be alive
+        if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
+            _primary_states.membership.max_replica_count) {
+            response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
+            return;
+        }
     }
 
     if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
@@ -155,6 +169,12 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     // stop prepare bulk load ingestion if there are secondaries unalive
     for (i = 0; i < request_count; ++i) {
         const mutation_update &update = mu->data.updates[i];
+
+        // TODO(heyuchen): delete
+        if (update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
+            ddebug_replica("bulk load init prepare mutation({})", mu->name());
+        }
+
         if (update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD &&
             static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
                 _primary_states.membership.max_replica_count) {
@@ -288,6 +308,12 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
           mu->name(),
           addr.to_string(),
           enum_to_string(rconfig.status));
+
+    // TODO(heyuchen): delete it
+    ddebug_replica("mutation({}) send_prepare_message to {} as {}",
+                   mu->name(),
+                   addr.to_string(),
+                   enum_to_string(rconfig.status));
 }
 
 void replica::do_possible_commit_on_primary(mutation_ptr &mu)
@@ -321,6 +347,9 @@ void replica::on_prepare(dsn::message_ex *request)
     decree decree = mu->data.header.decree;
 
     dinfo("%s: mutation %s on_prepare", name(), mu->name());
+
+    // TODO(heyuchen): delete it
+    ddebug_replica("on_prepare mutation({})", mu->name());
 
     dassert(mu->data.header.pid == rconfig.pid,
             "(%d.%d) VS (%d.%d)",
