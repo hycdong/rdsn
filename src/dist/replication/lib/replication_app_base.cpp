@@ -520,6 +520,9 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
         }
     }
 
+    // TODO(heyuchen): delete it
+    ddebug("%s: mutation %s: apply_mutation", _replica->name(), mu->name());
+
     int perror = on_batched_write_requests(
         mu->data.header.decree, mu->data.header.timestamp, batched_requests, batched_count);
 
