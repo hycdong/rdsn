@@ -345,6 +345,7 @@ private:
     void update_group_context_clean_flag(bulk_load_response &response);
     void handle_bulk_load_succeed();
     void handle_bulk_load_download_error();
+    void update_group_ingestion_status(bulk_load_response &response);
 
     bulk_load_status::type get_bulk_load_status() { return _bulk_load_context._status; }
     void set_bulk_load_status(bulk_load_status::type status)
@@ -448,6 +449,10 @@ private:
     bool _is_initializing;       // when initializing, switching to primary need to update ballot
     bool _deny_client_write;     // if deny all write requests
     throttling_controller _write_throttling_controller;
+
+    // _partition_version should be equal to partition_count-1
+    // when reject read/write, _partition_version = -1
+    std::atomic<int32_t> _partition_version;
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

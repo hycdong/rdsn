@@ -161,6 +161,19 @@ struct duplication_status
 
 extern const std::map<int, const char *> _duplication_status_VALUES_TO_NAMES;
 
+struct ingestion_status
+{
+    enum type
+    {
+        IS_INVALID = 0,
+        IS_RUNNING = 1,
+        IS_SUCCEED = 2,
+        IS_FAILED = 3
+    };
+};
+
+extern const std::map<int, const char *> _ingestion_status_VALUES_TO_NAMES;
+
 class mutation_header;
 
 class mutation_update;
@@ -6007,7 +6020,9 @@ typedef struct _bulk_load_response__isset
           download_progresses(false),
           total_download_progress(false),
           is_group_bulk_load_context_cleaned(false),
-          metadata(false)
+          metadata(false),
+          group_ingestion_status(false),
+          is_group_ingestion_finished(false)
     {
     }
     bool err : 1;
@@ -6018,6 +6033,8 @@ typedef struct _bulk_load_response__isset
     bool total_download_progress : 1;
     bool is_group_bulk_load_context_cleaned : 1;
     bool metadata : 1;
+    bool group_ingestion_status : 1;
+    bool is_group_ingestion_finished : 1;
 } _bulk_load_response__isset;
 
 class bulk_load_response
@@ -6031,7 +6048,8 @@ public:
         : app_name(),
           primary_bulk_load_status((::dsn::bulk_load_status::type)0),
           total_download_progress(0),
-          is_group_bulk_load_context_cleaned(0)
+          is_group_bulk_load_context_cleaned(0),
+          is_group_ingestion_finished(0)
     {
     }
 
@@ -6044,6 +6062,8 @@ public:
     int32_t total_download_progress;
     bool is_group_bulk_load_context_cleaned;
     bulk_load_metadata metadata;
+    std::map<::dsn::rpc_address, ingestion_status::type> group_ingestion_status;
+    bool is_group_ingestion_finished;
 
     _bulk_load_response__isset __isset;
 
@@ -6063,6 +6083,11 @@ public:
     void __set_is_group_bulk_load_context_cleaned(const bool val);
 
     void __set_metadata(const bulk_load_metadata &val);
+
+    void
+    __set_group_ingestion_status(const std::map<::dsn::rpc_address, ingestion_status::type> &val);
+
+    void __set_is_group_ingestion_finished(const bool val);
 
     bool operator==(const bulk_load_response &rhs) const
     {
@@ -6092,6 +6117,16 @@ public:
         if (__isset.metadata != rhs.__isset.metadata)
             return false;
         else if (__isset.metadata && !(metadata == rhs.metadata))
+            return false;
+        if (__isset.group_ingestion_status != rhs.__isset.group_ingestion_status)
+            return false;
+        else if (__isset.group_ingestion_status &&
+                 !(group_ingestion_status == rhs.group_ingestion_status))
+            return false;
+        if (__isset.is_group_ingestion_finished != rhs.__isset.is_group_ingestion_finished)
+            return false;
+        else if (__isset.is_group_ingestion_finished &&
+                 !(is_group_ingestion_finished == rhs.is_group_ingestion_finished))
             return false;
         return true;
     }
@@ -6222,7 +6257,8 @@ typedef struct _group_bulk_load_response__isset
           target_address(false),
           status(false),
           download_progress(false),
-          is_bulk_load_context_cleaned(false)
+          is_bulk_load_context_cleaned(false),
+          istatus(false)
     {
     }
     bool pid : 1;
@@ -6231,6 +6267,7 @@ typedef struct _group_bulk_load_response__isset
     bool status : 1;
     bool download_progress : 1;
     bool is_bulk_load_context_cleaned : 1;
+    bool istatus : 1;
 } _group_bulk_load_response__isset;
 
 class group_bulk_load_response
@@ -6241,7 +6278,9 @@ public:
     group_bulk_load_response &operator=(const group_bulk_load_response &);
     group_bulk_load_response &operator=(group_bulk_load_response &&);
     group_bulk_load_response()
-        : status((::dsn::bulk_load_status::type)0), is_bulk_load_context_cleaned(0)
+        : status((::dsn::bulk_load_status::type)0),
+          is_bulk_load_context_cleaned(0),
+          istatus((ingestion_status::type)0)
     {
     }
 
@@ -6252,6 +6291,7 @@ public:
     ::dsn::bulk_load_status::type status;
     partition_download_progress download_progress;
     bool is_bulk_load_context_cleaned;
+    ingestion_status::type istatus;
 
     _group_bulk_load_response__isset __isset;
 
@@ -6266,6 +6306,8 @@ public:
     void __set_download_progress(const partition_download_progress &val);
 
     void __set_is_bulk_load_context_cleaned(const bool val);
+
+    void __set_istatus(const ingestion_status::type val);
 
     bool operator==(const group_bulk_load_response &rhs) const
     {
@@ -6285,6 +6327,10 @@ public:
             return false;
         else if (__isset.is_bulk_load_context_cleaned &&
                  !(is_bulk_load_context_cleaned == rhs.is_bulk_load_context_cleaned))
+            return false;
+        if (__isset.istatus != rhs.__isset.istatus)
+            return false;
+        else if (__isset.istatus && !(istatus == rhs.istatus))
             return false;
         return true;
     }

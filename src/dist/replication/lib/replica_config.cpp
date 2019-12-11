@@ -786,6 +786,11 @@ bool replica::update_local_configuration(const replica_configuration &config,
             _primary_states.cleanup(old_ballot != config.ballot);
             // TODO(heyuchen): consider cleanup bulk load
             _bulk_load_context.cleanup();
+            if (_partition_version.load() == -1) {
+                ddebug_replica("recover write");
+                _partition_version.store(_app_info.partition_count - 1);
+                _app->set_partition_version(_app_info.partition_count - 1);
+            }
             // here we use wheather ballot changes and wheather disconnecting with meta to
             // distinguish different case above mentioned
             if (old_ballot == config.ballot && _stub->is_connected()) {
@@ -806,6 +811,11 @@ bool replica::update_local_configuration(const replica_configuration &config,
             clear_cold_backup_state();
             handle_bulk_load_error();
             _bulk_load_context.cleanup();
+            if (_partition_version.load() == -1) {
+                ddebug_replica("recover write");
+                _partition_version.store(_app_info.partition_count - 1);
+                _app->set_partition_version(_app_info.partition_count - 1);
+            }
             break;
         case partition_status::PS_POTENTIAL_SECONDARY:
             dassert(false, "invalid execution path");
@@ -818,6 +828,11 @@ bool replica::update_local_configuration(const replica_configuration &config,
         cleanup_preparing_mutations(false);
         // TODO(heyuchen): consider cleanup bulk load
         _bulk_load_context.cleanup();
+        if (_partition_version.load() == -1) {
+            ddebug_replica("recover write");
+            _partition_version.store(_app_info.partition_count - 1);
+            _app->set_partition_version(_app_info.partition_count - 1);
+        }
         if (config.status != partition_status::PS_SECONDARY) {
             // if primary change the ballot, secondary will update ballot from A to
             // A+1, we don't need clear cold backup context when this case

@@ -102,8 +102,12 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
 
+    group_ingestion_status.erase(group_ingestion_status.begin(), group_ingestion_status.end());
+
     group_bulk_load_context_flag.erase(group_bulk_load_context_flag.begin(),
                                        group_bulk_load_context_flag.end());
+
+    is_ingestion_commit = false;
 }
 
 bool primary_context::is_cleaned()
@@ -183,6 +187,9 @@ void primary_context::set_node_bulk_load_context(
     if (resp->__isset.download_progress && update_progress) {
         group_download_progress[node] = resp->download_progress;
     }
+    if (resp->__isset.istatus) {
+        group_ingestion_status[node] = resp->istatus;
+    }
     if (resp->__isset.is_bulk_load_context_cleaned) {
         group_bulk_load_context_flag[node] = resp->is_bulk_load_context_cleaned;
     }
@@ -192,6 +199,7 @@ void primary_context::reset_node_bulk_load_context(const rpc_address &node,
                                                    const gpid &pid,
                                                    bulk_load_status::type status)
 {
+    // TODO(heyuchen): consider what status should reset group_ingestion_status
     bool reset_progress =
         (status == bulk_load_status::type::BLS_DOWNLOADING ||
          status == bulk_load_status::type::BLS_DOWNLOADED ||

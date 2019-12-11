@@ -84,6 +84,9 @@ private:
     void handle_app_bulk_load_downloaded(const bulk_load_response &response,
                                          const rpc_address &primary_addr);
 
+    void handle_app_bulk_load_ingestion(const bulk_load_response &response,
+                                        const rpc_address &primary_addr);
+
     // helper function for on_partition_bulk_load_reply
     // hanlde situation when response.error is ERR_OK during failed status or finish status
     void handle_app_bulk_load_cleanup(const bulk_load_response &response,
