@@ -61,12 +61,19 @@ public:
         return ERR_NOT_IMPLEMENTED;
     }
     int on_request(message_ex *request) override { return 0; }
-    std::string query_compact_state() const { return ""; };
+    std::string query_compact_state() const { return ""; }
 
     // we mock the followings
     void update_app_envs(const std::map<std::string, std::string> &envs) override { _envs = envs; }
     void query_app_envs(std::map<std::string, std::string> &out) override { out = _envs; }
     decree last_durable_decree() const override { return 0; }
+
+    void set_partition_version(int32_t partition_version) {}
+    void set_ingestion_status(dsn::replication::ingestion_status::type status) {}
+    dsn::replication::ingestion_status::type get_ingestion_status() const override
+    {
+        return dsn::replication::ingestion_status::IS_INVALID;
+    }
 
 private:
     std::map<std::string, std::string> _envs;

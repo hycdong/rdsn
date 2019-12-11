@@ -90,6 +90,8 @@ public:
 
     virtual void query_app_envs(/*out*/ std::map<std::string, std::string> &envs) {}
 
+    ingestion_status::type get_ingestion_status() const override { return _ingestion_status; }
+
 private:
     void recover();
     void recover(const std::string &name, int64_t version);
@@ -104,6 +106,7 @@ private:
     bool _test_file_learning;
 
     int64_t _last_durable_decree;
+    ingestion_status::type _ingestion_status;
 };
 }
 }

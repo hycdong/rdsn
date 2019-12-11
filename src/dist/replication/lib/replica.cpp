@@ -62,6 +62,7 @@ replica::replica(
     _options = &stub->options();
     init_state();
     _config.pid = gpid;
+    _partition_version = app.partition_count - 1;
     reset_bulk_load_download_progress();
 
     std::string counter_str = fmt::format("private.log.size(MB)@{}", gpid);
@@ -162,6 +163,10 @@ void replica::on_client_read(task_code code, dsn::message_ex *request)
             response_client_read(request, ERR_INVALID_STATE);
             return;
         }
+    }
+
+    // TODO(heyuchen): see rocksdb code to figure out if should reject read while ingestion
+    if (_partition_version.load() == -1) {
     }
 
     dassert(_app != nullptr, "");

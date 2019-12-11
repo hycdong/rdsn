@@ -66,17 +66,19 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
     }
 
     // bulk load ingestion request requires that all secondaries should be alive
-    if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD &&
-        static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
-            _primary_states.membership.max_replica_count) {
-        response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
-        return;
+    //    if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD &&
+    //        static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
+    //            _primary_states.membership.max_replica_count) {
+    //        response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
+    //        return;
+    //    }
+
+    if (_partition_version.load() == -1) {
+        // TODO(heyuchen): reject write - ERR_BUSY
     }
 
     if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
         ddebug_replica("hyc: receive bulk load request");
-        // TODO(heyuchen):
-        // add count restriction, return error_busy
 
         // bulk load ingestion request requires that all secondaries should be alive
         if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
@@ -84,6 +86,8 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
             response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
             return;
         }
+        _partition_version.store(-1);
+        _app->set_partition_version(-1);
     }
 
     if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
@@ -495,10 +499,10 @@ void replica::on_append_log_completed(mutation_ptr &mu, error_code err, size_t s
 
     // TODO(heyuchen): dinfo
     ddebug("%s: append shared log completed for mutation %s, size = %u, err = %s",
-          name(),
-          mu->name(),
-          size,
-          err.to_string());
+           name(),
+           mu->name(),
+           size,
+           err.to_string());
 
     if (err == ERR_OK) {
         mu->set_logged();
@@ -583,13 +587,13 @@ void replica::on_prepare_reply(std::pair<mutation_ptr, partition_status::type> p
     if (resp.err == ERR_OK) {
         // TODO(heyuchen): dinfo
         ddebug("%s: mutation %s on_prepare_reply from %s, appro_data_bytes = %d, "
-              "target_status = %s, err = %s",
-              name(),
-              mu->name(),
-              node.to_string(),
-              mu->appro_data_bytes(),
-              enum_to_string(target_status),
-              resp.err.to_string());
+               "target_status = %s, err = %s",
+               name(),
+               mu->name(),
+               node.to_string(),
+               mu->appro_data_bytes(),
+               enum_to_string(target_status),
+               resp.err.to_string());
     } else {
         derror("%s: mutation %s on_prepare_reply from %s, appro_data_bytes = %d, "
                "target_status = %s, err = %s",

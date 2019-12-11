@@ -748,6 +748,14 @@ struct ddd_diagnose_response
 }
 
 // bulk load
+enum ingestion_status
+{
+    IS_INVALID,
+    IS_RUNNING,
+    IS_SUCCEED,
+    IS_FAILED
+}
+
 struct bulk_load_metadata
 {
     1:list<file_meta>   files;
@@ -813,7 +821,9 @@ struct bulk_load_response
     5:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
     6:optional i32                  total_download_progress;
     7:optional bool                 is_group_bulk_load_context_cleaned;
-    8:optional bulk_load_metadata    metadata;
+    8:optional bulk_load_metadata   metadata;
+    9:optional map<dsn.rpc_address, ingestion_status>               group_ingestion_status;
+    10:optional bool                is_group_ingestion_finished;
 }
 
 struct group_bulk_load_request
@@ -836,6 +846,7 @@ struct group_bulk_load_response
     // used when secondary downloading or downloaded
     5:optional partition_download_progress  download_progress;
     6:optional bool                         is_bulk_load_context_cleaned;
+    7:optional ingestion_status             istatus;
 }
 
 struct ingestion_request

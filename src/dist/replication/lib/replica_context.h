@@ -66,7 +66,8 @@ public:
         : next_learning_version(0),
           write_queue(gpid, max_concurrent_2pc_count, batch_write_disabled),
           last_prepare_decree_on_new_primary(0),
-          last_prepare_ts_ms(dsn_now_ms())
+          last_prepare_ts_ms(dsn_now_ms()),
+          is_ingestion_commit(false)
     {
     }
 
@@ -128,8 +129,12 @@ public:
     node_tasks group_bulk_load_pending_replies;
     // bulk load download progress
     std::unordered_map<rpc_address, partition_download_progress> group_download_progress;
+    // bulk load ingestion status
+    std::unordered_map<rpc_address, ingestion_status::type> group_ingestion_status;
     // bulk load cleanup flag
     std::unordered_map<rpc_address, bool> group_bulk_load_context_flag;
+
+    bool is_ingestion_commit;
 };
 
 class secondary_context
