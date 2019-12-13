@@ -570,6 +570,15 @@ void bulk_load_service::handle_app_bulk_load_cleanup(const bulk_load_response &r
         return;
     }
 
+    if (_partitions_cleaned_up[pid]) {
+        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), current partition "
+                "has already be cleaned up",
+                primary_addr.to_string(),
+                response.app_name,
+                pid.to_string());
+        return;
+    }
+
     bool all_clean_up = response.is_group_bulk_load_context_cleaned;
     ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
              "group_bulk_load_context_cleaned = {}",

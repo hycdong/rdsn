@@ -574,7 +574,7 @@ private:
     std::atomic<int32_t> _download_progress;
     // file_name -> downloading task
     std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
-    uint64_t _bulk_load_start_time_ns = 0;
+    uint64_t _bulk_load_start_time_ns;
 };
 
 //---------------inline impl----------------------------------------------------------------
