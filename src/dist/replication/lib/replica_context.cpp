@@ -199,10 +199,12 @@ void primary_context::reset_node_bulk_load_context(const rpc_address &node,
                                                    const gpid &pid,
                                                    bulk_load_status::type status)
 {
-    // TODO(heyuchen): consider what status should reset group_ingestion_status
     bool reset_progress =
         (status == bulk_load_status::type::BLS_DOWNLOADING ||
          status == bulk_load_status::type::BLS_DOWNLOADED ||
+         status == bulk_load_status::type::BLS_FINISH || status == bulk_load_status::BLS_FAILED);
+    bool reset_ingestion =
+        (status == bulk_load_status::BLS_INGESTING ||
          status == bulk_load_status::type::BLS_FINISH || status == bulk_load_status::BLS_FAILED);
     bool reset_flag = (status == bulk_load_status::type::BLS_FINISH ||
                        status == bulk_load_status::type::BLS_FAILED);
@@ -212,6 +214,9 @@ void primary_context::reset_node_bulk_load_context(const rpc_address &node,
         download_progress.progress = 0;
         download_progress.status = ERR_OK;
         group_download_progress[node] = download_progress;
+    }
+    if (reset_ingestion) {
+        group_ingestion_status[node] = ingestion_status::IS_INVALID;
     }
     if (reset_flag) {
         group_bulk_load_context_flag[node] = false;

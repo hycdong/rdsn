@@ -527,6 +527,19 @@ public:
         }
     }
 
+    void mock_response_ingestion_status(ingestion_status::type secondary_istatus, int32_t pidx = 0)
+    {
+        create_basic_response(ERR_OK, bulk_load_status::BLS_INGESTING, pidx);
+
+        _resp.__isset.group_ingestion_status = true;
+        _resp.group_ingestion_status[_primary] = ingestion_status::IS_SUCCEED;
+        _resp.group_ingestion_status[rpc_address("127.0.0.1", 10085)] =
+            ingestion_status::IS_SUCCEED;
+        _resp.group_ingestion_status[rpc_address("127.0.0.1", 10087)] = secondary_istatus;
+
+        _resp.__set_is_group_ingestion_finished(secondary_istatus == ingestion_status::IS_SUCCEED);
+    }
+
     void mock_bulk_load_metadata()
     {
         file_meta f_meta;
@@ -641,6 +654,40 @@ TEST_F(bulk_load_process_test, normal_ingesting)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_INGESTING);
 }
 
+TEST_F(bulk_load_process_test, ingestion_running)
+{
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
+    mock_response_ingestion_status(ingestion_status::IS_RUNNING);
+    auto response = _resp;
+    on_partition_bulk_load_reply(ERR_OK, BALLOT, response, gpid(_app_id, _pidx), _primary);
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_INGESTING);
+}
+
+TEST_F(bulk_load_process_test, ingestion_error)
+{
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
+    mock_response_ingestion_status(ingestion_status::IS_FAILED);
+    auto response = _resp;
+    on_partition_bulk_load_reply(ERR_OK, BALLOT, response, gpid(_app_id, _pidx), _primary);
+    wait_all();
+    ASSERT_TRUE(app_is_bulk_loading(APP_NAME));
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
+    ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);
+}
+
+TEST_F(bulk_load_process_test, normal_finish)
+{
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
+    for (int i = 0; i < _partition_count; ++i) {
+        mock_response_ingestion_status(ingestion_status::IS_SUCCEED, i);
+        auto response = _resp;
+        on_partition_bulk_load_reply(ERR_OK, BALLOT, response, _resp.pid, _primary);
+    }
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FINISH);
+}
+
 TEST_F(bulk_load_process_test, half_cleanup)
 {
     mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_FAILED);
@@ -729,34 +776,21 @@ TEST_F(bulk_load_process_test, ingest_rpc_error)
 
 TEST_F(bulk_load_process_test, ingest_empty_write_error)
 {
+    fail::cfg("meta_bulk_load_partition_ingestion", "return()");
     mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
-    create_ingest_response(ERR_OK, 11);
+    create_ingest_response(ERR_TRY_AGAIN, 11);
 
     on_partition_ingestion_reply(ERR_OK, _ingest_resp, gpid(_app_id, _pidx));
     wait_all();
 
     ASSERT_TRUE(app_is_bulk_loading(APP_NAME));
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_INGESTING);
 }
 
-TEST_F(bulk_load_process_test, ingest_checksum_error)
+TEST_F(bulk_load_process_test, ingest_wrong)
 {
     mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
-    create_ingest_response(ERR_WRONG_CHECKSUM, 0);
-
-    on_partition_ingestion_reply(ERR_OK, _ingest_resp, gpid(_app_id, _pidx));
-    wait_all();
-
-    ASSERT_TRUE(app_is_bulk_loading(APP_NAME));
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
-    ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);
-}
-
-TEST_F(bulk_load_process_test, ingest_error)
-{
-    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
-    create_ingest_response(ERR_INGESTION_FAILED, 4);
+    create_ingest_response(ERR_OK, 1);
 
     on_partition_ingestion_reply(ERR_OK, _ingest_resp, gpid(_app_id, _pidx));
     wait_all();
@@ -777,8 +811,7 @@ TEST_F(bulk_load_process_test, ingest_succeed)
     wait_all();
 
     ASSERT_TRUE(app_is_bulk_loading(APP_NAME));
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FINISH);
-    ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_INGESTING);
 }
 
 class bulk_load_failover_test : public bulk_load_service_test

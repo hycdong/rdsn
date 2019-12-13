@@ -68,15 +68,23 @@ public:
     void query_app_envs(std::map<std::string, std::string> &out) override { out = _envs; }
     decree last_durable_decree() const override { return 0; }
 
-    void set_partition_version(int32_t partition_version) {}
-    void set_ingestion_status(dsn::replication::ingestion_status::type status) {}
+    void set_partition_version(int32_t partition_version)
+    {
+        _partition_version.store(partition_version);
+    }
+    void set_ingestion_status(dsn::replication::ingestion_status::type status)
+    {
+        _ingestion_status = status;
+    }
     dsn::replication::ingestion_status::type get_ingestion_status() const override
     {
-        return dsn::replication::ingestion_status::IS_INVALID;
+        return _ingestion_status;
     }
 
 private:
     std::map<std::string, std::string> _envs;
+    std::atomic<int32_t> _partition_version;
+    ingestion_status::type _ingestion_status;
 };
 
 class mock_replica : public replica
@@ -110,6 +118,7 @@ inline std::unique_ptr<mock_replica> create_mock_replica(replica_stub *stub,
     app_info app_info;
     app_info.app_type = "replica";
     app_info.app_name = "temp";
+    app_info.partition_count = 4;
 
     return make_unique<mock_replica>(stub, gpid, app_info, dir);
 }

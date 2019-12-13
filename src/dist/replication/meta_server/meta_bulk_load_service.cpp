@@ -1252,9 +1252,7 @@ void bulk_load_service::try_to_continue_app_bulk_load(
 /// 1. no children
 ///     1 - downloading
 ///         create all partition with downloading and send bulk load request
-///     2 - donwloaded/ingesting/finish + no children
-///         remove dir and reset flag
-///     3 - failed + no children
+///     2 - donwloaded/ingesting/finish/failed + no children
 ///         remove dir and reset flag
 /// 2. some partition has same status with app status, some not
 ///     1 - app:downloading + not existed

@@ -786,6 +786,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
             _primary_states.cleanup(old_ballot != config.ballot);
             // TODO(heyuchen): consider cleanup bulk load
             _bulk_load_context.cleanup();
+            // TODO(heyuchen): consider reset partition_version
             if (_partition_version.load() == -1) {
                 ddebug_replica("recover write");
                 _partition_version.store(_app_info.partition_count - 1);
@@ -810,7 +811,9 @@ bool replica::update_local_configuration(const replica_configuration &config,
             set_backup_context_cancel();
             clear_cold_backup_state();
             handle_bulk_load_error();
+            // TODO(heyuchen): consider cleanup bulk load
             _bulk_load_context.cleanup();
+            // TODO(heyuchen): consider reset partition_version
             if (_partition_version.load() == -1) {
                 ddebug_replica("recover write");
                 _partition_version.store(_app_info.partition_count - 1);
@@ -828,6 +831,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
         cleanup_preparing_mutations(false);
         // TODO(heyuchen): consider cleanup bulk load
         _bulk_load_context.cleanup();
+        // TODO(heyuchen): consider reset partition_version
         if (_partition_version.load() == -1) {
             ddebug_replica("recover write");
             _partition_version.store(_app_info.partition_count - 1);
