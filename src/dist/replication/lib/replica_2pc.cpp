@@ -75,6 +75,8 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
 
     if (_partition_version.load() == -1) {
         // TODO(heyuchen): reject write - ERR_BUSY
+        response_client_write(request, ERR_BUSY);
+        return;
     }
 
     if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
