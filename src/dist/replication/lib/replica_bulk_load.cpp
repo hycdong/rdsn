@@ -833,6 +833,9 @@ void replica::handle_bulk_load_succeed()
     //        init_prepare(mu, false);
     //    }
 
+    // generate checkpoint
+    init_checkpoint(true);
+
     // TODO(heyuchen): consider when reset
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
 
