@@ -106,6 +106,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
             // reset bulk load download progress
             reset_bulk_load_download_progress();
             set_bulk_load_status(bulk_load_status::BLS_INGESTING);
+            _stub->_counter_bulk_load_ingestion_count->increment();
             _primary_states.is_ingestion_commit = false;
         }
         if (request.app_bulk_load_status == bulk_load_status::BLS_INGESTING) {
@@ -305,6 +306,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
             // reset bulk load download progress
             reset_bulk_load_download_progress();
             set_bulk_load_status(bulk_load_status::BLS_INGESTING);
+            _stub->_counter_bulk_load_ingestion_count->increment();
         }
         if (request.meta_app_bulk_load_status == bulk_load_status::BLS_INGESTING) {
             response.__set_istatus(_app->get_ingestion_status());
@@ -930,6 +932,7 @@ void replica::update_group_ingestion_status(bulk_load_response &response)
         ddebug_replica("finish ingestion, recover write");
         _partition_version.store(_app_info.partition_count - 1);
         _app->set_partition_version(_app_info.partition_count - 1);
+        _bulk_load_context._bulk_load_start_time_ns = 0;
     }
 }
 

@@ -548,7 +548,8 @@ public:
           _cur_download_size(0),
           _max_download_size(0),
           _download_progress(0),
-          _bulk_load_start_time_ns(0)
+          _bulk_load_start_time_ns(0),
+          _bulk_load_ingestion_start_time_ns(0)
     {
     }
 
@@ -560,6 +561,12 @@ public:
     {
         return _bulk_load_start_time_ns > 0 ? (dsn_now_ns() - _bulk_load_start_time_ns) / 1000000
                                             : 0;
+    }
+    uint64_t ingestion_duration_ms() const
+    {
+        return _bulk_load_ingestion_start_time_ns > 0
+                   ? (dsn_now_ns() - _bulk_load_ingestion_start_time_ns) / 1000000
+                   : 0;
     }
 
 private:
@@ -575,6 +582,7 @@ private:
     // file_name -> downloading task
     std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
     uint64_t _bulk_load_start_time_ns;
+    uint64_t _bulk_load_ingestion_start_time_ns;
 };
 
 //---------------inline impl----------------------------------------------------------------

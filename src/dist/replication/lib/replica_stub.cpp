@@ -297,6 +297,10 @@ void replica_stub::install_perf_counters()
                                                           "bulk.load.downloading.count",
                                                           COUNTER_TYPE_VOLATILE_NUMBER,
                                                           "current bulk load downloading count");
+    _counter_bulk_load_ingestion_count.init_app_counter("eon.replica_stub",
+                                                        "bulk.load.ingestion.count",
+                                                        COUNTER_TYPE_VOLATILE_NUMBER,
+                                                        "current bulk load ingestion count");
     _counter_bulk_load_finish_count.init_app_counter("eon.replica_stub",
                                                      "bulk.load.finish.count",
                                                      COUNTER_TYPE_VOLATILE_NUMBER,
@@ -324,6 +328,11 @@ void replica_stub::install_perf_counters()
                                                                "bulk.load.max.download.file.size",
                                                                COUNTER_TYPE_VOLATILE_NUMBER,
                                                                "bulk load max download file size");
+    _counter_bulk_load_max_ingestion_time_ms.init_app_counter(
+        "eon.replica_stub",
+        "bulk.load.max.ingestion.duration.time.ms",
+        COUNTER_TYPE_NUMBER,
+        "bulk load max duration time(ms)");
     _counter_bulk_load_max_duration_time_ms.init_app_counter("eon.replica_stub",
                                                              "bulk.load.max.duration.time.ms",
                                                              COUNTER_TYPE_NUMBER,
@@ -1610,6 +1619,7 @@ void replica_stub::on_gc()
     uint64_t cold_backup_max_upload_file_size = 0;
     uint64_t bulk_load_running_count = 0;
     uint64_t bulk_load_max_download_file_size = 0;
+    uint64_t bulk_load_max_ingestion_time_ms = 0;
     uint64_t bulk_load_max_duration_time_ms = 0;
     for (auto &kv : rs) {
         replica_ptr &rep = kv.second.rep;
@@ -1633,6 +1643,9 @@ void replica_stub::on_gc()
                 bulk_load_running_count++;
                 bulk_load_max_download_file_size = std::max(bulk_load_max_download_file_size,
                                                             rep->get_bulk_load_max_download_size());
+                bulk_load_max_ingestion_time_ms =
+                    std::max(bulk_load_max_ingestion_time_ms,
+                             rep->_bulk_load_context.ingestion_duration_ms());
                 bulk_load_max_duration_time_ms =
                     std::max(bulk_load_max_duration_time_ms, rep->_bulk_load_context.duration_ms());
             }
@@ -1647,6 +1660,7 @@ void replica_stub::on_gc()
     _counter_cold_backup_max_upload_file_size->set(cold_backup_max_upload_file_size);
     _counter_bulk_load_running_count->set(bulk_load_running_count);
     _counter_bulk_load_max_download_file_size->set(bulk_load_max_download_file_size);
+    _counter_bulk_load_max_ingestion_time_ms->set(bulk_load_max_ingestion_time_ms);
     _counter_bulk_load_max_duration_time_ms->set(bulk_load_max_duration_time_ms);
 
     ddebug("finish to garbage collection, time_used_ns = %" PRIu64, dsn_now_ns() - start);

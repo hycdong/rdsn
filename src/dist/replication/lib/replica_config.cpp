@@ -784,14 +784,14 @@ bool replica::update_local_configuration(const replica_configuration &config,
             break;
         case partition_status::PS_INACTIVE:
             _primary_states.cleanup(old_ballot != config.ballot);
-            // TODO(heyuchen): consider cleanup bulk load
-            _bulk_load_context.cleanup();
             // TODO(heyuchen): consider reset partition_version
             if (_partition_version.load() == -1) {
                 ddebug_replica("recover write");
                 _partition_version.store(_app_info.partition_count - 1);
                 _app->set_partition_version(_app_info.partition_count - 1);
             }
+            // TODO(heyuchen): consider cleanup bulk load
+            _bulk_load_context.cleanup();
             // here we use wheather ballot changes and wheather disconnecting with meta to
             // distinguish different case above mentioned
             if (old_ballot == config.ballot && _stub->is_connected()) {
@@ -810,15 +810,16 @@ bool replica::update_local_configuration(const replica_configuration &config,
             // upload
             set_backup_context_cancel();
             clear_cold_backup_state();
+            // TODO(heyuchen): consider should hanld bulk load error
             handle_bulk_load_error();
-            // TODO(heyuchen): consider cleanup bulk load
-            _bulk_load_context.cleanup();
             // TODO(heyuchen): consider reset partition_version
             if (_partition_version.load() == -1) {
                 ddebug_replica("recover write");
                 _partition_version.store(_app_info.partition_count - 1);
                 _app->set_partition_version(_app_info.partition_count - 1);
             }
+            // TODO(heyuchen): consider cleanup bulk load
+            _bulk_load_context.cleanup();
             break;
         case partition_status::PS_POTENTIAL_SECONDARY:
             dassert(false, "invalid execution path");

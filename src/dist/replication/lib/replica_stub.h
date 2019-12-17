@@ -336,12 +336,14 @@ private:
 
     perf_counter_wrapper _counter_bulk_load_running_count;
     perf_counter_wrapper _counter_bulk_load_downloading_count;
+    perf_counter_wrapper _counter_bulk_load_ingestion_count;
     perf_counter_wrapper _counter_bulk_load_finish_count;
     perf_counter_wrapper _counter_bulk_load_failed_count;
     perf_counter_wrapper _counter_bulk_load_recent_download_file_succ_count;
     perf_counter_wrapper _counter_bulk_load_recent_download_file_fail_count;
     perf_counter_wrapper _counter_bulk_load_recent_download_file_size;
     perf_counter_wrapper _counter_bulk_load_max_download_file_size;
+    perf_counter_wrapper _counter_bulk_load_max_ingestion_time_ms;
     perf_counter_wrapper _counter_bulk_load_max_duration_time_ms;
 
     dsn::task_tracker _tracker;

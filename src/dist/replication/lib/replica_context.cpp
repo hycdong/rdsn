@@ -1375,6 +1375,7 @@ void bulk_load_context::cleanup()
     _metadata.files.clear();
     _metadata.file_total_size = 0;
     _bulk_load_start_time_ns = 0;
+    _bulk_load_ingestion_start_time_ns = 0;
 }
 
 bool bulk_load_context::is_cleanup()

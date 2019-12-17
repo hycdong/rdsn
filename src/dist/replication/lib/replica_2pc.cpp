@@ -90,6 +90,7 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
         }
         _partition_version.store(-1);
         _app->set_partition_version(-1);
+        _bulk_load_context._bulk_load_ingestion_start_time_ns = dsn_now_ns();
     }
 
     if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
