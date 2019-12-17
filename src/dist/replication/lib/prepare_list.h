@@ -61,8 +61,10 @@ public:
     //
     // for two-phase commit
     //
-    error_code prepare(mutation_ptr &mu, partition_status::type status); // unordered prepare
-    void commit(decree decree, commit_type ct);                          // ordered commit
+    error_code prepare(mutation_ptr &mu,
+                       partition_status::type status,
+                       bool is_pop = false);    // unordered prepare
+    void commit(decree decree, commit_type ct); // ordered commit
 
 private:
     decree _last_committed_decree;

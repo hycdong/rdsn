@@ -60,7 +60,7 @@ void prepare_list::truncate(decree init_decree)
     _last_committed_decree = init_decree;
 }
 
-error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status)
+error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status, bool is_pop)
 {
     decree d = mu->data.header.decree;
     dcheck_gt_replica(d, last_committed_decree());
@@ -72,6 +72,11 @@ error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status
         while (d - min_decree() >= capacity() && last_committed_decree() > min_decree()) {
             pop_min();
         }
+        if (is_pop) {
+            while (last_committed_decree() > min_decree()) {
+                pop_min();
+            }
+        }
         return mutation_cache::put(mu);
 
     case partition_status::PS_SECONDARY:
@@ -81,6 +86,11 @@ error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status
         // pop committed mutations if buffer is full
         while (d - min_decree() >= capacity() && last_committed_decree() > min_decree()) {
             pop_min();
+        }
+        if (is_pop) {
+            while (last_committed_decree() > min_decree()) {
+                pop_min();
+            }
         }
         err = mutation_cache::put(mu);
         dassert_replica(err == ERR_OK, "mutation_cache::put failed, err = {}", err);
@@ -113,6 +123,11 @@ error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status
         // pop committed mutations if buffer is full
         while (d - min_decree() >= capacity() && last_committed_decree() > min_decree()) {
             pop_min();
+        }
+        if (is_pop) {
+            while (last_committed_decree() > min_decree()) {
+                pop_min();
+            }
         }
         err = mutation_cache::put(mu);
         dassert_replica(err == ERR_OK, "mutation_cache::put failed, err = {}", err);

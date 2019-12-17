@@ -134,7 +134,7 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
     }
 }
 
-void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
+void replica::init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_list)
 {
     dassert(partition_status::PS_PRIMARY == status(),
             "invalid partition_status, status = %s",
@@ -206,7 +206,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
             last_committed_decree());
 
     // local prepare
-    err = _prepare_list->prepare(mu, partition_status::PS_PRIMARY);
+    err = _prepare_list->prepare(mu, partition_status::PS_PRIMARY, pop_list);
     if (err != ERR_OK) {
         goto ErrOut;
     }
@@ -217,8 +217,11 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     for (auto it = _primary_states.membership.secondaries.begin();
          it != _primary_states.membership.secondaries.end();
          ++it) {
-        send_prepare_message(
-            *it, partition_status::PS_SECONDARY, mu, _options->prepare_timeout_ms_for_secondaries);
+        send_prepare_message(*it,
+                             partition_status::PS_SECONDARY,
+                             mu,
+                             _options->prepare_timeout_ms_for_secondaries,
+                             pop_list);
     }
 
     count = 0;
@@ -229,6 +232,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
                                  partition_status::PS_POTENTIAL_SECONDARY,
                                  mu,
                                  _options->prepare_timeout_ms_for_potential_secondaries,
+                                 pop_list,
                                  it->second.signature);
             count++;
         }
@@ -284,6 +288,7 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
                                    partition_status::type status,
                                    const mutation_ptr &mu,
                                    int timeout_milliseconds,
+                                   bool pop_list,
                                    int64_t learn_signature)
 {
     dsn::message_ex *msg = dsn::message_ex::create_request(
@@ -681,8 +686,12 @@ void replica::on_prepare_reply(std::pair<mutation_ptr, partition_status::type> p
                         if (status() == partition_status::PS_PRIMARY &&
                             get_ballot() == mu->data.header.ballot &&
                             mu->get_decree() > last_committed_decree()) {
-                            send_prepare_message(
-                                node, target_status, mu, prepare_timeout_ms, learn_signature);
+                            send_prepare_message(node,
+                                                 target_status,
+                                                 mu,
+                                                 prepare_timeout_ms,
+                                                 false,
+                                                 learn_signature);
                         }
                     },
                     get_gpid().thread_hash(),

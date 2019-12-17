@@ -115,7 +115,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
                 // gurantee secondary commit ingestion request
                 mutation_ptr mu = new_mutation(invalid_decree);
                 mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
-                init_prepare(mu, false);
+                init_prepare(mu, false, true);
                 _primary_states.is_ingestion_commit = true;
             }
             // primary set ingestion status in response
