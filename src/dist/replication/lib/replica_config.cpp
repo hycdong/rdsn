@@ -811,7 +811,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
             set_backup_context_cancel();
             clear_cold_backup_state();
             // TODO(heyuchen): consider should hanld bulk load error
-            handle_bulk_load_error();
+            // handle_bulk_load_error();
             // TODO(heyuchen): consider reset partition_version
             if (_partition_version.load() == -1) {
                 ddebug_replica("recover write");
