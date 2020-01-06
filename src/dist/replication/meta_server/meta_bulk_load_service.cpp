@@ -16,6 +16,7 @@ bulk_load_service::bulk_load_service(meta_service *meta_svc, const std::string &
     _state = _meta_svc->get_server_state();
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::initialize_bulk_load_service()
 {
     task_tracker tracker;
@@ -29,6 +30,7 @@ void bulk_load_service::initialize_bulk_load_service()
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -74,6 +76,7 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
     start_bulk_load_on_remote_storage(std::move(app), std::move(rpc));
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 // - ERR_OK: pass params check
 // - ERR_INVALID_PARAMETERS: wrong file_provider type
 // - ERR_FILE_OPERATION_FAILED: file_provider error
@@ -174,6 +177,7 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
     return ERR_OK;
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::start_bulk_load_on_remote_storage(std::shared_ptr<app_state> app,
                                                           start_bulk_load_rpc rpc)
 {
@@ -196,6 +200,7 @@ void bulk_load_service::start_bulk_load_on_remote_storage(std::shared_ptr<app_st
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::create_app_bulk_load_dir_with_rpc(std::shared_ptr<app_state> app,
                                                           start_bulk_load_rpc rpc)
 {
@@ -228,6 +233,7 @@ void bulk_load_service::create_app_bulk_load_dir_with_rpc(std::shared_ptr<app_st
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::create_partition_bulk_load_dir_with_rpc(const std::string &app_name,
                                                                 const gpid &pid,
                                                                 const int32_t partition_count,
@@ -258,6 +264,7 @@ void bulk_load_service::create_partition_bulk_load_dir_with_rpc(const std::strin
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::partition_bulk_load(const gpid &pid)
 {
     FAIL_POINT_INJECT_F("meta_bulk_load_partition_bulk_load", [](dsn::string_view) {});
@@ -283,7 +290,7 @@ void bulk_load_service::partition_bulk_load(const gpid &pid)
     if (primary_addr.is_invalid()) {
         dwarn_f(
             "app({}) partition({}) primary is invalid, try it later", app_name, pid.to_string());
-        tasking::enqueue(LPC_META_CALLBACK,
+        tasking::enqueue(LPC_META_STATE_NORMAL,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_bulk_load, this, pid),
                          0,
@@ -335,6 +342,7 @@ void bulk_load_service::partition_bulk_load(const gpid &pid)
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                                                      ballot req_ballot,
                                                      bulk_load_response &&response,
@@ -425,7 +433,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
     }
 
     if (is_app_bulk_loading(pid.get_app_id())) {
-        tasking::enqueue(LPC_META_CALLBACK,
+        tasking::enqueue(LPC_META_STATE_NORMAL,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_bulk_load, this, pid),
                          0,
@@ -433,12 +441,14 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::rollback_to_downloading(int32_t app_id)
 {
     zauto_write_lock l(_lock);
     update_app_bulk_load_status_unlock(app_id, bulk_load_status::type::BLS_DOWNLOADING);
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_response &response,
                                                          const rpc_address &primary_addr)
 {
@@ -511,6 +521,7 @@ void bulk_load_service::handle_app_bulk_load_downloading(const bulk_load_respons
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::handle_app_bulk_load_ingestion(const bulk_load_response &response,
                                                        const rpc_address &primary_addr)
 {
@@ -555,6 +566,7 @@ void bulk_load_service::handle_app_bulk_load_ingestion(const bulk_load_response 
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::handle_app_bulk_load_cleanup(const bulk_load_response &response,
                                                      const rpc_address &primary_addr)
 {
@@ -615,6 +627,7 @@ void bulk_load_service::handle_app_bulk_load_cleanup(const bulk_load_response &r
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::handle_partition_bulk_load_error(const gpid &pid)
 {
     zauto_write_lock l(_lock);
@@ -624,6 +637,7 @@ void bulk_load_service::handle_partition_bulk_load_error(const gpid &pid)
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 error_code bulk_load_service::check_download_status(const bulk_load_response &response)
 {
     // download_progresses filed is not set
@@ -648,6 +662,7 @@ error_code bulk_load_service::check_download_status(const bulk_load_response &re
     return ERR_OK;
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::update_partition_bulk_load_status(const std::string &app_name,
                                                           const gpid &pid,
                                                           std::string &path,
@@ -704,6 +719,7 @@ void bulk_load_service::update_partition_bulk_load_status(const std::string &app
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::update_app_bulk_load_status_unlock(int32_t app_id,
                                                            bulk_load_status::type new_status)
 {
@@ -755,6 +771,7 @@ void bulk_load_service::update_app_bulk_load_status_unlock(int32_t app_id,
         get_app_bulk_load_path(app_id), std::move(value), std::move(callback));
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::update_partition_bulk_load_metadata(std::string app_name,
                                                             gpid pid,
                                                             bulk_load_metadata metadata)
@@ -776,6 +793,7 @@ void bulk_load_service::update_partition_bulk_load_metadata(std::string app_name
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::remove_app_bulk_load_dir(int32_t app_id, const std::string &app_name)
 {
     std::string bulk_load_path = get_app_bulk_load_path(app_id);
@@ -786,6 +804,7 @@ void bulk_load_service::remove_app_bulk_load_dir(int32_t app_id, const std::stri
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::remove_app_bulk_load_dir(std::shared_ptr<app_state> app,
                                                  bool need_set_app_flag)
 {
@@ -800,6 +819,7 @@ void bulk_load_service::remove_app_bulk_load_dir(std::shared_ptr<app_state> app,
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::update_app_bulk_load_flag(std::shared_ptr<app_state> app,
                                                   bool is_bulk_loading)
 {
@@ -821,6 +841,7 @@ void bulk_load_service::update_app_bulk_load_flag(std::shared_ptr<app_state> app
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::clear_app_bulk_load_states(int32_t app_id, const std::string &app_name)
 {
     zauto_write_lock l(_lock);
@@ -836,6 +857,7 @@ void bulk_load_service::clear_app_bulk_load_states(int32_t app_id, const std::st
     ddebug_f("clear app({}) bulk load context", app_name);
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 template <typename T>
 void bulk_load_service::erase_map_elem_by_id(int32_t app_id, std::unordered_map<gpid, T> &mymap)
 {
@@ -846,6 +868,7 @@ void bulk_load_service::erase_map_elem_by_id(int32_t app_id, std::unordered_map<
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::handle_app_bulk_load_downloaded(const bulk_load_response &response,
                                                         const rpc_address &primary_addr)
 {
@@ -863,6 +886,7 @@ void bulk_load_service::handle_app_bulk_load_downloaded(const bulk_load_response
         response.app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_INGESTING);
 }
 
+// ThreadPool: THREAD_POOL_DEFAULT
 void bulk_load_service::partition_ingestion(const gpid &pid)
 {
     FAIL_POINT_INJECT_F("meta_bulk_load_partition_ingestion", [](dsn::string_view) {});
@@ -923,6 +947,7 @@ void bulk_load_service::partition_ingestion(const gpid &pid)
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 
+// ThreadPool: THREAD_POOL_DEFAULT
 void bulk_load_service::on_partition_ingestion_reply(error_code err,
                                                      ingestion_response &&resp,
                                                      const std::string &app_name,
@@ -934,7 +959,10 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
                  app_name,
                  pid.to_string(),
                  err.to_string());
-        rollback_to_downloading(pid.get_app_id());
+        tasking::enqueue(
+            LPC_META_STATE_NORMAL,
+            _meta_svc->tracker(),
+            std::bind(&bulk_load_service::rollback_to_downloading, this, pid.get_app_id()));
         return;
     }
 
@@ -952,17 +980,6 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         return;
     }
 
-    //    if (resp.err == ERR_OK && resp.rocksdb_error != 0) {
-    //        derror_f(
-    //            "app({}) partition({}) ingestion files failed while empty write, rocksdb error =
-    //            {}",
-    //            app_name,
-    //            pid.to_string(),
-    //            resp.rocksdb_error);
-    //        rollback_to_downloading(pid.get_app_id());
-    //        return;
-    //    }
-
     // TODO(heyuchen): this is uncertain error
     if (resp.err != ERR_OK || resp.rocksdb_error != 0) {
         derror_f("app({}) partition({}) failed to ingestion files, error = {}, rocksdb error = {}",
@@ -970,20 +987,18 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
                  pid.to_string(),
                  resp.err.to_string(),
                  resp.rocksdb_error);
-        handle_partition_bulk_load_error(pid);
+        tasking::enqueue(
+            LPC_META_STATE_NORMAL,
+            _meta_svc->tracker(),
+            std::bind(&bulk_load_service::handle_partition_bulk_load_error, this, pid));
         return;
     }
-
-    //    ddebug_f("app({}) partition({}) ingestion files succeed", app_name, pid.to_string());
-    //    std::string partition_bulk_load_path = get_partition_bulk_load_path(
-    //        get_app_bulk_load_path(pid.get_app_id()), pid.get_partition_index());
-    //    update_partition_bulk_load_status(
-    //        app_name, pid, partition_bulk_load_path, bulk_load_status::BLS_FINISH);
 
     // TODO(heyuchen): consider modify it
     ddebug_f("app({}) partition({}) receive ingestion reply succeed", app_name, pid.to_string());
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -1055,6 +1070,7 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::create_bulk_load_root_dir(error_code &err, task_tracker &tracker)
 {
     blob value = blob();
@@ -1068,7 +1084,7 @@ void bulk_load_service::create_bulk_load_root_dir(error_code &err, task_tracker 
             } else if (ERR_TIMEOUT == ec) {
                 dwarn_f("create bulk load root({}) failed, retry later", _bulk_load_root);
                 tasking::enqueue(
-                    LPC_META_CALLBACK,
+                    LPC_META_STATE_NORMAL,
                     nullptr,
                     std::bind(&bulk_load_service::create_bulk_load_root_dir, this, err, tracker),
                     0,
@@ -1083,6 +1099,7 @@ void bulk_load_service::create_bulk_load_root_dir(error_code &err, task_tracker 
         &tracker);
 }
 
+// ThreadPool: THREAD_POOL_META_SERVER
 void bulk_load_service::sync_apps_bulk_load(error_code &err, task_tracker &tracker)
 {
     std::string path = _bulk_load_root;
@@ -1107,6 +1124,7 @@ void bulk_load_service::sync_apps_bulk_load(error_code &err, task_tracker &track
         &tracker);
 }
 
+// ThreadPool: THREAD_POOL_META_SERVER
 void bulk_load_service::do_sync_app_bulk_load(int32_t app_id,
                                               error_code &err,
                                               task_tracker &tracker)
@@ -1136,6 +1154,7 @@ void bulk_load_service::do_sync_app_bulk_load(int32_t app_id,
         &tracker);
 }
 
+// ThreadPool: THREAD_POOL_META_SERVER
 void bulk_load_service::sync_partitions_bulk_load(int32_t app_id,
                                                   const std::string &app_name,
                                                   error_code &err,
@@ -1167,6 +1186,7 @@ void bulk_load_service::sync_partitions_bulk_load(int32_t app_id,
         &tracker);
 }
 
+// ThreadPool: THREAD_POOL_META_SERVER
 void bulk_load_service::do_sync_partition_bulk_load(const gpid &pid,
                                                     const std::string &app_name,
                                                     const std::string &partition_path,
@@ -1197,6 +1217,7 @@ void bulk_load_service::do_sync_partition_bulk_load(const gpid &pid,
         &tracker);
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::try_to_continue_bulk_load()
 {
     FAIL_POINT_INJECT_F("meta_try_to_continue_bulk_load", [](dsn::string_view) {});
@@ -1211,6 +1232,7 @@ void bulk_load_service::try_to_continue_bulk_load()
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::get_partition_bulk_load_info_by_app_id(
     int32_t app_id,
     std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map)
@@ -1223,6 +1245,7 @@ void bulk_load_service::get_partition_bulk_load_info_by_app_id(
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::try_to_continue_app_bulk_load(
     const app_bulk_load_info &ainfo,
     std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map)
@@ -1257,6 +1280,7 @@ void bulk_load_service::try_to_continue_app_bulk_load(
     continue_app_bulk_load(ainfo, partition_bulk_load_info_map, different_status_pidx_set);
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 /// meta bulk load failover cases
 /// 1. no children
 ///     1 - downloading
@@ -1334,6 +1358,7 @@ bool bulk_load_service::check_continue_bulk_load(
         ainfo, partition_bulk_load_info_map, different_status_pidx_set);
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 bool bulk_load_service::validate_partition_bulk_load_status(
     const app_bulk_load_info &ainfo,
     std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
@@ -1409,6 +1434,7 @@ bool bulk_load_service::validate_partition_bulk_load_status(
     return true;
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 bulk_load_status::type
 bulk_load_service::get_valid_partition_status(bulk_load_status::type app_status)
 {
@@ -1424,6 +1450,7 @@ bulk_load_service::get_valid_partition_status(bulk_load_status::type app_status)
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::continue_app_bulk_load(
     const app_bulk_load_info &ainfo,
     std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
@@ -1495,11 +1522,14 @@ void bulk_load_service::continue_app_bulk_load(
             partition_bulk_load(pid);
         }
         if (app_status == bulk_load_status::BLS_INGESTING) {
-            partition_ingestion(pid);
+            tasking::enqueue(LPC_BULK_LOAD_INGESTION,
+                             _meta_svc->tracker(),
+                             std::bind(&bulk_load_service::partition_ingestion, this, pid));
         }
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::create_partition_bulk_load_info(const std::string &app_name,
                                                         const gpid &pid,
                                                         int32_t partition_count)
@@ -1529,6 +1559,7 @@ void bulk_load_service::create_partition_bulk_load_info(const std::string &app_n
         });
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_state> app,
                                                         bool is_app_bulk_loading)
 {
