@@ -169,18 +169,16 @@ public:
                      iter != partition_bulk_load_info_map.end();
                      ++iter) {
                     gpid pid = gpid(ainfo.app_id, iter->first);
-                    mock_partition_bulk_load_info_on_remote_stroage(app_path, pid, iter->second);
+                    mock_partition_bulk_load_info_on_remote_stroage(pid, iter->second);
                 }
             });
     }
 
-    void mock_partition_bulk_load_info_on_remote_stroage(std::string app_path,
-                                                         gpid pid,
+    void mock_partition_bulk_load_info_on_remote_stroage(gpid pid,
                                                          partition_bulk_load_info pinfo)
     {
         blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
-        std::string partition_path =
-            bulk_svc()->get_partition_bulk_load_path(app_path, pid.get_partition_index());
+        std::string partition_path = bulk_svc()->get_partition_bulk_load_path(pid);
         _meta_svc->get_meta_storage()->create_node(
             std::move(partition_path), std::move(value), [this, partition_path, pid, pinfo]() {
                 ddebug_f("create partition[{}] bulk load dir({}), bulk_load_status={}",
@@ -357,7 +355,7 @@ public:
 
     bool need_update_metadata(gpid pid)
     {
-        return bulk_svc()->need_update_partition_bulk_load_metadata(pid);
+        return bulk_svc()->partition_metadata_not_existed(pid);
     }
 
     void on_partition_ingestion_reply(error_code err, ingestion_response &resp, const gpid &pid)
