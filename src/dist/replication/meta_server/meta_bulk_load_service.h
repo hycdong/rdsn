@@ -114,7 +114,7 @@ private:
 
     void start_app_bulk_load(std::shared_ptr<app_state> app, start_bulk_load_rpc rpc);
 
-    void partition_bulk_load(const gpid &pid);
+    void partition_bulk_load(const std::string &app_name, const gpid &pid);
 
     void on_partition_bulk_load_reply(error_code err,
                                       ballot req_ballot,
@@ -135,9 +135,11 @@ private:
 
     void handle_bulk_load_failed(int32_t app_id);
 
+    void handle_app_unavailable(int32_t app_id, const std::string &app_name);
+
     // Called when app status update to ingesting
     // create ingestion request and send it to primary
-    void partition_ingestion(const gpid &pid);
+    void partition_ingestion(const std::string &app_name, const gpid &pid);
 
     void on_partition_ingestion_reply(error_code err,
                                       ingestion_response &&resp,
@@ -159,9 +161,9 @@ private:
 
     // Called by `handle_app_downloading`
     // update partition bulk load metadata reported by replica server on remote storage
-    void update_partition_metadata_on_remote_stroage(std::string app_name,
-                                                     gpid pid,
-                                                     bulk_load_metadata metadata);
+    void update_partition_metadata_on_remote_stroage(const std::string &app_name,
+                                                     const gpid &pid,
+                                                     const bulk_load_metadata &metadata);
 
     void update_partition_status_on_remote_stroage(const std::string &app_name,
                                                    const gpid &pid,
@@ -313,8 +315,6 @@ private:
 
     std::unordered_map<gpid, partition_bulk_load_info> _partition_bulk_load_info;
     std::unordered_map<app_id, int32_t> _apps_in_progress_count;
-    // inflight partition_request
-    std::unordered_map<gpid, dsn::task_ptr> _partitions_request;
     // partition download progress while query bulk load status
     std::unordered_map<gpid, std::map<rpc_address, partition_download_progress>>
         _partitions_download_progress;
