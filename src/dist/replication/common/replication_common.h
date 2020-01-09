@@ -169,6 +169,8 @@ public:
     static const std::string BULK_LOAD_INFO;
     static const std::string BULK_LOAD_LOCAL_ROOT_DIR;
     static const int32_t PROGRESS_FINISHED;
+    static const int32_t BULK_LOAD_REQUEST_LONG_INTERVAL_MS;
+    static const int32_t BULK_LOAD_REQUEST_SHORT_INTERVAL_MS;
 };
 
 namespace cold_backup {

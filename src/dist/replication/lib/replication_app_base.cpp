@@ -520,9 +520,6 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
         }
     }
 
-    // TODO(heyuchen): delete it
-    ddebug("%s: mutation %s: apply_mutation", _replica->name(), mu->name());
-
     int perror = on_batched_write_requests(
         mu->data.header.decree, mu->data.header.timestamp, batched_requests, batched_count);
 
@@ -533,12 +530,7 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
 
     if (perror != 0) {
         derror("%s: mutation %s: get internal error %d", _replica->name(), mu->name(), perror);
-        // TODO(heyuchen): common - add perror comment
-        //        if (!has_ingestion_request || (has_ingestion_request && perror != 4)) {
-        //            return ERR_LOCAL_APP_FAILURE;
-        //        }
-
-        // TODO(heyuchen): async ingest test
+        // TODO(heyuchen): update comment
         if (!has_ingestion_request) {
             return ERR_LOCAL_APP_FAILURE;
         }

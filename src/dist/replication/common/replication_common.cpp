@@ -586,6 +586,8 @@ const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("tmp/pegasus_
 const std::string bulk_load_constant::BULK_LOAD_METADATA("bulk_load_metadata");
 const std::string bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR(".bulk_load");
 const int32_t bulk_load_constant::PROGRESS_FINISHED = 100;
+const int32_t bulk_load_constant::BULK_LOAD_REQUEST_LONG_INTERVAL_MS = 10000;
+const int32_t bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL_MS = 100;
 
 namespace cold_backup {
 std::string get_policy_path(const std::string &root, const std::string &policy_name)

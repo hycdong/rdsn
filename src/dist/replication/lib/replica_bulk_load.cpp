@@ -19,6 +19,9 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
 {
     _checker.only_one_thread_access();
 
+    response.pid = request.pid;
+    response.app_name = request.app_name;
+
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_replica("receive bulk load request with wrong status {}", enum_to_string(status()));
         response.err = ERR_INVALID_STATE;
@@ -35,8 +38,6 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
     }
 
     response.err = ERR_OK;
-    response.pid = request.pid;
-    response.app_name = request.app_name;
 
     ddebug_replica(
         "receive bulk load request, remote provider = {}, cluster_name = {}, app_name = {}, "

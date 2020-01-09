@@ -177,7 +177,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_list)
     for (i = 0; i < request_count; ++i) {
         const mutation_update &update = mu->data.updates[i];
 
-        // TODO(heyuchen): delete
+        // TODO(heyuchen): debug log info
         if (update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
             ddebug_replica("bulk load init prepare mutation({})", mu->name());
         }
@@ -320,12 +320,6 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
           mu->name(),
           addr.to_string(),
           enum_to_string(rconfig.status));
-
-    // TODO(heyuchen): delete it
-    ddebug_replica("mutation({}) send_prepare_message to {} as {}",
-                   mu->name(),
-                   addr.to_string(),
-                   enum_to_string(rconfig.status));
 }
 
 void replica::do_possible_commit_on_primary(mutation_ptr &mu)
@@ -359,9 +353,6 @@ void replica::on_prepare(dsn::message_ex *request)
     decree decree = mu->data.header.decree;
 
     dinfo("%s: mutation %s on_prepare", name(), mu->name());
-
-    // TODO(heyuchen): delete it
-    ddebug_replica("on_prepare mutation({})", mu->name());
 
     dassert(mu->data.header.pid == rconfig.pid,
             "(%d.%d) VS (%d.%d)",
@@ -505,12 +496,11 @@ void replica::on_append_log_completed(mutation_ptr &mu, error_code err, size_t s
 {
     _checker.only_one_thread_access();
 
-    // TODO(heyuchen): dinfo
-    ddebug("%s: append shared log completed for mutation %s, size = %u, err = %s",
-           name(),
-           mu->name(),
-           size,
-           err.to_string());
+    dinfo("%s: append shared log completed for mutation %s, size = %u, err = %s",
+          name(),
+          mu->name(),
+          size,
+          err.to_string());
 
     if (err == ERR_OK) {
         mu->set_logged();
@@ -593,15 +583,14 @@ void replica::on_prepare_reply(std::pair<mutation_ptr, partition_status::type> p
     }
 
     if (resp.err == ERR_OK) {
-        // TODO(heyuchen): dinfo
-        ddebug("%s: mutation %s on_prepare_reply from %s, appro_data_bytes = %d, "
-               "target_status = %s, err = %s",
-               name(),
-               mu->name(),
-               node.to_string(),
-               mu->appro_data_bytes(),
-               enum_to_string(target_status),
-               resp.err.to_string());
+        dinfo("%s: mutation %s on_prepare_reply from %s, appro_data_bytes = %d, "
+              "target_status = %s, err = %s",
+              name(),
+              mu->name(),
+              node.to_string(),
+              mu->appro_data_bytes(),
+              enum_to_string(target_status),
+              resp.err.to_string());
     } else {
         derror("%s: mutation %s on_prepare_reply from %s, appro_data_bytes = %d, "
                "target_status = %s, err = %s",
@@ -742,8 +731,6 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
 
     if (err == ERR_OK) {
         dinfo("%s: mutation %s ack_prepare_message, err = %s", name(), mu->name(), err.to_string());
-        // TODO(heyuchen): delete it
-        ddebug_replica("mutation({}) ack_prepare_message, err={}", mu->name(), err.to_string());
     } else {
         dwarn("%s: mutation %s ack_prepare_message, err = %s", name(), mu->name(), err.to_string());
     }

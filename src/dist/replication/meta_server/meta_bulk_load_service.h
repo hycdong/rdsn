@@ -129,12 +129,15 @@ private:
 
     void handle_app_ingestion(const bulk_load_response &response, const rpc_address &primary_addr);
 
-    void handle_app_finish(const bulk_load_response &response, const rpc_address &primary_addr);
+    // when app status is `succeed` or `failed`, both status means bulk load finish
+    void handle_bulk_load_finish(const bulk_load_response &response,
+                                 const rpc_address &primary_addr);
 
     void rollback_to_downloading(int32_t app_id);
 
     void handle_bulk_load_failed(int32_t app_id);
 
+    // app not existed or not available during bulk load
     void handle_app_unavailable(int32_t app_id, const std::string &app_name);
 
     // Called when app status update to ingesting
@@ -152,7 +155,10 @@ private:
     /// update bulk load states to remote storage functions
     ///
 
-    void create_app_bulk_load_dir(std::shared_ptr<app_state> app, start_bulk_load_rpc rpc);
+    void create_app_bulk_load_dir(const std::string &app_name,
+                                  int32_t app_id,
+                                  int32_t partition_count,
+                                  start_bulk_load_rpc rpc);
 
     void create_partition_bulk_load_dir(const std::string &app_name,
                                         const gpid &pid,

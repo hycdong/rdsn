@@ -785,6 +785,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
         case partition_status::PS_INACTIVE:
             _primary_states.cleanup(old_ballot != config.ballot);
             // TODO(heyuchen): consider reset partition_version
+            // TODO(heyuchen): consdier about ingestion status
             if (_partition_version.load() == -1) {
                 ddebug_replica("recover write");
                 _partition_version.store(_app_info.partition_count - 1);

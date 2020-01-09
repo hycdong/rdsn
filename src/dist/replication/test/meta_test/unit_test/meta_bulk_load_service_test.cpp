@@ -174,8 +174,7 @@ public:
             });
     }
 
-    void mock_partition_bulk_load_info_on_remote_stroage(gpid pid,
-                                                         partition_bulk_load_info pinfo)
+    void mock_partition_bulk_load_info_on_remote_stroage(gpid pid, partition_bulk_load_info pinfo)
     {
         blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
         std::string partition_path = bulk_svc()->get_partition_bulk_load_path(pid);
@@ -353,10 +352,7 @@ public:
         return find_app(app_name)->is_bulk_loading;
     }
 
-    bool need_update_metadata(gpid pid)
-    {
-        return bulk_svc()->partition_metadata_not_existed(pid);
-    }
+    bool need_update_metadata(gpid pid) { return bulk_svc()->partition_metadata_not_existed(pid); }
 
     void on_partition_ingestion_reply(error_code err, ingestion_response &resp, const gpid &pid)
     {
