@@ -524,11 +524,11 @@ TEST_F(replica_bulk_load_test, handle_bulk_load_downloading_error)
     ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
 }
 
-TEST_F(replica_bulk_load_test, handle_bulk_load_finish)
+TEST_F(replica_bulk_load_test, handle_bulk_load_succeed)
 {
     mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_DOWNLOADED);
 
-    test_cleanup_bulk_load_context(bulk_load_status::BLS_FINISH);
+    test_cleanup_bulk_load_context(bulk_load_status::BLS_SUCCEED);
     ASSERT_TRUE(get_clean_up_flag());
     ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
 }
@@ -537,7 +537,7 @@ TEST_F(replica_bulk_load_test, double_cleanup_bulk_load_context)
 {
     mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
 
-    test_cleanup_bulk_load_context(bulk_load_status::BLS_FINISH);
+    test_cleanup_bulk_load_context(bulk_load_status::BLS_SUCCEED);
     ASSERT_TRUE(get_clean_up_flag());
 }
 
@@ -745,36 +745,36 @@ TEST_F(replica_bulk_load_test, on_bulk_load_finish_ingestion)
     fail::teardown();
 }
 
-// request: finish; local:ingestion
-TEST_F(replica_bulk_load_test, on_bulk_load_finish)
+// request: succeed; local:ingestion
+TEST_F(replica_bulk_load_test, on_bulk_load_succeed)
 {
     fail::setup();
     fail::cfg("replica_broadcast_group_bulk_load", "return()");
     fail::cfg("replica_handle_bulk_load_succeed", "return()");
 
-    mock_bulk_load_request(bulk_load_status::BLS_FINISH);
+    mock_bulk_load_request(bulk_load_status::BLS_SUCCEED);
     mock_primary_states(true, false, true);
     mock_bulk_load_context(60, 60, 100, bulk_load_status::BLS_INGESTING);
 
     bulk_load_response resp;
     test_on_bulk_load(resp);
     ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_FINISH);
+    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_SUCCEED);
     ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_FINISH);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_SUCCEED);
 
     fail::teardown();
 }
 
-// request: finish; local:finish
-TEST_F(replica_bulk_load_test, on_bulk_load_finish_primary_cleanup)
+// request: succeed; local:succeed
+TEST_F(replica_bulk_load_test, on_bulk_load_succeed_primary_cleanup)
 {
     fail::setup();
     fail::cfg("replica_broadcast_group_bulk_load", "return()");
 
-    mock_bulk_load_request(bulk_load_status::BLS_FINISH);
+    mock_bulk_load_request(bulk_load_status::BLS_SUCCEED);
     mock_primary_states(false, true);
-    mock_bulk_load_context(70, 70, 100, bulk_load_status::BLS_FINISH);
+    mock_bulk_load_context(70, 70, 100, bulk_load_status::BLS_SUCCEED);
 
     bulk_load_response resp;
     test_on_bulk_load(resp);
@@ -787,13 +787,13 @@ TEST_F(replica_bulk_load_test, on_bulk_load_finish_primary_cleanup)
     fail::teardown();
 }
 
-// request: finish; local: invalid
-TEST_F(replica_bulk_load_test, on_bulk_load_finish_all_cleanup)
+// request: succeed; local: invalid
+TEST_F(replica_bulk_load_test, on_bulk_load_succeed_all_cleanup)
 {
     fail::setup();
     fail::cfg("replica_broadcast_group_bulk_load", "return()");
 
-    mock_bulk_load_request(bulk_load_status::BLS_FINISH);
+    mock_bulk_load_request(bulk_load_status::BLS_SUCCEED);
     mock_primary_states(false, true, true);
     mock_bulk_load_context(80, 80, 100, bulk_load_status::BLS_INVALID);
 
@@ -1010,28 +1010,28 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_ingestion_error)
     ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INGESTING);
 }
 
-// request: finish; local:ingestion
-TEST_F(replica_bulk_load_test, on_group_bulk_load_finish)
+// request: succeed; local:ingestion
+TEST_F(replica_bulk_load_test, on_group_bulk_load_succeed)
 {
     mock_replica_config(partition_status::PS_SECONDARY);
     mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_INGESTING);
 
     group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_FINISH, BALLOT, resp);
+    test_on_group_bulk_load(bulk_load_status::BLS_SUCCEED, BALLOT, resp);
 
     ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_FINISH);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_FINISH);
+    ASSERT_EQ(resp.status, bulk_load_status::BLS_SUCCEED);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_SUCCEED);
 }
 
-// request: finish; local:finish
-TEST_F(replica_bulk_load_test, on_group_bulk_load_finish_with_cleanup)
+// request: succeed; local:succeed
+TEST_F(replica_bulk_load_test, on_group_bulk_load_succeed_with_cleanup)
 {
     mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_FINISH);
+    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_SUCCEED);
 
     group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_FINISH, BALLOT, resp);
+    test_on_group_bulk_load(bulk_load_status::BLS_SUCCEED, BALLOT, resp);
 
     ASSERT_EQ(resp.err, ERR_OK);
     ASSERT_EQ(resp.status, bulk_load_status::BLS_INVALID);
@@ -1090,7 +1090,7 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_ballot_change)
 {
     mock_primary_states(true, true, true);
     test_on_group_bulk_load_reply(
-        bulk_load_status::BLS_FINISH, BALLOT - 1, bulk_load_status::BLS_FINISH, 100, false);
+        bulk_load_status::BLS_SUCCEED, BALLOT - 1, bulk_load_status::BLS_SUCCEED, 100, false);
     partition_download_progress download_progress;
     ASSERT_EQ(primary_get_node_download_progress(download_progress), ERR_OK);
     ASSERT_EQ(download_progress.progress, 0);
@@ -1147,12 +1147,12 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded)
     ASSERT_EQ(download_progress.progress, 100);
 }
 
-TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded_with_one_finish)
+TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded_with_one_succeed)
 {
     mock_primary_states(true, false, true);
     mock_bulk_load_context(100, 100, 100, bulk_load_status::BLS_DOWNLOADED);
     test_on_group_bulk_load_reply(
-        bulk_load_status::BLS_FINISH, BALLOT, bulk_load_status::BLS_DOWNLOADED, 100, false);
+        bulk_load_status::BLS_SUCCEED, BALLOT, bulk_load_status::BLS_DOWNLOADED, 100, false);
     bool is_context_cleaned = true;
     ASSERT_EQ(primary_get_node_context_clean_flag(is_context_cleaned), ERR_OK);
     ASSERT_FALSE(is_context_cleaned);
@@ -1174,12 +1174,12 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_ingestion)
     ASSERT_EQ(istatus, ingestion_status::IS_SUCCEED);
 }
 
-TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_finish)
+TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_succeed)
 {
     mock_primary_states(true, false, true);
-    mock_bulk_load_context(100, 100, 100, bulk_load_status::BLS_FINISH);
+    mock_bulk_load_context(100, 100, 100, bulk_load_status::BLS_SUCCEED);
     test_on_group_bulk_load_reply(
-        bulk_load_status::BLS_FINISH, BALLOT, bulk_load_status::BLS_FINISH, 100, false);
+        bulk_load_status::BLS_SUCCEED, BALLOT, bulk_load_status::BLS_SUCCEED, 100, false);
     bool is_context_cleaned = true;
     ASSERT_EQ(primary_get_node_context_clean_flag(is_context_cleaned), ERR_OK);
     ASSERT_FALSE(is_context_cleaned);

@@ -670,7 +670,7 @@ TEST_F(bulk_load_process_test, ingestion_error)
     ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);
 }
 
-TEST_F(bulk_load_process_test, normal_finish)
+TEST_F(bulk_load_process_test, normal_succeed)
 {
     mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
     for (int i = 0; i < _partition_count; ++i) {
@@ -679,7 +679,7 @@ TEST_F(bulk_load_process_test, normal_finish)
         on_partition_bulk_load_reply(ERR_OK, BALLOT, response, _resp.pid, _primary);
     }
     wait_all();
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FINISH);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_SUCCEED);
 }
 
 TEST_F(bulk_load_process_test, half_cleanup)
@@ -693,7 +693,7 @@ TEST_F(bulk_load_process_test, half_cleanup)
 
 TEST_F(bulk_load_process_test, cleanup_succeed)
 {
-    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_FINISH);
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_SUCCEED);
     for (int i = 0; i < _partition_count; ++i) {
         mock_response_cleanup_flag(true, i);
         auto resp = _resp;
@@ -740,8 +740,8 @@ TEST_F(bulk_load_process_test, response_object_not_found)
 
 TEST_F(bulk_load_process_test, response_ballot_changed)
 {
-    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_FINISH);
-    create_basic_response(ERR_OK, bulk_load_status::BLS_FINISH);
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_SUCCEED);
+    create_basic_response(ERR_OK, bulk_load_status::BLS_SUCCEED);
     partition_configuration config = find_app(APP_NAME)->partitions[_pidx];
     config.ballot = BALLOT + 2;
     update_partition_config_on_remote_storage(config, APP_NAME);
@@ -1031,14 +1031,14 @@ TEST_F(bulk_load_failover_test, ingesting_with_lack_of_partition)
     ASSERT_FALSE(app_is_bulk_loading(SYNC_APP_NAME));
 }
 
-// app:finish, partition[0,1]=finish, partition[2~3] not existed
-TEST_F(bulk_load_failover_test, finish_with_lack_of_partition)
+// app:succeed, partition[0,1]=succeed, partition[2~3] not existed
+TEST_F(bulk_load_failover_test, succeed_with_lack_of_partition)
 {
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
-    partition_bulk_load_status_map[0] = bulk_load_status::BLS_FINISH;
-    partition_bulk_load_status_map[1] = bulk_load_status::BLS_FINISH;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_SUCCEED;
+    partition_bulk_load_status_map[1] = bulk_load_status::BLS_SUCCEED;
 
-    try_to_continue_bulk_load(bulk_load_status::BLS_FINISH, partition_bulk_load_status_map);
+    try_to_continue_bulk_load(bulk_load_status::BLS_SUCCEED, partition_bulk_load_status_map);
 
     ASSERT_FALSE(app_is_bulk_loading(SYNC_APP_NAME));
 }
@@ -1162,7 +1162,7 @@ TEST_F(bulk_load_failover_test, downloading_with_partition_mix_wrong_status)
     fail::teardown();
 }
 
-// app:downloading, partition[0-3]=finish
+// app:downloading, partition[0-3]=succeed
 TEST_F(bulk_load_failover_test, downloading_with_rollback)
 {
 
@@ -1171,7 +1171,7 @@ TEST_F(bulk_load_failover_test, downloading_with_rollback)
 
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
     for (int32_t i = 0; i < SYNC_PARTITION_COUNT; ++i) {
-        partition_bulk_load_status_map[i] = bulk_load_status::BLS_FINISH;
+        partition_bulk_load_status_map[i] = bulk_load_status::BLS_SUCCEED;
     }
     try_to_continue_bulk_load(bulk_load_status::BLS_DOWNLOADING, partition_bulk_load_status_map);
 
@@ -1255,8 +1255,8 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_all_ingesting)
     fail::teardown();
 }
 
-// app:ingesting, partition[0~3]=finish
-TEST_F(bulk_load_failover_test, ingesting_with_partition_all_finish)
+// app:ingesting, partition[0~3]=succeed
+TEST_F(bulk_load_failover_test, ingesting_with_partition_all_succeed)
 {
     fail::setup();
     fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
@@ -1264,7 +1264,7 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_all_finish)
 
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
     for (int32_t i = 0; i < SYNC_PARTITION_COUNT; ++i) {
-        partition_bulk_load_status_map[i] = bulk_load_status::BLS_FINISH;
+        partition_bulk_load_status_map[i] = bulk_load_status::BLS_SUCCEED;
     }
     try_to_continue_bulk_load(bulk_load_status::BLS_INGESTING, partition_bulk_load_status_map);
 
@@ -1274,7 +1274,7 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_all_finish)
     fail::teardown();
 }
 
-// app:ingesting, partition[0]=finish, partition[1~3]=ingesting
+// app:ingesting, partition[0]=succeed, partition[1~3]=ingesting
 TEST_F(bulk_load_failover_test, ingesting_with_partition_mixed)
 {
     fail::setup();
@@ -1282,7 +1282,7 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_mixed)
     fail::cfg("meta_bulk_load_partition_ingestion", "return()");
 
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
-    partition_bulk_load_status_map[0] = bulk_load_status::BLS_FINISH;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_SUCCEED;
     for (int32_t i = 1; i < SYNC_PARTITION_COUNT; ++i) {
         partition_bulk_load_status_map[i] = bulk_load_status::BLS_INGESTING;
     }
@@ -1294,17 +1294,17 @@ TEST_F(bulk_load_failover_test, ingesting_with_partition_mixed)
     fail::teardown();
 }
 
-// app:finish, partition[0~3]=finish
-TEST_F(bulk_load_failover_test, finish_with_partition_all_finish)
+// app:succeed, partition[0~3]=succeed
+TEST_F(bulk_load_failover_test, succeed_with_partition_all_succeed)
 {
     fail::setup();
     fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
 
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
     for (int32_t i = 0; i < SYNC_PARTITION_COUNT; ++i) {
-        partition_bulk_load_status_map[i] = bulk_load_status::BLS_FINISH;
+        partition_bulk_load_status_map[i] = bulk_load_status::BLS_SUCCEED;
     }
-    try_to_continue_bulk_load(bulk_load_status::BLS_FINISH, partition_bulk_load_status_map);
+    try_to_continue_bulk_load(bulk_load_status::BLS_SUCCEED, partition_bulk_load_status_map);
 
     ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
     ASSERT_TRUE(app_is_bulk_loading(SYNC_APP_NAME));
@@ -1312,18 +1312,18 @@ TEST_F(bulk_load_failover_test, finish_with_partition_all_finish)
     fail::teardown();
 }
 
-// app:finish, partition[0~2]=finish, partition[3]=failed
-TEST_F(bulk_load_failover_test, finish_with_partition_failed)
+// app:succeed, partition[0~2]=succeed, partition[3]=failed
+TEST_F(bulk_load_failover_test, succeed_with_partition_failed)
 {
     fail::setup();
     fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
 
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
     for (int32_t i = 0; i < SYNC_PARTITION_COUNT - 1; ++i) {
-        partition_bulk_load_status_map[i] = bulk_load_status::BLS_FINISH;
+        partition_bulk_load_status_map[i] = bulk_load_status::BLS_SUCCEED;
     }
     partition_bulk_load_status_map[SYNC_PARTITION_COUNT - 1] = bulk_load_status::BLS_FAILED;
-    try_to_continue_bulk_load(bulk_load_status::BLS_FINISH, partition_bulk_load_status_map);
+    try_to_continue_bulk_load(bulk_load_status::BLS_SUCCEED, partition_bulk_load_status_map);
 
     ASSERT_FALSE(app_is_bulk_loading(SYNC_APP_NAME));
 
@@ -1432,13 +1432,13 @@ TEST_F(bulk_load_failover_test, ingesting_invalid_partition_failed)
     ASSERT_EQ(1, different_status_pidx_set.size());
 }
 
-// app:finsh, partition[0]=finsh, partition[1]=downloaded, partition[2]=ingesting,
+// app:succeed, partition[0]=succeed, partition[1]=downloaded, partition[2]=ingesting,
 // partition[3]=failed
-TEST_F(bulk_load_failover_test, finish_invalid_partition)
+TEST_F(bulk_load_failover_test, succeed_invalid_partition)
 {
-    prepare_for_validate_partition_status(bulk_load_status::BLS_FINISH);
+    prepare_for_validate_partition_status(bulk_load_status::BLS_SUCCEED);
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
-    partition_bulk_load_status_map[0] = bulk_load_status::BLS_FINISH;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_SUCCEED;
     partition_bulk_load_status_map[1] = bulk_load_status::BLS_DOWNLOADED;
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_INGESTING;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_FAILED;
@@ -1455,7 +1455,7 @@ TEST_F(bulk_load_failover_test, failed_valid_partition)
 {
     prepare_for_validate_partition_status(bulk_load_status::BLS_FAILED);
     std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
-    partition_bulk_load_status_map[0] = bulk_load_status::BLS_FINISH;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_SUCCEED;
     partition_bulk_load_status_map[1] = bulk_load_status::BLS_DOWNLOADED;
     partition_bulk_load_status_map[2] = bulk_load_status::BLS_INGESTING;
     partition_bulk_load_status_map[3] = bulk_load_status::BLS_DOWNLOADING;

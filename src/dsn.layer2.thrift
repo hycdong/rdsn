@@ -11,7 +11,7 @@ enum bulk_load_status
     BLS_DOWNLOADING,
     BLS_DOWNLOADED,
     BLS_INGESTING,
-    BLS_FINISH,
+    BLS_SUCCEED,
     BLS_FAILED,
     BLS_PAUSED,
     BLS_CANCELED

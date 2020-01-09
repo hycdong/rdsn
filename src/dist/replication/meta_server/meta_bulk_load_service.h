@@ -88,7 +88,7 @@ private:
     ///     |<------- Ingesting  --------->|
     ///     |            |                 |
     ///     v            v         Err     |
-    ///   Failed       Finish    --------->|
+    ///   Failed       Succeed   --------->|
     ///     |            |
     ///     v            v
     ///    remove bulk load info on remote storage
@@ -129,7 +129,7 @@ private:
 
     void handle_app_ingestion(const bulk_load_response &response, const rpc_address &primary_addr);
 
-    // when app status is `succeed` or `failed`, both status means bulk load finish
+    // when app status is `succeed` or `failed`, meta and replica should cleanup bulk load states
     void handle_bulk_load_finish(const bulk_load_response &response,
                                  const rpc_address &primary_addr);
 

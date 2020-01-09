@@ -581,8 +581,8 @@ const std::string replica_envs::WRITE_THROTTLING("replica.write_throttling");
 
 const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
 // TODO(heyuchen): update it
-// const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("bulk_load_test");
-const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("tmp/pegasus_bulkload_data");
+const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("bulk_load_test");
+// const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("tmp/pegasus_bulkload_data");
 const std::string bulk_load_constant::BULK_LOAD_METADATA("bulk_load_metadata");
 const std::string bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR(".bulk_load");
 const int32_t bulk_load_constant::PROGRESS_FINISHED = 100;

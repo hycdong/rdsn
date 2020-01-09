@@ -220,10 +220,8 @@ void bulk_load_service::create_app_bulk_load_dir(const std::string &app_name,
                 _app_bulk_load_info[ainfo.app_id] = ainfo;
             }
             for (int i = 0; i < ainfo.partition_count; ++i) {
-                create_partition_bulk_load_dir(ainfo.app_name,
-                                               gpid(ainfo.app_id, i),
-                                               ainfo.partition_count,
-                                               std::move(rpc));
+                create_partition_bulk_load_dir(
+                    ainfo.app_name, gpid(ainfo.app_id, i), ainfo.partition_count, std::move(rpc));
             }
         });
 }
@@ -414,7 +412,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
         } else if (app_status == bulk_load_status::BLS_INGESTING) {
             interval_ms = bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL_MS;
             handle_app_ingestion(response, primary_addr);
-        } else if (app_status == bulk_load_status::BLS_FINISH ||
+        } else if (app_status == bulk_load_status::BLS_SUCCEED ||
                    app_status == bulk_load_status::BLS_FAILED) {
             handle_bulk_load_finish(response, primary_addr);
         } else {
@@ -547,7 +545,7 @@ void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
 
     if (response.is_group_ingestion_finished) {
         ddebug_f("app({}) partition({}) ingestion files succeed", app_name, pid.to_string());
-        update_partition_status_on_remote_stroage(app_name, pid, bulk_load_status::BLS_FINISH);
+        update_partition_status_on_remote_stroage(app_name, pid, bulk_load_status::BLS_SUCCEED);
     } else {
         for (auto iter = response.group_ingestion_status.begin();
              iter != response.group_ingestion_status.end();
@@ -689,7 +687,7 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
                     update_app_status_on_remote_storage_unlock(pid.get_app_id(), new_status);
                 }
             } else if ((new_status == bulk_load_status::BLS_INGESTING ||
-                        new_status == bulk_load_status::BLS_FINISH) &&
+                        new_status == bulk_load_status::BLS_SUCCEED) &&
                        old_status != new_status) {
                 if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
                     update_app_status_on_remote_storage_unlock(pid.get_app_id(), new_status);
@@ -988,7 +986,7 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
             response.download_progresses.resize(partition_count);
         }
 
-        if (response.app_status == bulk_load_status::BLS_FINISH ||
+        if (response.app_status == bulk_load_status::BLS_SUCCEED ||
             response.app_status == bulk_load_status::BLS_FAILED) {
             response.__isset.cleanup_flags = true;
             response.cleanup_flags.resize(partition_count);
@@ -1327,7 +1325,7 @@ bool bulk_load_service::validate_partition_bulk_load_status(
         app_status == bulk_load_status::BLS_INGESTING) {
         bulk_load_status::type valid_status = (app_status == bulk_load_status::BLS_DOWNLOADED)
                                                   ? bulk_load_status::BLS_INGESTING
-                                                  : bulk_load_status::BLS_FINISH;
+                                                  : bulk_load_status::BLS_SUCCEED;
         ddebug_f("app({}) bulk_load_status={}, valid partition status may be {} or {}",
                  ainfo.app_name,
                  enum_to_string(app_status),
@@ -1352,13 +1350,13 @@ bool bulk_load_service::validate_partition_bulk_load_status(
     }
 
     // app: finish, valid partition: finish
-    if (app_status == bulk_load_status::BLS_FINISH && different_count > 0) {
+    if (app_status == bulk_load_status::BLS_SUCCEED && different_count > 0) {
         derror_f("app({}) bulk_load_status={}, there are {} partitions "
                  "bulk_load_status is not {}, this is invalid",
                  ainfo.app_name,
                  app_status,
                  different_count,
-                 enum_to_string(bulk_load_status::BLS_FINISH));
+                 enum_to_string(bulk_load_status::BLS_SUCCEED));
         return false;
     }
 
@@ -1406,7 +1404,7 @@ void bulk_load_service::do_continue_bulk_load(
         }
     } else if (app_status == bulk_load_status::BLS_DOWNLOADED ||
                app_status == bulk_load_status::BLS_INGESTING ||
-               app_status == bulk_load_status::BLS_FINISH) {
+               app_status == bulk_load_status::BLS_SUCCEED) {
         in_progress_partition_count = same_count;
     }
     {
@@ -1437,7 +1435,7 @@ void bulk_load_service::do_continue_bulk_load(
         } else if (app_status == bulk_load_status::BLS_DOWNLOADING ||
                    app_status == bulk_load_status::BLS_DOWNLOADED ||
                    app_status == bulk_load_status::BLS_INGESTING ||
-                   app_status == bulk_load_status::BLS_FINISH ||
+                   app_status == bulk_load_status::BLS_SUCCEED ||
                    app_status == bulk_load_status::BLS_FAILED) {
             partition_bulk_load(ainfo.app_name, pid);
         }

@@ -27,7 +27,7 @@ struct bulk_load_status
         BLS_DOWNLOADING = 1,
         BLS_DOWNLOADED = 2,
         BLS_INGESTING = 3,
-        BLS_FINISH = 4,
+        BLS_SUCCEED = 4,
         BLS_FAILED = 5,
         BLS_PAUSED = 6,
         BLS_CANCELED = 7

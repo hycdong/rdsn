@@ -52,7 +52,7 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
 
     if ((get_bulk_load_status() == bulk_load_status::BLS_INVALID ||
          get_bulk_load_status() == bulk_load_status::BLS_INGESTING ||
-         get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
+         get_bulk_load_status() == bulk_load_status::BLS_SUCCEED) &&
         request.partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
         _app->set_ingestion_status(ingestion_status::IS_INVALID);
@@ -125,14 +125,14 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         }
     }
 
-    if (request.partition_bulk_load_status == bulk_load_status::BLS_FINISH) {
+    if (request.partition_bulk_load_status == bulk_load_status::BLS_SUCCEED) {
         if (get_bulk_load_status() == bulk_load_status::BLS_INGESTING) {
             // primary and secondary update bulk load status to finish
             handle_bulk_load_succeed();
         } else {
             // handle cleanup
             // set clean flags
-            cleanup_bulk_load_context(bulk_load_status::BLS_FINISH);
+            cleanup_bulk_load_context(bulk_load_status::BLS_SUCCEED);
             update_group_context_clean_flag(response);
         }
     }
@@ -255,7 +255,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
     // do bulk load things
     if ((get_bulk_load_status() == bulk_load_status::BLS_INVALID ||
          get_bulk_load_status() == bulk_load_status::BLS_INGESTING ||
-         get_bulk_load_status() == bulk_load_status::BLS_FINISH) &&
+         get_bulk_load_status() == bulk_load_status::BLS_SUCCEED) &&
         request.meta_partition_bulk_load_status == bulk_load_status::BLS_DOWNLOADING) {
 
         _app->set_ingestion_status(ingestion_status::IS_INVALID);
@@ -314,14 +314,14 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         }
     }
 
-    if (request.meta_partition_bulk_load_status == bulk_load_status::BLS_FINISH) {
+    if (request.meta_partition_bulk_load_status == bulk_load_status::BLS_SUCCEED) {
         if (get_bulk_load_status() == bulk_load_status::BLS_INGESTING) {
             // primary and secondary update bulk load status to finish
             handle_bulk_load_succeed();
         } else {
             // handle cleanup
             // set clean flags
-            cleanup_bulk_load_context(bulk_load_status::BLS_FINISH);
+            cleanup_bulk_load_context(bulk_load_status::BLS_SUCCEED);
             response.__set_is_bulk_load_context_cleaned(_bulk_load_context.is_cleanup());
         }
     }
@@ -815,7 +815,7 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 void replica::handle_bulk_load_succeed()
 {
     FAIL_POINT_INJECT_F("replica_handle_bulk_load_succeed", [this](dsn::string_view) {
-        set_bulk_load_status(bulk_load_status::BLS_FINISH);
+        set_bulk_load_status(bulk_load_status::BLS_SUCCEED);
     });
 
     // TODO(heyuchen): consider downloaded -> ingestion/ when to reset progress
@@ -842,7 +842,7 @@ void replica::handle_bulk_load_succeed()
     // TODO(heyuchen): consider when reset
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
 
-    set_bulk_load_status(bulk_load_status::BLS_FINISH);
+    set_bulk_load_status(bulk_load_status::BLS_SUCCEED);
     _stub->_counter_bulk_load_finish_count->increment();
 }
 
