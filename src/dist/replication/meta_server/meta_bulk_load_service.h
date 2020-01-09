@@ -277,20 +277,53 @@ private:
 
     bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
     {
-        auto ainfo = _app_bulk_load_info[app_id];
-        return ainfo.status;
+        zauto_read_lock l(_lock);
+        return get_app_bulk_load_status_unlock(app_id);
     }
 
-    bool is_app_bulk_loading(int32_t app_id)
+    bulk_load_status::type get_app_bulk_load_status_unlock(int32_t app_id)
+    {
+        if (_app_bulk_load_info.find(app_id) != _app_bulk_load_info.end()) {
+            return _app_bulk_load_info[app_id].status;
+        } else {
+            return bulk_load_status::BLS_INVALID;
+        }
+    }
+
+    bool is_app_bulk_loading_unlock(int32_t app_id)
     {
         return (_bulk_load_app_id.find(app_id) == _bulk_load_app_id.end() ? false : true);
     }
 
-    bool partition_metadata_not_existed(gpid pid)
+    bool is_partition_metadata_not_updated(gpid pid)
     {
         zauto_read_lock l(_lock);
-        bulk_load_metadata metadata = _partition_bulk_load_info[pid].metadata;
-        return (metadata.files.size() == 0 && metadata.file_total_size == 0);
+        return is_partition_metadata_not_updated_unlock(pid);
+    }
+
+    bool is_partition_metadata_not_updated_unlock(gpid pid)
+    {
+        if (_partition_bulk_load_info.find(pid) != _partition_bulk_load_info.end()) {
+            bulk_load_metadata metadata = _partition_bulk_load_info[pid].metadata;
+            return (metadata.files.size() == 0 && metadata.file_total_size == 0);
+        } else {
+            return false;
+        }
+    }
+
+    bulk_load_status::type get_partition_bulk_load_status(gpid pid)
+    {
+        zauto_read_lock l(_lock);
+        return get_partition_bulk_load_status_unlock(pid);
+    }
+
+    bulk_load_status::type get_partition_bulk_load_status_unlock(gpid pid)
+    {
+        if (_partition_bulk_load_info.find(pid) != _partition_bulk_load_info.end()) {
+            return _partition_bulk_load_info[pid].status;
+        } else {
+            return bulk_load_status::BLS_INVALID;
+        }
     }
 
     template <typename T>

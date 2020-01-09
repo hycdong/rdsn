@@ -323,7 +323,7 @@ public:
 
     bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
     {
-        return bulk_svc()->get_app_bulk_load_status(app_id);
+        return bulk_svc()->get_app_bulk_load_status_unlock(app_id);
     }
 
     int32_t get_app_id_set_size() { return bulk_svc()->_bulk_load_app_id.size(); }
@@ -352,7 +352,10 @@ public:
         return find_app(app_name)->is_bulk_loading;
     }
 
-    bool need_update_metadata(gpid pid) { return bulk_svc()->partition_metadata_not_existed(pid); }
+    bool need_update_metadata(gpid pid)
+    {
+        return bulk_svc()->is_partition_metadata_not_updated(pid);
+    }
 
     void on_partition_ingestion_reply(error_code err, ingestion_response &resp, const gpid &pid)
     {
