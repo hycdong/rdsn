@@ -15,12 +15,14 @@
 namespace dsn {
 namespace replication {
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response &response)
 {
     _checker.only_one_thread_access();
 
     response.pid = request.pid;
     response.app_name = request.app_name;
+    response.err = ERR_OK;
 
     if (status() != partition_status::PS_PRIMARY) {
         dwarn_replica("receive bulk load request with wrong status {}", enum_to_string(status()));
@@ -36,8 +38,6 @@ void replica::on_bulk_load(const bulk_load_request &request, bulk_load_response 
         response.err = ERR_INVALID_STATE;
         return;
     }
-
-    response.err = ERR_OK;
 
     ddebug_replica(
         "receive bulk load request, remote provider = {}, cluster_name = {}, app_name = {}, "
@@ -182,16 +182,13 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
             continue;
 
         std::shared_ptr<group_bulk_load_request> request(new group_bulk_load_request);
-        request->app = _app_info;
+        request->app_name = _app_info.app_name;
         request->target_address = addr;
         _primary_states.get_replica_config(partition_status::PS_SECONDARY, request->config);
+        request->cluster_name = meta_req.cluster_name;
+        request->provider_name = meta_req.remote_provider_name;
         request->meta_app_bulk_load_status = meta_req.app_bulk_load_status;
         request->meta_partition_bulk_load_status = meta_req.partition_bulk_load_status;
-        if (get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING ||
-            bulk_load_status::BLS_DOWNLOADED) {
-            request->__set_cluster_name(meta_req.cluster_name);
-            request->__set_provider_name(meta_req.remote_provider_name);
-        }
 
         ddebug_replica("send group_bulk_load_request to {}", addr.to_string());
 
@@ -248,7 +245,6 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
     }
 
     response.err = ERR_OK;
-    response.pid = get_gpid();
     response.target_address = _stub->_primary_address;
 
     // TODO(heyuchen): refactor
@@ -286,7 +282,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         ddebug_replica("try to download sst files");
         reset_bulk_load_download_progress();
         response.err =
-            download_sst_files(request.app.app_name, request.cluster_name, request.provider_name);
+            download_sst_files(request.app_name, request.cluster_name, request.provider_name);
 
         if (response.err != ERR_OK) {
             // handle_bulk_load_error();
@@ -410,16 +406,6 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
         return err;
     }
     return do_download_sst_files(provider_name, remote_dir, local_dir);
-}
-
-std::string replica::get_bulk_load_remote_dir(const std::string &app_name,
-                                              const std::string &cluster_name,
-                                              uint32_t pidx)
-{
-    std::ostringstream oss;
-    oss << bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT << "/" << cluster_name << "/"
-        << app_name << "/" << pidx;
-    return oss.str();
 }
 
 // - ERR_FILE_OPERATION_FAILED: create folder failed

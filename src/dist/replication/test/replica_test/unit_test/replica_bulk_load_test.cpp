@@ -95,7 +95,6 @@ public:
         std::shared_ptr<group_bulk_load_response> resp =
             std::make_shared<group_bulk_load_response>();
         resp->err = error;
-        resp->pid = PID;
         resp->status = resp_status;
         resp->__set_is_bulk_load_context_cleaned(is_context_cleaned);
         resp->__set_download_progress(download_progress);
@@ -210,9 +209,7 @@ public:
 
     void mock_group_bulk_load_request(bulk_load_status::type status, ballot b)
     {
-        app_info app;
-        app.app_name = APP_NAME;
-        _group_req.app = app;
+        _group_req.app_name = APP_NAME;
         _group_req.meta_app_bulk_load_status = status;
         _group_req.meta_partition_bulk_load_status = status;
         _group_req.config.status = partition_status::PS_SECONDARY;

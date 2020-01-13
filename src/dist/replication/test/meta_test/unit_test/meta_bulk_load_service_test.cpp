@@ -561,12 +561,10 @@ public:
         _resp.is_group_bulk_load_context_cleaned = finish_cleanup;
     }
 
-    void create_ingest_response(error_code err, int32_t rocksdb_err, int32_t pidx = 0)
+    void create_ingest_response(error_code err, int32_t rocksdb_err)
     {
         _ingest_resp.err = err;
         _ingest_resp.rocksdb_error = rocksdb_err;
-        _ingest_resp.app_id = _app_id;
-        _ingest_resp.partition_index = pidx;
     }
 
     int32_t _app_id = 3;
@@ -801,7 +799,7 @@ TEST_F(bulk_load_process_test, ingest_succeed)
 {
     mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_INGESTING);
     for (int i = 0; i < _partition_count; ++i) {
-        create_ingest_response(ERR_OK, 0, i);
+        create_ingest_response(ERR_OK, 0);
         auto resp = _ingest_resp;
         on_partition_ingestion_reply(ERR_OK, resp, gpid(_app_id, i));
     }

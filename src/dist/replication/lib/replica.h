@@ -326,9 +326,6 @@ private:
 
     bool verify_sst_files(const file_meta &f_meta, const std::string &dir);
 
-    std::string get_bulk_load_remote_dir(const std::string &app_name,
-                                         const std::string &cluster_name,
-                                         uint32_t pidx);
     dsn::error_code create_local_bulk_load_dir(const std::string &bulk_load_dir);
     void update_download_progress();
     void do_download(const std::string &remote_file_dir,
@@ -348,6 +345,15 @@ private:
     void handle_bulk_load_download_error();
     void update_group_ingestion_status(bulk_load_response &response);
 
+    std::string get_bulk_load_remote_dir(const std::string &app_name,
+                                         const std::string &cluster_name,
+                                         uint32_t pidx)
+    {
+        std::ostringstream oss;
+        oss << bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT << "/" << cluster_name << "/"
+            << app_name << "/" << pidx;
+        return oss.str();
+    }
     bulk_load_status::type get_bulk_load_status() { return _bulk_load_context._status; }
     void set_bulk_load_status(bulk_load_status::type status)
     {

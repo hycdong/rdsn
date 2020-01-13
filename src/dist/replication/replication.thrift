@@ -828,25 +828,24 @@ struct bulk_load_response
 
 struct group_bulk_load_request
 {
-    1:dsn.layer2.app_info           app;
+    1:string                        app_name;
     2:dsn.rpc_address               target_address;
     3:replica_configuration         config;
-    4:dsn.layer2.bulk_load_status   meta_app_bulk_load_status;
-    5:dsn.layer2.bulk_load_status   meta_partition_bulk_load_status;
-    6:optional string               provider_name;
-    7:optional string               cluster_name;
+    4:string                        provider_name;
+    5:string                        cluster_name;
+    6:dsn.layer2.bulk_load_status   meta_app_bulk_load_status;
+    7:dsn.layer2.bulk_load_status   meta_partition_bulk_load_status;
 }
 
 struct group_bulk_load_response
 {
-    1:dsn.gpid                              pid;
-    2:dsn.error_code                        err;
-    3:dsn.rpc_address                       target_address;
-    4:dsn.layer2.bulk_load_status           status;
+    1:dsn.error_code                        err;
+    2:dsn.rpc_address                       target_address;
+    3:dsn.layer2.bulk_load_status           status;
     // used when secondary downloading or downloaded
-    5:optional partition_download_progress  download_progress;
-    6:optional bool                         is_bulk_load_context_cleaned;
-    7:optional ingestion_status             istatus;
+    4:optional partition_download_progress  download_progress;
+    5:optional bool                         is_bulk_load_context_cleaned;
+    6:optional ingestion_status             istatus;
 }
 
 struct ingestion_request
@@ -859,9 +858,6 @@ struct ingestion_response
 {
     1:dsn.error_code    err;
     2:i32               rocksdb_error;
-    3:i32               app_id;
-    4:i32               partition_index;
-    5:i64               decree;
 }
 
 /*

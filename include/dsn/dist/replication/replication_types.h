@@ -6151,22 +6151,22 @@ inline std::ostream &operator<<(std::ostream &out, const bulk_load_response &obj
 typedef struct _group_bulk_load_request__isset
 {
     _group_bulk_load_request__isset()
-        : app(false),
+        : app_name(false),
           target_address(false),
           config(false),
-          meta_app_bulk_load_status(false),
-          meta_partition_bulk_load_status(false),
           provider_name(false),
-          cluster_name(false)
+          cluster_name(false),
+          meta_app_bulk_load_status(false),
+          meta_partition_bulk_load_status(false)
     {
     }
-    bool app : 1;
+    bool app_name : 1;
     bool target_address : 1;
     bool config : 1;
-    bool meta_app_bulk_load_status : 1;
-    bool meta_partition_bulk_load_status : 1;
     bool provider_name : 1;
     bool cluster_name : 1;
+    bool meta_app_bulk_load_status : 1;
+    bool meta_partition_bulk_load_status : 1;
 } _group_bulk_load_request__isset;
 
 class group_bulk_load_request
@@ -6177,57 +6177,54 @@ public:
     group_bulk_load_request &operator=(const group_bulk_load_request &);
     group_bulk_load_request &operator=(group_bulk_load_request &&);
     group_bulk_load_request()
-        : meta_app_bulk_load_status((::dsn::bulk_load_status::type)0),
-          meta_partition_bulk_load_status((::dsn::bulk_load_status::type)0),
+        : app_name(),
           provider_name(),
-          cluster_name()
+          cluster_name(),
+          meta_app_bulk_load_status((::dsn::bulk_load_status::type)0),
+          meta_partition_bulk_load_status((::dsn::bulk_load_status::type)0)
     {
     }
 
     virtual ~group_bulk_load_request() throw();
-    ::dsn::app_info app;
+    std::string app_name;
     ::dsn::rpc_address target_address;
     replica_configuration config;
-    ::dsn::bulk_load_status::type meta_app_bulk_load_status;
-    ::dsn::bulk_load_status::type meta_partition_bulk_load_status;
     std::string provider_name;
     std::string cluster_name;
+    ::dsn::bulk_load_status::type meta_app_bulk_load_status;
+    ::dsn::bulk_load_status::type meta_partition_bulk_load_status;
 
     _group_bulk_load_request__isset __isset;
 
-    void __set_app(const ::dsn::app_info &val);
+    void __set_app_name(const std::string &val);
 
     void __set_target_address(const ::dsn::rpc_address &val);
 
     void __set_config(const replica_configuration &val);
 
-    void __set_meta_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
-
-    void __set_meta_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
-
     void __set_provider_name(const std::string &val);
 
     void __set_cluster_name(const std::string &val);
 
+    void __set_meta_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
+
+    void __set_meta_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
+
     bool operator==(const group_bulk_load_request &rhs) const
     {
-        if (!(app == rhs.app))
+        if (!(app_name == rhs.app_name))
             return false;
         if (!(target_address == rhs.target_address))
             return false;
         if (!(config == rhs.config))
             return false;
+        if (!(provider_name == rhs.provider_name))
+            return false;
+        if (!(cluster_name == rhs.cluster_name))
+            return false;
         if (!(meta_app_bulk_load_status == rhs.meta_app_bulk_load_status))
             return false;
         if (!(meta_partition_bulk_load_status == rhs.meta_partition_bulk_load_status))
-            return false;
-        if (__isset.provider_name != rhs.__isset.provider_name)
-            return false;
-        else if (__isset.provider_name && !(provider_name == rhs.provider_name))
-            return false;
-        if (__isset.cluster_name != rhs.__isset.cluster_name)
-            return false;
-        else if (__isset.cluster_name && !(cluster_name == rhs.cluster_name))
             return false;
         return true;
     }
@@ -6252,8 +6249,7 @@ inline std::ostream &operator<<(std::ostream &out, const group_bulk_load_request
 typedef struct _group_bulk_load_response__isset
 {
     _group_bulk_load_response__isset()
-        : pid(false),
-          err(false),
+        : err(false),
           target_address(false),
           status(false),
           download_progress(false),
@@ -6261,7 +6257,6 @@ typedef struct _group_bulk_load_response__isset
           istatus(false)
     {
     }
-    bool pid : 1;
     bool err : 1;
     bool target_address : 1;
     bool status : 1;
@@ -6285,7 +6280,6 @@ public:
     }
 
     virtual ~group_bulk_load_response() throw();
-    ::dsn::gpid pid;
     ::dsn::error_code err;
     ::dsn::rpc_address target_address;
     ::dsn::bulk_load_status::type status;
@@ -6294,8 +6288,6 @@ public:
     ingestion_status::type istatus;
 
     _group_bulk_load_response__isset __isset;
-
-    void __set_pid(const ::dsn::gpid &val);
 
     void __set_err(const ::dsn::error_code &val);
 
@@ -6311,8 +6303,6 @@ public:
 
     bool operator==(const group_bulk_load_response &rhs) const
     {
-        if (!(pid == rhs.pid))
-            return false;
         if (!(err == rhs.err))
             return false;
         if (!(target_address == rhs.target_address))
@@ -6406,15 +6396,9 @@ inline std::ostream &operator<<(std::ostream &out, const ingestion_request &obj)
 
 typedef struct _ingestion_response__isset
 {
-    _ingestion_response__isset()
-        : err(false), rocksdb_error(false), app_id(false), partition_index(false), decree(false)
-    {
-    }
+    _ingestion_response__isset() : err(false), rocksdb_error(false) {}
     bool err : 1;
     bool rocksdb_error : 1;
-    bool app_id : 1;
-    bool partition_index : 1;
-    bool decree : 1;
 } _ingestion_response__isset;
 
 class ingestion_response
@@ -6424,14 +6408,11 @@ public:
     ingestion_response(ingestion_response &&);
     ingestion_response &operator=(const ingestion_response &);
     ingestion_response &operator=(ingestion_response &&);
-    ingestion_response() : rocksdb_error(0), app_id(0), partition_index(0), decree(0) {}
+    ingestion_response() : rocksdb_error(0) {}
 
     virtual ~ingestion_response() throw();
     ::dsn::error_code err;
     int32_t rocksdb_error;
-    int32_t app_id;
-    int32_t partition_index;
-    int64_t decree;
 
     _ingestion_response__isset __isset;
 
@@ -6439,23 +6420,11 @@ public:
 
     void __set_rocksdb_error(const int32_t val);
 
-    void __set_app_id(const int32_t val);
-
-    void __set_partition_index(const int32_t val);
-
-    void __set_decree(const int64_t val);
-
     bool operator==(const ingestion_response &rhs) const
     {
         if (!(err == rhs.err))
             return false;
         if (!(rocksdb_error == rhs.rocksdb_error))
-            return false;
-        if (!(app_id == rhs.app_id))
-            return false;
-        if (!(partition_index == rhs.partition_index))
-            return false;
-        if (!(decree == rhs.decree))
             return false;
         return true;
     }
