@@ -300,7 +300,8 @@ public:
                                       const gpid &pid,
                                       const rpc_address &primary_addr)
     {
-        bulk_svc()->on_partition_bulk_load_reply(err, b, std::move(response), pid, primary_addr);
+        bulk_svc()->on_partition_bulk_load_reply(
+            err, APP_NAME, b, std::move(response), pid, primary_addr);
     }
 
     bool check_partition_bulk_load_status(

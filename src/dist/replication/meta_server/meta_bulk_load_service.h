@@ -117,6 +117,7 @@ private:
     void partition_bulk_load(const std::string &app_name, const gpid &pid);
 
     void on_partition_bulk_load_reply(error_code err,
+                                      const std::string &app_name,
                                       ballot req_ballot,
                                       bulk_load_response &&response,
                                       const gpid &pid,

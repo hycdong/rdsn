@@ -306,8 +306,9 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
     dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
         msg,
         _meta_svc->tracker(),
-        [this, req, pid, primary_addr](error_code err, bulk_load_response &&resp) {
-            on_partition_bulk_load_reply(err, req.ballot, std::move(resp), pid, primary_addr);
+        [this, req, pid, app_name, primary_addr](error_code err, bulk_load_response &&resp) {
+            on_partition_bulk_load_reply(
+                err, app_name, req.ballot, std::move(resp), pid, primary_addr);
         });
     ddebug_f("send bulk load request to replica server({}), app({}), partition({}), app status = "
              "{}, partition status = {}, remote provider = {}, cluster_name = {}",
@@ -323,6 +324,7 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
 
 // ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::on_partition_bulk_load_reply(error_code err,
+                                                     const std::string &app_name,
                                                      ballot req_ballot,
                                                      bulk_load_response &&response,
                                                      const gpid &pid,
@@ -339,7 +341,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
         rollback_to_downloading(pid.get_app_id());
     } else if (response.err == ERR_OBJECT_NOT_FOUND || response.err == ERR_INVALID_STATE) {
         dwarn_f("app({}), partition({}) doesn't exist or has invalid state on node({}), error = {}",
-                response.app_name,
+                app_name,
                 pid.to_string(),
                 primary_addr.to_string(),
                 response.err.to_string());
@@ -348,7 +350,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
         dwarn_f("node({}) has enough replicas downloading, wait to next round to send bulk load "
                 "request for app({}), partition({})",
                 primary_addr.to_string(),
-                response.app_name,
+                app_name,
                 pid.to_string());
     } else if (response.err != ERR_OK) {
         // TODO(heyuchen): add bulk load status check, not only downloading error handler below
@@ -356,13 +358,13 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
             if (response.err == ERR_CORRUPTION) {
                 derror_f("app({}), partition({}) failed to download files from remote provider, "
                          "because files are damaged, error = {}",
-                         response.app_name,
+                         app_name,
                          pid.to_string(),
                          response.err.to_string());
             } else {
                 dwarn_f("app({}), partition({}) failed to download files from remote provider, "
                         "because file system error, error = {}",
-                        response.app_name,
+                        app_name,
                         pid.to_string(),
                         response.err.to_string());
             }
@@ -375,9 +377,9 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
             std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
             if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
                 dwarn_f("app(name={}, id={}) is not existed, set bulk load failed",
-                        response.app_name,
+                        app_name,
                         pid.get_app_id());
-                handle_app_unavailable(pid.get_app_id(), response.app_name);
+                handle_app_unavailable(pid.get_app_id(), app_name);
                 return;
             }
             current_ballot = app->partitions[pid.get_partition_index()].ballot;
@@ -386,7 +388,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
         if (req_ballot < current_ballot) {
             dwarn_f("receive out-date response, app({}), partition({}), request ballot = {}, "
                     "current ballot= {}",
-                    response.app_name,
+                    app_name,
                     pid.to_string(),
                     req_ballot,
                     current_ballot);
@@ -414,12 +416,11 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
 
     zauto_read_lock l(_lock);
     if (is_app_bulk_loading_unlock(pid.get_app_id())) {
-        tasking::enqueue(
-            LPC_META_STATE_NORMAL,
-            _meta_svc->tracker(),
-            std::bind(&bulk_load_service::partition_bulk_load, this, response.app_name, pid),
-            0,
-            std::chrono::milliseconds(interval_ms));
+        tasking::enqueue(LPC_META_STATE_NORMAL,
+                         _meta_svc->tracker(),
+                         std::bind(&bulk_load_service::partition_bulk_load, this, app_name, pid),
+                         0,
+                         std::chrono::milliseconds(interval_ms));
     }
 }
 
