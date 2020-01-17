@@ -6017,24 +6017,24 @@ typedef struct _bulk_load_response__isset
           pid(false),
           app_name(false),
           primary_bulk_load_status(false),
+          metadata(false),
           download_progresses(false),
           total_download_progress(false),
-          is_group_bulk_load_context_cleaned(false),
-          metadata(false),
           group_ingestion_status(false),
-          is_group_ingestion_finished(false)
+          is_group_ingestion_finished(false),
+          is_group_bulk_load_context_cleaned(false)
     {
     }
     bool err : 1;
     bool pid : 1;
     bool app_name : 1;
     bool primary_bulk_load_status : 1;
+    bool metadata : 1;
     bool download_progresses : 1;
     bool total_download_progress : 1;
-    bool is_group_bulk_load_context_cleaned : 1;
-    bool metadata : 1;
     bool group_ingestion_status : 1;
     bool is_group_ingestion_finished : 1;
+    bool is_group_bulk_load_context_cleaned : 1;
 } _bulk_load_response__isset;
 
 class bulk_load_response
@@ -6048,8 +6048,8 @@ public:
         : app_name(),
           primary_bulk_load_status((::dsn::bulk_load_status::type)0),
           total_download_progress(0),
-          is_group_bulk_load_context_cleaned(0),
-          is_group_ingestion_finished(0)
+          is_group_ingestion_finished(0),
+          is_group_bulk_load_context_cleaned(0)
     {
     }
 
@@ -6058,12 +6058,12 @@ public:
     ::dsn::gpid pid;
     std::string app_name;
     ::dsn::bulk_load_status::type primary_bulk_load_status;
+    bulk_load_metadata metadata;
     std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
     int32_t total_download_progress;
-    bool is_group_bulk_load_context_cleaned;
-    bulk_load_metadata metadata;
     std::map<::dsn::rpc_address, ingestion_status::type> group_ingestion_status;
     bool is_group_ingestion_finished;
+    bool is_group_bulk_load_context_cleaned;
 
     _bulk_load_response__isset __isset;
 
@@ -6075,19 +6075,19 @@ public:
 
     void __set_primary_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
+    void __set_metadata(const bulk_load_metadata &val);
+
     void
     __set_download_progresses(const std::map<::dsn::rpc_address, partition_download_progress> &val);
 
     void __set_total_download_progress(const int32_t val);
 
-    void __set_is_group_bulk_load_context_cleaned(const bool val);
-
-    void __set_metadata(const bulk_load_metadata &val);
-
     void
     __set_group_ingestion_status(const std::map<::dsn::rpc_address, ingestion_status::type> &val);
 
     void __set_is_group_ingestion_finished(const bool val);
+
+    void __set_is_group_bulk_load_context_cleaned(const bool val);
 
     bool operator==(const bulk_load_response &rhs) const
     {
@@ -6099,6 +6099,10 @@ public:
             return false;
         if (!(primary_bulk_load_status == rhs.primary_bulk_load_status))
             return false;
+        if (__isset.metadata != rhs.__isset.metadata)
+            return false;
+        else if (__isset.metadata && !(metadata == rhs.metadata))
+            return false;
         if (__isset.download_progresses != rhs.__isset.download_progresses)
             return false;
         else if (__isset.download_progresses && !(download_progresses == rhs.download_progresses))
@@ -6107,16 +6111,6 @@ public:
             return false;
         else if (__isset.total_download_progress &&
                  !(total_download_progress == rhs.total_download_progress))
-            return false;
-        if (__isset.is_group_bulk_load_context_cleaned !=
-            rhs.__isset.is_group_bulk_load_context_cleaned)
-            return false;
-        else if (__isset.is_group_bulk_load_context_cleaned &&
-                 !(is_group_bulk_load_context_cleaned == rhs.is_group_bulk_load_context_cleaned))
-            return false;
-        if (__isset.metadata != rhs.__isset.metadata)
-            return false;
-        else if (__isset.metadata && !(metadata == rhs.metadata))
             return false;
         if (__isset.group_ingestion_status != rhs.__isset.group_ingestion_status)
             return false;
@@ -6127,6 +6121,12 @@ public:
             return false;
         else if (__isset.is_group_ingestion_finished &&
                  !(is_group_ingestion_finished == rhs.is_group_ingestion_finished))
+            return false;
+        if (__isset.is_group_bulk_load_context_cleaned !=
+            rhs.__isset.is_group_bulk_load_context_cleaned)
+            return false;
+        else if (__isset.is_group_bulk_load_context_cleaned &&
+                 !(is_group_bulk_load_context_cleaned == rhs.is_group_bulk_load_context_cleaned))
             return false;
         return true;
     }

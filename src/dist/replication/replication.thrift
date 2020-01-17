@@ -818,12 +818,12 @@ struct bulk_load_response
     2:dsn.gpid                      pid;
     3:string                        app_name;
     4:dsn.layer2.bulk_load_status   primary_bulk_load_status;
-    5:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
-    6:optional i32                  total_download_progress;
-    7:optional bool                 is_group_bulk_load_context_cleaned;
-    8:optional bulk_load_metadata   metadata;
-    9:optional map<dsn.rpc_address, ingestion_status>               group_ingestion_status;
-    10:optional bool                is_group_ingestion_finished;
+    5:optional bulk_load_metadata   metadata;
+    6:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
+    7:optional i32                  total_download_progress;
+    8:optional map<dsn.rpc_address, ingestion_status>               group_ingestion_status;
+    9:optional bool                is_group_ingestion_finished;
+    10:optional bool                 is_group_bulk_load_context_cleaned;
 }
 
 struct group_bulk_load_request
