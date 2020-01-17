@@ -158,6 +158,14 @@ public:
     const std::map<std::string, std::string> &get_replica_extra_envs() const { return _extra_envs; }
 
 private:
+    enum bulk_load_report_flag
+    {
+        ReportNothing = 0,
+        ReportDownloadProgress,
+        ReportIngestionStatus,
+        ReportCleanupFlag
+    };
+
     // common helpers
     void init_state();
     void response_client_read(dsn::message_ex *request, error_code error);
@@ -336,14 +344,37 @@ private:
                      dsn::error_code &err,
                      dsn::task_tracker &tracker);
     dsn::error_code read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
-    void update_group_download_progress(bulk_load_response &response);
+    void report_group_download_progress(bulk_load_response &response);
     void handle_bulk_load_error();
     void cleanup_bulk_load_context(bulk_load_status::type new_status);
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
     void update_group_context_clean_flag(bulk_load_response &response);
     void handle_bulk_load_succeed();
     void handle_bulk_load_download_error();
-    void update_group_ingestion_status(bulk_load_response &response);
+    void report_group_ingestion_status(bulk_load_response &response);
+
+    dsn::error_code validate_bulk_load_status(bulk_load_status::type meta_status,
+                                              bulk_load_status::type local_status);
+
+    dsn::error_code do_bulk_load(const std::string &app_name,
+                                 bulk_load_status::type meta_status,
+                                 const std::string &cluster_name,
+                                 const std::string &provider_name);
+
+    dsn::error_code bulk_load_start_download(const std::string &app_name,
+                                             const std::string &cluster_name,
+                                             const std::string &provider_name);
+    void bulk_load_start_ingestion();
+    dsn::error_code bulk_load_check_ingestion();
+
+    void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
+                                         bool report_metadata,
+                                         bulk_load_response &response);
+    void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
+                                            group_bulk_load_response &response);
+
+    bulk_load_report_flag get_report_flag(bulk_load_status::type meta_status,
+                                          bulk_load_status::type local_status);
 
     std::string get_bulk_load_remote_dir(const std::string &app_name,
                                          const std::string &cluster_name,
