@@ -324,6 +324,22 @@ private:
                                   const std::shared_ptr<group_bulk_load_request> &req,
                                   const std::shared_ptr<group_bulk_load_response> &resp);
 
+    dsn::error_code do_bulk_load(const std::string &app_name,
+                                 bulk_load_status::type meta_status,
+                                 const std::string &cluster_name,
+                                 const std::string &provider_name);
+
+    void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
+                                         bool report_metadata,
+                                         /*out*/ bulk_load_response &response);
+    void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
+                                            /*out*/ group_bulk_load_response &response);
+
+    // check local bulk load status whether is valid
+    // return ERR_INVALID_STATE if invalid
+    dsn::error_code validate_bulk_load_status(bulk_load_status::type meta_status,
+                                              bulk_load_status::type local_status);
+
     dsn::error_code download_sst_files(const std::string &app_name,
                                        const std::string &cluster_name,
                                        const std::string &provider_name);
@@ -335,7 +351,7 @@ private:
     bool verify_sst_files(const file_meta &f_meta, const std::string &dir);
 
     dsn::error_code create_local_bulk_load_dir(const std::string &bulk_load_dir);
-    void update_download_progress();
+    void update_download_progress(uint64_t file_size);
     void do_download(const std::string &remote_file_dir,
                      const std::string &local_file_dir,
                      const std::string &remote_file_name,
@@ -353,25 +369,11 @@ private:
     void handle_bulk_load_download_error();
     void report_group_ingestion_status(bulk_load_response &response);
 
-    dsn::error_code validate_bulk_load_status(bulk_load_status::type meta_status,
-                                              bulk_load_status::type local_status);
-
-    dsn::error_code do_bulk_load(const std::string &app_name,
-                                 bulk_load_status::type meta_status,
-                                 const std::string &cluster_name,
-                                 const std::string &provider_name);
-
     dsn::error_code bulk_load_start_download(const std::string &app_name,
                                              const std::string &cluster_name,
                                              const std::string &provider_name);
     void bulk_load_start_ingestion();
     dsn::error_code bulk_load_check_ingestion();
-
-    void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
-                                         bool report_metadata,
-                                         bulk_load_response &response);
-    void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
-                                            group_bulk_load_response &response);
 
     bulk_load_report_flag get_report_flag(bulk_load_status::type meta_status,
                                           bulk_load_status::type local_status);
@@ -396,7 +398,7 @@ private:
     }
     void try_set_bulk_load_max_download_size(uint64_t f_size)
     {
-        if (f_size > _bulk_load_context._max_download_size.load()) {
+        if (f_size > get_bulk_load_max_download_size()) {
             _bulk_load_context._max_download_size.store(f_size);
         }
     }

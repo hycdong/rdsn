@@ -545,7 +545,7 @@ public:
     explicit bulk_load_context()
         : _status(bulk_load_status::BLS_INVALID),
           _file_total_size(0),
-          _cur_download_size(0),
+          _cur_downloaded_size(0),
           _max_download_size(0),
           _download_progress(0),
           _bulk_load_start_time_ns(0),
@@ -576,7 +576,7 @@ private:
     bulk_load_status::type _status;
     bulk_load_metadata _metadata;
     uint64_t _file_total_size;
-    std::atomic<uint64_t> _cur_download_size;
+    std::atomic<uint64_t> _cur_downloaded_size;
     std::atomic<uint64_t> _max_download_size;
     std::atomic<int32_t> _download_progress;
     // file_name -> downloading task

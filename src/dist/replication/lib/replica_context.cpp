@@ -1362,7 +1362,7 @@ bool bulk_load_context::cleanup_download_task()
 void bulk_load_context::cleanup_download_prgress()
 {
     _file_total_size = 0;
-    _cur_download_size.store(0);
+    _cur_downloaded_size.store(0);
     _max_download_size.store(0);
     _download_progress.store(0);
 }
@@ -1381,7 +1381,7 @@ void bulk_load_context::cleanup()
 bool bulk_load_context::is_cleanup()
 {
     return _status == bulk_load_status::type::BLS_INVALID && _file_total_size == 0 &&
-           _cur_download_size.load() == 0 && _download_progress.load() == 0 &&
+           _cur_downloaded_size.load() == 0 && _download_progress.load() == 0 &&
            _bulk_load_download_task.size() == 0 && _metadata.files.size() == 0;
 }
 

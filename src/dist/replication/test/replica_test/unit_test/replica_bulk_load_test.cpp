@@ -103,7 +103,10 @@ public:
         _replica->on_group_bulk_load_reply(rpc_error, req, resp);
     }
 
-    void test_update_download_progress() { _replica->update_download_progress(); }
+    void test_update_download_progress(uint64_t file_size)
+    {
+        _replica->update_download_progress(file_size);
+    }
 
     void test_report_group_ingestion_status(bulk_load_response &response)
     {
@@ -218,12 +221,12 @@ public:
     }
 
     void mock_bulk_load_context(uint64_t file_total_size,
-                                uint64_t cur_download_size = 0,
+                                uint64_t cur_downloaded_size = 0,
                                 int32_t download_progress = 0,
                                 bulk_load_status::type status = bulk_load_status::BLS_INVALID)
     {
         _replica->_bulk_load_context._file_total_size = file_total_size;
-        _replica->_bulk_load_context._cur_download_size = cur_download_size;
+        _replica->_bulk_load_context._cur_downloaded_size = cur_downloaded_size;
         _replica->_bulk_load_context._download_progress = download_progress;
         _replica->_bulk_load_context._status = status;
         _replica->_bulk_load_download_progress.pid = PID;
@@ -304,9 +307,9 @@ public:
     }
 
     /// getter functions
-    uint64_t get_cur_download_size()
+    uint64_t get_cur_downloaded_size()
     {
-        return _replica->_bulk_load_context._cur_download_size.load();
+        return _replica->_bulk_load_context._cur_downloaded_size.load();
     }
 
     int32_t get_download_progress()
@@ -437,7 +440,7 @@ TEST_F(replica_bulk_load_test, do_download_file_exist)
     test_do_download(PROVIDER, LOCAL_DIR, METADATA, true, ec);
     ASSERT_EQ(ec, ERR_OK);
 
-    ASSERT_EQ(f_meta.size, get_cur_download_size());
+    ASSERT_EQ(f_meta.size, get_cur_downloaded_size());
     ASSERT_EQ(100, get_download_progress());
 }
 
@@ -1176,7 +1179,7 @@ TEST_F(replica_bulk_load_test, concurrent_count_decrease_test)
 {
     mock_stub_downloading_count(3);
     mock_bulk_load_context(300, 300, 100, bulk_load_status::BLS_DOWNLOADING);
-    test_update_download_progress();
+    test_update_download_progress(0);
     ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
     ASSERT_EQ(get_stub_downloading_count(), 2);
 }
