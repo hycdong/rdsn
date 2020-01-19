@@ -13084,8 +13084,6 @@ void bulk_load_metadata::printTo(std::ostream &out) const
 
 partition_download_progress::~partition_download_progress() throw() {}
 
-void partition_download_progress::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
-
 void partition_download_progress::__set_progress(const int32_t val) { this->progress = val; }
 
 void partition_download_progress::__set_status(const ::dsn::error_code &val) { this->status = val; }
@@ -13110,14 +13108,6 @@ uint32_t partition_download_progress::read(::apache::thrift::protocol::TProtocol
         }
         switch (fid) {
         case 1:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->pid.read(iprot);
-                this->__isset.pid = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 2:
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 xfer += iprot->readI32(this->progress);
                 this->__isset.progress = true;
@@ -13125,7 +13115,7 @@ uint32_t partition_download_progress::read(::apache::thrift::protocol::TProtocol
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 3:
+        case 2:
             if (ftype == ::apache::thrift::protocol::T_STRUCT) {
                 xfer += this->status.read(iprot);
                 this->__isset.status = true;
@@ -13151,15 +13141,11 @@ uint32_t partition_download_progress::write(::apache::thrift::protocol::TProtoco
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
     xfer += oprot->writeStructBegin("partition_download_progress");
 
-    xfer += oprot->writeFieldBegin("pid", ::apache::thrift::protocol::T_STRUCT, 1);
-    xfer += this->pid.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("progress", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeFieldBegin("progress", ::apache::thrift::protocol::T_I32, 1);
     xfer += oprot->writeI32(this->progress);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("status", ::apache::thrift::protocol::T_STRUCT, 3);
+    xfer += oprot->writeFieldBegin("status", ::apache::thrift::protocol::T_STRUCT, 2);
     xfer += this->status.write(oprot);
     xfer += oprot->writeFieldEnd();
 
@@ -13171,7 +13157,6 @@ uint32_t partition_download_progress::write(::apache::thrift::protocol::TProtoco
 void swap(partition_download_progress &a, partition_download_progress &b)
 {
     using ::std::swap;
-    swap(a.pid, b.pid);
     swap(a.progress, b.progress);
     swap(a.status, b.status);
     swap(a.__isset, b.__isset);
@@ -13180,14 +13165,12 @@ void swap(partition_download_progress &a, partition_download_progress &b)
 partition_download_progress::partition_download_progress(
     const partition_download_progress &other582)
 {
-    pid = other582.pid;
     progress = other582.progress;
     status = other582.status;
     __isset = other582.__isset;
 }
 partition_download_progress::partition_download_progress(partition_download_progress &&other583)
 {
-    pid = std::move(other583.pid);
     progress = std::move(other583.progress);
     status = std::move(other583.status);
     __isset = std::move(other583.__isset);
@@ -13195,7 +13178,6 @@ partition_download_progress::partition_download_progress(partition_download_prog
 partition_download_progress &partition_download_progress::
 operator=(const partition_download_progress &other584)
 {
-    pid = other584.pid;
     progress = other584.progress;
     status = other584.status;
     __isset = other584.__isset;
@@ -13204,7 +13186,6 @@ operator=(const partition_download_progress &other584)
 partition_download_progress &partition_download_progress::
 operator=(partition_download_progress &&other585)
 {
-    pid = std::move(other585.pid);
     progress = std::move(other585.progress);
     status = std::move(other585.status);
     __isset = std::move(other585.__isset);
@@ -13214,9 +13195,7 @@ void partition_download_progress::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
     out << "partition_download_progress(";
-    out << "pid=" << to_string(pid);
-    out << ", "
-        << "progress=" << to_string(progress);
+    out << "progress=" << to_string(progress);
     out << ", "
         << "status=" << to_string(status);
     out << ")";

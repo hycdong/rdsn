@@ -210,7 +210,6 @@ void primary_context::reset_node_bulk_load_context(const rpc_address &node,
                        status == bulk_load_status::type::BLS_FAILED);
     if (reset_progress) {
         partition_download_progress download_progress;
-        download_progress.pid = pid;
         download_progress.progress = 0;
         download_progress.status = ERR_OK;
         group_download_progress[node] = download_progress;
@@ -1365,6 +1364,7 @@ void bulk_load_context::cleanup_download_prgress()
     _cur_downloaded_size.store(0);
     _max_download_size.store(0);
     _download_progress.store(0);
+    _download_status = ERR_OK;
 }
 
 void bulk_load_context::cleanup()
@@ -1382,7 +1382,8 @@ bool bulk_load_context::is_cleanup()
 {
     return _status == bulk_load_status::type::BLS_INVALID && _file_total_size == 0 &&
            _cur_downloaded_size.load() == 0 && _download_progress.load() == 0 &&
-           _bulk_load_download_task.size() == 0 && _metadata.files.size() == 0;
+           _download_status == ERR_OK && _bulk_load_download_task.size() == 0 &&
+           _metadata.files.size() == 0;
 }
 
 } // namespace replication

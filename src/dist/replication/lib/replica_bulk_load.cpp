@@ -339,8 +339,8 @@ dsn::error_code replica::bulk_load_start_download(const std::string &app_name,
         return ERR_BUSY;
     }
 
+    _bulk_load_context.cleanup_download_prgress();
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
-    reset_bulk_load_download_progress();
     _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
 
     set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
@@ -449,15 +449,12 @@ dsn::error_code replica::do_download_sst_files(const std::string &remote_provide
                 do_download(remote_file_dir, local_file_dir, f_meta.name, fs, true, ec, tracker);
                 if (ec != ERR_OK) {
                     handle_bulk_load_download_error();
-                    _bulk_load_download_progress.status = ec;
+                    _bulk_load_context._download_status = ec;
                     return;
                 }
                 if (!verify_sst_files(f_meta, local_file_dir)) {
                     ec = ERR_CORRUPTION;
                 }
-                //                else {
-                //                    ddebug_replica("sst file({}) is verified", f_meta.name);
-                //                }
             });
         _bulk_load_context._bulk_load_download_task[f_meta.name] = bulk_load_download_task;
     }
@@ -524,13 +521,13 @@ void replica::do_download(const std::string &remote_file_dir,
         } else {
             uint64_t file_size = bf->get_size();
             if (update_progress) {
-                // _bulk_load_context._cur_downloaded_size.fetch_add(file_size);
                 update_download_progress(file_size);
             }
             ddebug_replica("download file({}) succeed, file_size = {}, download_progress = {}%",
                            local_file.c_str(),
                            resp.downloaded_size,
-                           _bulk_load_download_progress.progress);
+                           _bulk_load_context._download_progress);
+
             _stub->_counter_bulk_load_recent_download_file_succ_count->increment();
             _stub->_counter_bulk_load_recent_download_file_size->add(file_size);
             try_set_bulk_load_max_download_size(file_size);
@@ -552,7 +549,6 @@ void replica::do_download(const std::string &remote_file_dir,
         if (bf->get_md5sum().empty()) {
             derror_replica("file({}) doesn't exist on bulk load provider", bf->file_name());
             err = ERR_CORRUPTION;
-            // _bulk_load_download_progress.status = err;
             return;
         }
 
@@ -590,7 +586,6 @@ void replica::do_download(const std::string &remote_file_dir,
             } else {
                 ddebug_replica("local file({}) has been downloaded", local_file);
                 if (update_progress) {
-                    // _bulk_load_context._cur_downloaded_size.fetch_add(bf->get_size());
                     update_download_progress(bf->get_size());
                 }
             }
@@ -695,7 +690,6 @@ void replica::update_download_progress(uint64_t file_size)
     auto cur_download_size = static_cast<double>(_bulk_load_context._cur_downloaded_size.load());
     _bulk_load_context._download_progress.store(
         static_cast<int32_t>((cur_download_size / total_size) * 100));
-    _bulk_load_download_progress.progress = _bulk_load_context._download_progress.load();
     if (_bulk_load_context._download_progress.load() == bulk_load_constant::PROGRESS_FINISHED &&
         get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
         // update bulk load status to downloaded
@@ -717,13 +711,17 @@ void replica::report_group_download_progress(bulk_load_response &response)
     }
 
     response.__isset.download_progresses = true;
-    response.download_progresses[_primary_states.membership.primary] = _bulk_load_download_progress;
+
+    partition_download_progress primary_progress;
+    primary_progress.progress = _bulk_load_context._download_progress;
+    primary_progress.status = _bulk_load_context._download_status;
+    response.download_progresses[_primary_states.membership.primary] = primary_progress;
     ddebug_replica("primary = {}, download progress = {}%, status={}",
                    _primary_states.membership.primary.to_string(),
-                   _bulk_load_download_progress.progress,
-                   _bulk_load_download_progress.status.to_string());
+                   primary_progress.progress,
+                   primary_progress.status.to_string());
 
-    int32_t total_progress = _bulk_load_download_progress.progress;
+    int32_t total_progress = primary_progress.progress;
     for (const auto &target_address : _primary_states.membership.secondaries) {
         partition_download_progress sprogress =
             _primary_states.group_download_progress[target_address];
@@ -760,7 +758,7 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 
     if (old_status == bulk_load_status::BLS_DOWNLOADING ||
         old_status == bulk_load_status::BLS_DOWNLOADED) {
-        reset_bulk_load_download_progress();
+        _bulk_load_context.cleanup_download_prgress();
     }
 
     if (status() == partition_status::PS_PRIMARY) {
@@ -788,7 +786,6 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 void replica::bulk_load_start_ingestion()
 {
     _bulk_load_context.cleanup_download_task();
-    reset_bulk_load_download_progress();
     set_bulk_load_status(bulk_load_status::BLS_INGESTING);
     _stub->_counter_bulk_load_ingestion_count->increment();
 
@@ -981,9 +978,12 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
 
     bulk_load_report_flag flag = get_report_flag(remote_status, get_bulk_load_status());
     switch (flag) {
-    case ReportDownloadProgress:
-        response.__set_download_progress(_bulk_load_download_progress);
-        break;
+    case ReportDownloadProgress: {
+        partition_download_progress secondary_progress;
+        secondary_progress.progress = _bulk_load_context._download_progress;
+        secondary_progress.status = _bulk_load_context._download_status;
+        response.__set_download_progress(secondary_progress);
+    } break;
     case ReportIngestionStatus:
         response.__set_istatus(_app->get_ingestion_status());
         break;

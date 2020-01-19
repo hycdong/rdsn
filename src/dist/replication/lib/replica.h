@@ -402,13 +402,6 @@ private:
             _bulk_load_context._max_download_size.store(f_size);
         }
     }
-    void reset_bulk_load_download_progress()
-    {
-        _bulk_load_download_progress.pid = get_gpid();
-        _bulk_load_download_progress.progress = 0;
-        _bulk_load_download_progress.status = ERR_OK;
-        _bulk_load_context.cleanup_download_prgress();
-    }
 
 private:
     friend class ::dsn::replication::replication_checker;
@@ -482,8 +475,6 @@ private:
     //      ERR_IGNORE_DAMAGED_DATA : data on backup media is damaged but we can skip the damage
     //                                data, so skip the damaged partition
     dsn::error_code _restore_status;
-
-    partition_download_progress _bulk_load_download_progress;
 
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true
     bool _is_initializing;       // when initializing, switching to primary need to update ballot

@@ -548,6 +548,7 @@ public:
           _cur_downloaded_size(0),
           _max_download_size(0),
           _download_progress(0),
+          _download_status(ERR_OK),
           _bulk_load_start_time_ns(0),
           _bulk_load_ingestion_start_time_ns(0)
     {
@@ -579,6 +580,7 @@ private:
     std::atomic<uint64_t> _cur_downloaded_size;
     std::atomic<uint64_t> _max_download_size;
     std::atomic<int32_t> _download_progress;
+    dsn::error_code _download_status;
     // file_name -> downloading task
     std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
     uint64_t _bulk_load_start_time_ns;

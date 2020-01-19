@@ -501,7 +501,6 @@ public:
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_DOWNLOADING, pidx);
         partition_download_progress progress;
-        progress.pid = gpid(_app_id, pidx);
         progress.progress = 100;
         progress.status = ERR_OK;
 

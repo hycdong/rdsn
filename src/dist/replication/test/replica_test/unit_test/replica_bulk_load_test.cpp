@@ -87,7 +87,6 @@ public:
     {
         mock_group_bulk_load_request(req_status, req_ballot);
         partition_download_progress download_progress;
-        download_progress.pid = PID;
         download_progress.progress = progress;
         download_progress.status = ERR_OK;
         std::shared_ptr<group_bulk_load_request> req =
@@ -229,8 +228,6 @@ public:
         _replica->_bulk_load_context._cur_downloaded_size = cur_downloaded_size;
         _replica->_bulk_load_context._download_progress = download_progress;
         _replica->_bulk_load_context._status = status;
-        _replica->_bulk_load_download_progress.pid = PID;
-        _replica->_bulk_load_download_progress.progress = download_progress;
     }
 
     void mock_replica_config(partition_status::type status)
@@ -261,7 +258,6 @@ public:
 
         if (mock_download_progress) {
             partition_download_progress mock_progress;
-            mock_progress.pid = PID;
             mock_progress.progress = all_secondary_finish ? 100 : 0;
             _replica->_primary_states.group_download_progress[SECONDARY] = mock_progress;
             _replica->_primary_states.group_download_progress[SECONDARY2] = mock_progress;

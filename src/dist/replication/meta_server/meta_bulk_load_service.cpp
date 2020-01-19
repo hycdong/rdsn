@@ -451,7 +451,7 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
             dwarn_f("app({}) partition({}) meet error during downloading sst files, address = {}, "
                     "error = {}",
                     app_name,
-                    progress.pid.to_string(),
+                    pid.to_string(),
                     iter->first.to_string(),
                     progress.status.to_string());
             handle_bulk_load_failed(pid.get_app_id());

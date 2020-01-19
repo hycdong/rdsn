@@ -764,9 +764,8 @@ struct bulk_load_metadata
 
 struct partition_download_progress
 {
-    1:dsn.gpid          pid;
-    2:i32               progress;
-    3:dsn.error_code    status;
+    1:i32               progress;
+    2:dsn.error_code    status;
 }
 
 // client -> meta start bulk load, including downloading sst files and ingest them

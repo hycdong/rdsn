@@ -5580,8 +5580,7 @@ inline std::ostream &operator<<(std::ostream &out, const bulk_load_metadata &obj
 
 typedef struct _partition_download_progress__isset
 {
-    _partition_download_progress__isset() : pid(false), progress(false), status(false) {}
-    bool pid : 1;
+    _partition_download_progress__isset() : progress(false), status(false) {}
     bool progress : 1;
     bool status : 1;
 } _partition_download_progress__isset;
@@ -5596,13 +5595,10 @@ public:
     partition_download_progress() : progress(0) {}
 
     virtual ~partition_download_progress() throw();
-    ::dsn::gpid pid;
     int32_t progress;
     ::dsn::error_code status;
 
     _partition_download_progress__isset __isset;
-
-    void __set_pid(const ::dsn::gpid &val);
 
     void __set_progress(const int32_t val);
 
@@ -5610,8 +5606,6 @@ public:
 
     bool operator==(const partition_download_progress &rhs) const
     {
-        if (!(pid == rhs.pid))
-            return false;
         if (!(progress == rhs.progress))
             return false;
         if (!(status == rhs.status))
