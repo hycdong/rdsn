@@ -25,9 +25,9 @@ class replica_bulk_load_test : public ::testing::Test
 
 public:
     /// test helper functions
-    error_code test_read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta)
+    error_code test_parse_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta)
     {
-        return _replica->read_bulk_load_metadata(file_path, meta);
+        return _replica->parse_bulk_load_metadata(file_path, meta);
     }
 
     void test_do_download(const std::string &remote_file_dir,
@@ -56,9 +56,9 @@ public:
         _replica->report_group_download_progress(response);
     }
 
-    void test_update_group_context_clean_flag(bulk_load_response &response)
+    void test_report_group_context_clean_flag(bulk_load_response &response)
     {
-        _replica->update_group_context_clean_flag(response);
+        _replica->report_group_context_clean_flag(response);
     }
 
     void test_cleanup_bulk_load_context(bulk_load_status::type status)
@@ -105,6 +105,7 @@ public:
     void test_update_download_progress(uint64_t file_size)
     {
         _replica->update_download_progress(file_size);
+        _replica->tracker()->wait_outstanding_tasks();
     }
 
     void test_report_group_ingestion_status(bulk_load_response &response)
@@ -373,7 +374,7 @@ public:
 TEST_F(replica_bulk_load_test, bulk_load_metadata_not_exist)
 {
     bulk_load_metadata metadata;
-    error_code ec = test_read_bulk_load_metadata("path_not_exist", metadata);
+    error_code ec = test_parse_bulk_load_metadata("path_not_exist", metadata);
     ASSERT_EQ(ec, ERR_FILE_OPERATION_FAILED);
 }
 
@@ -384,7 +385,7 @@ TEST_F(replica_bulk_load_test, bulk_load_metadata_corrupt)
 
     bulk_load_metadata metadata;
     std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
-    error_code ec = test_read_bulk_load_metadata(metadata_file_name, metadata);
+    error_code ec = test_parse_bulk_load_metadata(metadata_file_name, metadata);
     ASSERT_EQ(ec, ERR_CORRUPTION);
 }
 
@@ -396,7 +397,7 @@ TEST_F(replica_bulk_load_test, bulk_load_metadata_parse_succeed)
     ASSERT_EQ(ec, ERR_OK);
 
     bulk_load_metadata metadata;
-    ec = test_read_bulk_load_metadata(metadata_file_name, metadata);
+    ec = test_parse_bulk_load_metadata(metadata_file_name, metadata);
     ASSERT_EQ(ec, ERR_OK);
     ASSERT_TRUE(validate_metadata(metadata));
 }
@@ -489,25 +490,25 @@ TEST_F(replica_bulk_load_test, report_group_download_progress)
     ASSERT_EQ(response.total_download_progress, 33);
 }
 
-TEST_F(replica_bulk_load_test, update_group_context_clean_flag_in_unhealthy_state)
+TEST_F(replica_bulk_load_test, report_group_context_clean_flag_in_unhealthy_state)
 {
     mock_cleanup_flag_unhealthy();
 
     bulk_load_response response;
     response.pid = PID;
 
-    test_update_group_context_clean_flag(response);
+    test_report_group_context_clean_flag(response);
     ASSERT_FALSE(response.is_group_bulk_load_context_cleaned);
 }
 
-TEST_F(replica_bulk_load_test, update_group_context_clean_flag)
+TEST_F(replica_bulk_load_test, report_group_context_clean_flag)
 {
     mock_primary_states(false, true);
 
     bulk_load_response response;
     response.pid = PID;
 
-    test_update_group_context_clean_flag(response);
+    test_report_group_context_clean_flag(response);
     ASSERT_FALSE(response.is_group_bulk_load_context_cleaned);
 }
 

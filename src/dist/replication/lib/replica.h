@@ -329,56 +329,66 @@ private:
                                  const std::string &cluster_name,
                                  const std::string &provider_name);
 
-    void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
-                                         bool report_metadata,
-                                         /*out*/ bulk_load_response &response);
-    void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
-                                            /*out*/ group_bulk_load_response &response);
-
-    // check local bulk load status whether is valid
-    // return ERR_INVALID_STATE if invalid
+    // compare meta bulk load status and local bulk load status
+    // \return ERR_INVALID_STATE if local bulk load status is invalid
     dsn::error_code validate_bulk_load_status(bulk_load_status::type meta_status,
                                               bulk_load_status::type local_status);
 
+    // replica start or restart download sst files from remote provider
+    // \return ERR_BUSY if node has already had enought replica executing downloading
+    // \return download errors by function `download_sst_files`
+    dsn::error_code bulk_load_start_download(const std::string &app_name,
+                                             const std::string &cluster_name,
+                                             const std::string &provider_name);
+
+    // \return ERR_FILE_OPERATION_FAILED: create local bulk load dir failed
+    // \return download metadata file error, see function `do_download`
+    // \return parse metadata file error, see function `parse_bulk_load_metadata`
     dsn::error_code download_sst_files(const std::string &app_name,
                                        const std::string &cluster_name,
                                        const std::string &provider_name);
 
-    dsn::error_code do_download_sst_files(const std::string &remote_provider,
-                                          const std::string &remote_file_dir,
-                                          const std::string &local_file_dir);
-
-    bool verify_sst_files(const file_meta &f_meta, const std::string &dir);
-
-    dsn::error_code create_local_bulk_load_dir(const std::string &bulk_load_dir);
-    void update_download_progress(uint64_t file_size);
-    void do_download(const std::string &remote_file_dir,
-                     const std::string &local_file_dir,
-                     const std::string &remote_file_name,
+    // download file from remote file system
+    // err = ERR_FILE_OPERATION_FAILED: local file system errors
+    // err = ERR_FS_INTERNAL: remote file system error
+    // err = ERR_CORRUPTION: file not exist or damaged or not pass verify
+    void do_download(const std::string &remote_dir,
+                     const std::string &local_dir,
+                     const std::string &file_name,
                      dsn::dist::block_service::block_filesystem *fs,
                      bool is_update_progress,
                      dsn::error_code &err,
                      dsn::task_tracker &tracker);
-    dsn::error_code read_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta);
-    void report_group_download_progress(bulk_load_response &response);
+
+    // \return ERR_FILE_OPERATION_FAILED: file not exist, get size failed, open file failed
+    // \return ERR_CORRUPTION: parse failed
+    dsn::error_code parse_bulk_load_metadata(const std::string &fname, bulk_load_metadata &meta);
+    void update_download_progress(uint64_t file_size);
+    bool verify_sst_files(const file_meta &f_meta, const std::string &local_dir);
+
+    void handle_bulk_load_download_error();
+    void bulk_load_check_download_finish();
+    void bulk_load_start_ingestion();
+    void bulk_load_check_ingestion_finish();
+    void handle_bulk_load_succeed();
     void handle_bulk_load_error();
     void cleanup_bulk_load_context(bulk_load_status::type new_status);
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
-    void update_group_context_clean_flag(bulk_load_response &response);
-    void handle_bulk_load_succeed();
-    void handle_bulk_load_download_error();
-    void report_group_ingestion_status(bulk_load_response &response);
-
-    dsn::error_code bulk_load_start_download(const std::string &app_name,
-                                             const std::string &cluster_name,
-                                             const std::string &provider_name);
-    void bulk_load_start_ingestion();
-    dsn::error_code bulk_load_check_ingestion();
 
     bulk_load_report_flag get_report_flag(bulk_load_status::type meta_status,
                                           bulk_load_status::type local_status);
+    // only called by primary
+    void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
+                                         bool report_metadata,
+                                         /*out*/ bulk_load_response &response);
+    void report_group_download_progress(bulk_load_response &response);
+    void report_group_ingestion_status(bulk_load_response &response);
+    void report_group_context_clean_flag(bulk_load_response &response);
+    // only called by secondary
+    void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
+                                            /*out*/ group_bulk_load_response &response);
 
-    std::string get_bulk_load_remote_dir(const std::string &app_name,
+    std::string get_remote_bulk_load_dir(const std::string &app_name,
                                          const std::string &cluster_name,
                                          uint32_t pidx)
     {
@@ -392,13 +402,9 @@ private:
     {
         _bulk_load_context._status = status;
     }
-    uint64_t get_bulk_load_max_download_size()
-    {
-        return _bulk_load_context._max_download_size.load();
-    }
     void try_set_bulk_load_max_download_size(uint64_t f_size)
     {
-        if (f_size > get_bulk_load_max_download_size()) {
+        if (f_size > _bulk_load_context.get_max_download_size()) {
             _bulk_load_context._max_download_size.store(f_size);
         }
     }

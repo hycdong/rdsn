@@ -362,14 +362,15 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                          pid.to_string(),
                          response.err.to_string());
             } else {
-                dwarn_f("app({}), partition({}) failed to download files from remote provider, "
-                        "because file system error, error = {}",
-                        app_name,
-                        pid.to_string(),
-                        response.err.to_string());
+                derror_f("app({}), partition({}) failed to download files from remote provider, "
+                         "because file system error, error = {}",
+                         app_name,
+                         pid.to_string(),
+                         response.err.to_string());
             }
             handle_bulk_load_failed(pid.get_app_id());
         }
+        // TODO(heyuchen): consdier other cases
     } else {
         ballot current_ballot;
         {
@@ -681,17 +682,15 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
 
             _partition_bulk_load_info[pid].status = new_status;
 
-            if (new_status == bulk_load_status::BLS_DOWNLOADED && old_status != new_status) {
+            if ((new_status == bulk_load_status::BLS_DOWNLOADED ||
+                 new_status == bulk_load_status::BLS_INGESTING ||
+                 new_status == bulk_load_status::BLS_SUCCEED) &&
+                old_status != new_status) {
                 if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
                     update_app_status_on_remote_storage_unlock(pid.get_app_id(), new_status);
                 }
-            } else if ((new_status == bulk_load_status::BLS_INGESTING ||
-                        new_status == bulk_load_status::BLS_SUCCEED) &&
+            } else if (new_status == bulk_load_status::BLS_DOWNLOADING &&
                        old_status != new_status) {
-                if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
-                    update_app_status_on_remote_storage_unlock(pid.get_app_id(), new_status);
-                }
-            } else if (new_status == bulk_load_status::BLS_DOWNLOADING) {
                 // TODO(heyuchen): consider here
                 _partitions_download_progress[pid].clear();
                 _partitions_total_download_progress[pid] = 0;

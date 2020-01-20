@@ -83,13 +83,12 @@ public:
 
     void do_cleanup_pending_mutations(bool clean_pending_mutations = true);
 
-    void set_node_bulk_load_context(const std::shared_ptr<group_bulk_load_response> &resp,
+    void set_group_bulk_load_states(const std::shared_ptr<group_bulk_load_response> &resp,
                                     const rpc_address &node,
                                     bool update_progress);
 
-    void reset_node_bulk_load_context(const rpc_address &node,
-                                      const gpid &pid,
-                                      bulk_load_status::type status);
+    void reset_group_bulk_load_states(const rpc_address &node,
+                                      bulk_load_status::type meta_app_status);
 
 public:
     // membership mgr, including learners
@@ -569,6 +568,7 @@ public:
                    ? (dsn_now_ns() - _bulk_load_ingestion_start_time_ns) / 1000000
                    : 0;
     }
+    uint64_t get_max_download_size() { return _max_download_size.load(); }
 
 private:
     friend class ::dsn::replication::replica;

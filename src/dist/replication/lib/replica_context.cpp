@@ -179,7 +179,7 @@ bool primary_context::check_exist(::dsn::rpc_address node, partition_status::typ
     }
 }
 
-void primary_context::set_node_bulk_load_context(
+void primary_context::set_group_bulk_load_states(
     const std::shared_ptr<group_bulk_load_response> &resp,
     const rpc_address &node,
     bool update_progress)
@@ -195,19 +195,18 @@ void primary_context::set_node_bulk_load_context(
     }
 }
 
-void primary_context::reset_node_bulk_load_context(const rpc_address &node,
-                                                   const gpid &pid,
-                                                   bulk_load_status::type status)
+void primary_context::reset_group_bulk_load_states(const rpc_address &node,
+                                                   bulk_load_status::type meta_app_status)
 {
     bool reset_progress =
-        (status == bulk_load_status::type::BLS_DOWNLOADING ||
-         status == bulk_load_status::type::BLS_DOWNLOADED ||
-         status == bulk_load_status::type::BLS_SUCCEED || status == bulk_load_status::BLS_FAILED);
+        (meta_app_status == bulk_load_status::type::BLS_DOWNLOADING ||
+         meta_app_status == bulk_load_status::type::BLS_DOWNLOADED || meta_app_status == bulk_load_status::type::BLS_INGESTING ||
+         meta_app_status == bulk_load_status::type::BLS_SUCCEED || meta_app_status == bulk_load_status::BLS_FAILED);
     bool reset_ingestion =
-        (status == bulk_load_status::BLS_INGESTING ||
-         status == bulk_load_status::type::BLS_SUCCEED || status == bulk_load_status::BLS_FAILED);
-    bool reset_flag = (status == bulk_load_status::type::BLS_SUCCEED ||
-                       status == bulk_load_status::type::BLS_FAILED);
+        (meta_app_status == bulk_load_status::BLS_INGESTING ||
+         meta_app_status == bulk_load_status::type::BLS_SUCCEED || meta_app_status == bulk_load_status::BLS_FAILED);
+    bool reset_flag = (meta_app_status == bulk_load_status::type::BLS_SUCCEED ||
+                       meta_app_status == bulk_load_status::type::BLS_FAILED);
     if (reset_progress) {
         partition_download_progress download_progress;
         download_progress.progress = 0;
