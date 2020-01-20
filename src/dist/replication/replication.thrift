@@ -806,9 +806,8 @@ struct bulk_load_request
     4:string                        remote_provider_name;
     5:string                        cluster_name;
     6:i64                           ballot;
-    7:dsn.layer2.bulk_load_status   app_bulk_load_status;
-    8:dsn.layer2.bulk_load_status   partition_bulk_load_status;
-    9:bool                          query_bulk_load_metadata;
+    7:dsn.layer2.bulk_load_status   meta_bulk_load_status;
+    8:bool                          query_bulk_load_metadata;
 }
 
 struct bulk_load_response
@@ -832,8 +831,7 @@ struct group_bulk_load_request
     3:replica_configuration         config;
     4:string                        provider_name;
     5:string                        cluster_name;
-    6:dsn.layer2.bulk_load_status   meta_app_bulk_load_status;
-    7:dsn.layer2.bulk_load_status   meta_partition_bulk_load_status;
+    6:dsn.layer2.bulk_load_status   meta_bulk_load_status;
 }
 
 struct group_bulk_load_response

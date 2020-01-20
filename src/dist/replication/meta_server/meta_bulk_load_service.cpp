@@ -294,10 +294,9 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
     req.pid = pid;
     req.app_name = app_name;
     req.primary_addr = primary_addr;
-    req.app_bulk_load_status = ainfo.status;
     req.remote_provider_name = ainfo.file_provider_type;
     req.cluster_name = ainfo.cluster_name;
-    req.partition_bulk_load_status = get_partition_bulk_load_status_unlock(pid);
+    req.meta_bulk_load_status = get_partition_bulk_load_status_unlock(pid);
     req.ballot = b;
     req.query_bulk_load_metadata = is_partition_metadata_not_updated_unlock(pid);
 
@@ -310,13 +309,12 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
             on_partition_bulk_load_reply(
                 err, app_name, req.ballot, std::move(resp), pid, primary_addr);
         });
-    ddebug_f("send bulk load request to replica server({}), app({}), partition({}), app status = "
-             "{}, partition status = {}, remote provider = {}, cluster_name = {}",
+    ddebug_f("send bulk load request to replica server({}), app({}), partition({}), partition "
+             "status = {}, remote provider = {}, cluster_name = {}",
              primary_addr.to_string(),
              app_name,
              pid.to_string(),
-             enum_to_string(req.app_bulk_load_status),
-             enum_to_string(req.partition_bulk_load_status),
+             enum_to_string(req.meta_bulk_load_status),
              req.remote_provider_name,
              req.cluster_name);
     _meta_svc->send_request(msg, primary_addr, rpc_callback);

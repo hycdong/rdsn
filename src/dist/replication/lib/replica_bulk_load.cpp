@@ -40,17 +40,15 @@ void replica::on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_r
 
     ddebug_replica(
         "receive bulk load request, remote provider = {}, cluster_name = {}, app_name = {}, "
-        "app_bulk_load_status = {}, meta partition_bulk_load_status = {}, local bulk_load_status = "
-        "{}",
+        "meta_bulk_load_status = {}, local bulk_load_status = {}",
         request.remote_provider_name,
         request.cluster_name,
         request.app_name,
-        enum_to_string(request.app_bulk_load_status),
-        enum_to_string(request.partition_bulk_load_status),
+        enum_to_string(request.meta_bulk_load_status),
         enum_to_string(get_bulk_load_status()));
 
     dsn::error_code ec = do_bulk_load(request.app_name,
-                                      request.partition_bulk_load_status,
+                                      request.meta_bulk_load_status,
                                       request.cluster_name,
                                       request.remote_provider_name);
     if (ec != ERR_OK) {
@@ -60,7 +58,7 @@ void replica::on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_r
     }
 
     report_bulk_load_states_to_meta(
-        request.partition_bulk_load_status, request.query_bulk_load_metadata, response);
+        request.meta_bulk_load_status, request.query_bulk_load_metadata, response);
     if (response.err != ERR_OK) {
         return;
     }
@@ -101,8 +99,7 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
         _primary_states.get_replica_config(partition_status::PS_SECONDARY, request->config);
         request->cluster_name = meta_req.cluster_name;
         request->provider_name = meta_req.remote_provider_name;
-        request->meta_app_bulk_load_status = meta_req.app_bulk_load_status;
-        request->meta_partition_bulk_load_status = meta_req.partition_bulk_load_status;
+        request->meta_bulk_load_status = meta_req.meta_bulk_load_status;
 
         ddebug_replica("send group_bulk_load_request to {}", addr.to_string());
 
@@ -154,17 +151,15 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         return;
     }
 
-    ddebug_replica(
-        "process group bulk load request, primary = {}, ballot = {}, meta app "
-        "bulk_load_status = {}, meta partition bulk_load_status= {}, local bulk_load_status = {}",
-        request.config.primary.to_string(),
-        request.config.ballot,
-        enum_to_string(request.meta_app_bulk_load_status),
-        enum_to_string(request.meta_partition_bulk_load_status),
-        enum_to_string(get_bulk_load_status()));
+    ddebug_replica("process group bulk load request, primary = {}, ballot = {}, "
+                   "meta_bulk_load_status = {}, local bulk_load_status = {}",
+                   request.config.primary.to_string(),
+                   request.config.ballot,
+                   enum_to_string(request.meta_bulk_load_status),
+                   enum_to_string(get_bulk_load_status()));
 
     dsn::error_code ec = do_bulk_load(request.app_name,
-                                      request.meta_partition_bulk_load_status,
+                                      request.meta_bulk_load_status,
                                       request.cluster_name,
                                       request.provider_name);
     if (ec != ERR_OK) {
@@ -173,7 +168,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         return;
     }
 
-    report_bulk_load_states_to_primary(request.meta_partition_bulk_load_status, response);
+    report_bulk_load_states_to_primary(request.meta_bulk_load_status, response);
 }
 
 void replica::on_group_bulk_load_reply(error_code err,
@@ -193,7 +188,8 @@ void replica::on_group_bulk_load_reply(error_code err,
 
     if (err != ERR_OK) {
         derror_replica("get group_bulk_load_reply failed, error = {}", err.to_string());
-        _primary_states.reset_group_bulk_load_states(req->target_address, req->meta_partition_bulk_load_status);
+        _primary_states.reset_group_bulk_load_states(req->target_address,
+                                                     req->meta_bulk_load_status);
 
         return;
     }
@@ -207,16 +203,19 @@ void replica::on_group_bulk_load_reply(error_code err,
 
     if (resp->err != ERR_OK) {
         derror_replica("on_group_bulk_load failed, error = {}", resp->err.to_string());
-        _primary_states.reset_group_bulk_load_states(req->target_address, req->meta_partition_bulk_load_status);
+        _primary_states.reset_group_bulk_load_states(req->target_address,
+                                                     req->meta_bulk_load_status);
     } else if (req->config.ballot != get_ballot()) {
         derror_replica(
             "recevied wrong on_group_bulk_load_reply, request ballot={}, current ballot={}",
             req->config.ballot,
             get_ballot());
         // TODO(heyuchen): consider here
-        _primary_states.reset_group_bulk_load_states(req->target_address, req->meta_partition_bulk_load_status);
+        _primary_states.reset_group_bulk_load_states(req->target_address,
+                                                     req->meta_bulk_load_status);
     } else {
-        _primary_states.set_group_bulk_load_states(resp, req->target_address, !_bulk_load_context.is_cleanup());
+        _primary_states.set_group_bulk_load_states(
+            resp, req->target_address, !_bulk_load_context.is_cleanup());
     }
 }
 

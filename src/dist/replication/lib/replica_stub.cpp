@@ -2381,14 +2381,13 @@ void replica_stub::on_group_bulk_load(const group_bulk_load_request &request,
         return;
     }
 
-    ddebug_f("[{}@{}]: received group bulk load request, primary = {}, ballot = {}, meta app "
-             "bulk_load_status = {}, meta partition bulk_load_status = {}",
+    ddebug_f("[{}@{}]: received group bulk load request, primary = {}, ballot = {}, "
+             "meta_bulk_load_status = {}",
              request.config.pid.to_string(),
              _primary_address_str,
              request.config.primary.to_string(),
              request.config.ballot,
-             enum_to_string(request.meta_app_bulk_load_status),
-             enum_to_string(request.meta_partition_bulk_load_status));
+             enum_to_string(request.meta_bulk_load_status));
 
     replica_ptr rep = get_replica(request.config.pid);
     if (rep != nullptr) {

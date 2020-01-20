@@ -25,47 +25,6 @@ class replica_bulk_load_test : public ::testing::Test
 
 public:
     /// test helper functions
-    error_code test_parse_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta)
-    {
-        return _replica->parse_bulk_load_metadata(file_path, meta);
-    }
-
-    void test_do_download(const std::string &remote_file_dir,
-                          const std::string &local_file_dir,
-                          const std::string &remote_file_name,
-                          bool is_update_progress,
-                          dsn::error_code &err)
-    {
-        dsn::task_tracker tracker;
-        _replica->do_download(remote_file_dir,
-                              local_file_dir,
-                              remote_file_name,
-                              _fs.get(),
-                              is_update_progress,
-                              err,
-                              tracker);
-    }
-
-    bool test_verify_sst_files(const file_meta &f_meta, const std::string &dir)
-    {
-        return _replica->verify_sst_files(f_meta, dir);
-    }
-
-    void test_report_group_download_progress(bulk_load_response &response)
-    {
-        _replica->report_group_download_progress(response);
-    }
-
-    void test_report_group_context_clean_flag(bulk_load_response &response)
-    {
-        _replica->report_group_context_clean_flag(response);
-    }
-
-    void test_cleanup_bulk_load_context(bulk_load_status::type status)
-    {
-        _replica->cleanup_bulk_load_context(status);
-    }
-
     void test_on_bulk_load(bulk_load_response &resp) { _replica->on_bulk_load(_req, resp); }
 
     void
@@ -73,6 +32,58 @@ public:
     {
         mock_group_bulk_load_request(status, b);
         _replica->on_group_bulk_load(_group_req, resp);
+    }
+
+    dsn::error_code test_do_download(const std::string &remote_file_name, bool is_update_progress)
+    {
+        dsn::error_code err;
+        dsn::task_tracker tracker;
+        _replica->do_download(
+            PROVIDER, LOCAL_DIR, remote_file_name, _fs.get(), is_update_progress, err, tracker);
+        return err;
+    }
+
+    error_code test_parse_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta)
+    {
+        return _replica->parse_bulk_load_metadata(file_path, meta);
+    }
+
+    bool test_verify_sst_files(const file_meta &f_meta)
+    {
+        return _replica->verify_sst_files(f_meta, LOCAL_DIR);
+    }
+
+    dsn::error_code test_start_downloading()
+    {
+        return _replica->bulk_load_start_download(APP_NAME, CLUSTER, PROVIDER);
+    }
+
+    void test_update_download_progress(uint64_t file_size)
+    {
+        _replica->update_download_progress(file_size);
+        _replica->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_start_ingestion() { return _replica->bulk_load_start_ingestion(); }
+
+    void test_cleanup_bulk_load_context(bulk_load_status::type status)
+    {
+        _replica->cleanup_bulk_load_context(status);
+    }
+
+    void test_report_group_download_progress(bulk_load_response &response)
+    {
+        _replica->report_group_download_progress(response);
+    }
+
+    void test_report_group_ingestion_status(bulk_load_response &response)
+    {
+        _replica->report_group_ingestion_status(response);
+    }
+
+    void test_report_group_context_clean_flag(bulk_load_response &response)
+    {
+        _replica->report_group_context_clean_flag(response);
     }
 
     void
@@ -102,15 +113,9 @@ public:
         _replica->on_group_bulk_load_reply(rpc_error, req, resp);
     }
 
-    void test_update_download_progress(uint64_t file_size)
+    bool validate_status(bulk_load_status::type meta_status, bulk_load_status::type local_status)
     {
-        _replica->update_download_progress(file_size);
-        _replica->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_report_group_ingestion_status(bulk_load_response &response)
-    {
-        _replica->report_group_ingestion_status(response);
+        return _replica->validate_bulk_load_status(meta_status, local_status) == ERR_OK;
     }
 
     /// mock structure functions
@@ -187,34 +192,25 @@ public:
         return true;
     }
 
-    void mock_bulk_load_request(bulk_load_status::type app_status,
-                                bulk_load_status::type partition_status,
-                                ballot b)
+    void mock_bulk_load_request(bulk_load_status::type status, ballot b)
     {
-        _req.app_bulk_load_status = app_status;
         _req.app_name = APP_NAME;
         _req.ballot = b;
         _req.cluster_name = CLUSTER;
-        _req.partition_bulk_load_status = partition_status;
+        _req.meta_bulk_load_status = status;
         _req.pid = PID;
         _req.remote_provider_name = PROVIDER;
     }
 
     void mock_bulk_load_request(bulk_load_status::type status)
     {
-        mock_bulk_load_request(status, status, BALLOT);
-    }
-
-    void mock_bulk_load_request(bulk_load_status::type status, ballot b)
-    {
-        mock_bulk_load_request(status, status, b);
+        mock_bulk_load_request(status, BALLOT);
     }
 
     void mock_group_bulk_load_request(bulk_load_status::type status, ballot b)
     {
         _group_req.app_name = APP_NAME;
-        _group_req.meta_app_bulk_load_status = status;
-        _group_req.meta_partition_bulk_load_status = status;
+        _group_req.meta_bulk_load_status = status;
         _group_req.config.status = partition_status::PS_SECONDARY;
         _group_req.config.ballot = b;
         _group_req.target_address = SECONDARY;
@@ -371,6 +367,106 @@ public:
     int32_t PARTITION_VERSION = 3;
 };
 
+// on_bulk_load unit tests
+TEST_F(replica_bulk_load_test, on_bulk_load_not_primary)
+{
+    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
+
+    bulk_load_response resp;
+    test_on_bulk_load(resp);
+    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
+}
+
+TEST_F(replica_bulk_load_test, on_bulk_load_ballot_change)
+{
+    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING, 2);
+    mock_primary_states(false, false);
+
+    bulk_load_response resp;
+    test_on_bulk_load(resp);
+    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
+}
+
+// on_group_bulk_load unit tests
+TEST_F(replica_bulk_load_test, on_group_bulk_load_request_outdated)
+{
+    mock_replica_config(partition_status::PS_SECONDARY);
+
+    group_bulk_load_response resp;
+    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT - 1, resp);
+
+    ASSERT_EQ(resp.err, ERR_VERSION_OUTDATED);
+}
+
+TEST_F(replica_bulk_load_test, on_group_bulk_load_ballot_changed)
+{
+    mock_replica_config(partition_status::PS_SECONDARY);
+
+    group_bulk_load_response resp;
+    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADED, BALLOT + 1, resp);
+
+    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
+}
+
+TEST_F(replica_bulk_load_test, on_group_bulk_load_wrong_partition_status)
+{
+    mock_replica_config(partition_status::PS_INACTIVE);
+
+    group_bulk_load_response resp;
+    test_on_group_bulk_load(bulk_load_status::BLS_INGESTING, BALLOT, resp);
+
+    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
+}
+
+// download files unit tests
+TEST_F(replica_bulk_load_test, do_download_file_not_exist)
+{
+    ASSERT_EQ(test_do_download(FILE_NAME, false), ERR_CORRUPTION);
+}
+
+TEST_F(replica_bulk_load_test, do_download_file_md5_not_match)
+{
+    create_file(FILE_NAME);
+    // mock remote file
+    std::string remote_file_name = utils::filesystem::path_combine(PROVIDER, FILE_NAME);
+    _fs->files[remote_file_name] = std::make_pair(2333, "md5_not_match");
+
+    ASSERT_EQ(test_do_download(FILE_NAME, false), ERR_OK);
+}
+
+TEST_F(replica_bulk_load_test, do_download_file_exist)
+{
+    file_meta f_meta;
+    create_file_and_get_file_meta(METADATA, f_meta, true);
+
+    // mock remote file
+    std::string remote_file_name = utils::filesystem::path_combine(PROVIDER, METADATA);
+    _fs->files[remote_file_name] = std::make_pair(f_meta.size, f_meta.md5);
+
+    // mock bulk_load context
+    mock_bulk_load_context(f_meta.size);
+
+    ASSERT_EQ(test_do_download(METADATA, true), ERR_OK);
+    ASSERT_EQ(f_meta.size, get_cur_downloaded_size());
+    ASSERT_EQ(100, get_download_progress());
+}
+
+TEST_F(replica_bulk_load_test, do_download_succeed)
+{
+    file_meta f_meta;
+    create_file_and_get_file_meta(FILE_NAME, f_meta, false);
+
+    std::string file_name = utils::filesystem::path_combine(LOCAL_DIR, FILE_NAME);
+    utils::filesystem::remove_path(file_name);
+
+    // mock remote file
+    std::string remote_file_name = utils::filesystem::path_combine(PROVIDER, FILE_NAME);
+    _fs->files[remote_file_name] = std::make_pair(f_meta.size, f_meta.md5);
+
+    ASSERT_EQ(test_do_download(FILE_NAME, false), ERR_OK);
+}
+
+// parse metadata unit tests
 TEST_F(replica_bulk_load_test, bulk_load_metadata_not_exist)
 {
     bulk_load_metadata metadata;
@@ -402,70 +498,14 @@ TEST_F(replica_bulk_load_test, bulk_load_metadata_parse_succeed)
     ASSERT_TRUE(validate_metadata(metadata));
 }
 
-TEST_F(replica_bulk_load_test, do_download_file_not_exist)
-{
-    error_code ec;
-    test_do_download(PROVIDER, LOCAL_DIR, FILE_NAME, false, ec);
-    ASSERT_EQ(ec, ERR_CORRUPTION);
-}
-
-TEST_F(replica_bulk_load_test, do_download_file_md5_not_match)
-{
-    create_file(FILE_NAME);
-    // mock remote file
-    std::string remote_whole_file_name = utils::filesystem::path_combine(PROVIDER, FILE_NAME);
-    _fs->files[remote_whole_file_name] = std::make_pair(2333, "md5_not_match");
-
-    error_code ec;
-    test_do_download(PROVIDER, LOCAL_DIR, FILE_NAME, false, ec);
-    ASSERT_EQ(ec, ERR_OK);
-}
-
-TEST_F(replica_bulk_load_test, do_download_file_exist)
-{
-    file_meta f_meta;
-    create_file_and_get_file_meta(METADATA, f_meta, true);
-
-    // mock remote file
-    std::string remote_whole_file_name = utils::filesystem::path_combine(PROVIDER, METADATA);
-    _fs->files[remote_whole_file_name] = std::make_pair(f_meta.size, f_meta.md5);
-
-    // mock bulk_load context
-    mock_bulk_load_context(f_meta.size);
-
-    error_code ec;
-    test_do_download(PROVIDER, LOCAL_DIR, METADATA, true, ec);
-    ASSERT_EQ(ec, ERR_OK);
-
-    ASSERT_EQ(f_meta.size, get_cur_downloaded_size());
-    ASSERT_EQ(100, get_download_progress());
-}
-
-TEST_F(replica_bulk_load_test, do_download_succeed)
-{
-    file_meta f_meta;
-    create_file_and_get_file_meta(FILE_NAME, f_meta, false);
-
-    std::string file_name = utils::filesystem::path_combine(LOCAL_DIR, FILE_NAME);
-    utils::filesystem::remove_path(file_name);
-
-    // mock remote file
-    std::string remote_whole_file_name = utils::filesystem::path_combine(PROVIDER, FILE_NAME);
-    _fs->files[remote_whole_file_name] = std::make_pair(f_meta.size, f_meta.md5);
-
-    error_code ec;
-    test_do_download(PROVIDER, LOCAL_DIR, FILE_NAME, false, ec);
-    ASSERT_EQ(ec, ERR_OK);
-}
-
+// verify file unit tests
 TEST_F(replica_bulk_load_test, verify_file_failed)
 {
     file_meta f_meta, target;
     create_file_and_get_file_meta(FILE_NAME, f_meta, false);
     construct_file_meta(target, FILE_NAME, f_meta.size, "wrong_md5");
 
-    bool flag = test_verify_sst_files(target, LOCAL_DIR);
-    ASSERT_FALSE(flag);
+    ASSERT_FALSE(test_verify_sst_files(target));
 }
 
 TEST_F(replica_bulk_load_test, verify_file_succeed)
@@ -474,56 +514,81 @@ TEST_F(replica_bulk_load_test, verify_file_succeed)
     create_file_and_get_file_meta(FILE_NAME, f_meta, false);
     construct_file_meta(target, FILE_NAME, f_meta.size, f_meta.md5);
 
-    bool flag = test_verify_sst_files(target, LOCAL_DIR);
-    ASSERT_TRUE(flag);
+    ASSERT_TRUE(test_verify_sst_files(target));
 }
 
-TEST_F(replica_bulk_load_test, report_group_download_progress)
+// start_downloading unit tests
+TEST_F(replica_bulk_load_test, start_downloading)
 {
-    mock_bulk_load_context(10, 10, 100);
-    mock_primary_states(true, false);
+    fail::setup();
+    fail::cfg("replica_bulk_load_download_sst_files", "return()");
 
-    bulk_load_response response;
-    response.pid = PID;
-    test_report_group_download_progress(response);
-    ASSERT_EQ(response.download_progresses.size(), 3);
-    ASSERT_EQ(response.total_download_progress, 33);
+    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
+    mock_primary_states(false, false);
+    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
+    mock_stub_downloading_count(1);
+
+    ASSERT_EQ(test_start_downloading(), ERR_OK);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
+    ASSERT_EQ(get_stub_downloading_count(), 2);
+
+    fail::teardown();
 }
 
-TEST_F(replica_bulk_load_test, report_group_context_clean_flag_in_unhealthy_state)
+TEST_F(replica_bulk_load_test, start_downloading_error)
 {
-    mock_cleanup_flag_unhealthy();
+    fail::setup();
+    fail::cfg("replica_bulk_load_download_sst_files_fs_error", "return()");
+    fail::cfg("replica_cleanup_bulk_load_context", "return()");
 
-    bulk_load_response response;
-    response.pid = PID;
+    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
+    mock_primary_states(false, false);
+    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
+    mock_stub_downloading_count(1);
 
-    test_report_group_context_clean_flag(response);
-    ASSERT_FALSE(response.is_group_bulk_load_context_cleaned);
+    ASSERT_EQ(test_start_downloading(), ERR_FS_INTERNAL);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
+    ASSERT_EQ(get_stub_downloading_count(), 1);
+
+    fail::teardown();
 }
 
-TEST_F(replica_bulk_load_test, report_group_context_clean_flag)
+TEST_F(replica_bulk_load_test, start_downloading_concurrent_excceed)
 {
-    mock_primary_states(false, true);
+    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
+    mock_primary_states(false, false);
+    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
+    mock_stub_downloading_count(MAX_DOWNLOADING_COUNT);
 
-    bulk_load_response response;
-    response.pid = PID;
-
-    test_report_group_context_clean_flag(response);
-    ASSERT_FALSE(response.is_group_bulk_load_context_cleaned);
+    ASSERT_EQ(test_start_downloading(), ERR_BUSY);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
+    ASSERT_EQ(get_stub_downloading_count(), MAX_DOWNLOADING_COUNT);
 }
 
-TEST_F(replica_bulk_load_test, handle_bulk_load_downloading_error)
+// finish download test
+TEST_F(replica_bulk_load_test, finish_download_concurrent_decrease)
 {
-    mock_bulk_load_context(1000, 100, 10, bulk_load_status::BLS_DOWNLOADING);
-
-    test_cleanup_bulk_load_context(bulk_load_status::BLS_FAILED);
-    ASSERT_TRUE(get_clean_up_flag());
-    ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
+    mock_stub_downloading_count(3);
+    mock_bulk_load_context(300, 300, 100, bulk_load_status::BLS_DOWNLOADING);
+    test_update_download_progress(0);
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
+    ASSERT_EQ(get_stub_downloading_count(), 2);
 }
 
-TEST_F(replica_bulk_load_test, handle_bulk_load_succeed)
+// start ingestion test
+TEST_F(replica_bulk_load_test, start_ingestion)
 {
-    mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_DOWNLOADED);
+    mock_bulk_load_request(bulk_load_status::BLS_INGESTING);
+    mock_bulk_load_context(50, 50, 100, bulk_load_status::BLS_DOWNLOADED);
+    test_start_ingestion();
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INGESTING);
+}
+
+// cleanup bulk load context unit tests
+TEST_F(replica_bulk_load_test, cleanup_bulk_load_context_with_succeed)
+{
+    mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_SUCCEED);
+    ASSERT_TRUE(utils::filesystem::directory_exists(LOCAL_DIR));
 
     test_cleanup_bulk_load_context(bulk_load_status::BLS_SUCCEED);
     ASSERT_TRUE(get_clean_up_flag());
@@ -538,499 +603,151 @@ TEST_F(replica_bulk_load_test, double_cleanup_bulk_load_context)
     ASSERT_TRUE(get_clean_up_flag());
 }
 
-/// on_bulk_load unit tests
-TEST_F(replica_bulk_load_test, on_bulk_load_not_primary)
+TEST_F(replica_bulk_load_test, cleanup_bulk_load_context_with_failed)
 {
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
+    mock_bulk_load_context(1000, 100, 10, bulk_load_status::BLS_DOWNLOADING);
 
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
+    test_cleanup_bulk_load_context(bulk_load_status::BLS_FAILED);
+    ASSERT_TRUE(get_clean_up_flag());
+    ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
 }
 
-TEST_F(replica_bulk_load_test, on_bulk_load_ballot_change)
+// report_group_download_progress unit tests
+TEST_F(replica_bulk_load_test, report_group_download_progress_all_downloading)
 {
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING, 2);
-    mock_primary_states(false, false);
-
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
-}
-
-// request: downoading; local:invalid
-TEST_F(replica_bulk_load_test, on_bulk_load_start_downloading)
-{
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-    fail::cfg("replica_bulk_load_download_sst_files", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
-    mock_primary_states(false, false);
-    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
-    mock_stub_downloading_count(1);
-
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(resp.total_download_progress, 0);
-    ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_stub_downloading_count(), 2);
-
-    fail::teardown();
-}
-
-// request: downoading; local:invalid
-TEST_F(replica_bulk_load_test, on_bulk_load_downloading_error)
-{
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-    fail::cfg("replica_bulk_load_download_sst_files_fs_error", "return()");
-    fail::cfg("replica_cleanup_bulk_load_context", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
-    mock_primary_states(false, false);
-    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
-    mock_stub_downloading_count(1);
-
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-
-    ASSERT_EQ(resp.err, ERR_FS_INTERNAL);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_stub_downloading_count(), 1);
-
-    fail::teardown();
-}
-
-// request: downoading; local:invalid
-TEST_F(replica_bulk_load_test, on_bulk_load_start_downloading_concurrent_excceed)
-{
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
-    mock_primary_states(false, false);
-    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
-    mock_stub_downloading_count(MAX_DOWNLOADING_COUNT);
-
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-
-    ASSERT_EQ(resp.err, ERR_BUSY);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INVALID);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
-    ASSERT_EQ(get_stub_downloading_count(), MAX_DOWNLOADING_COUNT);
-}
-
-// request: downoading; local:downloading
-TEST_F(replica_bulk_load_test, on_bulk_load_downloading)
-{
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
     mock_primary_states(true, false);
-    mock_bulk_load_context(30, 9, 30, bulk_load_status::BLS_DOWNLOADING);
-    mock_stub_downloading_count(2);
+    mock_bulk_load_context(100, 10, 10, bulk_load_status::BLS_DOWNLOADING);
 
     bulk_load_response resp;
-    test_on_bulk_load(resp);
+    test_report_group_download_progress(resp);
     ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(resp.total_download_progress, 10);
-    ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_stub_downloading_count(), 2);
-
-    fail::teardown();
+    ASSERT_EQ(resp.download_progresses.size(), 3);
+    ASSERT_EQ(resp.total_download_progress, 3);
 }
 
-// request: downoading; local:downloaded
-TEST_F(replica_bulk_load_test, on_bulk_load_downloading_with_primary_downloaded)
+TEST_F(replica_bulk_load_test, report_group_download_progress_primary_downloaded)
 {
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADING);
     mock_primary_states(true, false);
     mock_bulk_load_context(40, 40, 100, bulk_load_status::BLS_DOWNLOADED);
 
     bulk_load_response resp;
-    test_on_bulk_load(resp);
+    test_report_group_download_progress(resp);
     ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_DOWNLOADED);
     ASSERT_EQ(resp.total_download_progress, 33);
-    ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
-
-    fail::teardown();
 }
 
-// request: downoaded; local:downloaded
-TEST_F(replica_bulk_load_test, on_bulk_load_downloaded)
+TEST_F(replica_bulk_load_test, report_group_download_progress_all_downloaded)
 {
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_DOWNLOADED);
     mock_primary_states(true, false, true);
     mock_bulk_load_context(50, 50, 100, bulk_load_status::BLS_DOWNLOADED);
 
     bulk_load_response resp;
-    test_on_bulk_load(resp);
+    test_report_group_download_progress(resp);
     ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_DOWNLOADED);
     ASSERT_EQ(resp.total_download_progress, 100);
-    ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
-
-    fail::teardown();
 }
 
-// request:ingestion; local:downloaded
-TEST_F(replica_bulk_load_test, on_bulk_load_start_ingestion)
+// TODO(heyuchen): refactor this function
+TEST_F(replica_bulk_load_test, report_group_ingestion_status_test)
 {
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
+    {
+        mock_ingestion_status(ingestion_status::IS_INVALID);
+        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_FALSE(resp.is_group_ingestion_finished);
+    }
 
-    mock_bulk_load_request(bulk_load_status::BLS_INGESTING);
-    // mock_primary_states(true, false, true);
-    mock_bulk_load_context(50, 50, 100, bulk_load_status::BLS_DOWNLOADED);
+    {
+        mock_ingestion_status(ingestion_status::IS_RUNNING);
+        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_FALSE(resp.is_group_ingestion_finished);
+    }
 
-    mock_partition_version(PARTITION_VERSION);
-    mock_ingestion_status(ingestion_status::IS_INVALID);
-    mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID);
+    {
+        mock_ingestion_status(ingestion_status::IS_SUCCEED);
+        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_FALSE(resp.is_group_ingestion_finished);
+    }
 
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INGESTING);
-    ASSERT_FALSE(resp.__isset.total_download_progress);
-    ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INGESTING);
-    ASSERT_FALSE(resp.is_group_ingestion_finished);
+    {
+        mock_ingestion_status(ingestion_status::IS_FAILED);
+        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_FALSE(resp.is_group_ingestion_finished);
+    }
 
-    fail::teardown();
+    {
+        mock_ingestion_status(ingestion_status::IS_RUNNING);
+        mock_ingestion_states(ingestion_status::IS_RUNNING, ingestion_status::IS_INVALID, false);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_FALSE(resp.is_group_ingestion_finished);
+    }
+
+    {
+        mock_ingestion_status(ingestion_status::IS_SUCCEED);
+        mock_ingestion_states(ingestion_status::IS_SUCCEED, ingestion_status::IS_RUNNING, true);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_FALSE(resp.is_group_ingestion_finished);
+    }
+
+    {
+        mock_ingestion_status(ingestion_status::IS_FAILED);
+        mock_ingestion_states(ingestion_status::IS_FAILED, ingestion_status::IS_RUNNING, false);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_FALSE(resp.is_group_ingestion_finished);
+    }
+
+    {
+        mock_partition_version(-1);
+        mock_ingestion_status(ingestion_status::IS_SUCCEED);
+        mock_ingestion_states(ingestion_status::IS_SUCCEED, ingestion_status::IS_SUCCEED, true);
+        bulk_load_response resp;
+        test_report_group_ingestion_status(resp);
+        ASSERT_TRUE(resp.is_group_ingestion_finished);
+        ASSERT_EQ(get_partition_version(), PARTITION_VERSION);
+    }
 }
 
-// request:ingestion; local:ingestion
-TEST_F(replica_bulk_load_test, on_bulk_load_finish_ingestion)
+// report_group_context_clean_flag unit tests
+TEST_F(replica_bulk_load_test, report_group_context_clean_flag_in_unhealthy_state)
 {
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
+    mock_cleanup_flag_unhealthy();
 
-    mock_bulk_load_request(bulk_load_status::BLS_INGESTING);
-    // mock_primary_states(true, false, true);
-    mock_bulk_load_context(50, 50, 100, bulk_load_status::BLS_INGESTING);
-
-    mock_partition_version(-1);
-    mock_ingestion_status(ingestion_status::IS_SUCCEED);
-    mock_ingestion_states(ingestion_status::IS_SUCCEED, ingestion_status::IS_SUCCEED, true);
-
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INGESTING);
-    ASSERT_FALSE(resp.__isset.total_download_progress);
-    ASSERT_FALSE(resp.__isset.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INGESTING);
-    ASSERT_TRUE(resp.is_group_ingestion_finished);
-    ASSERT_EQ(get_partition_version(), PARTITION_VERSION);
-
-    fail::teardown();
+    bulk_load_response response;
+    test_report_group_context_clean_flag(response);
+    ASSERT_FALSE(response.is_group_bulk_load_context_cleaned);
 }
 
-// request: succeed; local:ingestion
-TEST_F(replica_bulk_load_test, on_bulk_load_succeed)
+TEST_F(replica_bulk_load_test, report_group_context_clean_flag_not_cleanup)
 {
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-    fail::cfg("replica_handle_bulk_load_succeed", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_SUCCEED);
-    mock_primary_states(true, false, true);
-    mock_bulk_load_context(60, 60, 100, bulk_load_status::BLS_INGESTING);
-
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_SUCCEED);
-    ASSERT_FALSE(resp.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_SUCCEED);
-
-    fail::teardown();
-}
-
-// request: succeed; local:succeed
-TEST_F(replica_bulk_load_test, on_bulk_load_succeed_primary_cleanup)
-{
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_SUCCEED);
-    mock_primary_states(false, true);
-    mock_bulk_load_context(70, 70, 100, bulk_load_status::BLS_SUCCEED);
-
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INVALID);
-    ASSERT_FALSE(resp.__isset.total_download_progress);
-    ASSERT_FALSE(resp.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
-
-    fail::teardown();
-}
-
-// request: succeed; local: invalid
-TEST_F(replica_bulk_load_test, on_bulk_load_succeed_all_cleanup)
-{
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_SUCCEED);
     mock_primary_states(false, true, true);
-    mock_bulk_load_context(80, 80, 100, bulk_load_status::BLS_INVALID);
+    mock_bulk_load_context(80, 80, 100, bulk_load_status::BLS_SUCCEED);
 
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INVALID);
-    ASSERT_FALSE(resp.__isset.total_download_progress);
-    ASSERT_FALSE(resp.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
-
-    fail::teardown();
+    bulk_load_response response;
+    test_report_group_context_clean_flag(response);
+    ASSERT_FALSE(response.is_group_bulk_load_context_cleaned);
 }
 
-// request: failed; local:failed
-TEST_F(replica_bulk_load_test, on_bulk_load_failed_all_cleanup)
+TEST_F(replica_bulk_load_test, report_group_context_clean_flag_all_cleanup)
 {
-    fail::setup();
-    fail::cfg("replica_broadcast_group_bulk_load", "return()");
-
-    mock_bulk_load_request(bulk_load_status::BLS_FAILED);
     mock_primary_states(false, true, true);
-    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_FAILED);
+    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
 
-    bulk_load_response resp;
-    test_on_bulk_load(resp);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.primary_bulk_load_status, bulk_load_status::BLS_INVALID);
-    ASSERT_FALSE(resp.__isset.total_download_progress);
-    ASSERT_FALSE(resp.is_group_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
-
-    fail::teardown();
-}
-/// on_group_bulk_load unit tests
-
-TEST_F(replica_bulk_load_test, on_group_bulk_load_request_outdated)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT - 1, resp);
-
-    ASSERT_EQ(resp.err, ERR_VERSION_OUTDATED);
+    bulk_load_response response;
+    test_report_group_context_clean_flag(response);
+    ASSERT_TRUE(response.is_group_bulk_load_context_cleaned);
 }
 
-TEST_F(replica_bulk_load_test, on_group_bulk_load_ballot_changed)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT + 1, resp);
-
-    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
-}
-
-TEST_F(replica_bulk_load_test, on_group_bulk_load_wrong_partition_status)
-{
-    mock_replica_config(partition_status::PS_INACTIVE);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
-}
-
-// request: downoading; local:invalid
-TEST_F(replica_bulk_load_test, on_group_bulk_load_start_downloading)
-{
-    fail::setup();
-    fail::cfg("replica_bulk_load_download_sst_files", "return()");
-
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(0, 0, 0);
-    mock_stub_downloading_count(0);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(resp.download_progress.progress, 0);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_stub_downloading_count(), 1);
-
-    fail::teardown();
-}
-
-// request: downoading; local:invalid
-TEST_F(replica_bulk_load_test, on_group_bulk_load_start_downloading_failed)
-{
-    fail::setup();
-    fail::cfg("replica_bulk_load_download_sst_files_fs_error", "return()");
-    fail::cfg("replica_cleanup_bulk_load_context", "return()");
-
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(0, 0, 0);
-    mock_stub_downloading_count(0);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_FS_INTERNAL);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(resp.download_progress.progress, 0);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_stub_downloading_count(), 0);
-
-    fail::teardown();
-}
-
-// request: downoading; local:invalid
-TEST_F(replica_bulk_load_test, on_group_bulk_load_start_downloading_concurrent_excceed)
-{
-    fail::setup();
-    fail::cfg("replica_bulk_load_download_sst_files", "return()");
-
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_stub_downloading_count(MAX_DOWNLOADING_COUNT);
-    mock_bulk_load_context(0, 0, 0);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_BUSY);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
-    ASSERT_EQ(get_stub_downloading_count(), MAX_DOWNLOADING_COUNT);
-
-    fail::teardown();
-}
-
-// request: downoading; local:downloading
-TEST_F(replica_bulk_load_test, on_group_bulk_load_downloading)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(100, 80, 80, bulk_load_status::BLS_DOWNLOADING);
-    mock_stub_downloading_count(1);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(resp.download_progress.progress, 80);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_stub_downloading_count(), 1);
-}
-
-// request: downoading; local:downloaded
-TEST_F(replica_bulk_load_test, on_group_bulk_load_downloaded)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_DOWNLOADED);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_DOWNLOADING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_DOWNLOADED);
-    ASSERT_EQ(resp.download_progress.progress, 100);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
-}
-
-// request: ingestion; local:downloaded
-TEST_F(replica_bulk_load_test, on_group_bulk_load_start_ingestion)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_DOWNLOADED);
-    mock_ingestion_status(ingestion_status::IS_INVALID);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_INGESTING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_INGESTING);
-    ASSERT_EQ(resp.istatus, ingestion_status::IS_INVALID);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INGESTING);
-}
-
-// request: ingestion; local:ingestion
-TEST_F(replica_bulk_load_test, on_group_bulk_load_ingestion_error)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_INGESTING);
-    mock_ingestion_status(ingestion_status::IS_FAILED);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_INGESTING, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_INGESTING);
-    ASSERT_EQ(resp.istatus, ingestion_status::IS_FAILED);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INGESTING);
-}
-
-// request: succeed; local:ingestion
-TEST_F(replica_bulk_load_test, on_group_bulk_load_succeed)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(200, 200, 100, bulk_load_status::BLS_INGESTING);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_SUCCEED, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_SUCCEED);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_SUCCEED);
-}
-
-// request: succeed; local:succeed
-TEST_F(replica_bulk_load_test, on_group_bulk_load_succeed_with_cleanup)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_SUCCEED);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_SUCCEED, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_INVALID);
-    ASSERT_TRUE(resp.is_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
-}
-
-// request: failed; local:failed
-TEST_F(replica_bulk_load_test, on_group_bulk_load_failed)
-{
-    mock_replica_config(partition_status::PS_SECONDARY);
-    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_FAILED);
-
-    group_bulk_load_response resp;
-    test_on_group_bulk_load(bulk_load_status::BLS_FAILED, BALLOT, resp);
-
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.status, bulk_load_status::BLS_INVALID);
-    ASSERT_TRUE(resp.is_bulk_load_context_cleaned);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_INVALID);
-}
-
-/// on_group_bulk_load_reply unit tests
+// on_group_bulk_load_reply unit tests
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_rpc_error)
 {
     mock_primary_states(false, true);
@@ -1136,7 +853,6 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_downloaded_with_one_succ
 
 TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_ingestion)
 {
-    // mock_primary_states(true, false, true);
     mock_ingestion_states(ingestion_status::IS_RUNNING, ingestion_status::IS_INVALID);
     mock_bulk_load_context(100, 100, 100, bulk_load_status::BLS_INGESTING);
     test_on_group_bulk_load_reply(bulk_load_status::BLS_INGESTING,
@@ -1172,83 +888,26 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_failed)
     ASSERT_TRUE(is_context_cleaned);
 }
 
-TEST_F(replica_bulk_load_test, concurrent_count_decrease_test)
+// validate_bulk_load_status unit test
+TEST_F(replica_bulk_load_test, validate_bulk_load_status_test)
 {
-    mock_stub_downloading_count(3);
-    mock_bulk_load_context(300, 300, 100, bulk_load_status::BLS_DOWNLOADING);
-    test_update_download_progress(0);
-    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
-    ASSERT_EQ(get_stub_downloading_count(), 2);
-}
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_INVALID, bulk_load_status::BLS_INVALID));
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INVALID));
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_FAILED, bulk_load_status::BLS_INGESTING));
 
-// TODO(heyuchen): refactor this function
-TEST_F(replica_bulk_load_test, report_group_ingestion_status_test)
-{
-    {
-        mock_ingestion_status(ingestion_status::IS_INVALID);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
+    ASSERT_FALSE(validate_status(bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_INVALID));
+    ASSERT_TRUE(
+        validate_status(bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_DOWNLOADED));
 
-    {
-        mock_ingestion_status(ingestion_status::IS_RUNNING);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_DOWNLOADED));
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_INGESTING));
+    ASSERT_FALSE(validate_status(bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_SUCCEED));
 
-    {
-        mock_ingestion_status(ingestion_status::IS_SUCCEED);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_FAILED);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_RUNNING);
-        mock_ingestion_states(ingestion_status::IS_RUNNING, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_SUCCEED);
-        mock_ingestion_states(ingestion_status::IS_SUCCEED, ingestion_status::IS_RUNNING, true);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_FAILED);
-        mock_ingestion_states(ingestion_status::IS_FAILED, ingestion_status::IS_RUNNING, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_partition_version(-1);
-        mock_ingestion_status(ingestion_status::IS_SUCCEED);
-        mock_ingestion_states(ingestion_status::IS_SUCCEED, ingestion_status::IS_SUCCEED, true);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_TRUE(resp.is_group_ingestion_finished);
-        ASSERT_EQ(get_partition_version(), PARTITION_VERSION);
-    }
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INVALID));
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INGESTING));
+    ASSERT_TRUE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_SUCCEED));
+    ASSERT_FALSE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADING));
+    ASSERT_FALSE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADED));
 }
 
 } // namespace replication

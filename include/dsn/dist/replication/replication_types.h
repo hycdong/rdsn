@@ -5899,8 +5899,7 @@ typedef struct _bulk_load_request__isset
           remote_provider_name(false),
           cluster_name(false),
           ballot(false),
-          app_bulk_load_status(false),
-          partition_bulk_load_status(false),
+          meta_bulk_load_status(false),
           query_bulk_load_metadata(false)
     {
     }
@@ -5910,8 +5909,7 @@ typedef struct _bulk_load_request__isset
     bool remote_provider_name : 1;
     bool cluster_name : 1;
     bool ballot : 1;
-    bool app_bulk_load_status : 1;
-    bool partition_bulk_load_status : 1;
+    bool meta_bulk_load_status : 1;
     bool query_bulk_load_metadata : 1;
 } _bulk_load_request__isset;
 
@@ -5927,8 +5925,7 @@ public:
           remote_provider_name(),
           cluster_name(),
           ballot(0),
-          app_bulk_load_status((::dsn::bulk_load_status::type)0),
-          partition_bulk_load_status((::dsn::bulk_load_status::type)0),
+          meta_bulk_load_status((::dsn::bulk_load_status::type)0),
           query_bulk_load_metadata(0)
     {
     }
@@ -5940,8 +5937,7 @@ public:
     std::string remote_provider_name;
     std::string cluster_name;
     int64_t ballot;
-    ::dsn::bulk_load_status::type app_bulk_load_status;
-    ::dsn::bulk_load_status::type partition_bulk_load_status;
+    ::dsn::bulk_load_status::type meta_bulk_load_status;
     bool query_bulk_load_metadata;
 
     _bulk_load_request__isset __isset;
@@ -5958,9 +5954,7 @@ public:
 
     void __set_ballot(const int64_t val);
 
-    void __set_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
-
-    void __set_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
+    void __set_meta_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
     void __set_query_bulk_load_metadata(const bool val);
 
@@ -5978,9 +5972,7 @@ public:
             return false;
         if (!(ballot == rhs.ballot))
             return false;
-        if (!(app_bulk_load_status == rhs.app_bulk_load_status))
-            return false;
-        if (!(partition_bulk_load_status == rhs.partition_bulk_load_status))
+        if (!(meta_bulk_load_status == rhs.meta_bulk_load_status))
             return false;
         if (!(query_bulk_load_metadata == rhs.query_bulk_load_metadata))
             return false;
@@ -6150,8 +6142,7 @@ typedef struct _group_bulk_load_request__isset
           config(false),
           provider_name(false),
           cluster_name(false),
-          meta_app_bulk_load_status(false),
-          meta_partition_bulk_load_status(false)
+          meta_bulk_load_status(false)
     {
     }
     bool app_name : 1;
@@ -6159,8 +6150,7 @@ typedef struct _group_bulk_load_request__isset
     bool config : 1;
     bool provider_name : 1;
     bool cluster_name : 1;
-    bool meta_app_bulk_load_status : 1;
-    bool meta_partition_bulk_load_status : 1;
+    bool meta_bulk_load_status : 1;
 } _group_bulk_load_request__isset;
 
 class group_bulk_load_request
@@ -6174,8 +6164,7 @@ public:
         : app_name(),
           provider_name(),
           cluster_name(),
-          meta_app_bulk_load_status((::dsn::bulk_load_status::type)0),
-          meta_partition_bulk_load_status((::dsn::bulk_load_status::type)0)
+          meta_bulk_load_status((::dsn::bulk_load_status::type)0)
     {
     }
 
@@ -6185,8 +6174,7 @@ public:
     replica_configuration config;
     std::string provider_name;
     std::string cluster_name;
-    ::dsn::bulk_load_status::type meta_app_bulk_load_status;
-    ::dsn::bulk_load_status::type meta_partition_bulk_load_status;
+    ::dsn::bulk_load_status::type meta_bulk_load_status;
 
     _group_bulk_load_request__isset __isset;
 
@@ -6200,9 +6188,7 @@ public:
 
     void __set_cluster_name(const std::string &val);
 
-    void __set_meta_app_bulk_load_status(const ::dsn::bulk_load_status::type val);
-
-    void __set_meta_partition_bulk_load_status(const ::dsn::bulk_load_status::type val);
+    void __set_meta_bulk_load_status(const ::dsn::bulk_load_status::type val);
 
     bool operator==(const group_bulk_load_request &rhs) const
     {
@@ -6216,9 +6202,7 @@ public:
             return false;
         if (!(cluster_name == rhs.cluster_name))
             return false;
-        if (!(meta_app_bulk_load_status == rhs.meta_app_bulk_load_status))
-            return false;
-        if (!(meta_partition_bulk_load_status == rhs.meta_partition_bulk_load_status))
+        if (!(meta_bulk_load_status == rhs.meta_bulk_load_status))
             return false;
         return true;
     }

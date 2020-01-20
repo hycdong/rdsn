@@ -87,8 +87,7 @@ public:
                                     const rpc_address &node,
                                     bool update_progress);
 
-    void reset_group_bulk_load_states(const rpc_address &node,
-                                      bulk_load_status::type meta_app_status);
+    void reset_group_bulk_load_states(const rpc_address &node, bulk_load_status::type meta_status);
 
 public:
     // membership mgr, including learners

@@ -196,17 +196,18 @@ void primary_context::set_group_bulk_load_states(
 }
 
 void primary_context::reset_group_bulk_load_states(const rpc_address &node,
-                                                   bulk_load_status::type meta_app_status)
+                                                   bulk_load_status::type meta_status)
 {
-    bool reset_progress =
-        (meta_app_status == bulk_load_status::type::BLS_DOWNLOADING ||
-         meta_app_status == bulk_load_status::type::BLS_DOWNLOADED || meta_app_status == bulk_load_status::type::BLS_INGESTING ||
-         meta_app_status == bulk_load_status::type::BLS_SUCCEED || meta_app_status == bulk_load_status::BLS_FAILED);
-    bool reset_ingestion =
-        (meta_app_status == bulk_load_status::BLS_INGESTING ||
-         meta_app_status == bulk_load_status::type::BLS_SUCCEED || meta_app_status == bulk_load_status::BLS_FAILED);
-    bool reset_flag = (meta_app_status == bulk_load_status::type::BLS_SUCCEED ||
-                       meta_app_status == bulk_load_status::type::BLS_FAILED);
+    bool reset_progress = (meta_status == bulk_load_status::type::BLS_DOWNLOADING ||
+                           meta_status == bulk_load_status::type::BLS_DOWNLOADED ||
+                           meta_status == bulk_load_status::type::BLS_INGESTING ||
+                           meta_status == bulk_load_status::type::BLS_SUCCEED ||
+                           meta_status == bulk_load_status::BLS_FAILED);
+    bool reset_ingestion = (meta_status == bulk_load_status::BLS_INGESTING ||
+                            meta_status == bulk_load_status::type::BLS_SUCCEED ||
+                            meta_status == bulk_load_status::BLS_FAILED);
+    bool reset_flag = (meta_status == bulk_load_status::type::BLS_SUCCEED ||
+                       meta_status == bulk_load_status::type::BLS_FAILED);
     if (reset_progress) {
         partition_download_progress download_progress;
         download_progress.progress = 0;
