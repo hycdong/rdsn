@@ -36,10 +36,13 @@
 #pragma once
 
 #include "dist/replication/common/replication_common.h"
-#include "mutation.h"
+#include "dist/replication/lib/mutation.h"
+
 #include <atomic>
 #include <dsn/tool-api/zlocks.h>
+#include <dsn/utility/errors.h>
 #include <dsn/perf_counter/perf_counter_wrapper.h>
+#include <dsn/dist/replication/replica_base.h>
 
 namespace dsn {
 namespace replication {
@@ -125,9 +128,10 @@ class replica;
 class mutation_log : public ref_counter
 {
 public:
-    // return true when the mutation's offset is not less than
-    // the remembered (shared or private) valid_start_offset therefore valid for the replica
+    // DEPRECATED: The returned bool value will never be evaluated.
+    // Always return true in the callback.
     typedef std::function<bool(int log_length, mutation_ptr &)> replay_callback;
+
     typedef std::function<void(dsn::error_code err)> io_failure_callback;
 
 public:
@@ -150,6 +154,14 @@ public:
         return false;
     }
 
+    // only for private log
+    // get in-memory mutations, including pending and writing mutations
+    virtual void get_in_memory_mutations(decree start_decree,
+                                         ballot current_ballot,
+                                         /*out*/ std::vector<mutation_ptr> &mutations_list) const
+    {
+    }
+
     // flush the pending buffer until all data is on disk
     // thread safe
     virtual void flush() = 0;
@@ -164,7 +176,8 @@ public:
     // when is_private = true, should specify "private_gpid"
     //
     mutation_log(const std::string &dir, int32_t max_log_file_mb, gpid gpid, replica *r = nullptr);
-    virtual ~mutation_log();
+
+    virtual ~mutation_log() = default;
 
     //
     // initialization
@@ -187,6 +200,32 @@ public:
     static error_code replay(std::vector<std::string> &log_files,
                              replay_callback callback,
                              /*out*/ int64_t &end_offset);
+
+    // Reads a series of mutations from the log file (from `start_offset` of `log`),
+    // and iterates over the mutations, executing the provided `callback` for each
+    // mutation entry.
+    // Since the logs are packed into multiple blocks, this function retrieves
+    // only one log block at a time. The size of block depends on configuration
+    // `log_private_batch_buffer_kb` and `log_private_batch_buffer_count`.
+    //
+    // Parameters:
+    // - callback: the callback to execute for each mutation.
+    // - start_offset: file offset to start.
+    //
+    // Returns:
+    // - ERR_INVALID_DATA: if the loaded data is incorrect or invalid.
+    //
+    static error_s replay_block(log_file_ptr &log,
+                                replay_callback &callback,
+                                size_t start_offset,
+                                /*out*/ int64_t &end_offset);
+    static error_s replay_block(log_file_ptr &log,
+                                replay_callback &&callback,
+                                size_t start_offset,
+                                /*out*/ int64_t &end_offset)
+    {
+        return replay_block(log, callback, start_offset, end_offset);
+    }
 
     //
     // maintain max_decree & valid_start_offset
@@ -255,6 +294,16 @@ public:
     //
     bool get_learn_state(gpid gpid, decree start, /*out*/ learn_state &state) const;
 
+    // only valid for private log
+    // get parent mutations in memory and private log files during partition split
+    // total_file_size is used for split perf-counter
+    void get_parent_mutations_and_logs(gpid pid,
+                                       decree start_decree,
+                                       ballot start_ballot,
+                                       /*out*/ std::vector<mutation_ptr> &mutation_list,
+                                       /*out*/ std::vector<std::string> &files,
+                                       /*out*/ uint64_t &total_file_size) const;
+
     //
     //  other inquiry routines
     //
@@ -275,9 +324,21 @@ public:
     // thread safe
     decree max_commit_on_disk() const;
 
-    // maximum decree that is garbage collected
-    // thread safe
-    decree max_gced_decree(gpid gpid, int64_t valid_start_offset) const;
+    // Decree of the maximum garbage-collected mutation.
+    // For example, given mutations [20, 100], if [20, 50] is garbage-collected,
+    // the max_gced_decree=50.
+    // In production the mutations may not be ordered with the file-id. Given 3 log files:
+    //   #1:[20, 30], #2:[30, 50], #3:[10, 50]
+    // The third file is learned from primary of new epoch. Since it contains mutations smaller
+    // than the others, the max_gced_decree = 9.
+    // Returns `invalid_decree` when plog directory is empty.
+    //
+    // thread-safe & private log only
+    decree max_gced_decree(gpid gpid) const;
+    decree max_gced_decree_no_lock(gpid gpid) const;
+
+    // thread-safe
+    std::map<int, log_file_ptr> get_log_file_map() const;
 
     // check the consistence of valid_start_offset
     // thread safe
@@ -288,6 +349,8 @@ public:
 
     void hint_switch_file() { _switch_file_hint = true; }
     void demand_switch_file() { _switch_file_demand = true; }
+
+    task_tracker *tracker() { return &_tracker; }
 
 protected:
     // thread-safe
@@ -349,6 +412,10 @@ protected:
     dsn::task_tracker _tracker;
 
 private:
+    friend class mutation_log_test;
+    friend class mock_mutation_log_private;
+    friend class mock_mutation_log_shared;
+
     ///////////////////////////////////////////////
     //// memory states
     ///////////////////////////////////////////////
@@ -396,7 +463,12 @@ public:
     {
     }
 
-    virtual ~mutation_log_shared() override { _tracker.cancel_outstanding_tasks(); }
+    virtual ~mutation_log_shared() override
+    {
+        close();
+        _tracker.cancel_outstanding_tasks();
+    }
+
     virtual ::dsn::task_ptr append(mutation_ptr &mu,
                                    dsn::task_code callback_code,
                                    dsn::task_tracker *tracker,
@@ -435,25 +507,28 @@ private:
     perf_counter_wrapper *_write_size_counter;
 };
 
-class mutation_log_private : public mutation_log
+class mutation_log_private : public mutation_log, private replica_base
 {
 public:
+    // Parameters:
+    //  - batch_buffer_max_count, batch_buffer_bytes
+    //    The hint of limited size for the write buffer storing the pending mutations.
+    //    Note that the actual log block is still possible to be larger than the
+    //    hinted size.
     mutation_log_private(const std::string &dir,
                          int32_t max_log_file_mb,
                          gpid gpid,
                          replica *r,
                          uint32_t batch_buffer_bytes,
                          uint32_t batch_buffer_max_count,
-                         uint64_t batch_buffer_flush_interval_ms)
-        : mutation_log(dir, max_log_file_mb, gpid, r),
-          _batch_buffer_bytes(batch_buffer_bytes),
-          _batch_buffer_max_count(batch_buffer_max_count),
-          _batch_buffer_flush_interval_ms(batch_buffer_flush_interval_ms)
+                         uint64_t batch_buffer_flush_interval_ms);
+
+    ~mutation_log_private() override
     {
-        mutation_log_private::init_states();
+        close();
+        _tracker.cancel_outstanding_tasks();
     }
 
-    virtual ~mutation_log_private() override { _tracker.cancel_outstanding_tasks(); }
     virtual ::dsn::task_ptr append(mutation_ptr &mu,
                                    dsn::task_code callback_code,
                                    dsn::task_tracker *tracker,
@@ -463,6 +538,12 @@ public:
 
     virtual bool get_learn_state_in_memory(decree start_decree,
                                            binary_writer &writer) const override;
+
+    // get in-memory mutations, including pending and writing mutations
+    virtual void
+    get_in_memory_mutations(decree start_decree,
+                            ballot start_ballot,
+                            /*out*/ std::vector<mutation_ptr> &mutation_list) const override;
 
     virtual void flush() override;
     virtual void flush_once() override;
@@ -586,8 +667,10 @@ public:
     //
     // others
     //
-    // reset file_streamer to point to the start of this log file.
-    void reset_stream();
+
+    // Reset file_streamer to point to `offset`.
+    // offset=0 means the start of this log file.
+    void reset_stream(size_t offset = 0);
     // end offset in the global space: end_offset = start_offset + file_size
     int64_t end_offset() const { return _end_offset.load(); }
     // start offset in the global space
@@ -616,11 +699,15 @@ public:
     void set_last_write_time(uint64_t last_write_time) { _last_write_time = last_write_time; }
     uint64_t last_write_time() const { return _last_write_time; }
 
+    const disk_file *file_handle() const { return _handle; }
+
 private:
     // make private, user should create log_file through open_read() or open_write()
     log_file(const char *path, disk_file *handle, int index, int64_t start_offset, bool is_read);
 
 private:
+    friend class mock_log_file;
+
     uint32_t _crc32;
     int64_t _start_offset; // start offset in the global space
     std::atomic<int64_t>
@@ -628,16 +715,18 @@ private:
     class file_streamer;
     std::unique_ptr<file_streamer> _stream;
     disk_file *_handle;        // file handle
-    bool _is_read;             // if opened for read or write
+    const bool _is_read;       // if opened for read or write
     std::string _path;         // file path
     int _index;                // file index
     log_file_header _header;   // file header
     uint64_t _last_write_time; // seconds from epoch time
+
+    mutable zlock _write_lock;
 
     // this data is used for garbage collection, and is part of file header.
     // for read, the value is read from file header.
     // for write, the value is set by write_file_header().
     replica_log_info_map _previous_log_max_decrees;
 };
-}
-} // namespace
+} // namespace replication
+} // namespace dsn

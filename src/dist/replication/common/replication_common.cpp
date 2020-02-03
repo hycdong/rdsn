@@ -48,7 +48,7 @@ replication_options::replication_options()
     delay_for_fd_timeout_on_start = false;
     empty_write_disabled = false;
     allow_non_idempotent_write = false;
-    duplication_disabled = false;
+    duplication_disabled = true;
 
     prepare_timeout_ms_for_secondaries = 1000;
     prepare_timeout_ms_for_potential_secondaries = 3000;
@@ -272,7 +272,7 @@ void replication_options::initialize()
                                   "whether to allow non-idempotent write, default is false");
 
     duplication_disabled = dsn_config_get_value_bool(
-        "replication", "duplication_disabled", false, "is duplication disabled");
+        "replication", "duplication_disabled", duplication_disabled, "is duplication disabled");
     if (allow_non_idempotent_write && !duplication_disabled) {
         dassert(false, "duplication and non-idempotent write cannot be enabled together");
     }
@@ -598,7 +598,8 @@ const std::string backup_restore_constant::BACKUP_ID("restore.backup_id");
 const std::string backup_restore_constant::SKIP_BAD_PARTITION("restore.skip_bad_partition");
 
 const std::string replica_envs::DENY_CLIENT_WRITE("replica.deny_client_write");
-const std::string replica_envs::WRITE_THROTTLING("replica.write_throttling");
+const std::string replica_envs::WRITE_QPS_THROTTLING("replica.write_throttling");
+const std::string replica_envs::WRITE_SIZE_THROTTLING("replica.write_throttling_by_size");
 
 const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
 // TODO(heyuchen): update it

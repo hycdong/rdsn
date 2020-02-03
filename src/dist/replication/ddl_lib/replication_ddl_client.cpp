@@ -25,12 +25,14 @@
  */
 
 #include <boost/lexical_cast.hpp>
+#include <fmt/format.h>
 
 #include <dsn/utility/error_code.h>
 #include <dsn/utility/output_utils.h>
 #include <dsn/tool-api/group_address.h>
 #include <dsn/dist/replication/replication_ddl_client.h>
 #include <dsn/dist/replication/replication_other_types.h>
+#include <dsn/dist/replication/duplication_common.h>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -1423,6 +1425,34 @@ dsn::error_code replication_ddl_client::query_restore(int32_t restore_app_id, bo
     return ERR_OK;
 }
 
+error_with<duplication_add_response>
+replication_ddl_client::add_dup(std::string app_name, std::string remote_cluster_name, bool freezed)
+{
+    auto req = make_unique<duplication_add_request>();
+    req->app_name = std::move(app_name);
+    req->remote_cluster_name = std::move(remote_cluster_name);
+    req->freezed = freezed;
+    return call_rpc_sync(duplication_add_rpc(std::move(req), RPC_CM_ADD_DUPLICATION));
+}
+
+error_with<duplication_status_change_response> replication_ddl_client::change_dup_status(
+    std::string app_name, int dupid, duplication_status::type status)
+{
+    auto req = make_unique<duplication_status_change_request>();
+    req->app_name = std::move(app_name);
+    req->dupid = dupid;
+    req->status = status;
+    return call_rpc_sync(
+        duplication_status_change_rpc(std::move(req), RPC_CM_CHANGE_DUPLICATION_STATUS));
+}
+
+error_with<duplication_query_response> replication_ddl_client::query_dup(std::string app_name)
+{
+    auto req = make_unique<duplication_query_request>();
+    req->app_name = std::move(app_name);
+    return call_rpc_sync(duplication_query_rpc(std::move(req), RPC_CM_QUERY_DUPLICATION));
+}
+
 bool replication_ddl_client::valid_app_char(int c)
 {
     return (bool)std::isalnum(c) || c == '_' || c == '.' || c == ':';
@@ -1466,36 +1496,17 @@ dsn::error_code replication_ddl_client::get_app_envs(const std::string &app_name
     return dsn::ERR_OBJECT_NOT_FOUND;
 }
 
-::dsn::error_code replication_ddl_client::set_app_envs(const std::string &app_name,
-                                                       const std::vector<std::string> &keys,
-                                                       const std::vector<std::string> &values)
+error_with<configuration_update_app_env_response>
+replication_ddl_client::set_app_envs(const std::string &app_name,
+                                     const std::vector<std::string> &keys,
+                                     const std::vector<std::string> &values)
 {
-    std::shared_ptr<configuration_update_app_env_request> req =
-        std::make_shared<configuration_update_app_env_request>();
+    auto req = make_unique<configuration_update_app_env_request>();
     req->__set_app_name(app_name);
-    req->__set_op(app_env_operation::type::APP_ENV_OP_SET);
     req->__set_keys(keys);
     req->__set_values(values);
-
-    auto resp_task = request_meta<configuration_update_app_env_request>(RPC_CM_UPDATE_APP_ENV, req);
-    resp_task->wait();
-
-    if (resp_task->error() != ERR_OK) {
-        return resp_task->error();
-    }
-    configuration_update_app_env_response response;
-    dsn::unmarshall(resp_task->get_response(), response);
-    if (response.err != ERR_OK) {
-        return response.err;
-    } else {
-        std::cout << "set app envs succeed" << std::endl;
-        if (!response.hint_message.empty()) {
-            std::cout << "=============================" << std::endl;
-            std::cout << response.hint_message << std::endl;
-            std::cout << "=============================" << std::endl;
-        }
-    }
-    return ERR_OK;
+    req->__set_op(app_env_operation::type::APP_ENV_OP_SET);
+    return call_rpc_sync(update_app_env_rpc(std::move(req), RPC_CM_UPDATE_APP_ENV));
 }
 
 ::dsn::error_code replication_ddl_client::del_app_envs(const std::string &app_name,
@@ -1764,5 +1775,6 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
 
     return resp.err;
 }
+
 } // namespace replication
 } // namespace dsn

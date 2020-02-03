@@ -56,7 +56,10 @@ class server_state;
 class meta_server_failure_detector;
 class server_load_balancer;
 class replication_checker;
+class meta_duplication_service;
+class meta_split_service;
 class bulk_load_service;
+
 namespace test {
 class test_checker;
 }
@@ -66,6 +69,8 @@ DEFINE_TASK_CODE(LPC_DEFAULT_CALLBACK, TASK_PRIORITY_COMMON, dsn::THREAD_POOL_DE
 typedef rpc_holder<configuration_update_app_env_request, configuration_update_app_env_response>
     app_env_rpc;
 typedef rpc_holder<ddd_diagnose_request, ddd_diagnose_response> ddd_diagnose_rpc;
+typedef rpc_holder<app_partition_split_request, app_partition_split_response>
+    app_partition_split_rpc;
 
 // TODO(heyuchen): common - handle rpc_holder
 typedef rpc_holder<start_bulk_load_request, start_bulk_load_response> start_bulk_load_rpc;
@@ -179,6 +184,18 @@ private:
     void on_report_restore_status(dsn::message_ex *req);
     void on_query_restore_status(dsn::message_ex *req);
 
+    // duplication
+    void on_add_duplication(duplication_add_rpc rpc);
+    void on_change_duplication_status(duplication_status_change_rpc rpc);
+    void on_query_duplication_info(duplication_query_rpc rpc);
+    void on_duplication_sync(duplication_sync_rpc rpc);
+    void register_duplication_rpc_handlers();
+    void recover_duplication_from_meta_state();
+    void initialize_duplication_service();
+
+    // split
+    void on_app_partition_split(app_partition_split_rpc rpc);
+
     // bulk load
     void on_start_bulk_load(start_bulk_load_rpc rpc);
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
@@ -213,6 +230,14 @@ private:
     std::shared_ptr<server_load_balancer> _balancer;
     std::shared_ptr<backup_service> _backup_handler;
 
+    friend class meta_test_base;
+    friend class meta_duplication_service;
+    friend class meta_http_service_test;
+    friend class meta_http_service;
+    std::unique_ptr<meta_duplication_service> _dup_svc;
+
+    std::unique_ptr<meta_split_service> _split_svc;
+
     std::shared_ptr<bulk_load_service> _bulk_load_svc;
 
     // handle all the block filesystems for current meta service
@@ -241,5 +266,6 @@ private:
 
     dsn::task_tracker _tracker;
 };
-}
-}
+
+} // namespace replication
+} // namespace dsn

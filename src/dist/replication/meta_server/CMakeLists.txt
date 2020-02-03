@@ -1,15 +1,18 @@
 set(MY_PROJ_NAME dsn_meta_server)
 
+set(DUPLICATION_SRC
+        duplication/duplication_info.cpp
+        duplication/meta_duplication_service.cpp
+        )
+
 # Source files under CURRENT project directory will be automatically included.
 # You can manually set MY_PROJ_SRC to include source files under other directories.
-set(MY_PROJ_SRC "")
+set(MY_PROJ_SRC "${DUPLICATION_SRC}")
 
 # Search mode for source files under CURRENT project directory?
 # "GLOB_RECURSE" for recursive search
 # "GLOB" for non-recursive search
 set(MY_SRC_SEARCH_MODE "GLOB_RECURSE")
-
-set(MY_PROJ_INC_PATH)
 
 set(MY_PROJ_LIBS
     dsn_replication_common
@@ -18,6 +21,8 @@ set(MY_PROJ_LIBS
     dsn.failure_detector
     dsn.replication.zookeeper_provider
     dsn_cli
+    dsn_http
+    dsn_runtime
     zookeeper_mt
     galaxy-fds-sdk-cpp
     PocoNet
@@ -26,14 +31,7 @@ set(MY_PROJ_LIBS
     PocoJSON
     crypto
     )
-
-set(MY_PROJ_LIB_PATH
-    ${LIBFDS_LIB_DIR}
-    ${POCO_LIB_DIR}
-)
-
-set(MY_BOOST_PACKAGES regex)
-
+    
 # Extra files that will be installed
 set(MY_BINPLACES "")
 

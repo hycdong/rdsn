@@ -29,7 +29,8 @@ struct partition_status
         PS_ERROR = 2,
         PS_PRIMARY = 3,
         PS_SECONDARY = 4,
-        PS_POTENTIAL_SECONDARY = 5
+        PS_POTENTIAL_SECONDARY = 5,
+        PS_PARTITION_SPLIT = 6
     };
 };
 
@@ -338,6 +339,7 @@ class ddd_partition_info;
 
 class ddd_diagnose_response;
 
+<<<<<<< HEAD
 class bulk_load_metadata;
 
 class partition_download_progress;
@@ -361,6 +363,11 @@ class group_bulk_load_response;
 class ingestion_request;
 
 class ingestion_response;
+=======
+class app_partition_split_request;
+
+class app_partition_split_response;
+>>>>>>> 1.12.0
 
 typedef struct _mutation_header__isset
 {
@@ -463,12 +470,14 @@ public:
     mutation_update(mutation_update &&);
     mutation_update &operator=(const mutation_update &);
     mutation_update &operator=(mutation_update &&);
-    mutation_update() : serialization_type(0) {}
+    mutation_update() : serialization_type(0), start_time_ns(dsn_now_ns()) {}
 
     virtual ~mutation_update() throw();
     ::dsn::task_code code;
     int32_t serialization_type;
     ::dsn::blob data;
+    // start_time_ns doesn't need to serialization, because we only use it on local node
+    uint64_t start_time_ns;
 
     _mutation_update__isset __isset;
 
@@ -485,6 +494,8 @@ public:
         if (!(serialization_type == rhs.serialization_type))
             return false;
         if (!(data == rhs.data))
+            return false;
+        if (!(start_time_ns == rhs.start_time_ns))
             return false;
         return true;
     }
@@ -944,13 +955,18 @@ inline std::ostream &operator<<(std::ostream &out, const prepare_ack &obj)
 typedef struct _learn_state__isset
 {
     _learn_state__isset()
-        : from_decree_excluded(false), to_decree_included(false), meta(false), files(false)
+        : from_decree_excluded(false),
+          to_decree_included(false),
+          meta(false),
+          files(false),
+          learn_start_decree(false)
     {
     }
     bool from_decree_excluded : 1;
     bool to_decree_included : 1;
     bool meta : 1;
     bool files : 1;
+    bool learn_start_decree : 1;
 } _learn_state__isset;
 
 class learn_state
@@ -960,13 +976,14 @@ public:
     learn_state(learn_state &&);
     learn_state &operator=(const learn_state &);
     learn_state &operator=(learn_state &&);
-    learn_state() : from_decree_excluded(0), to_decree_included(0) {}
+    learn_state() : from_decree_excluded(0), to_decree_included(0), learn_start_decree(0) {}
 
     virtual ~learn_state() throw();
     int64_t from_decree_excluded;
     int64_t to_decree_included;
     ::dsn::blob meta;
     std::vector<std::string> files;
+    int64_t learn_start_decree;
 
     _learn_state__isset __isset;
 
@@ -978,6 +995,8 @@ public:
 
     void __set_files(const std::vector<std::string> &val);
 
+    void __set_learn_start_decree(const int64_t val);
+
     bool operator==(const learn_state &rhs) const
     {
         if (!(from_decree_excluded == rhs.from_decree_excluded))
@@ -987,6 +1006,10 @@ public:
         if (!(meta == rhs.meta))
             return false;
         if (!(files == rhs.files))
+            return false;
+        if (__isset.learn_start_decree != rhs.__isset.learn_start_decree)
+            return false;
+        else if (__isset.learn_start_decree && !(learn_start_decree == rhs.learn_start_decree))
             return false;
         return true;
     }
@@ -1016,7 +1039,8 @@ typedef struct _learn_request__isset
           signature(false),
           last_committed_decree_in_app(false),
           last_committed_decree_in_prepare_list(false),
-          app_specific_learn_request(false)
+          app_specific_learn_request(false),
+          max_gced_decree(false)
     {
     }
     bool pid : 1;
@@ -1025,6 +1049,7 @@ typedef struct _learn_request__isset
     bool last_committed_decree_in_app : 1;
     bool last_committed_decree_in_prepare_list : 1;
     bool app_specific_learn_request : 1;
+    bool max_gced_decree : 1;
 } _learn_request__isset;
 
 class learn_request
@@ -1035,7 +1060,10 @@ public:
     learn_request &operator=(const learn_request &);
     learn_request &operator=(learn_request &&);
     learn_request()
-        : signature(0), last_committed_decree_in_app(0), last_committed_decree_in_prepare_list(0)
+        : signature(0),
+          last_committed_decree_in_app(0),
+          last_committed_decree_in_prepare_list(0),
+          max_gced_decree(0)
     {
     }
 
@@ -1046,6 +1074,7 @@ public:
     int64_t last_committed_decree_in_app;
     int64_t last_committed_decree_in_prepare_list;
     ::dsn::blob app_specific_learn_request;
+    int64_t max_gced_decree;
 
     _learn_request__isset __isset;
 
@@ -1061,6 +1090,8 @@ public:
 
     void __set_app_specific_learn_request(const ::dsn::blob &val);
 
+    void __set_max_gced_decree(const int64_t val);
+
     bool operator==(const learn_request &rhs) const
     {
         if (!(pid == rhs.pid))
@@ -1074,6 +1105,10 @@ public:
         if (!(last_committed_decree_in_prepare_list == rhs.last_committed_decree_in_prepare_list))
             return false;
         if (!(app_specific_learn_request == rhs.app_specific_learn_request))
+            return false;
+        if (__isset.max_gced_decree != rhs.__isset.max_gced_decree)
+            return false;
+        else if (__isset.max_gced_decree && !(max_gced_decree == rhs.max_gced_decree))
             return false;
         return true;
     }
@@ -1261,13 +1296,20 @@ inline std::ostream &operator<<(std::ostream &out, const learn_notify_response &
 typedef struct _group_check_request__isset
 {
     _group_check_request__isset()
-        : app(false), node(false), config(false), last_committed_decree(false)
+        : app(false),
+          node(false),
+          config(false),
+          last_committed_decree(false),
+          confirmed_decree(false),
+          child_gpid(false)
     {
     }
     bool app : 1;
     bool node : 1;
     bool config : 1;
     bool last_committed_decree : 1;
+    bool confirmed_decree : 1;
+    bool child_gpid : 1;
 } _group_check_request__isset;
 
 class group_check_request
@@ -1277,13 +1319,15 @@ public:
     group_check_request(group_check_request &&);
     group_check_request &operator=(const group_check_request &);
     group_check_request &operator=(group_check_request &&);
-    group_check_request() : last_committed_decree(0) {}
+    group_check_request() : last_committed_decree(0), confirmed_decree(0) {}
 
     virtual ~group_check_request() throw();
     ::dsn::app_info app;
     ::dsn::rpc_address node;
     replica_configuration config;
     int64_t last_committed_decree;
+    int64_t confirmed_decree;
+    ::dsn::gpid child_gpid;
 
     _group_check_request__isset __isset;
 
@@ -1295,6 +1339,10 @@ public:
 
     void __set_last_committed_decree(const int64_t val);
 
+    void __set_confirmed_decree(const int64_t val);
+
+    void __set_child_gpid(const ::dsn::gpid &val);
+
     bool operator==(const group_check_request &rhs) const
     {
         if (!(app == rhs.app))
@@ -1304,6 +1352,14 @@ public:
         if (!(config == rhs.config))
             return false;
         if (!(last_committed_decree == rhs.last_committed_decree))
+            return false;
+        if (__isset.confirmed_decree != rhs.__isset.confirmed_decree)
+            return false;
+        else if (__isset.confirmed_decree && !(confirmed_decree == rhs.confirmed_decree))
+            return false;
+        if (__isset.child_gpid != rhs.__isset.child_gpid)
+            return false;
+        else if (__isset.child_gpid && !(child_gpid == rhs.child_gpid))
             return false;
         return true;
     }
@@ -4714,9 +4770,12 @@ inline std::ostream &operator<<(std::ostream &out, const configuration_update_ap
 
 typedef struct _duplication_add_request__isset
 {
-    _duplication_add_request__isset() : app_name(false), remote_cluster_address(false) {}
+    _duplication_add_request__isset() : app_name(false), remote_cluster_name(false), freezed(false)
+    {
+    }
     bool app_name : 1;
-    bool remote_cluster_address : 1;
+    bool remote_cluster_name : 1;
+    bool freezed : 1;
 } _duplication_add_request__isset;
 
 class duplication_add_request
@@ -4726,23 +4785,28 @@ public:
     duplication_add_request(duplication_add_request &&);
     duplication_add_request &operator=(const duplication_add_request &);
     duplication_add_request &operator=(duplication_add_request &&);
-    duplication_add_request() : app_name(), remote_cluster_address() {}
+    duplication_add_request() : app_name(), remote_cluster_name(), freezed(0) {}
 
     virtual ~duplication_add_request() throw();
     std::string app_name;
-    std::string remote_cluster_address;
+    std::string remote_cluster_name;
+    bool freezed;
 
     _duplication_add_request__isset __isset;
 
     void __set_app_name(const std::string &val);
 
-    void __set_remote_cluster_address(const std::string &val);
+    void __set_remote_cluster_name(const std::string &val);
+
+    void __set_freezed(const bool val);
 
     bool operator==(const duplication_add_request &rhs) const
     {
         if (!(app_name == rhs.app_name))
             return false;
-        if (!(remote_cluster_address == rhs.remote_cluster_address))
+        if (!(remote_cluster_name == rhs.remote_cluster_name))
+            return false;
+        if (!(freezed == rhs.freezed))
             return false;
         return true;
     }
@@ -4937,12 +5001,12 @@ inline std::ostream &operator<<(std::ostream &out, const duplication_status_chan
 typedef struct _duplication_entry__isset
 {
     _duplication_entry__isset()
-        : dupid(false), status(false), remote_address(false), create_ts(false), progress(false)
+        : dupid(false), status(false), remote(false), create_ts(false), progress(false)
     {
     }
     bool dupid : 1;
     bool status : 1;
-    bool remote_address : 1;
+    bool remote : 1;
     bool create_ts : 1;
     bool progress : 1;
 } _duplication_entry__isset;
@@ -4954,15 +5018,12 @@ public:
     duplication_entry(duplication_entry &&);
     duplication_entry &operator=(const duplication_entry &);
     duplication_entry &operator=(duplication_entry &&);
-    duplication_entry()
-        : dupid(0), status((duplication_status::type)0), remote_address(), create_ts(0)
-    {
-    }
+    duplication_entry() : dupid(0), status((duplication_status::type)0), remote(), create_ts(0) {}
 
     virtual ~duplication_entry() throw();
     int32_t dupid;
     duplication_status::type status;
-    std::string remote_address;
+    std::string remote;
     int64_t create_ts;
     std::map<int32_t, int64_t> progress;
 
@@ -4972,7 +5033,7 @@ public:
 
     void __set_status(const duplication_status::type val);
 
-    void __set_remote_address(const std::string &val);
+    void __set_remote(const std::string &val);
 
     void __set_create_ts(const int64_t val);
 
@@ -4984,7 +5045,7 @@ public:
             return false;
         if (!(status == rhs.status))
             return false;
-        if (!(remote_address == rhs.remote_address))
+        if (!(remote == rhs.remote))
             return false;
         if (!(create_ts == rhs.create_ts))
             return false;
@@ -5237,13 +5298,13 @@ public:
 
     virtual ~duplication_sync_response() throw();
     ::dsn::error_code err;
-    std::map<int32_t, std::vector<duplication_entry>> dup_map;
+    std::map<int32_t, std::map<int32_t, duplication_entry>> dup_map;
 
     _duplication_sync_response__isset __isset;
 
     void __set_err(const ::dsn::error_code &val);
 
-    void __set_dup_map(const std::map<int32_t, std::vector<duplication_entry>> &val);
+    void __set_dup_map(const std::map<int32_t, std::map<int32_t, duplication_entry>> &val);
 
     bool operator==(const duplication_sync_response &rhs) const
     {
@@ -5526,6 +5587,7 @@ inline std::ostream &operator<<(std::ostream &out, const ddd_diagnose_response &
     return out;
 }
 
+<<<<<<< HEAD
 typedef struct _bulk_load_metadata__isset
 {
     _bulk_load_metadata__isset() : files(false), file_total_size(false) {}
@@ -5771,6 +5833,45 @@ public:
     }
 
     bool operator<(const configuration_query_bulk_load_request &) const;
+=======
+typedef struct _app_partition_split_request__isset
+{
+    _app_partition_split_request__isset() : app_name(false), new_partition_count(false) {}
+    bool app_name : 1;
+    bool new_partition_count : 1;
+} _app_partition_split_request__isset;
+
+class app_partition_split_request
+{
+public:
+    app_partition_split_request(const app_partition_split_request &);
+    app_partition_split_request(app_partition_split_request &&);
+    app_partition_split_request &operator=(const app_partition_split_request &);
+    app_partition_split_request &operator=(app_partition_split_request &&);
+    app_partition_split_request() : app_name(), new_partition_count(0) {}
+
+    virtual ~app_partition_split_request() throw();
+    std::string app_name;
+    int32_t new_partition_count;
+
+    _app_partition_split_request__isset __isset;
+
+    void __set_app_name(const std::string &val);
+
+    void __set_new_partition_count(const int32_t val);
+
+    bool operator==(const app_partition_split_request &rhs) const
+    {
+        if (!(app_name == rhs.app_name))
+            return false;
+        if (!(new_partition_count == rhs.new_partition_count))
+            return false;
+        return true;
+    }
+    bool operator!=(const app_partition_split_request &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const app_partition_split_request &) const;
+>>>>>>> 1.12.0
 
     uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
     uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
@@ -5778,14 +5879,21 @@ public:
     virtual void printTo(std::ostream &out) const;
 };
 
+<<<<<<< HEAD
 void swap(configuration_query_bulk_load_request &a, configuration_query_bulk_load_request &b);
 
 inline std::ostream &operator<<(std::ostream &out, const configuration_query_bulk_load_request &obj)
+=======
+void swap(app_partition_split_request &a, app_partition_split_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const app_partition_split_request &obj)
+>>>>>>> 1.12.0
 {
     obj.printTo(out);
     return out;
 }
 
+<<<<<<< HEAD
 typedef struct _configuration_query_bulk_load_response__isset
 {
     _configuration_query_bulk_load_response__isset()
@@ -6409,6 +6517,51 @@ public:
     bool operator!=(const ingestion_response &rhs) const { return !(*this == rhs); }
 
     bool operator<(const ingestion_response &) const;
+=======
+typedef struct _app_partition_split_response__isset
+{
+    _app_partition_split_response__isset() : err(false), app_id(false), partition_count(false) {}
+    bool err : 1;
+    bool app_id : 1;
+    bool partition_count : 1;
+} _app_partition_split_response__isset;
+
+class app_partition_split_response
+{
+public:
+    app_partition_split_response(const app_partition_split_response &);
+    app_partition_split_response(app_partition_split_response &&);
+    app_partition_split_response &operator=(const app_partition_split_response &);
+    app_partition_split_response &operator=(app_partition_split_response &&);
+    app_partition_split_response() : app_id(0), partition_count(0) {}
+
+    virtual ~app_partition_split_response() throw();
+    ::dsn::error_code err;
+    int32_t app_id;
+    int32_t partition_count;
+
+    _app_partition_split_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_app_id(const int32_t val);
+
+    void __set_partition_count(const int32_t val);
+
+    bool operator==(const app_partition_split_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (!(app_id == rhs.app_id))
+            return false;
+        if (!(partition_count == rhs.partition_count))
+            return false;
+        return true;
+    }
+    bool operator!=(const app_partition_split_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const app_partition_split_response &) const;
+>>>>>>> 1.12.0
 
     uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
     uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
@@ -6416,9 +6569,15 @@ public:
     virtual void printTo(std::ostream &out) const;
 };
 
+<<<<<<< HEAD
 void swap(ingestion_response &a, ingestion_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const ingestion_response &obj)
+=======
+void swap(app_partition_split_response &a, app_partition_split_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const app_partition_split_response &obj)
+>>>>>>> 1.12.0
 {
     obj.printTo(out);
     return out;

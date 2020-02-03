@@ -83,6 +83,12 @@
 #define JSON_ENCODE_ENTRIES12(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)      \
     JSON_ENCODE_ENTRIES11(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);              \
     JSON_ENCODE_ENTRY(out, prefix, T12)
+#define JSON_ENCODE_ENTRIES13(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13) \
+    JSON_ENCODE_ENTRIES12(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);         \
+    JSON_ENCODE_ENTRY(out, prefix, T13)
+#define JSON_ENCODE_ENTRIES14(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14) \
+    JSON_ENCODE_ENTRIES13(out, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);         \
+    JSON_ENCODE_ENTRY(out, prefix, T14)
 
 #define JSON_DECODE_ENTRY(in, prefix, T)                                                           \
     do {                                                                                           \
@@ -134,9 +140,15 @@
 #define JSON_DECODE_ENTRIES12(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)       \
     JSON_DECODE_ENTRIES11(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);               \
     JSON_TRY_DECODE_ENTRY(in, prefix, T12)
+#define JSON_DECODE_ENTRIES13(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)  \
+    JSON_DECODE_ENTRIES12(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);          \
+    JSON_TRY_DECODE_ENTRY(in, prefix, T13)
+#define JSON_DECODE_ENTRIES14(in, prefix, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)  \
+    JSON_DECODE_ENTRIES13(in, prefix, T1, T2, T3, T4, T5 T6, T7, T8, T9, T10, T11, T12, T13);          \
+    JSON_TRY_DECODE_ENTRY(in, prefix, T14)
 
 #define JSON_ENTRIES_GET_MACRO(                                                                    \
-    ph1, ph2, ph3, ph4, ph5, ph6, ph7, ph8, ph9, ph10, ph11, ph12, NAME, ...)                      \
+    ph1, ph2, ph3, ph4, ph5, ph6, ph7, ph8, ph9, ph10, ph11, ph12, ph13, ph14, NAME, ...)                \
     NAME
 // workaround due to the way VC handles "..."
 #define JSON_ENTRIES_GET_MACRO_(tuple) JSON_ENTRIES_GET_MACRO tuple
@@ -144,6 +156,8 @@
 #define JSON_ENCODE_ENTRIES(out, prefix, ...)                                                      \
     out.StartObject();                                                                             \
     JSON_ENTRIES_GET_MACRO_((__VA_ARGS__,                                                          \
+                             JSON_ENCODE_ENTRIES14,                                                \
+                             JSON_ENCODE_ENTRIES13,                                                \
                              JSON_ENCODE_ENTRIES12,                                                \
                              JSON_ENCODE_ENTRIES11,                                                \
                              JSON_ENCODE_ENTRIES10,                                                \
@@ -164,6 +178,8 @@
     int arguments_count = 0;                                                                       \
     int parsed_count = 0;                                                                          \
     JSON_ENTRIES_GET_MACRO_((__VA_ARGS__,                                                          \
+                             JSON_DECODE_ENTRIES14,                                                \
+                             JSON_DECODE_ENTRIES13,                                                \
                              JSON_DECODE_ENTRIES12,                                                \
                              JSON_DECODE_ENTRIES11,                                                \
                              JSON_DECODE_ENTRIES10,                                                \
@@ -616,6 +632,8 @@ NON_MEMBER_JSON_SERIALIZATION(dsn::app_info,
                               expire_second,
                               create_second,
                               drop_second,
+                              duplicating,
+                              init_partition_count,
                               is_bulk_loading)
 
 NON_MEMBER_JSON_SERIALIZATION(dsn::replication::file_meta, name, size, md5)

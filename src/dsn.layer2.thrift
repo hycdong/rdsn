@@ -43,7 +43,7 @@ struct configuration_query_by_index_response
     2:i32                           app_id;
     3:i32                           partition_count;
     4:bool                          is_stateful;
-    5:list<partition_configuration> partitions;    
+    5:list<partition_configuration> partitions;
 }
 
 enum app_status
@@ -74,7 +74,18 @@ struct app_info
     10:i64          create_second;
     11:i64          drop_second;
 
-    // new fields added to support bulk load
-    //12:bulk_load_status app_bulk_load_status = bulk_load_status.BLS_INVALID;
-    12:bool         is_bulk_loading = false;
+    // New fields added from v1.12.0
+    // Whether this app is duplicating.
+    // If true it should prevent its unconfirmed WAL from being compacted.
+    12:optional bool duplicating;
+
+    // New fields for partition split
+    // If meta server failed during partition split,
+    // child partition is not existed on remote stroage, but partition count changed.
+    // We use init_partition_count to handle those child partitions while sync_apps_from_remote_stroage
+    13:i32          init_partition_count = -1;
+
+    // New fields for bulk load
+    // Whether this app is in bulk load
+    14:bool         is_bulk_loading = false;
 }

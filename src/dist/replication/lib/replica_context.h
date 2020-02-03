@@ -537,6 +537,21 @@ private:
 
 typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
 
+class partition_split_context
+{
+public:
+    partition_split_context() : is_prepare_list_copied(false) {}
+    bool cleanup(bool force);
+    bool is_cleaned() const;
+
+public:
+    gpid parent_gpid;
+    bool is_prepare_list_copied;
+
+    // child replica async learn parent states
+    dsn::task_ptr async_learn_task;
+};
+
 class bulk_load_context
 {
 public:
