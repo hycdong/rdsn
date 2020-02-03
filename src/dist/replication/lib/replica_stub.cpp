@@ -46,6 +46,9 @@
 #include <dsn/dist/replication/replication_app_base.h>
 #include <vector>
 #include <deque>
+#ifdef DSN_ENABLE_GPERF
+#include <gperftools/malloc_extension.h>
+#endif
 
 namespace dsn {
 namespace replication {
@@ -686,6 +689,22 @@ void replica_stub::initialize_start()
                                    0,
                                    std::chrono::milliseconds(_options.config_sync_interval_ms));
     }
+
+#ifdef DSN_ENABLE_GPERF
+    if (_options.mem_release_enabled) {
+        _mem_release_timer_task =
+            tasking::enqueue_timer(LPC_MEM_RELEASE,
+                                   &_tracker,
+                                   []() {
+                                       ddebug("Memory release has started...");
+                                       ::MallocExtension::instance()->ReleaseFreeMemory();
+                                       ddebug("Memory release has ended...");
+                                   },
+                                   std::chrono::milliseconds(_options.mem_release_interval_ms),
+                                   0,
+                                   std::chrono::milliseconds(_options.mem_release_interval_ms));
+    }
+#endif
 
     // init liveness monitor
     dassert(NS_Disconnected == _state, "");
@@ -2018,14 +2037,16 @@ void replica_stub::open_service()
         {"deny-client"},
         "deny-client <true|false>",
         "deny-client - control if deny client read & write request",
-        [this](const std::vector<std::string> &args) { HANDLE_CLI_FLAGS(_deny_client, args); });
+        [this](const std::vector<std::string> &args) {
+            return remote_command_set_bool_flag(_deny_client, "deny-client", args);
+        });
 
     _verbose_client_log_command = ::dsn::command_manager::instance().register_app_command(
         {"verbose-client-log"},
         "verbose-client-log <true|false>",
         "verbose-client-log - control if print verbose error log when reply read & write request",
         [this](const std::vector<std::string> &args) {
-            HANDLE_CLI_FLAGS(_verbose_client_log, args);
+            return remote_command_set_bool_flag(_verbose_client_log, "verbose-client-log", args);
         });
 
     _verbose_commit_log_command = ::dsn::command_manager::instance().register_app_command(
@@ -2033,7 +2054,7 @@ void replica_stub::open_service()
         "verbose-commit-log <true|false>",
         "verbose-commit-log - control if print verbose log when commit mutation",
         [this](const std::vector<std::string> &args) {
-            HANDLE_CLI_FLAGS(_verbose_commit_log, args);
+            return remote_command_set_bool_flag(_verbose_commit_log, "verbose-commit-log", args);
         });
 
     _trigger_chkpt_command = ::dsn::command_manager::instance().register_app_command(
@@ -2287,6 +2308,11 @@ void replica_stub::close()
     if (_gc_timer_task != nullptr) {
         _gc_timer_task->cancel(true);
         _gc_timer_task = nullptr;
+    }
+
+    if (_mem_release_timer_task != nullptr) {
+        _mem_release_timer_task->cancel(true);
+        _mem_release_timer_task = nullptr;
     }
 
     {
