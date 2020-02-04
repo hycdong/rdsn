@@ -69,12 +69,14 @@ replica_stub::replica_stub(replica_state_subscriber subscriber /*= nullptr*/,
       _query_compact_command(nullptr),
       _query_app_envs_command(nullptr),
       _useless_dir_reserve_seconds_command(nullptr),
+      _max_reserved_memory_percentage_command(nullptr),
       _max_concurrent_bulk_load_downloading_count_command(nullptr),
       _deny_client(false),
       _verbose_client_log(false),
       _verbose_commit_log(false),
       _gc_disk_error_replica_interval_seconds(3600),
       _gc_disk_garbage_replica_interval_seconds(3600),
+      _mem_release_max_reserved_mem_percentage(10),
       _max_concurrent_bulk_load_downloading_count(5),
       _learn_app_concurrent_count(0),
       _fs_manager(false),
@@ -370,6 +372,7 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
     _verbose_commit_log = _options.verbose_commit_log_on_start;
     _gc_disk_error_replica_interval_seconds = _options.gc_disk_error_replica_interval_seconds;
     _gc_disk_garbage_replica_interval_seconds = _options.gc_disk_garbage_replica_interval_seconds;
+    _mem_release_max_reserved_mem_percentage = _options.mem_release_max_reserved_mem_percentage;
     _max_concurrent_bulk_load_downloading_count =
         _options.max_concurrent_bulk_load_downloading_count;
 
@@ -693,17 +696,13 @@ void replica_stub::initialize_start()
 
 #ifdef DSN_ENABLE_GPERF
     if (_options.mem_release_enabled) {
-        _mem_release_timer_task =
-            tasking::enqueue_timer(LPC_MEM_RELEASE,
-                                   &_tracker,
-                                   []() {
-                                       ddebug("Memory release has started...");
-                                       ::MallocExtension::instance()->ReleaseFreeMemory();
-                                       ddebug("Memory release has ended...");
-                                   },
-                                   std::chrono::milliseconds(_options.mem_release_interval_ms),
-                                   0,
-                                   std::chrono::milliseconds(_options.mem_release_interval_ms));
+        _mem_release_timer_task = tasking::enqueue_timer(
+            LPC_MEM_RELEASE,
+            &_tracker,
+            std::bind(&replica_stub::gc_tcmalloc_memory, this),
+            std::chrono::milliseconds(_options.mem_release_check_interval_ms),
+            0,
+            std::chrono::milliseconds(_options.mem_release_check_interval_ms));
     }
 #endif
 
@@ -2131,6 +2130,34 @@ void replica_stub::open_service()
             return result;
         });
 
+#ifdef DSN_ENABLE_GPERF
+    _max_reserved_memory_percentage_command = dsn::command_manager::instance().register_app_command(
+        {"mem-release-max-reserved-percentage"},
+        "mem-release-max-reserved-percentage [num | DEFAULT]",
+        "control tcmalloc max reserved but not-used memory percentage",
+        [this](const std::vector<std::string> &args) {
+            std::string result("OK");
+            if (args.empty()) {
+                // show current value
+                result = "mem-release-max-reserved-percentage = " +
+                         std::to_string(_mem_release_max_reserved_mem_percentage);
+                return result;
+            }
+            if (args[0] == "DEFAULT") {
+                // set to default value
+                _mem_release_max_reserved_mem_percentage =
+                    _options.mem_release_max_reserved_mem_percentage;
+                return result;
+            }
+            int32_t percentage = 0;
+            if (!dsn::buf2int32(args[0], percentage) || percentage <= 0 || percentage >= 100) {
+                result = std::string("ERR: invalid arguments");
+            } else {
+                _mem_release_max_reserved_mem_percentage = percentage;
+            }
+            return result;
+        });
+#endif
     _max_concurrent_bulk_load_downloading_count_command =
         dsn::command_manager::instance().register_app_command(
             {"max-concurrent-bulk-load-downloading-count"},
@@ -2281,8 +2308,11 @@ void replica_stub::close()
     dsn::command_manager::instance().deregister_command(_query_compact_command);
     dsn::command_manager::instance().deregister_command(_query_app_envs_command);
     dsn::command_manager::instance().deregister_command(_useless_dir_reserve_seconds_command);
+#ifdef DSN_ENABLE_GPERF
+    dsn::command_manager::instance().deregister_command(_max_reserved_memory_percentage_command);
+#endif
     dsn::command_manager::instance().deregister_command(
-        _max_concurrent_bulk_load_downloading_count_command);
+            _max_concurrent_bulk_load_downloading_count_command);
 
     _kill_partition_command = nullptr;
     _deny_client_command = nullptr;
@@ -2292,6 +2322,7 @@ void replica_stub::close()
     _query_compact_command = nullptr;
     _query_app_envs_command = nullptr;
     _useless_dir_reserve_seconds_command = nullptr;
+    _max_reserved_memory_percentage_command = nullptr;
     _max_concurrent_bulk_load_downloading_count_command = nullptr;
 
     if (_config_sync_timer_task != nullptr) {
@@ -2409,6 +2440,44 @@ replica_stub::get_child_dir(const char *app_type, gpid child_pid, const std::str
     dassert_f(!child_dir.empty(), "can not find parent_dir {} in data_dirs", parent_dir);
     return child_dir;
 }
+
+#ifdef DSN_ENABLE_GPERF
+// Get tcmalloc numeric property (name is "prop") value.
+// Return -1 if get property failed (property we used will be greater than zero)
+// Properties can be found in 'gperftools/malloc_extension.h'
+static int64_t get_tcmalloc_numeric_property(const char *prop)
+{
+    size_t value;
+    if (!::MallocExtension::instance()->GetNumericProperty(prop, &value)) {
+        derror_f("Failed to get tcmalloc property {}", prop);
+        return -1;
+    }
+    return value;
+}
+
+void replica_stub::gc_tcmalloc_memory()
+{
+    int64_t total_allocated_bytes =
+        get_tcmalloc_numeric_property("generic.current_allocated_bytes");
+    int64_t reserved_bytes = get_tcmalloc_numeric_property("tcmalloc.pageheap_free_bytes");
+    if (total_allocated_bytes == -1 || reserved_bytes == -1) {
+        return;
+    }
+
+    int64_t max_reserved_bytes =
+        total_allocated_bytes * _mem_release_max_reserved_mem_percentage / 100.0;
+    if (reserved_bytes > max_reserved_bytes) {
+        int64_t release_bytes = reserved_bytes - max_reserved_bytes;
+        ddebug_f("Memory release started, almost {} bytes will be released", release_bytes);
+        while (release_bytes > 0) {
+            // tcmalloc releasing memory will lock page heap, release 1MB at a time to avoid locking
+            // page heap for long time
+            ::MallocExtension::instance()->ReleaseToSystem(1024 * 1024);
+            release_bytes -= 1024 * 1024;
+        }
+    }
+}
+#endif
 
 //
 // partition split
