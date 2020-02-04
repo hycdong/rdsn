@@ -307,12 +307,9 @@ typedef struct _app_info__isset
           expire_second(false),
           create_second(false),
           drop_second(false),
-<<<<<<< HEAD
-          is_bulk_loading(true)
-=======
           duplicating(false),
-          init_partition_count(true)
->>>>>>> 1.12.0
+          init_partition_count(true),
+          is_bulk_loading(true)
     {
     }
     bool status : 1;
@@ -326,12 +323,9 @@ typedef struct _app_info__isset
     bool expire_second : 1;
     bool create_second : 1;
     bool drop_second : 1;
-<<<<<<< HEAD
-    bool is_bulk_loading : 1;
-=======
     bool duplicating : 1;
     bool init_partition_count : 1;
->>>>>>> 1.12.0
+    bool is_bulk_loading : 1;
 } _app_info__isset;
 
 class app_info
@@ -352,12 +346,9 @@ public:
           expire_second(0),
           create_second(0),
           drop_second(0),
-<<<<<<< HEAD
-          is_bulk_loading(false)
-=======
           duplicating(0),
-          init_partition_count(-1)
->>>>>>> 1.12.0
+          init_partition_count(-1),
+          is_bulk_loading(false)
     {
         status = (app_status::type)0;
     }
@@ -374,12 +365,9 @@ public:
     int64_t expire_second;
     int64_t create_second;
     int64_t drop_second;
-<<<<<<< HEAD
-    bool is_bulk_loading;
-=======
     bool duplicating;
     int32_t init_partition_count;
->>>>>>> 1.12.0
+    bool is_bulk_loading;
 
     _app_info__isset __isset;
 
@@ -405,13 +393,11 @@ public:
 
     void __set_drop_second(const int64_t val);
 
-<<<<<<< HEAD
-    void __set_is_bulk_loading(const bool val);
-=======
     void __set_duplicating(const bool val);
 
     void __set_init_partition_count(const int32_t val);
->>>>>>> 1.12.0
+
+    void __set_is_bulk_loading(const bool val);
 
     bool operator==(const app_info &rhs) const
     {
@@ -437,15 +423,13 @@ public:
             return false;
         if (!(drop_second == rhs.drop_second))
             return false;
-<<<<<<< HEAD
-        if (!(is_bulk_loading == rhs.is_bulk_loading))
-=======
         if (__isset.duplicating != rhs.__isset.duplicating)
             return false;
         else if (__isset.duplicating && !(duplicating == rhs.duplicating))
             return false;
         if (!(init_partition_count == rhs.init_partition_count))
->>>>>>> 1.12.0
+            return false;
+        if (!(is_bulk_loading == rhs.is_bulk_loading))
             return false;
         return true;
     }

@@ -30,8 +30,6 @@ set(MY_PROJ_LIBS
 
 set(MY_BOOST_LIBS Boost::regex)
 
-set(MY_BOOST_PACKAGES regex)
-
 # Extra files that will be installed
 set(MY_BINPLACES "")
 

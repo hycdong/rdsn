@@ -383,7 +383,8 @@ void meta_service::register_rpc_handlers()
         RPC_CM_UPDATE_APP_ENV, "update_app_env(set/del/clear)", &meta_service::update_app_env);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_DDD_DIAGNOSE, "ddd_diagnose", &meta_service::ddd_diagnose);
-    register_rpc_handler_with_rpc_holder(RPC_CM_APP_PARTITION_SPLIT, "app_partition_split", &meta_service::on_app_partition_split);
+    register_rpc_handler_with_rpc_holder(
+        RPC_CM_APP_PARTITION_SPLIT, "app_partition_split", &meta_service::on_app_partition_split);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_START_BULK_LOAD, "start_bulk_load", &meta_service::on_start_bulk_load);
     register_rpc_handler_with_rpc_holder(RPC_CM_QUERY_BULK_LOAD_STATUS,

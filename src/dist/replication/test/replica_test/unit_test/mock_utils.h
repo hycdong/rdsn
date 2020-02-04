@@ -317,7 +317,6 @@ struct mock_mutation_duplicator : public mutation_duplicator
     typedef std::function<void(mutation_tuple_set, callback)> duplicate_function;
     static void mock(duplicate_function hook) { _func = std::move(hook); }
     static duplicate_function _func;
->>>>>>> 1.12.0
 };
 
 } // namespace replication

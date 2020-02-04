@@ -735,9 +735,6 @@ void app_info::__set_create_second(const int64_t val) { this->create_second = va
 
 void app_info::__set_drop_second(const int64_t val) { this->drop_second = val; }
 
-<<<<<<< HEAD
-void app_info::__set_is_bulk_loading(const bool val) { this->is_bulk_loading = val; }
-=======
 void app_info::__set_duplicating(const bool val)
 {
     this->duplicating = val;
@@ -745,7 +742,8 @@ void app_info::__set_duplicating(const bool val)
 }
 
 void app_info::__set_init_partition_count(const int32_t val) { this->init_partition_count = val; }
->>>>>>> 1.12.0
+
+void app_info::__set_is_bulk_loading(const bool val) { this->is_bulk_loading = val; }
 
 uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
 {
@@ -872,10 +870,6 @@ uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
             break;
         case 12:
             if (ftype == ::apache::thrift::protocol::T_BOOL) {
-<<<<<<< HEAD
-                xfer += iprot->readBool(this->is_bulk_loading);
-                this->__isset.is_bulk_loading = true;
-=======
                 xfer += iprot->readBool(this->duplicating);
                 this->__isset.duplicating = true;
             } else {
@@ -886,7 +880,14 @@ uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 xfer += iprot->readI32(this->init_partition_count);
                 this->__isset.init_partition_count = true;
->>>>>>> 1.12.0
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 14:
+            if (ftype == ::apache::thrift::protocol::T_BOOL) {
+                xfer += iprot->readBool(this->is_bulk_loading);
+                this->__isset.is_bulk_loading = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -963,10 +964,6 @@ uint32_t app_info::write(::apache::thrift::protocol::TProtocol *oprot) const
     xfer += oprot->writeI64(this->drop_second);
     xfer += oprot->writeFieldEnd();
 
-<<<<<<< HEAD
-    xfer += oprot->writeFieldBegin("is_bulk_loading", ::apache::thrift::protocol::T_BOOL, 12);
-    xfer += oprot->writeBool(this->is_bulk_loading);
-=======
     if (this->__isset.duplicating) {
         xfer += oprot->writeFieldBegin("duplicating", ::apache::thrift::protocol::T_BOOL, 12);
         xfer += oprot->writeBool(this->duplicating);
@@ -974,7 +971,10 @@ uint32_t app_info::write(::apache::thrift::protocol::TProtocol *oprot) const
     }
     xfer += oprot->writeFieldBegin("init_partition_count", ::apache::thrift::protocol::T_I32, 13);
     xfer += oprot->writeI32(this->init_partition_count);
->>>>>>> 1.12.0
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("is_bulk_loading", ::apache::thrift::protocol::T_BOOL, 14);
+    xfer += oprot->writeBool(this->is_bulk_loading);
     xfer += oprot->writeFieldEnd();
 
     xfer += oprot->writeFieldStop();
@@ -996,12 +996,9 @@ void swap(app_info &a, app_info &b)
     swap(a.expire_second, b.expire_second);
     swap(a.create_second, b.create_second);
     swap(a.drop_second, b.drop_second);
-<<<<<<< HEAD
-    swap(a.is_bulk_loading, b.is_bulk_loading);
-=======
     swap(a.duplicating, b.duplicating);
     swap(a.init_partition_count, b.init_partition_count);
->>>>>>> 1.12.0
+    swap(a.is_bulk_loading, b.is_bulk_loading);
     swap(a.__isset, b.__isset);
 }
 
@@ -1018,12 +1015,9 @@ app_info::app_info(const app_info &other45)
     expire_second = other45.expire_second;
     create_second = other45.create_second;
     drop_second = other45.drop_second;
-<<<<<<< HEAD
-    is_bulk_loading = other45.is_bulk_loading;
-=======
     duplicating = other45.duplicating;
     init_partition_count = other45.init_partition_count;
->>>>>>> 1.12.0
+    is_bulk_loading = other45.is_bulk_loading;
     __isset = other45.__isset;
 }
 app_info::app_info(app_info &&other46)
@@ -1039,12 +1033,9 @@ app_info::app_info(app_info &&other46)
     expire_second = std::move(other46.expire_second);
     create_second = std::move(other46.create_second);
     drop_second = std::move(other46.drop_second);
-<<<<<<< HEAD
-    is_bulk_loading = std::move(other46.is_bulk_loading);
-=======
     duplicating = std::move(other46.duplicating);
     init_partition_count = std::move(other46.init_partition_count);
->>>>>>> 1.12.0
+    is_bulk_loading = std::move(other46.is_bulk_loading);
     __isset = std::move(other46.__isset);
 }
 app_info &app_info::operator=(const app_info &other47)
@@ -1060,12 +1051,9 @@ app_info &app_info::operator=(const app_info &other47)
     expire_second = other47.expire_second;
     create_second = other47.create_second;
     drop_second = other47.drop_second;
-<<<<<<< HEAD
-    is_bulk_loading = other47.is_bulk_loading;
-=======
     duplicating = other47.duplicating;
     init_partition_count = other47.init_partition_count;
->>>>>>> 1.12.0
+    is_bulk_loading = other47.is_bulk_loading;
     __isset = other47.__isset;
     return *this;
 }
@@ -1082,12 +1070,9 @@ app_info &app_info::operator=(app_info &&other48)
     expire_second = std::move(other48.expire_second);
     create_second = std::move(other48.create_second);
     drop_second = std::move(other48.drop_second);
-<<<<<<< HEAD
-    is_bulk_loading = std::move(other48.is_bulk_loading);
-=======
     duplicating = std::move(other48.duplicating);
     init_partition_count = std::move(other48.init_partition_count);
->>>>>>> 1.12.0
+    is_bulk_loading = std::move(other48.is_bulk_loading);
     __isset = std::move(other48.__isset);
     return *this;
 }
@@ -1117,14 +1102,12 @@ void app_info::printTo(std::ostream &out) const
     out << ", "
         << "drop_second=" << to_string(drop_second);
     out << ", "
-<<<<<<< HEAD
-        << "is_bulk_loading=" << to_string(is_bulk_loading);
-=======
         << "duplicating=";
     (__isset.duplicating ? (out << to_string(duplicating)) : (out << "<null>"));
     out << ", "
         << "init_partition_count=" << to_string(init_partition_count);
->>>>>>> 1.12.0
+    out << ", "
+        << "is_bulk_loading=" << to_string(is_bulk_loading);
     out << ")";
 }
 

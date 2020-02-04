@@ -70,7 +70,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
         return;
     }
 
-    if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
+    if (request->rpc_code() == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
         ddebug_replica("hyc: receive bulk load request");
 
         // bulk load ingestion request requires that all secondaries should be alive
