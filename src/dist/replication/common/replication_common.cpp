@@ -516,6 +516,9 @@ void replication_options::initialize()
                                              max_concurrent_uploading_file_count,
                                              "concurrent uploading file count");
 
+    bulk_load_root = dsn_config_get_value_string(
+        "replication", "bulk_load_root", "", "bulk load remote file provider path prefix");
+
     max_concurrent_bulk_load_downloading_count =
         (int32_t)dsn_config_get_value_uint64("replication",
                                              "max_concurrent_bulk_load_downloading_count",
@@ -610,9 +613,6 @@ const std::string replica_envs::WRITE_QPS_THROTTLING("replica.write_throttling")
 const std::string replica_envs::WRITE_SIZE_THROTTLING("replica.write_throttling_by_size");
 
 const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
-// TODO(heyuchen): update it
-// const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("bulk_load_test");
-const std::string bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT("tmp/pegasus_bulkload_data");
 const std::string bulk_load_constant::BULK_LOAD_METADATA("bulk_load_metadata");
 const std::string bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR(".bulk_load");
 const int32_t bulk_load_constant::PROGRESS_FINISHED = 100;

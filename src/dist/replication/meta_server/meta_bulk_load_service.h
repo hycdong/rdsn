@@ -249,7 +249,7 @@ private:
                                                const std::string &cluster_name) const
     {
         std::ostringstream oss;
-        oss << bulk_load_constant::BULK_LOAD_FILE_PROVIDER_ROOT << "/" << cluster_name << "/"
+        oss << _meta_svc->get_options().bulk_load_root << "/" << cluster_name << "/"
             << app_name << "/" << bulk_load_constant::BULK_LOAD_INFO;
         return oss.str();
     }

@@ -115,6 +115,7 @@ public:
     std::string cold_backup_root;
     int32_t max_concurrent_uploading_file_count;
 
+    std::string bulk_load_root;
     int32_t max_concurrent_bulk_load_downloading_count;
 
 public:
@@ -164,7 +165,6 @@ class bulk_load_constant
 {
 public:
     static const std::string BULK_LOAD_METADATA;
-    static const std::string BULK_LOAD_FILE_PROVIDER_ROOT;
     static const std::string BULK_LOAD_INFO;
     static const std::string BULK_LOAD_LOCAL_ROOT_DIR;
     static const int32_t PROGRESS_FINISHED;
