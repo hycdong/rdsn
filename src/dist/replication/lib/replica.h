@@ -464,8 +464,7 @@ private:
                                          uint32_t pidx)
     {
         std::ostringstream oss;
-        oss << _options->bulk_load_root << "/" << cluster_name << "/"
-            << app_name << "/" << pidx;
+        oss << _options->bulk_load_root << "/" << cluster_name << "/" << app_name << "/" << pidx;
         return oss.str();
     }
     bulk_load_status::type get_bulk_load_status() { return _bulk_load_context._status; }

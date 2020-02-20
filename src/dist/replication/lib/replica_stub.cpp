@@ -2312,7 +2312,7 @@ void replica_stub::close()
     dsn::command_manager::instance().deregister_command(_max_reserved_memory_percentage_command);
 #endif
     dsn::command_manager::instance().deregister_command(
-            _max_concurrent_bulk_load_downloading_count_command);
+        _max_concurrent_bulk_load_downloading_count_command);
 
     _kill_partition_command = nullptr;
     _deny_client_command = nullptr;
