@@ -397,6 +397,7 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
                 }
                 if (!verify_sst_files(f_meta, local_dir)) {
                     ec = ERR_CORRUPTION;
+                    _bulk_load_context._download_status = ec;
                 }
             });
         _bulk_load_context._bulk_load_download_task[f_meta.name] = bulk_load_download_task;
@@ -700,7 +701,6 @@ void replica::handle_bulk_load_succeed()
 
 void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
 {
-    // TODO(heyuchen): update mock function
     FAIL_POINT_INJECT_F("replica_cleanup_bulk_load_context",
                         [=](dsn::string_view) { set_bulk_load_status(new_status); });
 

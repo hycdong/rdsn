@@ -65,7 +65,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
     //    }
 
     if (_partition_version.load() == -1) {
-        // TODO(heyuchen): reject write - ERR_BUSY
+        // reject write request
         response_client_write(request, ERR_BUSY);
         return;
     }
