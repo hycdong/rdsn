@@ -390,14 +390,13 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
                 dsn::error_code ec;
                 dsn::task_tracker tracker;
                 do_download(remote_dir, local_dir, f_meta.name, fs, true, ec, tracker);
+                if (ec == ERR_OK) {
+                    ec = verify_sst_files(f_meta, local_dir) ? ERR_OK : ERR_CORRUPTION;
+                }
                 if (ec != ERR_OK) {
                     handle_bulk_load_download_error();
                     _bulk_load_context._download_status = ec;
                     return;
-                }
-                if (!verify_sst_files(f_meta, local_dir)) {
-                    ec = ERR_CORRUPTION;
-                    _bulk_load_context._download_status = ec;
                 }
             });
         _bulk_load_context._bulk_load_download_task[f_meta.name] = bulk_load_download_task;
