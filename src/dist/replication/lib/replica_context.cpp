@@ -100,14 +100,7 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     membership.ballot = 0;
 
-    group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
-
-    group_ingestion_status.erase(group_ingestion_status.begin(), group_ingestion_status.end());
-
-    group_bulk_load_context_flag.erase(group_bulk_load_context_flag.begin(),
-                                       group_bulk_load_context_flag.end());
-
-    is_ingestion_commit = false;
+    cleanup_bulk_load_states();
 }
 
 bool primary_context::is_cleaned()
@@ -220,6 +213,18 @@ void primary_context::reset_group_bulk_load_states(const rpc_address &node,
     if (reset_flag) {
         group_bulk_load_context_flag[node] = false;
     }
+}
+
+void primary_context::cleanup_bulk_load_states()
+{
+    group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
+
+    group_ingestion_status.erase(group_ingestion_status.begin(), group_ingestion_status.end());
+
+    group_bulk_load_context_flag.erase(group_bulk_load_context_flag.begin(),
+                                       group_bulk_load_context_flag.end());
+
+    is_ingestion_commit = false;
 }
 
 bool secondary_context::cleanup(bool force)

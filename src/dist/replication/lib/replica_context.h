@@ -89,6 +89,8 @@ public:
 
     void reset_group_bulk_load_states(const rpc_address &node, bulk_load_status::type meta_status);
 
+    void cleanup_bulk_load_states();
+
 public:
     // membership mgr, including learners
     partition_configuration membership;

@@ -187,7 +187,9 @@ void replica::on_group_bulk_load_reply(error_code err,
     _primary_states.group_bulk_load_pending_replies.erase(req->target_address);
 
     if (err != ERR_OK) {
-        derror_replica("get group_bulk_load_reply failed, error = {}", err.to_string());
+        derror_replica("get group_bulk_load_reply from {} failed, error = {}",
+                       req->target_address.to_string(),
+                       err.to_string());
         _primary_states.reset_group_bulk_load_states(req->target_address,
                                                      req->meta_bulk_load_status);
 
@@ -202,12 +204,15 @@ void replica::on_group_bulk_load_reply(error_code err,
     }
 
     if (resp->err != ERR_OK) {
-        derror_replica("on_group_bulk_load failed, error = {}", resp->err.to_string());
+        derror_replica("on_group_bulk_load from {} failed, error = {}",
+                       req->target_address.to_string(),
+                       resp->err.to_string());
         _primary_states.reset_group_bulk_load_states(req->target_address,
                                                      req->meta_bulk_load_status);
     } else if (req->config.ballot != get_ballot()) {
         derror_replica(
-            "recevied wrong on_group_bulk_load_reply, request ballot={}, current ballot={}",
+            "recevied wrong on_group_bulk_load_reply from {}, request ballot={}, current ballot={}",
+            req->target_address.to_string(),
             req->config.ballot,
             get_ballot());
         // TODO(heyuchen): consider here
@@ -311,6 +316,10 @@ dsn::error_code replica::bulk_load_start_download(const std::string &app_name,
         return ERR_BUSY;
     }
 
+    // TODO(heyuchen): add cleanup states here
+    if (status() == partition_status::PS_PRIMARY) {
+        _primary_states.cleanup_bulk_load_states();
+    }
     _bulk_load_context.cleanup_download_prgress();
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
     _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
