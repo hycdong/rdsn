@@ -475,7 +475,7 @@ void replica::do_download(const std::string &remote_dir,
             ddebug_replica("download file({}) succeed, file_size = {}, download_progress = {}%",
                            local_file_name.c_str(),
                            resp.downloaded_size,
-                           _bulk_load_context._download_progress);
+                           _bulk_load_context._download_progress.load());
 
             _stub->_counter_bulk_load_recent_download_file_succ_count->increment();
             _stub->_counter_bulk_load_recent_download_file_size->add(file_size);
@@ -826,7 +826,7 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
     switch (flag) {
     case ReportDownloadProgress: {
         partition_download_progress secondary_progress;
-        secondary_progress.progress = _bulk_load_context._download_progress;
+        secondary_progress.progress = _bulk_load_context._download_progress.load();
         secondary_progress.status = _bulk_load_context._download_status;
         response.__set_download_progress(secondary_progress);
     } break;
@@ -854,7 +854,7 @@ void replica::report_group_download_progress(bulk_load_response &response)
 
     response.__isset.download_progresses = true;
     partition_download_progress primary_progress;
-    primary_progress.progress = _bulk_load_context._download_progress;
+    primary_progress.progress = _bulk_load_context._download_progress.load();
     primary_progress.status = _bulk_load_context._download_status;
     response.download_progresses[_primary_states.membership.primary] = primary_progress;
     ddebug_replica("primary = {}, download progress = {}%, status={}",
