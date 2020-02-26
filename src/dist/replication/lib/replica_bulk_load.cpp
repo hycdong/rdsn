@@ -322,6 +322,8 @@ dsn::error_code replica::bulk_load_start_download(const std::string &app_name,
     }
     _bulk_load_context.cleanup_download_prgress();
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
+    _partition_version.store(_app_info.partition_count - 1);
+    _app->set_partition_version(_app_info.partition_count - 1);
     _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
 
     set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
