@@ -736,6 +736,7 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
                     // TODO(heyuchen): consider here
                     _partitions_download_progress[pid].clear();
                     _partitions_total_download_progress[pid] = 0;
+                    _partitions_cleaned_up[pid] = false;
                     if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
                         _apps_in_progress_count[pid.get_app_id()] =
                             _app_bulk_load_info[pid.get_app_id()].partition_count;
