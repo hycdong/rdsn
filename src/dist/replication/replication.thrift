@@ -861,8 +861,9 @@ struct bulk_load_response
     6:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
     7:optional i32                  total_download_progress;
     8:optional map<dsn.rpc_address, ingestion_status>               group_ingestion_status;
-    9:optional bool                is_group_ingestion_finished;
-    10:optional bool                 is_group_bulk_load_context_cleaned;
+    9:optional bool                 is_group_ingestion_finished;
+    10:optional bool                is_group_bulk_load_context_cleaned;
+    11:optional bool                is_group_bulk_load_paused;
 }
 
 struct group_bulk_load_request
@@ -884,6 +885,7 @@ struct group_bulk_load_response
     4:optional partition_download_progress  download_progress;
     5:optional bool                         is_bulk_load_context_cleaned;
     6:optional ingestion_status             istatus;
+    7:optional bool                         is_bulk_load_paused;
 }
 
 struct ingestion_request
@@ -896,6 +898,26 @@ struct ingestion_response
 {
     1:dsn.error_code    err;
     2:i32               rocksdb_error;
+}
+
+enum bulk_load_control_type
+{
+    BLC_PAUSE,
+    BLC_RESTART,
+    BLC_CANCEL,
+    BLC_FORCE_CANCEL
+}
+
+struct configuration_control_bulk_load_request
+{
+    1:i32                       app_id;
+    2:bulk_load_control_type    type;
+}
+
+struct configuration_control_bulk_load_response
+{
+    1:dsn.error_code    err;
+    2:string            msg;
 }
 
 /*

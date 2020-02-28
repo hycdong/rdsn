@@ -29,8 +29,9 @@ struct bulk_load_status
         BLS_INGESTING = 3,
         BLS_SUCCEED = 4,
         BLS_FAILED = 5,
-        BLS_PAUSED = 6,
-        BLS_CANCELED = 7
+        BLS_PAUSING = 6,
+        BLS_PAUSED = 7,
+        BLS_CANCELED = 8
     };
 };
 

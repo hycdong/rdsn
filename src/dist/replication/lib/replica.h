@@ -188,7 +188,8 @@ private:
         ReportNothing = 0,
         ReportDownloadProgress,
         ReportIngestionStatus,
-        ReportCleanupFlag
+        ReportCleanupFlag,
+        ReportIsPaused
     };
 
     // common helpers
@@ -446,6 +447,8 @@ private:
     void cleanup_bulk_load_context(bulk_load_status::type new_status);
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
 
+    void pause_bulk_load();
+
     bulk_load_report_flag get_report_flag(bulk_load_status::type meta_status,
                                           bulk_load_status::type local_status);
     // only called by primary
@@ -455,6 +458,8 @@ private:
     void report_group_download_progress(bulk_load_response &response);
     void report_group_ingestion_status(bulk_load_response &response);
     void report_group_context_clean_flag(bulk_load_response &response);
+    void report_group_is_paused(bulk_load_response &response);
+
     // only called by secondary
     void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
                                             /*out*/ group_bulk_load_response &response);

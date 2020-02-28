@@ -175,6 +175,19 @@ struct ingestion_status
 
 extern const std::map<int, const char *> _ingestion_status_VALUES_TO_NAMES;
 
+struct bulk_load_control_type
+{
+    enum type
+    {
+        BLC_PAUSE = 0,
+        BLC_RESTART = 1,
+        BLC_CANCEL = 2,
+        BLC_FORCE_CANCEL = 3
+    };
+};
+
+extern const std::map<int, const char *> _bulk_load_control_type_VALUES_TO_NAMES;
+
 class mutation_header;
 
 class mutation_update;
@@ -366,6 +379,10 @@ class group_bulk_load_response;
 class ingestion_request;
 
 class ingestion_response;
+
+class configuration_control_bulk_load_request;
+
+class configuration_control_bulk_load_response;
 
 typedef struct _mutation_header__isset
 {
@@ -6184,7 +6201,8 @@ typedef struct _bulk_load_response__isset
           total_download_progress(false),
           group_ingestion_status(false),
           is_group_ingestion_finished(false),
-          is_group_bulk_load_context_cleaned(false)
+          is_group_bulk_load_context_cleaned(false),
+          is_group_bulk_load_paused(false)
     {
     }
     bool err : 1;
@@ -6197,6 +6215,7 @@ typedef struct _bulk_load_response__isset
     bool group_ingestion_status : 1;
     bool is_group_ingestion_finished : 1;
     bool is_group_bulk_load_context_cleaned : 1;
+    bool is_group_bulk_load_paused : 1;
 } _bulk_load_response__isset;
 
 class bulk_load_response
@@ -6211,7 +6230,8 @@ public:
           primary_bulk_load_status((::dsn::bulk_load_status::type)0),
           total_download_progress(0),
           is_group_ingestion_finished(0),
-          is_group_bulk_load_context_cleaned(0)
+          is_group_bulk_load_context_cleaned(0),
+          is_group_bulk_load_paused(0)
     {
     }
 
@@ -6226,6 +6246,7 @@ public:
     std::map<::dsn::rpc_address, ingestion_status::type> group_ingestion_status;
     bool is_group_ingestion_finished;
     bool is_group_bulk_load_context_cleaned;
+    bool is_group_bulk_load_paused;
 
     _bulk_load_response__isset __isset;
 
@@ -6250,6 +6271,8 @@ public:
     void __set_is_group_ingestion_finished(const bool val);
 
     void __set_is_group_bulk_load_context_cleaned(const bool val);
+
+    void __set_is_group_bulk_load_paused(const bool val);
 
     bool operator==(const bulk_load_response &rhs) const
     {
@@ -6289,6 +6312,11 @@ public:
             return false;
         else if (__isset.is_group_bulk_load_context_cleaned &&
                  !(is_group_bulk_load_context_cleaned == rhs.is_group_bulk_load_context_cleaned))
+            return false;
+        if (__isset.is_group_bulk_load_paused != rhs.__isset.is_group_bulk_load_paused)
+            return false;
+        else if (__isset.is_group_bulk_load_paused &&
+                 !(is_group_bulk_load_paused == rhs.is_group_bulk_load_paused))
             return false;
         return true;
     }
@@ -6408,7 +6436,8 @@ typedef struct _group_bulk_load_response__isset
           status(false),
           download_progress(false),
           is_bulk_load_context_cleaned(false),
-          istatus(false)
+          istatus(false),
+          is_bulk_load_paused(false)
     {
     }
     bool err : 1;
@@ -6417,6 +6446,7 @@ typedef struct _group_bulk_load_response__isset
     bool download_progress : 1;
     bool is_bulk_load_context_cleaned : 1;
     bool istatus : 1;
+    bool is_bulk_load_paused : 1;
 } _group_bulk_load_response__isset;
 
 class group_bulk_load_response
@@ -6429,7 +6459,8 @@ public:
     group_bulk_load_response()
         : status((::dsn::bulk_load_status::type)0),
           is_bulk_load_context_cleaned(0),
-          istatus((ingestion_status::type)0)
+          istatus((ingestion_status::type)0),
+          is_bulk_load_paused(0)
     {
     }
 
@@ -6440,6 +6471,7 @@ public:
     partition_download_progress download_progress;
     bool is_bulk_load_context_cleaned;
     ingestion_status::type istatus;
+    bool is_bulk_load_paused;
 
     _group_bulk_load_response__isset __isset;
 
@@ -6454,6 +6486,8 @@ public:
     void __set_is_bulk_load_context_cleaned(const bool val);
 
     void __set_istatus(const ingestion_status::type val);
+
+    void __set_is_bulk_load_paused(const bool val);
 
     bool operator==(const group_bulk_load_response &rhs) const
     {
@@ -6475,6 +6509,10 @@ public:
         if (__isset.istatus != rhs.__isset.istatus)
             return false;
         else if (__isset.istatus && !(istatus == rhs.istatus))
+            return false;
+        if (__isset.is_bulk_load_paused != rhs.__isset.is_bulk_load_paused)
+            return false;
+        else if (__isset.is_bulk_load_paused && !(is_bulk_load_paused == rhs.is_bulk_load_paused))
             return false;
         return true;
     }
@@ -6595,6 +6633,121 @@ public:
 void swap(ingestion_response &a, ingestion_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const ingestion_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _configuration_control_bulk_load_request__isset
+{
+    _configuration_control_bulk_load_request__isset() : app_id(false), type(false) {}
+    bool app_id : 1;
+    bool type : 1;
+} _configuration_control_bulk_load_request__isset;
+
+class configuration_control_bulk_load_request
+{
+public:
+    configuration_control_bulk_load_request(const configuration_control_bulk_load_request &);
+    configuration_control_bulk_load_request(configuration_control_bulk_load_request &&);
+    configuration_control_bulk_load_request &
+    operator=(const configuration_control_bulk_load_request &);
+    configuration_control_bulk_load_request &operator=(configuration_control_bulk_load_request &&);
+    configuration_control_bulk_load_request() : app_id(0), type((bulk_load_control_type::type)0) {}
+
+    virtual ~configuration_control_bulk_load_request() throw();
+    int32_t app_id;
+    bulk_load_control_type::type type;
+
+    _configuration_control_bulk_load_request__isset __isset;
+
+    void __set_app_id(const int32_t val);
+
+    void __set_type(const bulk_load_control_type::type val);
+
+    bool operator==(const configuration_control_bulk_load_request &rhs) const
+    {
+        if (!(app_id == rhs.app_id))
+            return false;
+        if (!(type == rhs.type))
+            return false;
+        return true;
+    }
+    bool operator!=(const configuration_control_bulk_load_request &rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool operator<(const configuration_control_bulk_load_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(configuration_control_bulk_load_request &a, configuration_control_bulk_load_request &b);
+
+inline std::ostream &operator<<(std::ostream &out,
+                                const configuration_control_bulk_load_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _configuration_control_bulk_load_response__isset
+{
+    _configuration_control_bulk_load_response__isset() : err(false), msg(false) {}
+    bool err : 1;
+    bool msg : 1;
+} _configuration_control_bulk_load_response__isset;
+
+class configuration_control_bulk_load_response
+{
+public:
+    configuration_control_bulk_load_response(const configuration_control_bulk_load_response &);
+    configuration_control_bulk_load_response(configuration_control_bulk_load_response &&);
+    configuration_control_bulk_load_response &
+    operator=(const configuration_control_bulk_load_response &);
+    configuration_control_bulk_load_response &
+    operator=(configuration_control_bulk_load_response &&);
+    configuration_control_bulk_load_response() : msg() {}
+
+    virtual ~configuration_control_bulk_load_response() throw();
+    ::dsn::error_code err;
+    std::string msg;
+
+    _configuration_control_bulk_load_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_msg(const std::string &val);
+
+    bool operator==(const configuration_control_bulk_load_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (!(msg == rhs.msg))
+            return false;
+        return true;
+    }
+    bool operator!=(const configuration_control_bulk_load_response &rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool operator<(const configuration_control_bulk_load_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(configuration_control_bulk_load_response &a, configuration_control_bulk_load_response &b);
+
+inline std::ostream &operator<<(std::ostream &out,
+                                const configuration_control_bulk_load_response &obj)
 {
     obj.printTo(out);
     return out;

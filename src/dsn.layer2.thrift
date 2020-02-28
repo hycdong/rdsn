@@ -13,6 +13,7 @@ enum bulk_load_status
     BLS_INGESTING,
     BLS_SUCCEED,
     BLS_FAILED,
+    BLS_PAUSING,
     BLS_PAUSED,
     BLS_CANCELED
 }

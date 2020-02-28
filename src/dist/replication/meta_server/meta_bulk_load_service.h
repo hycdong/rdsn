@@ -61,6 +61,8 @@ public:
     void on_start_bulk_load(start_bulk_load_rpc rpc);
     // client -> meta server to query bulk load status
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
+    // client -> meta server to pause/restart/cancel bulk load
+    void on_control_bulk_load(control_bulk_load_rpc rpc);
 
 private:
     // TODO(heyuchen): consider pause and cancel
@@ -134,9 +136,11 @@ private:
     void handle_bulk_load_finish(const bulk_load_response &response,
                                  const rpc_address &primary_addr);
 
-    void rollback_to_downloading(int32_t app_id);
+    void rollback_to_downloading(int32_t app_id, bool should_send_request = false);
 
     void handle_bulk_load_failed(int32_t app_id);
+
+    void handle_app_pausing(const bulk_load_response &response, const rpc_address &primary_addr);
 
     // app not existed or not available during bulk load
     void handle_app_unavailable(int32_t app_id, const std::string &app_name);
@@ -174,10 +178,12 @@ private:
 
     void update_partition_status_on_remote_stroage(const std::string &app_name,
                                                    const gpid &pid,
-                                                   bulk_load_status::type new_status);
+                                                   bulk_load_status::type new_status,
+                                                   bool should_send_request = false);
 
     void update_app_status_on_remote_storage_unlock(int32_t app_id,
-                                                    bulk_load_status::type new_status);
+                                                    bulk_load_status::type new_status,
+                                                    bool should_send_request = false);
 
     // `need_set_app_flag` = true: update app's is_bulk_loading to false on remote_storage
     void remove_bulk_load_dir(std::shared_ptr<app_state> app, bool need_set_app_flag);
@@ -241,7 +247,6 @@ private:
     void create_partition_bulk_load_dir(const std::string &app_name,
                                         const gpid &pid,
                                         int32_t partition_count);
-
     ///
     /// helper functions
     ///
@@ -336,6 +341,10 @@ private:
             }
         }
     }
+
+    void set_control_response(bulk_load_status::type local_status,
+                              const std::string &app_name,
+                              configuration_control_bulk_load_response &resp);
 
 private:
     friend class bulk_load_service_test;

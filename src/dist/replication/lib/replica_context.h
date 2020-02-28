@@ -133,6 +133,8 @@ public:
     std::unordered_map<rpc_address, ingestion_status::type> group_ingestion_status;
     // bulk load cleanup flag
     std::unordered_map<rpc_address, bool> group_bulk_load_context_flag;
+    // bulk load pause flag
+    std::unordered_map<rpc_address, bool> group_bulk_load_paused;
 
     bool is_ingestion_commit;
 };

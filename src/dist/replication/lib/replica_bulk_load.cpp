@@ -247,7 +247,8 @@ dsn::error_code replica::do_bulk_load(const std::string &app_name,
         // start or restart downloading
         if (local_status == bulk_load_status::BLS_INVALID ||
             local_status == bulk_load_status::BLS_INGESTING ||
-            local_status == bulk_load_status::BLS_SUCCEED) {
+            local_status == bulk_load_status::BLS_SUCCEED ||
+            local_status == bulk_load_status::BLS_PAUSED) {
             ec = bulk_load_start_download(app_name, cluster_name, provider_name);
         }
         break;
@@ -269,12 +270,20 @@ dsn::error_code replica::do_bulk_load(const std::string &app_name,
     case bulk_load_status::BLS_FAILED:
         handle_bulk_load_error();
         break;
+    case bulk_load_status::BLS_PAUSING:
+        pause_bulk_load();
+        break;
+    case bulk_load_status::BLS_CANCELED: {
+        ddebug_replica("bulk load canceled, original status = {}", enum_to_string(local_status));
+        cleanup_bulk_load_context(bulk_load_status::BLS_CANCELED);
+    } break;
     default:
         break;
     }
     return ec;
 }
 
+// TODO(heyuchen): consider after add 3 status
 dsn::error_code replica::validate_bulk_load_status(bulk_load_status::type meta_status,
                                                    bulk_load_status::type local_status)
 {
@@ -295,6 +304,14 @@ dsn::error_code replica::validate_bulk_load_status(bulk_load_status::type meta_s
         if (local_status != bulk_load_status::BLS_INGESTING &&
             local_status != bulk_load_status::BLS_SUCCEED &&
             local_status != bulk_load_status::BLS_INVALID) {
+            err = ERR_INVALID_STATE;
+        }
+        break;
+    case bulk_load_status::BLS_PAUSING:
+        if (local_status != bulk_load_status::BLS_DOWNLOADING &&
+            local_status != bulk_load_status::BLS_DOWNLOADED &&
+            local_status != bulk_load_status::BLS_PAUSING &&
+            local_status != bulk_load_status::BLS_PAUSED) {
             err = ERR_INVALID_STATE;
         }
         break;
@@ -401,8 +418,8 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
                 dsn::error_code ec;
                 dsn::task_tracker tracker;
                 do_download(remote_dir, local_dir, f_meta.name, fs, true, ec, tracker);
-                if (ec == ERR_OK) {
-                    ec = verify_sst_files(f_meta, local_dir) ? ERR_OK : ERR_CORRUPTION;
+                if (ec == ERR_OK && !verify_sst_files(f_meta, local_dir)) {
+                    ec = ERR_CORRUPTION;
                 }
                 if (ec != ERR_OK) {
                     handle_bulk_load_download_error();
@@ -740,6 +757,29 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
     _bulk_load_context.cleanup();
 }
 
+void replica::pause_bulk_load()
+{
+    bulk_load_status::type cur_status = get_bulk_load_status();
+    if (cur_status == bulk_load_status::BLS_PAUSED) {
+        ddebug_replica("bulk load has been paused");
+        return;
+    }
+
+    if (cur_status == bulk_load_status::BLS_DOWNLOADING) {
+        // TODO(heyuchen): same as function hanld_bulk_load_download_error
+        // consider refactor it
+        _stub->_bulk_load_recent_downloading_replica_count--;
+        // TODO(heyuchen): delete this debug log
+        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
+                       _stub->_primary_address_str,
+                       _stub->_bulk_load_recent_downloading_replica_count);
+        _bulk_load_context.cleanup_download_task();
+    }
+
+    set_bulk_load_status(bulk_load_status::BLS_PAUSED);
+    ddebug_replica("paused bulk load");
+}
+
 void replica::handle_bulk_load_error()
 {
     derror_replica("bulk load failed, original status = {}",
@@ -776,8 +816,15 @@ replica::bulk_load_report_flag replica::get_report_flag(bulk_load_status::type m
     if (((local_status == bulk_load_status::BLS_SUCCEED ||
           local_status == bulk_load_status::BLS_INVALID) &&
          meta_status == bulk_load_status::BLS_SUCCEED) ||
-        meta_status == bulk_load_status::BLS_FAILED) {
+        meta_status == bulk_load_status::BLS_FAILED ||
+        meta_status == bulk_load_status::BLS_CANCELED) {
         return ReportCleanupFlag;
+    }
+
+    if ((local_status == bulk_load_status::BLS_PAUSING ||
+         local_status == bulk_load_status::BLS_PAUSED) &&
+        meta_status == bulk_load_status::BLS_PAUSING) {
+        return ReportIsPaused;
     }
 
     return ReportNothing;
@@ -807,6 +854,9 @@ void replica::report_bulk_load_states_to_meta(bulk_load_status::type remote_stat
     case ReportCleanupFlag:
         report_group_context_clean_flag(response);
         break;
+    case ReportIsPaused:
+        report_group_is_paused(response);
+        break;
     case ReportNothing:
         break;
     default:
@@ -824,7 +874,8 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
         return;
     }
 
-    bulk_load_report_flag flag = get_report_flag(remote_status, get_bulk_load_status());
+    auto cur_bulk_load_status = get_bulk_load_status();
+    bulk_load_report_flag flag = get_report_flag(remote_status, cur_bulk_load_status);
     switch (flag) {
     case ReportDownloadProgress: {
         partition_download_progress secondary_progress;
@@ -838,12 +889,14 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
     case ReportCleanupFlag:
         response.__set_is_bulk_load_context_cleaned(_bulk_load_context.is_cleanup());
         break;
+    case ReportIsPaused:
+        response.__set_is_bulk_load_paused(cur_bulk_load_status == bulk_load_status::BLS_PAUSED);
     case ReportNothing:
         break;
     default:
         break;
     }
-    response.status = get_bulk_load_status();
+    response.status = cur_bulk_load_status;
 }
 
 void replica::report_group_download_progress(bulk_load_response &response)
@@ -952,6 +1005,34 @@ void replica::report_group_context_clean_flag(bulk_load_response &response)
         group_flag = group_flag && is_clean_up;
     }
     response.__set_is_group_bulk_load_context_cleaned(group_flag);
+}
+
+void replica::report_group_is_paused(bulk_load_response &response)
+{
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_replica("receive request with wrong status {}", enum_to_string(status()));
+        response.err = ERR_INVALID_STATE;
+        return;
+    }
+
+    if (_primary_states.membership.secondaries.size() + 1 !=
+        _primary_states.membership.max_replica_count) {
+        response.__set_is_group_bulk_load_context_cleaned(false);
+        return;
+    }
+
+    bool group_is_paused = (get_bulk_load_status() == bulk_load_status::BLS_PAUSED);
+    ddebug_replica("primary = {}, bulk_load is_paused = {}",
+                   _primary_states.membership.primary.to_string(),
+                   group_is_paused);
+    for (const auto &target_address : _primary_states.membership.secondaries) {
+        bool is_paused = _primary_states.group_bulk_load_paused[target_address];
+        ddebug_replica("secondary = {}, bulk_load_context cleanup = {}",
+                       target_address.to_string(),
+                       is_paused);
+        group_is_paused = group_is_paused && is_paused;
+    }
+    response.__set_is_group_bulk_load_paused(group_is_paused);
 }
 
 } // namespace replication

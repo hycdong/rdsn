@@ -76,6 +76,9 @@ typedef rpc_holder<app_partition_split_request, app_partition_split_response>
 typedef rpc_holder<start_bulk_load_request, start_bulk_load_response> start_bulk_load_rpc;
 typedef rpc_holder<configuration_query_bulk_load_request, configuration_query_bulk_load_response>
     query_bulk_load_rpc;
+typedef rpc_holder<configuration_control_bulk_load_request,
+                   configuration_control_bulk_load_response>
+    control_bulk_load_rpc;
 
 class meta_service : public serverlet<meta_service>
 {
@@ -199,6 +202,7 @@ private:
     // bulk load
     void on_start_bulk_load(start_bulk_load_rpc rpc);
     void on_query_bulk_load_status(query_bulk_load_rpc rpc);
+    void on_control_bulk_load(control_bulk_load_rpc rpc);
 
     // common routines
     // ret:

@@ -175,6 +175,8 @@ public:
 
     dsn::error_code query_bulk_load(const std::string &app_name, int32_t pidx, bool detailed);
 
+    dsn::error_code control_bulk_load(int32_t app_id, bulk_load_control_type::type control_type);
+
 private:
     bool static valid_app_char(int c);
 

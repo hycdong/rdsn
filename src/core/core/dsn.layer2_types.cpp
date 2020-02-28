@@ -19,6 +19,7 @@ int _kbulk_load_statusValues[] = {bulk_load_status::BLS_INVALID,
                                   bulk_load_status::BLS_INGESTING,
                                   bulk_load_status::BLS_SUCCEED,
                                   bulk_load_status::BLS_FAILED,
+                                  bulk_load_status::BLS_PAUSING,
                                   bulk_load_status::BLS_PAUSED,
                                   bulk_load_status::BLS_CANCELED};
 const char *_kbulk_load_statusNames[] = {"BLS_INVALID",
@@ -27,10 +28,11 @@ const char *_kbulk_load_statusNames[] = {"BLS_INVALID",
                                          "BLS_INGESTING",
                                          "BLS_SUCCEED",
                                          "BLS_FAILED",
+                                         "BLS_PAUSING",
                                          "BLS_PAUSED",
                                          "BLS_CANCELED"};
 const std::map<int, const char *> _bulk_load_status_VALUES_TO_NAMES(
-    ::apache::thrift::TEnumIterator(8, _kbulk_load_statusValues, _kbulk_load_statusNames),
+    ::apache::thrift::TEnumIterator(9, _kbulk_load_statusValues, _kbulk_load_statusNames),
     ::apache::thrift::TEnumIterator(-1, NULL, NULL));
 
 int _kapp_statusValues[] = {app_status::AS_INVALID,

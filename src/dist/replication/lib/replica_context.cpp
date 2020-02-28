@@ -186,6 +186,9 @@ void primary_context::set_group_bulk_load_states(
     if (resp->__isset.is_bulk_load_context_cleaned) {
         group_bulk_load_context_flag[node] = resp->is_bulk_load_context_cleaned;
     }
+    if (resp->__isset.is_bulk_load_paused) {
+        group_bulk_load_paused[node] = resp->is_bulk_load_paused;
+    }
 }
 
 void primary_context::reset_group_bulk_load_states(const rpc_address &node,
@@ -195,12 +198,24 @@ void primary_context::reset_group_bulk_load_states(const rpc_address &node,
                            meta_status == bulk_load_status::type::BLS_DOWNLOADED ||
                            meta_status == bulk_load_status::type::BLS_INGESTING ||
                            meta_status == bulk_load_status::type::BLS_SUCCEED ||
-                           meta_status == bulk_load_status::BLS_FAILED);
+                           meta_status == bulk_load_status::BLS_FAILED ||
+                           meta_status == bulk_load_status::BLS_CANCELED);
+
     bool reset_ingestion = (meta_status == bulk_load_status::BLS_INGESTING ||
                             meta_status == bulk_load_status::type::BLS_SUCCEED ||
-                            meta_status == bulk_load_status::BLS_FAILED);
-    bool reset_flag = (meta_status == bulk_load_status::type::BLS_SUCCEED ||
-                       meta_status == bulk_load_status::type::BLS_FAILED);
+                            meta_status == bulk_load_status::BLS_FAILED ||
+                            meta_status == bulk_load_status::BLS_CANCELED);
+
+    bool reset_cleanup_flag = (meta_status == bulk_load_status::type::BLS_SUCCEED ||
+                               meta_status == bulk_load_status::type::BLS_FAILED ||
+                               meta_status == bulk_load_status::BLS_CANCELED);
+
+    bool reset_pause_flag = (meta_status == bulk_load_status::type::BLS_PAUSING ||
+                             meta_status == bulk_load_status::type::BLS_PAUSED ||
+                             meta_status == bulk_load_status::type::BLS_SUCCEED ||
+                             meta_status == bulk_load_status::type::BLS_FAILED ||
+                             meta_status == bulk_load_status::BLS_CANCELED);
+
     if (reset_progress) {
         partition_download_progress download_progress;
         download_progress.progress = 0;
@@ -210,8 +225,11 @@ void primary_context::reset_group_bulk_load_states(const rpc_address &node,
     if (reset_ingestion) {
         group_ingestion_status[node] = ingestion_status::IS_INVALID;
     }
-    if (reset_flag) {
+    if (reset_cleanup_flag) {
         group_bulk_load_context_flag[node] = false;
+    }
+    if (reset_pause_flag) {
+        group_bulk_load_paused[node] = false;
     }
 }
 
