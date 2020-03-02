@@ -761,6 +761,9 @@ bool replica::update_local_configuration(const replica_configuration &config,
                 _app->set_partition_version(_app_info.partition_count - 1);
             }
             // TODO(heyuchen): consider cleanup bulk load
+            if (get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
+                try_decrease_bulk_load_download_count();
+            }
             _bulk_load_context.cleanup();
             // here we use wheather ballot changes and wheather disconnecting with meta to
             // distinguish different case above mentioned
@@ -788,6 +791,9 @@ bool replica::update_local_configuration(const replica_configuration &config,
                 _partition_version.store(_app_info.partition_count - 1);
                 _app->set_partition_version(_app_info.partition_count - 1);
             }
+            if (get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
+                try_decrease_bulk_load_download_count();
+            }
             // TODO(heyuchen): consider cleanup bulk load
             _bulk_load_context.cleanup();
             break;
@@ -800,6 +806,9 @@ bool replica::update_local_configuration(const replica_configuration &config,
         break;
     case partition_status::PS_SECONDARY:
         cleanup_preparing_mutations(false);
+        if (get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
+            try_decrease_bulk_load_download_count();
+        }
         // TODO(heyuchen): consider cleanup bulk load
         _bulk_load_context.cleanup();
         // TODO(heyuchen): consider reset partition_version

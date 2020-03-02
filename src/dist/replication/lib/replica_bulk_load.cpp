@@ -308,7 +308,8 @@ dsn::error_code replica::validate_bulk_load_status(bulk_load_status::type meta_s
         }
         break;
     case bulk_load_status::BLS_PAUSING:
-        if (local_status != bulk_load_status::BLS_DOWNLOADING &&
+        if (local_status != bulk_load_status::BLS_INVALID &&
+            local_status != bulk_load_status::BLS_DOWNLOADING &&
             local_status != bulk_load_status::BLS_DOWNLOADED &&
             local_status != bulk_load_status::BLS_PAUSING &&
             local_status != bulk_load_status::BLS_PAUSED) {
@@ -357,7 +358,7 @@ dsn::error_code replica::bulk_load_start_download(const std::string &app_name,
 
     dsn::error_code err = download_sst_files(app_name, cluster_name, provider_name);
     if (err != ERR_OK) {
-        handle_bulk_load_download_error();
+        try_decrease_bulk_load_download_count();
     }
     return err;
 }
@@ -422,7 +423,7 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
                     ec = ERR_CORRUPTION;
                 }
                 if (ec != ERR_OK) {
-                    handle_bulk_load_download_error();
+                    try_decrease_bulk_load_download_count();
                     _bulk_load_context._download_status = ec;
                     return;
                 }
@@ -663,14 +664,16 @@ bool replica::verify_sst_files(const file_meta &f_meta, const std::string &local
     return true;
 }
 
-void replica::handle_bulk_load_download_error()
+void replica::try_decrease_bulk_load_download_count()
 {
-    _stub->_bulk_load_recent_downloading_replica_count--;
-    // TODO(heyuchen): delete this debug log
-    ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
-                   _stub->_primary_address_str,
-                   _stub->_bulk_load_recent_downloading_replica_count);
-    _bulk_load_context.cleanup_download_task();
+    if (_stub->_bulk_load_recent_downloading_replica_count > 0) {
+        _stub->_bulk_load_recent_downloading_replica_count--;
+        // TODO(heyuchen): delete this debug log
+        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
+                       _stub->_primary_address_str,
+                       _stub->_bulk_load_recent_downloading_replica_count);
+        _bulk_load_context.cleanup_download_task();
+    }
 }
 
 void replica::bulk_load_check_download_finish()
@@ -678,18 +681,21 @@ void replica::bulk_load_check_download_finish()
     if (_bulk_load_context._download_progress.load() == bulk_load_constant::PROGRESS_FINISHED &&
         get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADED);
-        _stub->_bulk_load_recent_downloading_replica_count--;
+        try_decrease_bulk_load_download_count();
+        //        _stub->_bulk_load_recent_downloading_replica_count--;
 
-        // TODO(heyuchen): delete this debug log
-        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
-                       _stub->_primary_address_str,
-                       _stub->_bulk_load_recent_downloading_replica_count);
+        //        // TODO(heyuchen): delete this debug log
+        //        ddebug_replica("concurrent: node[{}]
+        //        recent_bulk_load_downloading_replica_count={}",
+        //                       _stub->_primary_address_str,
+        //                       _stub->_bulk_load_recent_downloading_replica_count);
     }
 }
 
 void replica::bulk_load_start_ingestion()
 {
-    _bulk_load_context.cleanup_download_task();
+    // TODO(heyuchen): consider
+    //    _bulk_load_context.cleanup_download_task();
     set_bulk_load_status(bulk_load_status::BLS_INGESTING);
     _stub->_counter_bulk_load_ingestion_count->increment();
 
@@ -766,14 +772,16 @@ void replica::pause_bulk_load()
     }
 
     if (cur_status == bulk_load_status::BLS_DOWNLOADING) {
+        try_decrease_bulk_load_download_count();
         // TODO(heyuchen): same as function hanld_bulk_load_download_error
         // consider refactor it
-        _stub->_bulk_load_recent_downloading_replica_count--;
-        // TODO(heyuchen): delete this debug log
-        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
-                       _stub->_primary_address_str,
-                       _stub->_bulk_load_recent_downloading_replica_count);
-        _bulk_load_context.cleanup_download_task();
+        //        _stub->_bulk_load_recent_downloading_replica_count--;
+        //        // TODO(heyuchen): delete this debug log
+        //        ddebug_replica("concurrent: node[{}]
+        //        recent_bulk_load_downloading_replica_count={}",
+        //                       _stub->_primary_address_str,
+        //                       _stub->_bulk_load_recent_downloading_replica_count);
+        //        _bulk_load_context.cleanup_download_task();
     }
 
     set_bulk_load_status(bulk_load_status::BLS_PAUSED);

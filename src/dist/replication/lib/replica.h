@@ -438,7 +438,7 @@ private:
     void update_download_progress(uint64_t file_size);
     bool verify_sst_files(const file_meta &f_meta, const std::string &local_dir);
 
-    void handle_bulk_load_download_error();
+    void try_decrease_bulk_load_download_count();
     void bulk_load_check_download_finish();
     void bulk_load_start_ingestion();
     void bulk_load_check_ingestion_finish();
