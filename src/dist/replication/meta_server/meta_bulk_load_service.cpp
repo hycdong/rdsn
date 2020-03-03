@@ -629,11 +629,11 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
-void bulk_load_service::rollback_to_downloading(int32_t app_id, bool should_send_request)
+void bulk_load_service::rollback_to_downloading(int32_t app_id)
 {
     zauto_read_lock l(_lock);
     update_app_status_on_remote_storage_unlock(
-        app_id, bulk_load_status::type::BLS_DOWNLOADING, should_send_request);
+        app_id, bulk_load_status::type::BLS_DOWNLOADING);
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
@@ -759,6 +759,8 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
 void bulk_load_service::update_app_status_on_remote_storage_unlock(
     int32_t app_id, bulk_load_status::type new_status, bool should_send_request)
 {
+    FAIL_POINT_INJECT_F("meta_update_app_status_on_remote_storage_unlock", [](dsn::string_view) {});
+
     app_bulk_load_info ainfo = _app_bulk_load_info[app_id];
     auto old_status = ainfo.status;
     // TODO(heyuchen): consider! handle app downloading and some downloaded
@@ -885,7 +887,7 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         tasking::enqueue(
             LPC_META_STATE_NORMAL,
             _meta_svc->tracker(),
-            std::bind(&bulk_load_service::rollback_to_downloading, this, pid.get_app_id(), false));
+            std::bind(&bulk_load_service::rollback_to_downloading, this, pid.get_app_id()));
         return;
     }
 

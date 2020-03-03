@@ -294,6 +294,22 @@ public:
         return rpc.response();
     }
 
+    error_code control_bulk_load(int32_t app_id,
+                                 bulk_load_control_type::type type,
+                                 bulk_load_status::type app_status)
+    {
+        bulk_svc()->_app_bulk_load_info[app_id].status = app_status;
+
+        auto request = dsn::make_unique<configuration_control_bulk_load_request>();
+        request->app_id = app_id;
+        request->type = type;
+
+        control_bulk_load_rpc rpc(std::move(request), RPC_CM_CONTROL_BULK_LOAD);
+        bulk_svc()->on_control_bulk_load(rpc);
+        wait_all();
+        return rpc.response().err;
+    }
+
     void on_partition_bulk_load_reply(error_code err,
                                       ballot b,
                                       bulk_load_response &response,
@@ -320,6 +336,11 @@ public:
         }
         return bulk_svc()->validate_partition_bulk_load_status(
             ainfo, partition_bulk_load_info_map, different_status_pidx_set);
+    }
+
+    void reset_local_bulk_load_states(int32_t app_id, const std::string &app_name)
+    {
+        bulk_svc()->reset_local_bulk_load_states(app_id, app_name);
     }
 
     bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
@@ -458,6 +479,41 @@ TEST_F(bulk_load_service_test, query_bulk_load_status_success)
     app->is_bulk_loading = true;
     auto resp = query_bulk_load(APP_NAME);
     ASSERT_EQ(resp.err, ERR_OK);
+}
+
+/// control bulk load unit tests
+TEST_F(bulk_load_service_test, control_bulk_load_test)
+{
+    create_app(APP_NAME);
+    std::shared_ptr<app_state> app = find_app(APP_NAME);
+    app->is_bulk_loading = true;
+    mock_meta_bulk_load_context(app->app_id, app->partition_count, bulk_load_status::BLS_INVALID);
+
+    fail::setup();
+    fail::cfg("meta_update_app_status_on_remote_storage_unlock", "return()");
+
+    struct control_test
+    {
+        bulk_load_control_type::type type;
+        bulk_load_status::type app_status;
+        error_code expected_err;
+    } tests[] = {
+        {bulk_load_control_type::BLC_PAUSE, bulk_load_status::BLS_DOWNLOADING, ERR_OK},
+        {bulk_load_control_type::BLC_PAUSE, bulk_load_status::BLS_DOWNLOADED, ERR_INVALID_STATE},
+        {bulk_load_control_type::BLC_RESTART, bulk_load_status::BLS_PAUSED, ERR_OK},
+        {bulk_load_control_type::BLC_RESTART, bulk_load_status::BLS_PAUSING, ERR_INVALID_STATE},
+        {bulk_load_control_type::BLC_CANCEL, bulk_load_status::BLS_DOWNLOADING, ERR_OK},
+        {bulk_load_control_type::BLC_CANCEL, bulk_load_status::BLS_PAUSED, ERR_OK},
+        {bulk_load_control_type::BLC_CANCEL, bulk_load_status::BLS_INGESTING, ERR_INVALID_STATE},
+        {bulk_load_control_type::BLC_FORCE_CANCEL, bulk_load_status::BLS_SUCCEED, ERR_OK},
+    };
+
+    for (auto test : tests) {
+        ASSERT_EQ(control_bulk_load(app->app_id, test.type, test.app_status), test.expected_err);
+    }
+    reset_local_bulk_load_states(app->app_id, app->app_name);
+
+    fail::teardown();
 }
 
 /// bulk load process unit tests
