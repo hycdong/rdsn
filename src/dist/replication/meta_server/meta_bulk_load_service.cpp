@@ -632,8 +632,7 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
 void bulk_load_service::rollback_to_downloading(int32_t app_id)
 {
     zauto_read_lock l(_lock);
-    update_app_status_on_remote_storage_unlock(
-        app_id, bulk_load_status::type::BLS_DOWNLOADING);
+    update_app_status_on_remote_storage_unlock(app_id, bulk_load_status::type::BLS_DOWNLOADING);
 }
 
 // ThreadPool: THREAD_POOL_META_STATE

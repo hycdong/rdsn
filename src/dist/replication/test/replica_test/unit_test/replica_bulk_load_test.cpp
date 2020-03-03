@@ -76,9 +76,20 @@ public:
         _replica->report_group_download_progress(response);
     }
 
-    void test_report_group_ingestion_status(bulk_load_response &response)
+    bool test_report_group_ingestion_status(ingestion_status::type primary,
+                                            ingestion_status::type secondary1,
+                                            ingestion_status::type secondary2,
+                                            bool is_ingestion_commit,
+                                            bool mock_partition_version)
     {
+        if (mock_partition_version) {
+            _replica->_partition_version.store(-1);
+        }
+        mock_ingestion_status(primary);
+        mock_ingestion_states(secondary1, secondary2, is_ingestion_commit);
+        bulk_load_response response;
         _replica->report_group_ingestion_status(response);
+        return response.is_group_ingestion_finished;
     }
 
     void test_report_group_context_clean_flag(bulk_load_response &response)
@@ -287,11 +298,6 @@ public:
     void mock_stub_downloading_count(int32_t count)
     {
         _stub->set_bulk_load_recent_downloading_replica_count(count);
-    }
-
-    void mock_partition_version(int32_t partition_version)
-    {
-        _replica->_partition_version.store(partition_version);
     }
 
     void mock_ingestion_status(ingestion_status::type status)
@@ -647,72 +653,75 @@ TEST_F(replica_bulk_load_test, report_group_download_progress_all_downloaded)
     ASSERT_EQ(resp.total_download_progress, 100);
 }
 
-// TODO(heyuchen): refactor this function
 TEST_F(replica_bulk_load_test, report_group_ingestion_status_test)
 {
-    {
-        mock_ingestion_status(ingestion_status::IS_INVALID);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
 
+    struct ingestion_struct
     {
-        mock_ingestion_status(ingestion_status::IS_RUNNING);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
+        ingestion_status::type primary;
+        ingestion_status::type secondary1;
+        ingestion_status::type secondary2;
+        bool is_ingestion_commit;
+        bool mock_partition_version;
+        bool is_group_ingestion_finished;
+    } tests[] = {
+        {ingestion_status::IS_INVALID,
+         ingestion_status::IS_INVALID,
+         ingestion_status::IS_INVALID,
+         false,
+         false,
+         false},
+        {ingestion_status::IS_RUNNING,
+         ingestion_status::IS_INVALID,
+         ingestion_status::IS_INVALID,
+         false,
+         false,
+         false},
+        {ingestion_status::IS_SUCCEED,
+         ingestion_status::IS_INVALID,
+         ingestion_status::IS_INVALID,
+         false,
+         false,
+         false},
+        {ingestion_status::IS_FAILED,
+         ingestion_status::IS_INVALID,
+         ingestion_status::IS_INVALID,
+         false,
+         false,
+         false},
+        {ingestion_status::IS_RUNNING,
+         ingestion_status::IS_RUNNING,
+         ingestion_status::IS_INVALID,
+         false,
+         false,
+         false},
+        {ingestion_status::IS_SUCCEED,
+         ingestion_status::IS_SUCCEED,
+         ingestion_status::IS_RUNNING,
+         true,
+         false,
+         false},
+        {ingestion_status::IS_FAILED,
+         ingestion_status::IS_FAILED,
+         ingestion_status::IS_RUNNING,
+         false,
+         false,
+         false},
+        {ingestion_status::IS_SUCCEED,
+         ingestion_status::IS_SUCCEED,
+         ingestion_status::IS_SUCCEED,
+         true,
+         true,
+         true},
+    };
 
-    {
-        mock_ingestion_status(ingestion_status::IS_SUCCEED);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_FAILED);
-        mock_ingestion_states(ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_RUNNING);
-        mock_ingestion_states(ingestion_status::IS_RUNNING, ingestion_status::IS_INVALID, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_SUCCEED);
-        mock_ingestion_states(ingestion_status::IS_SUCCEED, ingestion_status::IS_RUNNING, true);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_ingestion_status(ingestion_status::IS_FAILED);
-        mock_ingestion_states(ingestion_status::IS_FAILED, ingestion_status::IS_RUNNING, false);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_FALSE(resp.is_group_ingestion_finished);
-    }
-
-    {
-        mock_partition_version(-1);
-        mock_ingestion_status(ingestion_status::IS_SUCCEED);
-        mock_ingestion_states(ingestion_status::IS_SUCCEED, ingestion_status::IS_SUCCEED, true);
-        bulk_load_response resp;
-        test_report_group_ingestion_status(resp);
-        ASSERT_TRUE(resp.is_group_ingestion_finished);
+    for (auto test : tests) {
+        ASSERT_EQ(test_report_group_ingestion_status(test.primary,
+                                                     test.secondary1,
+                                                     test.secondary2,
+                                                     test.is_ingestion_commit,
+                                                     test.mock_partition_version),
+                  test.is_group_ingestion_finished);
         ASSERT_EQ(get_partition_version(), PARTITION_VERSION);
     }
 }
@@ -891,23 +900,28 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_reply_failed)
 // validate_bulk_load_status unit test
 TEST_F(replica_bulk_load_test, validate_bulk_load_status_test)
 {
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_INVALID, bulk_load_status::BLS_INVALID));
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INVALID));
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_FAILED, bulk_load_status::BLS_INGESTING));
+    struct validate_struct
+    {
+        bulk_load_status::type meta_status;
+        bulk_load_status::type local_status;
+        bool expected_flag;
+    } tests[] = {{bulk_load_status::BLS_INVALID, bulk_load_status::BLS_INVALID, true},
+                 {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INVALID, true},
+                 {bulk_load_status::BLS_FAILED, bulk_load_status::BLS_INGESTING, true},
+                 {bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_INVALID, false},
+                 {bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_DOWNLOADED, true},
+                 {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_DOWNLOADED, true},
+                 {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_INGESTING, true},
+                 {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_SUCCEED, false},
+                 {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INVALID, true},
+                 {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INGESTING, true},
+                 {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_SUCCEED, true},
+                 {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADING, false},
+                 {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADED, false}};
 
-    ASSERT_FALSE(validate_status(bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_INVALID));
-    ASSERT_TRUE(
-        validate_status(bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_DOWNLOADED));
-
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_DOWNLOADED));
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_INGESTING));
-    ASSERT_FALSE(validate_status(bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_SUCCEED));
-
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INVALID));
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INGESTING));
-    ASSERT_TRUE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_SUCCEED));
-    ASSERT_FALSE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADING));
-    ASSERT_FALSE(validate_status(bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADED));
+    for (auto test : tests) {
+        ASSERT_EQ(validate_status(test.meta_status, test.local_status), test.expected_flag);
+    }
 }
 
 } // namespace replication
