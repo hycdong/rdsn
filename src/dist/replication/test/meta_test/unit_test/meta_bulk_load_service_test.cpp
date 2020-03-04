@@ -426,30 +426,6 @@ TEST_F(bulk_load_service_test, start_bulk_load_with_wrong_provider)
     ASSERT_EQ(err, ERR_INVALID_PARAMETERS);
 }
 
-TEST_F(bulk_load_service_test, start_bulk_load_with_file_error)
-{
-    create_app(APP_NAME);
-    fail::setup();
-    fail::cfg("meta_check_bulk_load_request_params_file_failed", "return()");
-
-    error_code err = check_start_bulk_load_request_params(PROVIDER, 1, PARTITION_COUNT);
-    ASSERT_EQ(err, ERR_FILE_OPERATION_FAILED);
-
-    fail::teardown();
-}
-
-TEST_F(bulk_load_service_test, start_bulk_load_with_inconsistent_app_info)
-{
-    create_app(APP_NAME);
-    fail::setup();
-    fail::cfg("meta_check_bulk_load_request_app_info_failed", "return()");
-
-    error_code err = check_start_bulk_load_request_params(PROVIDER, 1, PARTITION_COUNT);
-    ASSERT_EQ(err, ERR_INCONSISTENT_STATE);
-
-    fail::teardown();
-}
-
 TEST_F(bulk_load_service_test, start_bulk_load_succeed)
 {
     create_app(APP_NAME);

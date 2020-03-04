@@ -362,8 +362,12 @@ private:
     std::unordered_map<app_id, bool> _apps_cleaning_up;
     std::unordered_map<app_id, app_bulk_load_info> _app_bulk_load_info;
 
-    std::unordered_map<gpid, partition_bulk_load_info> _partition_bulk_load_info;
     std::unordered_map<app_id, int32_t> _apps_in_progress_count;
+    std::unordered_map<app_id, bool> _apps_pending_sync_flag;
+
+    std::unordered_map<gpid, partition_bulk_load_info> _partition_bulk_load_info;
+    std::unordered_map<gpid, bool> _partitions_pending_sync_flag;
+
     // partition download progress while query bulk load status
     std::unordered_map<gpid, std::map<rpc_address, partition_download_progress>>
         _partitions_download_progress;

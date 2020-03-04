@@ -85,25 +85,6 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
 {
     FAIL_POINT_INJECT_F("meta_check_bulk_load_request_params",
                         [](dsn::string_view) -> error_code { return ERR_OK; });
-    FAIL_POINT_INJECT_F("meta_check_bulk_load_request_params_file_failed",
-                        [](dsn::string_view) -> error_code { return ERR_FILE_OPERATION_FAILED; });
-    FAIL_POINT_INJECT_F(
-        "meta_check_bulk_load_request_app_info_failed", [=](dsn::string_view) -> error_code {
-            int32_t invalid_app_id = 0;
-            int32_t invalid_partition_count = 9;
-            if (app_id != invalid_app_id || partition_count != invalid_partition_count) {
-                derror_f(
-                    "app({}) information is inconsistent, local app_id({}) VS remote app_id({}), "
-                    "local partition_count({}) VS remote partition_count({})",
-                    app_name,
-                    app_id,
-                    invalid_app_id,
-                    partition_count,
-                    invalid_partition_count);
-                return ERR_INCONSISTENT_STATE;
-            }
-            return ERR_OK;
-        });
 
     // check file provider
     dsn::dist::block_service::block_filesystem *blk_fs =
@@ -218,6 +199,7 @@ void bulk_load_service::create_app_bulk_load_dir(const std::string &app_name,
             {
                 zauto_write_lock l(_lock);
                 _app_bulk_load_info[ainfo.app_id] = ainfo;
+                _apps_pending_sync_flag[ainfo.app_id] = false;
             }
             for (int i = 0; i < ainfo.partition_count; ++i) {
                 create_partition_bulk_load_dir(
@@ -244,6 +226,7 @@ void bulk_load_service::create_partition_bulk_load_dir(const std::string &app_na
             {
                 zauto_write_lock l(_lock);
                 _partition_bulk_load_info[pid] = pinfo;
+                _partitions_pending_sync_flag[pid] = false;
                 if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
                     ddebug_f("app({}) start bulk load succeed", app_name);
                     _apps_in_progress_count[pid.get_app_id()] = partition_count;
@@ -695,17 +678,27 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
 {
     zauto_read_lock l(_lock);
     partition_bulk_load_info pinfo = _partition_bulk_load_info[pid];
+
     if (pinfo.status == new_status && new_status != bulk_load_status::BLS_DOWNLOADING) {
-        dwarn_f("app({}) partition({}) old status:{} VS new status:{}, ignore it",
+        dinfo_f("app({}) partition({}) old status:{} VS new status:{}, ignore it",
                 app_name,
                 pid.to_string(),
                 enum_to_string(pinfo.status),
                 enum_to_string(new_status));
         return;
     }
+
+    if (_partitions_pending_sync_flag[pid]) {
+        ddebug_f("app({}) partition({}) has already sync bulk load status, wait for next round",
+                 app_name,
+                 pid);
+        return;
+    }
+
     pinfo.status = new_status;
     blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
+    _partitions_pending_sync_flag[pid] = true;
     std::string path = get_partition_bulk_load_path(pid);
     _meta_svc->get_meta_storage()->set_data(
         std::move(path),
@@ -714,13 +707,14 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
             {
                 zauto_write_lock l(_lock);
                 bulk_load_status::type old_status = _partition_bulk_load_info[pid].status;
+                _partition_bulk_load_info[pid].status = new_status;
+                _partitions_pending_sync_flag[pid] = false;
+
                 ddebug_f("app({}) update partition({}) status from {} to {}",
                          app_name,
                          pid.to_string(),
                          enum_to_string(old_status),
                          enum_to_string(new_status));
-
-                _partition_bulk_load_info[pid].status = new_status;
 
                 if ((new_status == bulk_load_status::BLS_DOWNLOADED ||
                      new_status == bulk_load_status::BLS_INGESTING ||
@@ -762,6 +756,7 @@ void bulk_load_service::update_app_status_on_remote_storage_unlock(
 
     app_bulk_load_info ainfo = _app_bulk_load_info[app_id];
     auto old_status = ainfo.status;
+
     // TODO(heyuchen): consider! handle app downloading and some downloaded
     if (old_status == new_status && new_status != bulk_load_status::BLS_DOWNLOADING) {
         dwarn_f("app({}) old status:{} VS new status:{}, ignore it",
@@ -771,8 +766,26 @@ void bulk_load_service::update_app_status_on_remote_storage_unlock(
         return;
     }
 
+    if (_apps_pending_sync_flag[app_id]) {
+        ddebug_f("app({}) has already sync bulk load status, wait and retry, cur={}, new={}",
+                 ainfo.app_name,
+                 enum_to_string(old_status),
+                 enum_to_string(new_status));
+        tasking::enqueue(LPC_META_STATE_NORMAL,
+                         _meta_svc->tracker(),
+                         std::bind(&bulk_load_service::update_app_status_on_remote_storage_unlock,
+                                   this,
+                                   app_id,
+                                   new_status,
+                                   should_send_request),
+                         0,
+                         std::chrono::seconds(1));
+        return;
+    }
+
     ainfo.status = new_status;
     blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
+
     auto callback = [this, old_status, ainfo, app_id, new_status, should_send_request]() {
         ddebug_f("update app({}) status from {} to {}",
                  ainfo.app_name,
@@ -781,6 +794,7 @@ void bulk_load_service::update_app_status_on_remote_storage_unlock(
         {
             zauto_write_lock l(_lock);
             _app_bulk_load_info[app_id] = ainfo;
+            _apps_pending_sync_flag[app_id] = false;
             _apps_in_progress_count[app_id] = ainfo.partition_count;
         }
 
@@ -807,6 +821,7 @@ void bulk_load_service::update_app_status_on_remote_storage_unlock(
         }
     };
 
+    _apps_pending_sync_flag[app_id] = true;
     _meta_svc->get_meta_storage()->set_data(
         get_app_bulk_load_path(app_id), std::move(value), std::move(callback));
 }
@@ -970,6 +985,8 @@ void bulk_load_service::reset_local_bulk_load_states(int32_t app_id, const std::
     zauto_write_lock l(_lock);
     _app_bulk_load_info.erase(app_id);
     _apps_in_progress_count.erase(app_id);
+    _apps_pending_sync_flag.erase(app_id);
+    erase_map_elem_by_id(app_id, _partitions_pending_sync_flag);
     erase_map_elem_by_id(app_id, _partitions_download_progress);
     erase_map_elem_by_id(app_id, _partition_bulk_load_info);
     erase_map_elem_by_id(app_id, _partitions_total_download_progress);
@@ -1592,7 +1609,7 @@ void bulk_load_service::on_control_bulk_load(control_bulk_load_rpc rpc)
         }
     }
 
-    zauto_read_lock l(_lock);
+    zauto_write_lock l(_lock);
     bulk_load_status::type local_status = get_app_bulk_load_status_unlock(request.app_id);
 
     switch (request.type) {
