@@ -593,6 +593,13 @@ public:
         _resp.is_group_bulk_load_context_cleaned = finish_cleanup;
     }
 
+    void mock_response_paused(bool is_group_paused, int32_t pidx)
+    {
+        create_basic_response(ERR_OK, bulk_load_status::BLS_PAUSED, pidx);
+        _resp.__isset.is_group_bulk_load_paused = true;
+        _resp.is_group_bulk_load_paused = is_group_paused;
+    }
+
     void create_ingest_response(error_code err, int32_t rocksdb_err)
     {
         _ingest_resp.err = err;
@@ -734,6 +741,18 @@ TEST_F(bulk_load_process_test, cleanup_succeed)
     }
     wait_all();
     ASSERT_FALSE(app_is_bulk_loading(APP_NAME));
+}
+
+TEST_F(bulk_load_process_test, pause_succeed)
+{
+    mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_PAUSING);
+    for (int i = 0; i < _partition_count; ++i) {
+        mock_response_paused(true, i);
+        auto resp = _resp;
+        on_partition_bulk_load_reply(ERR_OK, BALLOT, resp, _resp.pid, _primary);
+    }
+    wait_all();
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_PAUSED);
 }
 
 TEST_F(bulk_load_process_test, rpc_error)

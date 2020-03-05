@@ -233,6 +233,7 @@ void primary_context::reset_group_bulk_load_states(const rpc_address &node,
     }
 }
 
+// TODO(heyuchen): cleanup group_bulk_load_paused
 void primary_context::cleanup_bulk_load_states()
 {
     group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());

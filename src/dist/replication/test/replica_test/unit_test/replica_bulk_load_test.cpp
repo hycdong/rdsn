@@ -71,6 +71,8 @@ public:
         _replica->cleanup_bulk_load_context(status);
     }
 
+    void test_pause_bulk_load() { return _replica->pause_bulk_load(); }
+
     void test_report_group_download_progress(bulk_load_response &response)
     {
         _replica->report_group_download_progress(response);
@@ -95,6 +97,11 @@ public:
     void test_report_group_context_clean_flag(bulk_load_response &response)
     {
         _replica->report_group_context_clean_flag(response);
+    }
+
+    void test_report_group_is_paused(bulk_load_response &response)
+    {
+        _replica->report_group_is_paused(response);
     }
 
     void
@@ -250,7 +257,8 @@ public:
 
     void mock_primary_states(bool mock_download_progress = true,
                              bool mock_cleanup_flag = true,
-                             bool all_secondary_finish = false)
+                             bool all_secondary_finish = false,
+                             bool mock_pause_flag = false)
     {
         mock_replica_config(partition_status::PS_PRIMARY);
         rpc_address SECONDARY2 = rpc_address("127.0.0.4", 34801);
@@ -274,6 +282,10 @@ public:
             _replica->_primary_states.group_bulk_load_context_flag[SECONDARY] = true;
             _replica->_primary_states.group_bulk_load_context_flag[SECONDARY2] =
                 all_secondary_finish;
+        }
+        if (mock_pause_flag) {
+            _replica->_primary_states.group_bulk_load_paused[SECONDARY] = true;
+            _replica->_primary_states.group_bulk_load_paused[SECONDARY2] = all_secondary_finish;
         }
     }
 
@@ -618,6 +630,31 @@ TEST_F(replica_bulk_load_test, cleanup_bulk_load_context_with_failed)
     ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
 }
 
+TEST_F(replica_bulk_load_test, cleanup_bulk_load_context_with_cancel)
+{
+    mock_bulk_load_context(50, 50, 100, bulk_load_status::BLS_DOWNLOADED);
+
+    test_cleanup_bulk_load_context(bulk_load_status::BLS_CANCELED);
+    ASSERT_TRUE(get_clean_up_flag());
+    ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
+}
+
+TEST_F(replica_bulk_load_test, pause_bulk_load_with_invalid)
+{
+    mock_bulk_load_request(bulk_load_status::BLS_PAUSING);
+    mock_bulk_load_context(0, 0, 0, bulk_load_status::BLS_INVALID);
+    test_pause_bulk_load();
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_PAUSED);
+}
+
+TEST_F(replica_bulk_load_test, pause_bulk_load_with_downloading)
+{
+    mock_bulk_load_request(bulk_load_status::BLS_PAUSING);
+    mock_bulk_load_context(1000, 100, 10, bulk_load_status::BLS_DOWNLOADING);
+    test_pause_bulk_load();
+    ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_PAUSED);
+}
+
 // report_group_download_progress unit tests
 TEST_F(replica_bulk_load_test, report_group_download_progress_all_downloading)
 {
@@ -754,6 +791,26 @@ TEST_F(replica_bulk_load_test, report_group_context_clean_flag_all_cleanup)
     bulk_load_response response;
     test_report_group_context_clean_flag(response);
     ASSERT_TRUE(response.is_group_bulk_load_context_cleaned);
+}
+
+TEST_F(replica_bulk_load_test, report_group_is_paused_not_cleanup)
+{
+    mock_primary_states(false, false, false, true);
+    mock_bulk_load_context(100, 10, 10, bulk_load_status::BLS_DOWNLOADING);
+
+    bulk_load_response response;
+    test_report_group_is_paused(response);
+    ASSERT_FALSE(response.is_group_bulk_load_paused);
+}
+
+TEST_F(replica_bulk_load_test, report_group_is_paused_all_cleanup)
+{
+    mock_primary_states(false, false, true, true);
+    mock_bulk_load_context(100, 10, 10, bulk_load_status::BLS_PAUSED);
+
+    bulk_load_response response;
+    test_report_group_is_paused(response);
+    ASSERT_TRUE(response.is_group_bulk_load_paused);
 }
 
 // on_group_bulk_load_reply unit tests
@@ -908,16 +965,17 @@ TEST_F(replica_bulk_load_test, validate_bulk_load_status_test)
     } tests[] = {{bulk_load_status::BLS_INVALID, bulk_load_status::BLS_INVALID, true},
                  {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INVALID, true},
                  {bulk_load_status::BLS_FAILED, bulk_load_status::BLS_INGESTING, true},
+                 {bulk_load_status::BLS_CANCELED, bulk_load_status::BLS_SUCCEED, true},
                  {bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_INVALID, false},
                  {bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_DOWNLOADED, true},
                  {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_DOWNLOADED, true},
-                 {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_INGESTING, true},
                  {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_SUCCEED, false},
                  {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INVALID, true},
                  {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INGESTING, true},
-                 {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_SUCCEED, true},
                  {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADING, false},
-                 {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_DOWNLOADED, false}};
+                 {bulk_load_status::BLS_PAUSING, bulk_load_status::BLS_INVALID, true},
+                 {bulk_load_status::BLS_PAUSING, bulk_load_status::BLS_PAUSED, true},
+                 {bulk_load_status::BLS_PAUSING, bulk_load_status::BLS_INGESTING, false}};
 
     for (auto test : tests) {
         ASSERT_EQ(validate_status(test.meta_status, test.local_status), test.expected_flag);
