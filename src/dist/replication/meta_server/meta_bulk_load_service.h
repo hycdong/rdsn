@@ -136,7 +136,7 @@ private:
     void handle_bulk_load_finish(const bulk_load_response &response,
                                  const rpc_address &primary_addr);
 
-    void rollback_to_downloading(int32_t app_id);
+    void try_rollback_to_downloading(int32_t app_id, const std::string &app_name);
 
     void handle_bulk_load_failed(int32_t app_id);
 

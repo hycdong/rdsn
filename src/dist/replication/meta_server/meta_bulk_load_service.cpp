@@ -319,14 +319,14 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                 pid.get_app_id(),
                 pid.to_string(),
                 err.to_string());
-        rollback_to_downloading(pid.get_app_id());
+        try_rollback_to_downloading(pid.get_app_id(), app_name);
     } else if (response.err == ERR_OBJECT_NOT_FOUND || response.err == ERR_INVALID_STATE) {
         dwarn_f("app({}), partition({}) doesn't exist or has invalid state on node({}), error = {}",
                 app_name,
                 pid.to_string(),
                 primary_addr.to_string(),
                 response.err.to_string());
-        rollback_to_downloading(pid.get_app_id());
+        try_rollback_to_downloading(pid.get_app_id(), app_name);
     } else if (response.err == ERR_BUSY) {
         dwarn_f("node({}) has enough replicas downloading, wait to next round to send bulk load "
                 "request for app({}), partition({})",
@@ -374,7 +374,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                     pid.to_string(),
                     req_ballot,
                     current_ballot);
-            rollback_to_downloading(pid.get_app_id());
+            try_rollback_to_downloading(pid.get_app_id(), app_name);
         }
 
         // do bulk load
@@ -538,7 +538,8 @@ void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
                         app_name,
                         pid.to_string(),
                         iter->first.to_string());
-                rollback_to_downloading(pid.get_app_id());
+                // TODO(heyuchen): turn to failed, not downloading
+                try_rollback_to_downloading(pid.get_app_id(), app_name);
                 break;
             }
         }
@@ -612,10 +613,20 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
-void bulk_load_service::rollback_to_downloading(int32_t app_id)
+void bulk_load_service::try_rollback_to_downloading(int32_t app_id, const std::string &app_name)
 {
     zauto_read_lock l(_lock);
-    update_app_status_on_remote_storage_unlock(app_id, bulk_load_status::type::BLS_DOWNLOADING);
+    const auto app_status = get_app_bulk_load_status_unlock(app_id);
+    if (app_status == bulk_load_status::BLS_DOWNLOADING ||
+        app_status == bulk_load_status::BLS_DOWNLOADED ||
+        app_status == bulk_load_status::BLS_INGESTING ||
+        app_status == bulk_load_status::BLS_SUCCEED) {
+        update_app_status_on_remote_storage_unlock(app_id, bulk_load_status::type::BLS_DOWNLOADING);
+    } else {
+        ddebug_f("app({}) status={}, no need to rollback to downloading, wait for next round",
+                 app_name,
+                 enum_to_string(app_status));
+    }
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
@@ -901,7 +912,8 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         tasking::enqueue(
             LPC_META_STATE_NORMAL,
             _meta_svc->tracker(),
-            std::bind(&bulk_load_service::rollback_to_downloading, this, pid.get_app_id()));
+            std::bind(
+                &bulk_load_service::try_rollback_to_downloading, this, pid.get_app_id(), app_name));
         return;
     }
 
