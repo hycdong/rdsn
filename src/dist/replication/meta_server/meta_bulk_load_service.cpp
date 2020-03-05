@@ -1655,7 +1655,8 @@ void bulk_load_service::on_control_bulk_load(control_bulk_load_rpc rpc)
                  request.type == bulk_load_control_type::BLC_FORCE_CANCEL ? "force" : "",
                  enum_to_string(local_status));
         update_app_status_on_remote_storage_unlock(request.app_id,
-                                                   bulk_load_status::type::BLS_CANCELED);
+                                                   bulk_load_status::type::BLS_CANCELED,
+                                                   local_status == bulk_load_status::BLS_PAUSED);
     } break;
     default:
         break;
