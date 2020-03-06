@@ -200,6 +200,8 @@ void replica::on_group_bulk_load_reply(error_code err,
         // TODO(heyuchen): remove concurrent
         dwarn_replica("concurrent: node[{}] has enough replica downloading, wait for next round",
                       req->target_address.to_string());
+        _primary_states.reset_group_bulk_load_states(req->target_address,
+                                                     req->meta_bulk_load_status);
         return;
     }
 
