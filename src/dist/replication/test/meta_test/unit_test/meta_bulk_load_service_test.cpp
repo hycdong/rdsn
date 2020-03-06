@@ -706,7 +706,7 @@ TEST_F(bulk_load_process_test, ingestion_error)
     on_partition_bulk_load_reply(ERR_OK, BALLOT, response, gpid(_app_id, _pidx), _primary);
     wait_all();
     ASSERT_TRUE(app_is_bulk_loading(APP_NAME));
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
     ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);
 }
 
@@ -786,7 +786,7 @@ TEST_F(bulk_load_process_test, response_object_not_found)
     wait_all();
 
     ASSERT_TRUE(app_is_bulk_loading(APP_NAME));
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
     ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);
 }
 
@@ -1419,6 +1419,138 @@ TEST_F(bulk_load_failover_test, failed_with_partition_mixed)
     fail::teardown();
 }
 
+// TODO(heyuchen):
+
+// app:pausing, partition[0]=downloading, partition[1]=downloaded, partition[2]=pausing,
+// partition[3]=paused
+TEST_F(bulk_load_failover_test, pausing_with_partition_mixed)
+{
+    fail::setup();
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_DOWNLOADING;
+    partition_bulk_load_status_map[1] = bulk_load_status::BLS_DOWNLOADED;
+    partition_bulk_load_status_map[2] = bulk_load_status::BLS_PAUSING;
+    partition_bulk_load_status_map[3] = bulk_load_status::BLS_PAUSED;
+    try_to_continue_bulk_load(bulk_load_status::BLS_PAUSING, partition_bulk_load_status_map);
+
+    ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
+    ASSERT_TRUE(app_is_bulk_loading(SYNC_APP_NAME));
+
+    fail::teardown();
+}
+
+// app:pausing, partition[0~3]=pasuing
+TEST_F(bulk_load_failover_test, pausing_with_all_pausing)
+{
+    fail::setup();
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    for (int32_t i = 0; i < SYNC_PARTITION_COUNT; ++i) {
+        partition_bulk_load_status_map[i] = bulk_load_status::BLS_PAUSING;
+    }
+    try_to_continue_bulk_load(bulk_load_status::BLS_PAUSING, partition_bulk_load_status_map);
+
+    ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
+    ASSERT_TRUE(app_is_bulk_loading(SYNC_APP_NAME));
+
+    fail::teardown();
+}
+
+// app:pausing, partition[0,1]=pausing, partition[2,3]=paused
+TEST_F(bulk_load_failover_test, pausing_with_some_paused)
+{
+    fail::setup();
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_PAUSING;
+    partition_bulk_load_status_map[1] = bulk_load_status::BLS_PAUSING;
+    partition_bulk_load_status_map[2] = bulk_load_status::BLS_PAUSED;
+    partition_bulk_load_status_map[3] = bulk_load_status::BLS_PAUSED;
+    try_to_continue_bulk_load(bulk_load_status::BLS_PAUSING, partition_bulk_load_status_map);
+
+    ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
+    ASSERT_TRUE(app_is_bulk_loading(SYNC_APP_NAME));
+
+    fail::teardown();
+}
+
+// app:paused, partition[0~2]=paused, partition[3]=pausing
+TEST_F(bulk_load_failover_test, paused_with_mixed)
+{
+    fail::setup();
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_PAUSED;
+    partition_bulk_load_status_map[1] = bulk_load_status::BLS_PAUSED;
+    partition_bulk_load_status_map[2] = bulk_load_status::BLS_PAUSED;
+    partition_bulk_load_status_map[3] = bulk_load_status::BLS_PAUSING;
+    try_to_continue_bulk_load(bulk_load_status::BLS_PAUSED, partition_bulk_load_status_map);
+
+    ASSERT_FALSE(app_is_bulk_loading(SYNC_APP_NAME));
+
+    fail::teardown();
+}
+
+// app:paused, partition[0~3]=paused
+TEST_F(bulk_load_failover_test, paused_with_all_paused)
+{
+    fail::setup();
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    for (int32_t i = 0; i < SYNC_PARTITION_COUNT; ++i) {
+        partition_bulk_load_status_map[i] = bulk_load_status::BLS_PAUSED;
+    }
+    try_to_continue_bulk_load(bulk_load_status::BLS_PAUSED, partition_bulk_load_status_map);
+
+    ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
+    ASSERT_TRUE(app_is_bulk_loading(SYNC_APP_NAME));
+
+    fail::teardown();
+}
+
+// app:cancel, partition[0~3]=cancel
+TEST_F(bulk_load_failover_test, cancel_with_all_cancel)
+{
+    fail::setup();
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    for (int32_t i = 0; i < SYNC_PARTITION_COUNT; ++i) {
+        partition_bulk_load_status_map[i] = bulk_load_status::BLS_CANCELED;
+    }
+    try_to_continue_bulk_load(bulk_load_status::BLS_CANCELED, partition_bulk_load_status_map);
+
+    ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
+    ASSERT_TRUE(app_is_bulk_loading(SYNC_APP_NAME));
+
+    fail::teardown();
+}
+
+// app:cancel, partition[0~2]=ingestion, partition[3]=downloaded
+TEST_F(bulk_load_failover_test, cancel_with_mixed)
+{
+    fail::setup();
+    fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_INGESTING;
+    partition_bulk_load_status_map[1] = bulk_load_status::BLS_INGESTING;
+    partition_bulk_load_status_map[2] = bulk_load_status::BLS_DOWNLOADED;
+    partition_bulk_load_status_map[3] = bulk_load_status::BLS_DOWNLOADED;
+    try_to_continue_bulk_load(bulk_load_status::BLS_CANCELED, partition_bulk_load_status_map);
+
+    ASSERT_EQ(get_app_in_process_count(SYNC_APP_ID), SYNC_PARTITION_COUNT);
+    ASSERT_TRUE(app_is_bulk_loading(SYNC_APP_NAME));
+
+    fail::teardown();
+}
+
 /// validate_partition_status unit test
 
 // app:downloading, partition[0,1]=downloading, partition[2]=downloaded, partition[3] not existed
@@ -1517,6 +1649,8 @@ TEST_F(bulk_load_failover_test, failed_valid_partition)
         _ainfo, partition_bulk_load_status_map, different_status_pidx_set));
     ASSERT_EQ(4, different_status_pidx_set.size());
 }
+
+// TODO(heyuchen)
 
 } // namespace replication
 } // namespace dsn

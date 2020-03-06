@@ -534,12 +534,11 @@ void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
              iter != response.group_ingestion_status.end();
              ++iter) {
             if (iter->second == ingestion_status::IS_FAILED) {
-                dwarn_f("app({}) partition({}) node({}) ingestion failed",
-                        app_name,
-                        pid.to_string(),
-                        iter->first.to_string());
-                // TODO(heyuchen): turn to failed, not downloading
-                try_rollback_to_downloading(pid.get_app_id(), app_name);
+                derror_f("app({}) partition({}) node({}) ingestion failed",
+                         app_name,
+                         pid.to_string(),
+                         iter->first.to_string());
+                handle_bulk_load_failed(pid.get_app_id());
                 break;
             }
         }
@@ -1289,10 +1288,10 @@ void bulk_load_service::continue_bulk_load(
 
 // ThreadPool: THREAD_POOL_META_STATE
 /// meta bulk load failover cases
-/// 1. no children
+/// 1. lack children
 ///     1 - downloading
 ///         create all partition with downloading and send bulk load request
-///     2 - donwloaded/ingesting/finish/failed + no children
+///     2 - other status with no children
 ///         remove dir and reset flag
 /// 2. some partition has same status with app status, some not
 ///     1 - app:downloading + not existed
@@ -1314,12 +1313,21 @@ void bulk_load_service::continue_bulk_load(
 ///         set partition failed, send bulk load request (app aim cleanup)
 ///     9 - app:downloading + not downloading && not downloaded
 ///         count = not downloading count, send bulk load request
+///     10- app:pausing + not pausing
+///         set partition pausing, send bulk load request (app aim paused)
+///     11- app:paused + not paused
+///         remove dir and reset flag
+///     12- app:cancel + not cancel
+///         set partition cancel, send bulk load request (app aim cleanup)
 /// 3. all child partition status isconsistency with app (count = partition count)
 ///     1 - downloading: send request
 ///     2 - downloaded: send request
 ///     3 - ingesting: send request and send ingestion
 ///     4 - finish: send request
 ///     5 - failed: send request
+///     6 - pausing: send request
+///     7 - paused: not send request
+///     8 - cancel: send request
 bool bulk_load_service::check_bulk_load_status(
     int32_t app_id,
     int32_t partition_count,
@@ -1341,22 +1349,23 @@ bool bulk_load_service::check_bulk_load_status(
 
     // partition buld load dir count should not be greater than partition_count
     int partition_size = partition_bulk_load_info_map.size();
-    if (ainfo.partition_count < partition_size) {
+    if (partition_count < partition_size) {
         derror_f("app({}) has invalid count, app partition_count = {}, remote "
                  "partition_bulk_load_info count = {}",
                  ainfo.app_name,
-                 ainfo.partition_count,
+                 partition_count,
                  partition_size);
         return false;
     }
 
     // partition buld load dir count is not equal to partition_count can only be happended when app
     // status is downlading
-    if (partition_size != ainfo.partition_count &&
-        ainfo.status != bulk_load_status::BLS_DOWNLOADING) {
-        derror_f("app({}) bulk_load_status={}, but there are no partition_bulk_load dir existed",
-                 ainfo.app_name,
-                 enum_to_string(ainfo.status));
+    if (partition_size != partition_count && ainfo.status != bulk_load_status::BLS_DOWNLOADING) {
+        derror_f(
+            "app({}) bulk_load_status={}, but there are {} partitions lack partition_bulk_load dir",
+            ainfo.app_name,
+            enum_to_string(ainfo.status),
+            partition_count - partition_size);
         return false;
     }
 
@@ -1437,12 +1446,25 @@ bool bulk_load_service::validate_partition_bulk_load_status(
         return false;
     }
 
+    // TODO(heyuchen): new add 2-11
+    if (app_status == bulk_load_status::BLS_PAUSED && different_count > 0) {
+        derror_f("app({}) bulk_load_status={}, {} partitions bulk_load_status is different from "
+                 "app, this is invalid",
+                 ainfo.app_name,
+                 enum_to_string(app_status),
+                 different_count);
+        return false;
+    }
+
+    // TODO(heyuchen): new add 2-12
     // app: downloading or failed, valid partition: all status
     if (app_status == bulk_load_status::BLS_DOWNLOADING ||
-        app_status == bulk_load_status::BLS_FAILED) {
+        app_status == bulk_load_status::BLS_FAILED || app_status == bulk_load_status::BLS_PAUSING ||
+        app_status == bulk_load_status::BLS_CANCELED) {
         return true;
     }
 
+    // TODO(heyuchen): update this comment
     // invalid, paused, canceled
     return true;
 }
@@ -1472,6 +1494,7 @@ void bulk_load_service::do_continue_bulk_load(
              different_count);
 
     // calculate in_progress_partition_count
+    // TODO(heyuchen): failed, pausing, paused, cancel
     int in_progress_partition_count = partition_count;
     if (app_status == bulk_load_status::BLS_DOWNLOADING) {
         if (invalid_count > 0) {
@@ -1489,9 +1512,18 @@ void bulk_load_service::do_continue_bulk_load(
         _apps_in_progress_count[app_id] = in_progress_partition_count;
     }
 
+    // TODO(heyuchen): new add 3-7
+    if (app_status == bulk_load_status::BLS_PAUSED) {
+        ddebug_f("app({}) status = {}", ainfo.app_name, enum_to_string(app_status));
+        return;
+    }
+
     // if app status is downloading and all partition exist, set all partition status to downloading
     // if app status is failed, set all partition status to failed
+    // TODO(heyuchen): new add 3-6 3-8, consider pausing
     if ((app_status == bulk_load_status::BLS_FAILED ||
+         app_status == bulk_load_status::BLS_CANCELED ||
+         app_status == bulk_load_status::BLS_PAUSING ||
          (app_status == bulk_load_status::BLS_DOWNLOADING && invalid_count == 0)) &&
         different_count > 0) {
         for (auto iter = different_status_pidx_set.begin(); iter != different_status_pidx_set.end();
@@ -1513,7 +1545,9 @@ void bulk_load_service::do_continue_bulk_load(
                    app_status == bulk_load_status::BLS_DOWNLOADED ||
                    app_status == bulk_load_status::BLS_INGESTING ||
                    app_status == bulk_load_status::BLS_SUCCEED ||
-                   app_status == bulk_load_status::BLS_FAILED) {
+                   app_status == bulk_load_status::BLS_FAILED ||
+                   app_status == bulk_load_status::BLS_CANCELED ||
+                   app_status == bulk_load_status::BLS_PAUSING) {
             partition_bulk_load(ainfo.app_name, pid);
         }
         if (app_status == bulk_load_status::BLS_INGESTING) {
