@@ -116,6 +116,7 @@ public:
     int32_t max_concurrent_uploading_file_count;
 
     std::string bulk_load_root;
+    int32_t partition_bulk_load_interval_ms;
     int32_t max_concurrent_bulk_load_downloading_count;
 
 public:
@@ -168,7 +169,6 @@ public:
     static const std::string BULK_LOAD_INFO;
     static const std::string BULK_LOAD_LOCAL_ROOT_DIR;
     static const int32_t PROGRESS_FINISHED;
-    static const int32_t BULK_LOAD_REQUEST_LONG_INTERVAL_MS;
     static const int32_t BULK_LOAD_REQUEST_SHORT_INTERVAL_MS;
 };
 

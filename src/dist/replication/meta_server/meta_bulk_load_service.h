@@ -181,9 +181,19 @@ private:
                                                    bulk_load_status::type new_status,
                                                    bool should_send_request = false);
 
+    void update_partition_status_on_remote_stroage_rely(const std::string &app_name,
+                                                        const gpid &pid,
+                                                        bulk_load_status::type new_status,
+                                                        bool should_send_request);
+
     void update_app_status_on_remote_storage_unlock(int32_t app_id,
                                                     bulk_load_status::type new_status,
                                                     bool should_send_request = false);
+
+    void update_app_status_on_remote_storage_reply(const app_bulk_load_info &ainfo,
+                                                   bulk_load_status::type old_status,
+                                                   bulk_load_status::type new_status,
+                                                   bool should_send_request);
 
     // `need_set_app_flag` = true: update app's is_bulk_loading to false on remote_storage
     void remove_bulk_load_dir(std::shared_ptr<app_state> app, bool need_set_app_flag);
