@@ -313,7 +313,6 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
 {
     int32_t interval_ms = _meta_svc->get_options().partition_bulk_load_interval_ms;
 
-    // TODO(heyuchen): consider failover, check if lack of case
     if (err != ERR_OK) {
         dwarn_f("app({}), partition({}) failed to recevie bulk load response, error = {}",
                 pid.get_app_id(),
@@ -767,7 +766,6 @@ void bulk_load_service::update_app_status_on_remote_storage_unlock(
     app_bulk_load_info ainfo = _app_bulk_load_info[app_id];
     auto old_status = ainfo.status;
 
-    // TODO(heyuchen): consider! handle app downloading and some downloaded
     if (old_status == new_status && new_status != bulk_load_status::BLS_DOWNLOADING) {
         dwarn_f("app({}) old status:{} VS new status:{}, ignore it",
                 ainfo.app_name,
@@ -943,7 +941,6 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         return;
     }
 
-    // TODO(heyuchen): this is uncertain error
     if (resp.err != ERR_OK || resp.rocksdb_error != 0) {
         derror_f("app({}) partition({}) failed to ingestion files, error = {}, rocksdb error = {}",
                  app_name,
@@ -1448,19 +1445,11 @@ bool bulk_load_service::validate_partition_bulk_load_status(
         return true;
     }
 
-    // app: finish, valid partition: finish
-    if (app_status == bulk_load_status::BLS_SUCCEED && different_count > 0) {
-        derror_f("app({}) bulk_load_status={}, there are {} partitions "
-                 "bulk_load_status is not {}, this is invalid",
-                 ainfo.app_name,
-                 app_status,
-                 different_count,
-                 enum_to_string(bulk_load_status::BLS_SUCCEED));
-        return false;
-    }
-
-    // TODO(heyuchen): new add 2-11
-    if (app_status == bulk_load_status::BLS_PAUSED && different_count > 0) {
+    // app: succeed, valid partition: succeed
+    // app: paused, valid partition: paused
+    if ((app_status == bulk_load_status::BLS_SUCCEED ||
+         app_status == bulk_load_status::BLS_PAUSED) &&
+        different_count > 0) {
         derror_f("app({}) bulk_load_status={}, {} partitions bulk_load_status is different from "
                  "app, this is invalid",
                  ainfo.app_name,
@@ -1469,16 +1458,7 @@ bool bulk_load_service::validate_partition_bulk_load_status(
         return false;
     }
 
-    // TODO(heyuchen): new add 2-12
-    // app: downloading or failed, valid partition: all status
-    if (app_status == bulk_load_status::BLS_DOWNLOADING ||
-        app_status == bulk_load_status::BLS_FAILED || app_status == bulk_load_status::BLS_PAUSING ||
-        app_status == bulk_load_status::BLS_CANCELED) {
-        return true;
-    }
-
-    // TODO(heyuchen): update this comment
-    // invalid, paused, canceled
+    // app: downloading, failed, pausing, cancel, valid partition: all status
     return true;
 }
 
@@ -1507,8 +1487,7 @@ void bulk_load_service::do_continue_bulk_load(
              different_count);
 
     // calculate in_progress_partition_count
-    // TODO(heyuchen): failed, pausing, paused, cancel
-    int in_progress_partition_count = partition_count;
+    int in_progress_partition_count = partition_count; // failed, pausing, paused, cancel
     if (app_status == bulk_load_status::BLS_DOWNLOADING) {
         if (invalid_count > 0) {
             in_progress_partition_count = invalid_count;
@@ -1525,15 +1504,13 @@ void bulk_load_service::do_continue_bulk_load(
         _apps_in_progress_count[app_id] = in_progress_partition_count;
     }
 
-    // TODO(heyuchen): new add 3-7
+    // if bulk load paused, return directly
     if (app_status == bulk_load_status::BLS_PAUSED) {
         ddebug_f("app({}) status = {}", ainfo.app_name, enum_to_string(app_status));
         return;
     }
 
     // if app status is downloading and all partition exist, set all partition status to downloading
-    // if app status is failed, set all partition status to failed
-    // TODO(heyuchen): new add 3-6 3-8, consider pausing
     if ((app_status == bulk_load_status::BLS_FAILED ||
          app_status == bulk_load_status::BLS_CANCELED ||
          app_status == bulk_load_status::BLS_PAUSING ||
