@@ -55,6 +55,7 @@
 #include "prepare_list.h"
 #include "replica_context.h"
 #include "throttling_controller.h"
+#include <gtest/gtest_prod.h>
 
 namespace dsn {
 namespace replication {
@@ -443,9 +444,9 @@ private:
     void bulk_load_start_ingestion();
     void bulk_load_check_ingestion_finish();
     void handle_bulk_load_succeed();
-    void handle_bulk_load_error();
-    void cleanup_bulk_load_context(bulk_load_status::type new_status);
+    void handle_bulk_load_finish(bulk_load_status::type new_status);
     dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
+    void clear_bulk_load_states();
 
     void pause_bulk_load();
 
@@ -496,6 +497,7 @@ private:
     friend class load_mutation;
     friend class replica_split_test;
     friend class replica_bulk_load_test;
+    FRIEND_TEST(replica_bulk_load_test, get_report_flag_test);
 
     // replica configuration, updated by update_local_configuration ONLY
     replica_configuration _config;

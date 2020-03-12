@@ -68,8 +68,6 @@ void replica::on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_r
 
 void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
 {
-    FAIL_POINT_INJECT_F("replica_broadcast_group_bulk_load", [](dsn::string_view) {});
-
     if (!_primary_states.learners.empty()) {
         dwarn_replica("has learners, skip broadcast group bulk load request");
         return;
@@ -266,18 +264,18 @@ dsn::error_code replica::do_bulk_load(const std::string &app_name,
         if (local_status == bulk_load_status::BLS_INGESTING) {
             handle_bulk_load_succeed();
         } else if (local_status == bulk_load_status::BLS_SUCCEED) {
-            cleanup_bulk_load_context(meta_status);
+            handle_bulk_load_finish(meta_status);
         }
         break;
     case bulk_load_status::BLS_FAILED:
-        handle_bulk_load_error();
+        handle_bulk_load_finish(bulk_load_status::BLS_FAILED);
+        _stub->_counter_bulk_load_failed_count->increment();
         break;
     case bulk_load_status::BLS_PAUSING:
         pause_bulk_load();
         break;
     case bulk_load_status::BLS_CANCELED: {
-        ddebug_replica("bulk load canceled, original status = {}", enum_to_string(local_status));
-        cleanup_bulk_load_context(bulk_load_status::BLS_CANCELED);
+        handle_bulk_load_finish(bulk_load_status::BLS_CANCELED);
     } break;
     default:
         break;
@@ -285,7 +283,6 @@ dsn::error_code replica::do_bulk_load(const std::string &app_name,
     return ec;
 }
 
-// TODO(heyuchen): consider after add 3 status
 dsn::error_code replica::validate_bulk_load_status(bulk_load_status::type meta_status,
                                                    bulk_load_status::type local_status)
 {
@@ -336,7 +333,6 @@ dsn::error_code replica::bulk_load_start_download(const std::string &app_name,
         return ERR_BUSY;
     }
 
-    // TODO(heyuchen): add cleanup states here
     if (status() == partition_status::PS_PRIMARY) {
         _primary_states.cleanup_bulk_load_states();
     }
@@ -371,8 +367,6 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
 {
     FAIL_POINT_INJECT_F("replica_bulk_load_download_sst_files",
                         [](dsn::string_view) -> error_code { return ERR_OK; });
-    FAIL_POINT_INJECT_F("replica_bulk_load_download_sst_files_fs_error",
-                        [](dsn::string_view) -> error_code { return ERR_FS_INTERNAL; });
 
     std::string remote_dir =
         get_remote_bulk_load_dir(app_name, cluster_name, get_gpid().get_partition_index());
@@ -674,7 +668,6 @@ void replica::try_decrease_bulk_load_download_count()
         ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
                        _stub->_primary_address_str,
                        _stub->_bulk_load_recent_downloading_replica_count);
-        _bulk_load_context.cleanup_download_task();
     }
 }
 
@@ -683,24 +676,15 @@ void replica::bulk_load_check_download_finish()
     if (_bulk_load_context._download_progress.load() == bulk_load_constant::PROGRESS_FINISHED &&
         get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADED);
+        _bulk_load_context.cleanup_download_task();
         try_decrease_bulk_load_download_count();
-        //        _stub->_bulk_load_recent_downloading_replica_count--;
-
-        //        // TODO(heyuchen): delete this debug log
-        //        ddebug_replica("concurrent: node[{}]
-        //        recent_bulk_load_downloading_replica_count={}",
-        //                       _stub->_primary_address_str,
-        //                       _stub->_bulk_load_recent_downloading_replica_count);
     }
 }
 
 void replica::bulk_load_start_ingestion()
 {
-    // TODO(heyuchen): consider
-    //    _bulk_load_context.cleanup_download_task();
     set_bulk_load_status(bulk_load_status::BLS_INGESTING);
     _stub->_counter_bulk_load_ingestion_count->increment();
-
     if (status() == partition_status::PS_PRIMARY) {
         _primary_states.is_ingestion_commit = false;
     }
@@ -720,10 +704,6 @@ void replica::bulk_load_check_ingestion_finish()
 
 void replica::handle_bulk_load_succeed()
 {
-    FAIL_POINT_INJECT_F("replica_handle_bulk_load_succeed", [this](dsn::string_view) {
-        set_bulk_load_status(bulk_load_status::BLS_SUCCEED);
-    });
-
     // generate checkpoint
     init_checkpoint(true);
 
@@ -734,11 +714,8 @@ void replica::handle_bulk_load_succeed()
     _stub->_counter_bulk_load_finish_count->increment();
 }
 
-void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
+void replica::handle_bulk_load_finish(bulk_load_status::type new_status)
 {
-    FAIL_POINT_INJECT_F("replica_cleanup_bulk_load_context",
-                        [=](dsn::string_view) { set_bulk_load_status(new_status); });
-
     if (_bulk_load_context.is_cleanup()) {
         ddebug_replica("bulk load context has been cleaned up");
         return;
@@ -749,6 +726,10 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
             _primary_states.reset_group_bulk_load_states(target_address, new_status);
         }
     }
+
+    ddebug_replica("bulk load finished, old_status={}, new_status={}",
+                   enum_to_string(get_bulk_load_status()),
+                   enum_to_string(new_status));
 
     // remove local bulk load dir
     std::string bulk_load_dir =
@@ -761,8 +742,19 @@ void replica::cleanup_bulk_load_context(bulk_load_status::type new_status)
                          get_gpid().thread_hash());
     }
 
-    // clean up bulk_load_context
-    _bulk_load_context.cleanup();
+    // clean up bulk load states
+    clear_bulk_load_states();
+}
+
+dsn::error_code replica::remove_local_bulk_load_dir(const std::string &bulk_load_dir)
+{
+    if (!utils::filesystem::directory_exists(bulk_load_dir) ||
+        !utils::filesystem::remove_path(bulk_load_dir)) {
+        derror_replica("remove bulk_load dir({}) failed", bulk_load_dir);
+        return ERR_FILE_OPERATION_FAILED;
+    }
+
+    return ERR_OK;
 }
 
 void replica::pause_bulk_load()
@@ -775,38 +767,23 @@ void replica::pause_bulk_load()
 
     if (cur_status == bulk_load_status::BLS_DOWNLOADING) {
         try_decrease_bulk_load_download_count();
-        // TODO(heyuchen): same as function hanld_bulk_load_download_error
-        // consider refactor it
-        //        _stub->_bulk_load_recent_downloading_replica_count--;
-        //        // TODO(heyuchen): delete this debug log
-        //        ddebug_replica("concurrent: node[{}]
-        //        recent_bulk_load_downloading_replica_count={}",
-        //                       _stub->_primary_address_str,
-        //                       _stub->_bulk_load_recent_downloading_replica_count);
-        //        _bulk_load_context.cleanup_download_task();
     }
 
     set_bulk_load_status(bulk_load_status::BLS_PAUSED);
     ddebug_replica("paused bulk load");
 }
 
-void replica::handle_bulk_load_error()
+void replica::clear_bulk_load_states()
 {
-    derror_replica("bulk load failed, original status = {}",
-                   enum_to_string(get_bulk_load_status()));
-    cleanup_bulk_load_context(bulk_load_status::BLS_FAILED);
-    _stub->_counter_bulk_load_failed_count->increment();
-}
-
-dsn::error_code replica::remove_local_bulk_load_dir(const std::string &bulk_load_dir)
-{
-    if (!utils::filesystem::directory_exists(bulk_load_dir) ||
-        !utils::filesystem::remove_path(bulk_load_dir)) {
-        derror_replica("remove bulk_load dir({}) failed", bulk_load_dir);
-        return ERR_FILE_OPERATION_FAILED;
+    if (get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
+        try_decrease_bulk_load_download_count();
     }
-
-    return ERR_OK;
+    if (_partition_version.load() == -1) {
+        _partition_version.store(_app_info.partition_count - 1);
+        _app->set_partition_version(_app_info.partition_count - 1);
+    }
+    _app->set_ingestion_status(ingestion_status::IS_INVALID);
+    _bulk_load_context.cleanup();
 }
 
 replica::bulk_load_report_flag replica::get_report_flag(bulk_load_status::type meta_status,

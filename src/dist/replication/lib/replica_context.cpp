@@ -233,7 +233,6 @@ void primary_context::reset_group_bulk_load_states(const rpc_address &node,
     }
 }
 
-// TODO(heyuchen): cleanup group_bulk_load_paused
 void primary_context::cleanup_bulk_load_states()
 {
     group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
@@ -242,6 +241,8 @@ void primary_context::cleanup_bulk_load_states()
 
     group_bulk_load_context_flag.erase(group_bulk_load_context_flag.begin(),
                                        group_bulk_load_context_flag.end());
+
+    group_bulk_load_paused.erase(group_bulk_load_paused.begin(), group_bulk_load_paused.end());
 
     is_ingestion_commit = false;
 }
