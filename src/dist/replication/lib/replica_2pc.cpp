@@ -146,7 +146,6 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_list)
     for (i = 0; i < request_count; ++i) {
         const mutation_update &update = mu->data.updates[i];
 
-        // TODO(heyuchen): debug log info
         if (update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
             ddebug_replica("bulk load init prepare mutation({})", mu->name());
         }

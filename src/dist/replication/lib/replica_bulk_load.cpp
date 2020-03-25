@@ -421,6 +421,8 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
                 if (ec != ERR_OK) {
                     try_decrease_bulk_load_download_count();
                     _bulk_load_context._download_status = ec;
+                    derror_replica(
+                        "failed to download file({}), error = {}", f_meta.name, ec.to_string());
                     return;
                 }
             });
