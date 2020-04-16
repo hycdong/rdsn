@@ -106,16 +106,16 @@ public:
     void test_handle_bulk_load_finish(bulk_load_status::type status,
                                       int32_t download_progress,
                                       ingestion_status::type istatus,
-                                      int32_t partition_version,
+                                      bool is_bulk_load_ingestion,
                                       bulk_load_status::type req_status)
     {
-        mock_bulk_load_states(status, download_progress, istatus, partition_version);
+        mock_bulk_load_states(status, download_progress, istatus, is_bulk_load_ingestion);
         _replica->handle_bulk_load_finish(req_status);
     }
 
     void test_pause_bulk_load(bulk_load_status::type status, int32_t progress)
     {
-        mock_bulk_load_states(status, progress, ingestion_status::IS_INVALID, PARTITION_VERSION);
+        mock_bulk_load_states(status, progress, ingestion_status::IS_INVALID);
         _replica->pause_bulk_load();
     }
 
@@ -134,11 +134,10 @@ public:
                                             ingestion_status::type secondary1,
                                             ingestion_status::type secondary2,
                                             bool is_ingestion_commit,
-                                            bool mock_partition_version)
+                                            bool is_bulk_load_ingestion)
     {
-        if (mock_partition_version) {
-            _replica->_partition_version.store(-1);
-        }
+
+        _replica->_is_bulk_load_ingestion = is_bulk_load_ingestion;
         _replica->_app->set_ingestion_status(primary);
         mock_secondary_ingestion_states(secondary1, secondary2, is_ingestion_commit);
         bulk_load_response response;
@@ -330,12 +329,12 @@ public:
     void mock_bulk_load_states(bulk_load_status::type status,
                                int32_t download_progress,
                                ingestion_status::type istatus,
-                               int32_t partition_version)
+                               bool is_ingestion = false)
     {
         _replica->_bulk_load_context._status = status;
         _replica->_bulk_load_context._download_progress = download_progress;
         _replica->_app->set_ingestion_status(istatus);
-        _replica->_partition_version.store(partition_version);
+        _replica->_is_bulk_load_ingestion = is_ingestion;
     }
 
     void mock_secondary_progress(int32_t secondary_progress1, int32_t secondary_progress2)
@@ -368,8 +367,7 @@ public:
         } else if (p_status == bulk_load_status::BLS_DOWNLOADED) {
             p_progress = 100;
         }
-        mock_bulk_load_states(
-            p_status, p_progress, ingestion_status::IS_INVALID, PARTITION_VERSION);
+        mock_bulk_load_states(p_status, p_progress, ingestion_status::IS_INVALID);
         mock_secondary_progress(s1_progress, s2_progress);
     }
 
@@ -386,8 +384,7 @@ public:
                                      ingestion_status::type s2_status,
                                      bool is_ingestion_commit = true)
     {
-        mock_bulk_load_states(
-            bulk_load_status::BLS_INGESTING, 100, ingestion_status::IS_SUCCEED, PARTITION_VERSION);
+        mock_bulk_load_states(bulk_load_status::BLS_INGESTING, 100, ingestion_status::IS_SUCCEED);
         mock_secondary_ingestion_states(s1_status, s2_status, is_ingestion_commit);
     }
 
@@ -396,8 +393,7 @@ public:
                                  bool secondary2_cleanup = true)
     {
         int32_t primary_progress = primary_status == bulk_load_status::BLS_SUCCEED ? 100 : 0;
-        mock_bulk_load_states(
-            primary_status, primary_progress, ingestion_status::IS_INVALID, PARTITION_VERSION);
+        mock_bulk_load_states(primary_status, primary_progress, ingestion_status::IS_INVALID);
         mock_secondary_ingestion_states(
             ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, true);
         _replica->_primary_states.group_bulk_load_context_flag[SECONDARY] = secondary1_cleanup;
@@ -434,7 +430,7 @@ public:
 
     ingestion_status::type get_ingestion_status() { return _replica->_app->get_ingestion_status(); }
 
-    int32_t get_partition_version() { return _replica->_partition_version.load(); }
+    int32_t is_ingestion() { return _replica->_is_bulk_load_ingestion; }
 
     bool is_download_progress_reset()
     {
@@ -493,7 +489,6 @@ public:
     rpc_address SECONDARY = rpc_address("127.0.0.3", 34801);
     rpc_address SECONDARY2 = rpc_address("127.0.0.4", 34801);
     int32_t MAX_DOWNLOADING_COUNT = 5;
-    int32_t PARTITION_VERSION = 3;
 };
 
 // on_bulk_load unit tests
@@ -673,7 +668,7 @@ TEST_F(replica_bulk_load_test, rollback_to_downloading_test)
         ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
         ASSERT_TRUE(primary_is_bulk_load_states_cleaned());
         ASSERT_EQ(get_ingestion_status(), ingestion_status::IS_INVALID);
-        ASSERT_EQ(get_partition_version(), PARTITION_VERSION);
+        ASSERT_FALSE(is_ingestion());
     }
 }
 
@@ -714,49 +709,49 @@ TEST_F(replica_bulk_load_test, bulk_load_finish_test)
         bulk_load_status::type local_status;
         int32_t progress;
         ingestion_status::type istatus;
-        int32_t partition_version;
+        bool is_ingestion;
         bulk_load_status::type request_status;
         bool create_dir;
     } tests[]{{bulk_load_status::BLS_SUCCEED,
                100,
                ingestion_status::IS_INVALID,
-               PARTITION_VERSION,
+               false,
                bulk_load_status::BLS_SUCCEED,
                false},
               {bulk_load_status::BLS_INVALID,
                0,
                ingestion_status::IS_INVALID,
-               PARTITION_VERSION,
+               false,
                bulk_load_status::BLS_SUCCEED,
                false},
               {bulk_load_status::BLS_DOWNLOADING,
                10,
                ingestion_status::IS_INVALID,
-               PARTITION_VERSION,
+               false,
                bulk_load_status::BLS_FAILED,
                true},
               {bulk_load_status::BLS_INGESTING,
                100,
                ingestion_status::type::IS_FAILED,
-               PARTITION_VERSION,
+               false,
                bulk_load_status::BLS_FAILED,
                true},
               {bulk_load_status::BLS_DOWNLOADED,
                100,
                ingestion_status::IS_INVALID,
-               PARTITION_VERSION,
+               false,
                bulk_load_status::BLS_CANCELED,
                true},
               {bulk_load_status::BLS_INGESTING,
                100,
                ingestion_status::type::IS_RUNNING,
-               -1,
+               true,
                bulk_load_status::BLS_CANCELED,
                true},
               {bulk_load_status::BLS_SUCCEED,
                100,
                ingestion_status::IS_INVALID,
-               PARTITION_VERSION,
+               false,
                bulk_load_status::BLS_CANCELED,
                true}};
 
@@ -764,13 +759,10 @@ TEST_F(replica_bulk_load_test, bulk_load_finish_test)
         if (test.create_dir) {
             utils::filesystem::create_directory(LOCAL_DIR);
         }
-        test_handle_bulk_load_finish(test.local_status,
-                                     test.progress,
-                                     test.istatus,
-                                     test.partition_version,
-                                     test.request_status);
+        test_handle_bulk_load_finish(
+            test.local_status, test.progress, test.istatus, test.is_ingestion, test.request_status);
         ASSERT_EQ(get_ingestion_status(), ingestion_status::IS_INVALID);
-        ASSERT_EQ(get_partition_version(), PARTITION_VERSION);
+        ASSERT_FALSE(is_ingestion());
         ASSERT_TRUE(get_clean_up_flag());
         ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
     }
@@ -836,7 +828,7 @@ TEST_F(replica_bulk_load_test, report_group_ingestion_status_test)
         ingestion_status::type secondary1;
         ingestion_status::type secondary2;
         bool is_ingestion_commit;
-        bool mock_partition_version;
+        bool mock_is_ingestion;
         bool is_group_ingestion_finished;
     } tests[] = {
         {ingestion_status::IS_INVALID,
@@ -894,9 +886,9 @@ TEST_F(replica_bulk_load_test, report_group_ingestion_status_test)
                                                      test.secondary1,
                                                      test.secondary2,
                                                      test.is_ingestion_commit,
-                                                     test.mock_partition_version),
+                                                     test.mock_is_ingestion),
                   test.is_group_ingestion_finished);
-        ASSERT_EQ(get_partition_version(), PARTITION_VERSION);
+        ASSERT_FALSE(is_ingestion());
     }
 }
 

@@ -56,15 +56,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
         return;
     }
 
-    // bulk load ingestion request requires that all secondaries should be alive
-    //    if (code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD &&
-    //        static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
-    //            _primary_states.membership.max_replica_count) {
-    //        response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
-    //        return;
-    //    }
-
-    if (_partition_version.load() == -1) {
+    if (_is_bulk_load_ingestion) {
         // reject write request
         response_client_write(request, ERR_BUSY);
         return;
@@ -79,8 +71,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
             response_client_write(request, ERR_NOT_ENOUGH_MEMBER);
             return;
         }
-        _partition_version.store(-1);
-        _app->set_partition_version(-1);
+        _is_bulk_load_ingestion = true;
         _bulk_load_context._bulk_load_ingestion_start_time_ns = dsn_now_ns();
     }
 

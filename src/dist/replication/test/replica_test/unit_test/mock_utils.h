@@ -70,10 +70,6 @@ public:
     void query_app_envs(std::map<std::string, std::string> &out) override { out = _envs; }
     decree last_durable_decree() const override { return 0; }
 
-    void set_partition_version(int32_t partition_version)
-    {
-        _partition_version.store(partition_version);
-    }
     void set_ingestion_status(dsn::replication::ingestion_status::type status)
     {
         _ingestion_status = status;
@@ -86,7 +82,6 @@ public:
 private:
     std::map<std::string, std::string> _envs;
     decree _decree = 5;
-    std::atomic<int32_t> _partition_version;
     ingestion_status::type _ingestion_status;
 };
 

@@ -338,8 +338,7 @@ dsn::error_code replica::bulk_load_start_download(const std::string &app_name,
     }
     _bulk_load_context.cleanup_download_prgress();
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
-    _partition_version.store(_app_info.partition_count - 1);
-    _app->set_partition_version(_app_info.partition_count - 1);
+    _is_bulk_load_ingestion = false;
     _bulk_load_context._bulk_load_start_time_ns = dsn_now_ns();
 
     set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
@@ -780,10 +779,7 @@ void replica::clear_bulk_load_states()
     if (get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
         try_decrease_bulk_load_download_count();
     }
-    if (_partition_version.load() == -1) {
-        _partition_version.store(_app_info.partition_count - 1);
-        _app->set_partition_version(_app_info.partition_count - 1);
-    }
+    _is_bulk_load_ingestion = false;
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
     _bulk_load_context.cleanup();
 }
@@ -961,8 +957,7 @@ void replica::report_group_ingestion_status(bulk_load_response &response)
     if (is_group_ingestion_finish) {
         // group ingestion finish will recover wirte
         ddebug_replica("finish ingestion, recover write");
-        _partition_version.store(_app_info.partition_count - 1);
-        _app->set_partition_version(_app_info.partition_count - 1);
+        _is_bulk_load_ingestion = false;
         _bulk_load_context._bulk_load_start_time_ns = 0;
     }
 }

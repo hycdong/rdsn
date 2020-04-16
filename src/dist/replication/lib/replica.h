@@ -584,9 +584,8 @@ private:
     // _child_init_ballot = 0 if partition not in partition split
     ballot _child_init_ballot{0};
 
-    // _partition_version should be equal to partition_count-1
-    // when reject read/write, _partition_version = -1
-    std::atomic<int32_t> _partition_version;
+    // if replica in bulk load ingestion, reject write request
+    bool _is_bulk_load_ingestion{false};
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

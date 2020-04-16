@@ -64,7 +64,6 @@ replica::replica(
     _options = &stub->options();
     init_state();
     _config.pid = gpid;
-    _partition_version = app.partition_count - 1;
 
     std::string counter_str = fmt::format("private.log.size(MB)@{}", gpid);
     _counter_private_log_size.init_app_counter(
@@ -165,10 +164,6 @@ void replica::on_client_read(dsn::message_ex *request)
             response_client_read(request, ERR_INVALID_STATE);
             return;
         }
-    }
-
-    // TODO(heyuchen): see rocksdb code to figure out if should reject read while ingestion
-    if (_partition_version.load() == -1) {
     }
 
     uint64_t start_time_ns = dsn_now_ns();

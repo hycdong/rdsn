@@ -225,8 +225,6 @@ public:
     // query app envs.
     virtual void query_app_envs(/*out*/ std::map<std::string, std::string> &envs) = 0;
 
-    virtual void set_partition_version(int32_t partition_version) {}
-
     virtual void set_ingestion_status(dsn::replication::ingestion_status::type status) {}
 
     virtual dsn::replication::ingestion_status::type get_ingestion_status() const = 0;
