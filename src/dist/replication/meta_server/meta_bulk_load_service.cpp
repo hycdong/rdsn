@@ -45,23 +45,29 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
         if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
             derror_f("app({}) is not existed or not available", request.app_name);
             response.err = app == nullptr ? ERR_APP_NOT_EXIST : ERR_APP_DROPPED;
+            response.hint_msg = fmt::format(
+                "app {}", response.err == ERR_APP_NOT_EXIST ? "not existed" : "dropped");
             return;
         }
 
         if (app->is_bulk_loading) {
             derror_f("app({}) is already executing bulk load, please wait", app->app_name);
             response.err = ERR_BUSY;
+            response.hint_msg = "app is already executing bulk load";
             return;
         }
     }
 
+    std::string hint_msg;
     error_code e = check_bulk_load_request_params(request.app_name,
                                                   request.cluster_name,
                                                   request.file_provider_type,
                                                   app->app_id,
-                                                  app->partition_count);
+                                                  app->partition_count,
+                                                  hint_msg);
     if (e != ERR_OK) {
         response.err = e;
+        response.hint_msg = hint_msg;
         return;
     }
 
@@ -73,7 +79,7 @@ void bulk_load_service::on_start_bulk_load(start_bulk_load_rpc rpc)
     // avoid possible load balancing
     _meta_svc->set_function_level(meta_function_level::fl_steady);
 
-    start_app_bulk_load(std::move(app), std::move(rpc));
+    do_start_app_bulk_load(std::move(app), std::move(rpc));
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
@@ -81,7 +87,8 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
                                                              const std::string &cluster_name,
                                                              const std::string &file_provider,
                                                              const int32_t app_id,
-                                                             const int32_t partition_count)
+                                                             const int32_t partition_count,
+                                                             std::string &hint_msg)
 {
     FAIL_POINT_INJECT_F("meta_check_bulk_load_request_params",
                         [](dsn::string_view) -> error_code { return ERR_OK; });
@@ -91,6 +98,7 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
         _meta_svc->get_block_service_manager().get_block_filesystem(file_provider);
     if (blk_fs == nullptr) {
         derror_f("invalid remote file provider type: {}", file_provider);
+        hint_msg = "invalid file_provider";
         return ERR_INVALID_PARAMETERS;
     }
 
@@ -114,6 +122,7 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
     if (err != ERR_OK || file_handler == nullptr) {
         derror_f(
             "failed to get file({}) handler on remote provider({})", remote_path, file_provider);
+        hint_msg = "file_provider error";
         return ERR_FILE_OPERATION_FAILED;
     }
 
@@ -129,12 +138,14 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
                  file_provider,
                  remote_path,
                  r_resp.err.to_string());
+        hint_msg = "read bulk_load_info failed";
         return r_resp.err;
     }
 
     bulk_load_info bl_info;
     if (!::dsn::json::json_forwarder<bulk_load_info>::decode(r_resp.buffer, bl_info)) {
         derror_f("file({}) is damaged on remote file provider({})", remote_path, file_provider);
+        hint_msg = "bulk_load_info damaged";
         return ERR_INCOMPLETE_DATA;
     }
 
@@ -146,6 +157,7 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
                  bl_info.app_id,
                  partition_count,
                  bl_info.partition_count);
+        hint_msg = "app_id or partition_count inconsistent";
         return ERR_INCONSISTENT_STATE;
     }
 
@@ -153,10 +165,11 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
-void bulk_load_service::start_app_bulk_load(std::shared_ptr<app_state> app, start_bulk_load_rpc rpc)
+void bulk_load_service::do_start_app_bulk_load(std::shared_ptr<app_state> app,
+                                               start_bulk_load_rpc rpc)
 {
     app_info info = *app;
-    info.is_bulk_loading = true;
+    info.__set_is_bulk_loading(true);
 
     blob value = dsn::json::json_forwarder<app_info>::encode(info);
     _meta_svc->get_meta_storage()->set_data(
@@ -181,7 +194,6 @@ void bulk_load_service::create_app_bulk_load_dir(const std::string &app_name,
                                                  int32_t partition_count,
                                                  start_bulk_load_rpc rpc)
 {
-    std::string app_path = get_app_bulk_load_path(app_id);
     const auto req = rpc.request();
 
     app_bulk_load_info ainfo;
@@ -194,14 +206,14 @@ void bulk_load_service::create_app_bulk_load_dir(const std::string &app_name,
     blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
 
     _meta_svc->get_meta_storage()->create_node(
-        std::move(app_path), std::move(value), [rpc, ainfo, this]() {
+        get_app_bulk_load_path(app_id), std::move(value), [rpc, ainfo, this]() {
             dinfo_f("create app({}) bulk load dir", ainfo.app_name);
             {
                 zauto_write_lock l(_lock);
                 _app_bulk_load_info[ainfo.app_id] = ainfo;
                 _apps_pending_sync_flag[ainfo.app_id] = false;
             }
-            for (int i = 0; i < ainfo.partition_count; ++i) {
+            for (int32_t i = 0; i < ainfo.partition_count; ++i) {
                 create_partition_bulk_load_dir(
                     ainfo.app_name, gpid(ainfo.app_id, i), ainfo.partition_count, std::move(rpc));
             }
@@ -987,7 +999,7 @@ void bulk_load_service::update_app_is_bulk_loading(std::shared_ptr<app_state> ap
                                                    bool is_bulk_loading)
 {
     app_info info = *app;
-    info.is_bulk_loading = is_bulk_loading;
+    info.__set_is_bulk_loading(is_bulk_loading);
 
     blob value = dsn::json::json_forwarder<app_info>::encode(info);
     _meta_svc->get_meta_storage()->set_data(

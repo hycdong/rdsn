@@ -723,7 +723,11 @@ void app_info::__set_duplicating(const bool val)
 
 void app_info::__set_init_partition_count(const int32_t val) { this->init_partition_count = val; }
 
-void app_info::__set_is_bulk_loading(const bool val) { this->is_bulk_loading = val; }
+void app_info::__set_is_bulk_loading(const bool val)
+{
+    this->is_bulk_loading = val;
+    __isset.is_bulk_loading = true;
+}
 
 uint32_t app_info::read(::apache::thrift::protocol::TProtocol *iprot)
 {
@@ -953,10 +957,11 @@ uint32_t app_info::write(::apache::thrift::protocol::TProtocol *oprot) const
     xfer += oprot->writeI32(this->init_partition_count);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("is_bulk_loading", ::apache::thrift::protocol::T_BOOL, 14);
-    xfer += oprot->writeBool(this->is_bulk_loading);
-    xfer += oprot->writeFieldEnd();
-
+    if (this->__isset.is_bulk_loading) {
+        xfer += oprot->writeFieldBegin("is_bulk_loading", ::apache::thrift::protocol::T_BOOL, 14);
+        xfer += oprot->writeBool(this->is_bulk_loading);
+        xfer += oprot->writeFieldEnd();
+    }
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -1087,7 +1092,8 @@ void app_info::printTo(std::ostream &out) const
     out << ", "
         << "init_partition_count=" << to_string(init_partition_count);
     out << ", "
-        << "is_bulk_loading=" << to_string(is_bulk_loading);
+        << "is_bulk_loading=";
+    (__isset.is_bulk_loading ? (out << to_string(is_bulk_loading)) : (out << "<null>"));
     out << ")";
 }
 

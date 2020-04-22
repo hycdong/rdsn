@@ -112,9 +112,10 @@ private:
                                               const std::string &cluster_name,
                                               const std::string &file_provider,
                                               const int32_t app_id,
-                                              const int32_t partition_count);
+                                              const int32_t partition_count,
+                                              std::string &hint_msg);
 
-    void start_app_bulk_load(std::shared_ptr<app_state> app, start_bulk_load_rpc rpc);
+    void do_start_app_bulk_load(std::shared_ptr<app_state> app, start_bulk_load_rpc rpc);
 
     void partition_bulk_load(const std::string &app_name, const gpid &pid);
 

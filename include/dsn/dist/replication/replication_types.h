@@ -5904,8 +5904,9 @@ inline std::ostream &operator<<(std::ostream &out, const start_bulk_load_request
 
 typedef struct _start_bulk_load_response__isset
 {
-    _start_bulk_load_response__isset() : err(false) {}
+    _start_bulk_load_response__isset() : err(false), hint_msg(false) {}
     bool err : 1;
+    bool hint_msg : 1;
 } _start_bulk_load_response__isset;
 
 class start_bulk_load_response
@@ -5915,18 +5916,23 @@ public:
     start_bulk_load_response(start_bulk_load_response &&);
     start_bulk_load_response &operator=(const start_bulk_load_response &);
     start_bulk_load_response &operator=(start_bulk_load_response &&);
-    start_bulk_load_response() {}
+    start_bulk_load_response() : hint_msg() {}
 
     virtual ~start_bulk_load_response() throw();
     ::dsn::error_code err;
+    std::string hint_msg;
 
     _start_bulk_load_response__isset __isset;
 
     void __set_err(const ::dsn::error_code &val);
 
+    void __set_hint_msg(const std::string &val);
+
     bool operator==(const start_bulk_load_response &rhs) const
     {
         if (!(err == rhs.err))
+            return false;
+        if (!(hint_msg == rhs.hint_msg))
             return false;
         return true;
     }

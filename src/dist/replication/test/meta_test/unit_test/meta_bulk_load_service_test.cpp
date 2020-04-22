@@ -279,8 +279,9 @@ public:
                                                     int32_t app_id,
                                                     int32_t partition_count)
     {
+        std::string hint_msg;
         return bulk_svc()->check_bulk_load_request_params(
-            APP_NAME, CLUSTER, provider, app_id, partition_count);
+            APP_NAME, CLUSTER, provider, app_id, partition_count, hint_msg);
     }
 
     error_code query_bulk_load(const std::string &app_name)

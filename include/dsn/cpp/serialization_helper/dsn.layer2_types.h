@@ -412,7 +412,9 @@ public:
             return false;
         if (!(init_partition_count == rhs.init_partition_count))
             return false;
-        if (!(is_bulk_loading == rhs.is_bulk_loading))
+        if (__isset.is_bulk_loading != rhs.__isset.is_bulk_loading)
+            return false;
+        else if (__isset.is_bulk_loading && !(is_bulk_loading == rhs.is_bulk_loading))
             return false;
         return true;
     }

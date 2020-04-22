@@ -13809,6 +13809,8 @@ start_bulk_load_response::~start_bulk_load_response() throw() {}
 
 void start_bulk_load_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
 
+void start_bulk_load_response::__set_hint_msg(const std::string &val) { this->hint_msg = val; }
+
 uint32_t start_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
@@ -13836,6 +13838,14 @@ uint32_t start_bulk_load_response::read(::apache::thrift::protocol::TProtocol *i
                 xfer += iprot->skip(ftype);
             }
             break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->hint_msg);
+                this->__isset.hint_msg = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -13858,6 +13868,10 @@ uint32_t start_bulk_load_response::write(::apache::thrift::protocol::TProtocol *
     xfer += this->err.write(oprot);
     xfer += oprot->writeFieldEnd();
 
+    xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 2);
+    xfer += oprot->writeString(this->hint_msg);
+    xfer += oprot->writeFieldEnd();
+
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -13867,29 +13881,34 @@ void swap(start_bulk_load_response &a, start_bulk_load_response &b)
 {
     using ::std::swap;
     swap(a.err, b.err);
+    swap(a.hint_msg, b.hint_msg);
     swap(a.__isset, b.__isset);
 }
 
 start_bulk_load_response::start_bulk_load_response(const start_bulk_load_response &other600)
 {
     err = other600.err;
+    hint_msg = other600.hint_msg;
     __isset = other600.__isset;
 }
 start_bulk_load_response::start_bulk_load_response(start_bulk_load_response &&other601)
 {
     err = std::move(other601.err);
+    hint_msg = std::move(other601.hint_msg);
     __isset = std::move(other601.__isset);
 }
 start_bulk_load_response &start_bulk_load_response::
 operator=(const start_bulk_load_response &other602)
 {
     err = other602.err;
+    hint_msg = other602.hint_msg;
     __isset = other602.__isset;
     return *this;
 }
 start_bulk_load_response &start_bulk_load_response::operator=(start_bulk_load_response &&other603)
 {
     err = std::move(other603.err);
+    hint_msg = std::move(other603.hint_msg);
     __isset = std::move(other603.__isset);
     return *this;
 }
@@ -13898,6 +13917,8 @@ void start_bulk_load_response::printTo(std::ostream &out) const
     using ::apache::thrift::to_string;
     out << "start_bulk_load_response(";
     out << "err=" << to_string(err);
+    out << ", "
+        << "hint_msg=" << to_string(hint_msg);
     out << ")";
 }
 

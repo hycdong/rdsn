@@ -834,7 +834,18 @@ struct start_bulk_load_request
 
 struct start_bulk_load_response
 {
-    1:dsn.error_code        err;
+    // Possible error:
+    // - ERR_OK: start bulk load succeed
+    // - ERR_APP_NOT_EXIST: app not exist
+    // - ERR_APP_DROPPED: app has been dropped
+    // - ERR_BUSY: app is already executing bulk load
+    // - ERR_INVALID_PARAMETERS: wrong file_provider type
+    // - ERR_FILE_OPERATION_FAILED: remote file_provider error
+    // - ERR_OBJECT_NOT_FOUND: bulk_load_info not exist on file_provider
+    // - ERR_INCOMPLETE_DATA: bulk_load_info is damaged on file_provider
+    // - ERR_INCONSISTENT_STATE: app_id or partition_count inconsistent
+    1:dsn.error_code    err;
+    2:string            hint_msg;
 }
 
 
