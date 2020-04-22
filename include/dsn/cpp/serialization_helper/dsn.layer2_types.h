@@ -19,24 +19,6 @@
 
 namespace dsn {
 
-struct bulk_load_status
-{
-    enum type
-    {
-        BLS_INVALID = 0,
-        BLS_DOWNLOADING = 1,
-        BLS_DOWNLOADED = 2,
-        BLS_INGESTING = 3,
-        BLS_SUCCEED = 4,
-        BLS_FAILED = 5,
-        BLS_PAUSING = 6,
-        BLS_PAUSED = 7,
-        BLS_CANCELED = 8
-    };
-};
-
-extern const std::map<int, const char *> _bulk_load_status_VALUES_TO_NAMES;
-
 struct app_status
 {
     enum type

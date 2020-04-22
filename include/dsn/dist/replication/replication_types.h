@@ -162,6 +162,24 @@ struct duplication_status
 
 extern const std::map<int, const char *> _duplication_status_VALUES_TO_NAMES;
 
+struct bulk_load_status
+{
+    enum type
+    {
+        BLS_INVALID = 0,
+        BLS_DOWNLOADING = 1,
+        BLS_DOWNLOADED = 2,
+        BLS_INGESTING = 3,
+        BLS_SUCCEED = 4,
+        BLS_FAILED = 5,
+        BLS_PAUSING = 6,
+        BLS_PAUSED = 7,
+        BLS_CANCELED = 8
+    };
+};
+
+extern const std::map<int, const char *> _bulk_load_status_VALUES_TO_NAMES;
+
 struct ingestion_status
 {
     enum type
@@ -6009,15 +6027,15 @@ public:
     operator=(const configuration_query_bulk_load_response &);
     configuration_query_bulk_load_response &operator=(configuration_query_bulk_load_response &&);
     configuration_query_bulk_load_response()
-        : app_name(), app_status((::dsn::bulk_load_status::type)0), max_replica_count(0)
+        : app_name(), app_status((bulk_load_status::type)0), max_replica_count(0)
     {
     }
 
     virtual ~configuration_query_bulk_load_response() throw();
     ::dsn::error_code err;
     std::string app_name;
-    ::dsn::bulk_load_status::type app_status;
-    std::vector<::dsn::bulk_load_status::type> partitions_status;
+    bulk_load_status::type app_status;
+    std::vector<bulk_load_status::type> partitions_status;
     int32_t max_replica_count;
     std::vector<std::map<::dsn::rpc_address, partition_download_progress>> download_progresses;
     std::vector<bool> cleanup_flags;
@@ -6028,9 +6046,9 @@ public:
 
     void __set_app_name(const std::string &val);
 
-    void __set_app_status(const ::dsn::bulk_load_status::type val);
+    void __set_app_status(const bulk_load_status::type val);
 
-    void __set_partitions_status(const std::vector<::dsn::bulk_load_status::type> &val);
+    void __set_partitions_status(const std::vector<bulk_load_status::type> &val);
 
     void __set_max_replica_count(const int32_t val);
 
@@ -6118,7 +6136,7 @@ public:
           remote_provider_name(),
           cluster_name(),
           ballot(0),
-          meta_bulk_load_status((::dsn::bulk_load_status::type)0),
+          meta_bulk_load_status((bulk_load_status::type)0),
           query_bulk_load_metadata(0)
     {
     }
@@ -6130,7 +6148,7 @@ public:
     std::string remote_provider_name;
     std::string cluster_name;
     int64_t ballot;
-    ::dsn::bulk_load_status::type meta_bulk_load_status;
+    bulk_load_status::type meta_bulk_load_status;
     bool query_bulk_load_metadata;
 
     _bulk_load_request__isset __isset;
@@ -6147,7 +6165,7 @@ public:
 
     void __set_ballot(const int64_t val);
 
-    void __set_meta_bulk_load_status(const ::dsn::bulk_load_status::type val);
+    void __set_meta_bulk_load_status(const bulk_load_status::type val);
 
     void __set_query_bulk_load_metadata(const bool val);
 
@@ -6227,7 +6245,7 @@ public:
     bulk_load_response &operator=(bulk_load_response &&);
     bulk_load_response()
         : app_name(),
-          primary_bulk_load_status((::dsn::bulk_load_status::type)0),
+          primary_bulk_load_status((bulk_load_status::type)0),
           total_download_progress(0),
           is_group_ingestion_finished(0),
           is_group_bulk_load_context_cleaned(0),
@@ -6239,7 +6257,7 @@ public:
     ::dsn::error_code err;
     ::dsn::gpid pid;
     std::string app_name;
-    ::dsn::bulk_load_status::type primary_bulk_load_status;
+    bulk_load_status::type primary_bulk_load_status;
     bulk_load_metadata metadata;
     std::map<::dsn::rpc_address, partition_download_progress> download_progresses;
     int32_t total_download_progress;
@@ -6256,7 +6274,7 @@ public:
 
     void __set_app_name(const std::string &val);
 
-    void __set_primary_bulk_load_status(const ::dsn::bulk_load_status::type val);
+    void __set_primary_bulk_load_status(const bulk_load_status::type val);
 
     void __set_metadata(const bulk_load_metadata &val);
 
@@ -6368,7 +6386,7 @@ public:
         : app_name(),
           provider_name(),
           cluster_name(),
-          meta_bulk_load_status((::dsn::bulk_load_status::type)0)
+          meta_bulk_load_status((bulk_load_status::type)0)
     {
     }
 
@@ -6378,7 +6396,7 @@ public:
     replica_configuration config;
     std::string provider_name;
     std::string cluster_name;
-    ::dsn::bulk_load_status::type meta_bulk_load_status;
+    bulk_load_status::type meta_bulk_load_status;
 
     _group_bulk_load_request__isset __isset;
 
@@ -6392,7 +6410,7 @@ public:
 
     void __set_cluster_name(const std::string &val);
 
-    void __set_meta_bulk_load_status(const ::dsn::bulk_load_status::type val);
+    void __set_meta_bulk_load_status(const bulk_load_status::type val);
 
     bool operator==(const group_bulk_load_request &rhs) const
     {
@@ -6457,7 +6475,7 @@ public:
     group_bulk_load_response &operator=(const group_bulk_load_response &);
     group_bulk_load_response &operator=(group_bulk_load_response &&);
     group_bulk_load_response()
-        : status((::dsn::bulk_load_status::type)0),
+        : status((bulk_load_status::type)0),
           is_bulk_load_context_cleaned(0),
           istatus((ingestion_status::type)0),
           is_bulk_load_paused(0)
@@ -6467,7 +6485,7 @@ public:
     virtual ~group_bulk_load_response() throw();
     ::dsn::error_code err;
     ::dsn::rpc_address target_address;
-    ::dsn::bulk_load_status::type status;
+    bulk_load_status::type status;
     partition_download_progress download_progress;
     bool is_bulk_load_context_cleaned;
     ingestion_status::type istatus;
@@ -6479,7 +6497,7 @@ public:
 
     void __set_target_address(const ::dsn::rpc_address &val);
 
-    void __set_status(const ::dsn::bulk_load_status::type val);
+    void __set_status(const bulk_load_status::type val);
 
     void __set_download_progress(const partition_download_progress &val);
 

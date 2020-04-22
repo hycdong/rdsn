@@ -137,6 +137,28 @@ const std::map<int, const char *> _duplication_status_VALUES_TO_NAMES(
     ::apache::thrift::TEnumIterator(4, _kduplication_statusValues, _kduplication_statusNames),
     ::apache::thrift::TEnumIterator(-1, NULL, NULL));
 
+int _kbulk_load_statusValues[] = {bulk_load_status::BLS_INVALID,
+                                  bulk_load_status::BLS_DOWNLOADING,
+                                  bulk_load_status::BLS_DOWNLOADED,
+                                  bulk_load_status::BLS_INGESTING,
+                                  bulk_load_status::BLS_SUCCEED,
+                                  bulk_load_status::BLS_FAILED,
+                                  bulk_load_status::BLS_PAUSING,
+                                  bulk_load_status::BLS_PAUSED,
+                                  bulk_load_status::BLS_CANCELED};
+const char *_kbulk_load_statusNames[] = {"BLS_INVALID",
+                                         "BLS_DOWNLOADING",
+                                         "BLS_DOWNLOADED",
+                                         "BLS_INGESTING",
+                                         "BLS_SUCCEED",
+                                         "BLS_FAILED",
+                                         "BLS_PAUSING",
+                                         "BLS_PAUSED",
+                                         "BLS_CANCELED"};
+const std::map<int, const char *> _bulk_load_status_VALUES_TO_NAMES(
+    ::apache::thrift::TEnumIterator(9, _kbulk_load_statusValues, _kbulk_load_statusNames),
+    ::apache::thrift::TEnumIterator(-1, NULL, NULL));
+
 int _kingestion_statusValues[] = {ingestion_status::IS_INVALID,
                                   ingestion_status::IS_RUNNING,
                                   ingestion_status::IS_SUCCEED,
@@ -13994,14 +14016,13 @@ void configuration_query_bulk_load_response::__set_app_name(const std::string &v
     this->app_name = val;
 }
 
-void configuration_query_bulk_load_response::__set_app_status(
-    const ::dsn::bulk_load_status::type val)
+void configuration_query_bulk_load_response::__set_app_status(const bulk_load_status::type val)
 {
     this->app_status = val;
 }
 
 void configuration_query_bulk_load_response::__set_partitions_status(
-    const std::vector<::dsn::bulk_load_status::type> &val)
+    const std::vector<bulk_load_status::type> &val)
 {
     this->partitions_status = val;
 }
@@ -14063,7 +14084,7 @@ uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 int32_t ecast608;
                 xfer += iprot->readI32(ecast608);
-                this->app_status = (::dsn::bulk_load_status::type)ecast608;
+                this->app_status = (bulk_load_status::type)ecast608;
                 this->__isset.app_status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -14081,7 +14102,7 @@ uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol
                     for (_i613 = 0; _i613 < _size609; ++_i613) {
                         int32_t ecast614;
                         xfer += iprot->readI32(ecast614);
-                        this->partitions_status[_i613] = (::dsn::bulk_load_status::type)ecast614;
+                        this->partitions_status[_i613] = (bulk_load_status::type)ecast614;
                     }
                     xfer += iprot->readListEnd();
                 }
@@ -14186,7 +14207,7 @@ configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProto
     {
         xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I32,
                                       static_cast<uint32_t>(this->partitions_status.size()));
-        std::vector<::dsn::bulk_load_status::type>::const_iterator _iter632;
+        std::vector<bulk_load_status::type>::const_iterator _iter632;
         for (_iter632 = this->partitions_status.begin(); _iter632 != this->partitions_status.end();
              ++_iter632) {
             xfer += oprot->writeI32((int32_t)(*_iter632));
@@ -14352,7 +14373,7 @@ void bulk_load_request::__set_cluster_name(const std::string &val) { this->clust
 
 void bulk_load_request::__set_ballot(const int64_t val) { this->ballot = val; }
 
-void bulk_load_request::__set_meta_bulk_load_status(const ::dsn::bulk_load_status::type val)
+void bulk_load_request::__set_meta_bulk_load_status(const bulk_load_status::type val)
 {
     this->meta_bulk_load_status = val;
 }
@@ -14433,7 +14454,7 @@ uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 int32_t ecast640;
                 xfer += iprot->readI32(ecast640);
-                this->meta_bulk_load_status = (::dsn::bulk_load_status::type)ecast640;
+                this->meta_bulk_load_status = (bulk_load_status::type)ecast640;
                 this->__isset.meta_bulk_load_status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -14597,7 +14618,7 @@ void bulk_load_response::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
 
 void bulk_load_response::__set_app_name(const std::string &val) { this->app_name = val; }
 
-void bulk_load_response::__set_primary_bulk_load_status(const ::dsn::bulk_load_status::type val)
+void bulk_load_response::__set_primary_bulk_load_status(const bulk_load_status::type val)
 {
     this->primary_bulk_load_status = val;
 }
@@ -14693,7 +14714,7 @@ uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 int32_t ecast645;
                 xfer += iprot->readI32(ecast645);
-                this->primary_bulk_load_status = (::dsn::bulk_load_status::type)ecast645;
+                this->primary_bulk_load_status = (bulk_load_status::type)ecast645;
                 this->__isset.primary_bulk_load_status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -15031,7 +15052,7 @@ void group_bulk_load_request::__set_cluster_name(const std::string &val)
     this->cluster_name = val;
 }
 
-void group_bulk_load_request::__set_meta_bulk_load_status(const ::dsn::bulk_load_status::type val)
+void group_bulk_load_request::__set_meta_bulk_load_status(const bulk_load_status::type val)
 {
     this->meta_bulk_load_status = val;
 }
@@ -15099,7 +15120,7 @@ uint32_t group_bulk_load_request::read(::apache::thrift::protocol::TProtocol *ip
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 int32_t ecast667;
                 xfer += iprot->readI32(ecast667);
-                this->meta_bulk_load_status = (::dsn::bulk_load_status::type)ecast667;
+                this->meta_bulk_load_status = (bulk_load_status::type)ecast667;
                 this->__isset.meta_bulk_load_status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -15233,7 +15254,7 @@ void group_bulk_load_response::__set_target_address(const ::dsn::rpc_address &va
     this->target_address = val;
 }
 
-void group_bulk_load_response::__set_status(const ::dsn::bulk_load_status::type val)
+void group_bulk_load_response::__set_status(const bulk_load_status::type val)
 {
     this->status = val;
 }
@@ -15301,7 +15322,7 @@ uint32_t group_bulk_load_response::read(::apache::thrift::protocol::TProtocol *i
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 int32_t ecast672;
                 xfer += iprot->readI32(ecast672);
-                this->status = (::dsn::bulk_load_status::type)ecast672;
+                this->status = (bulk_load_status::type)ecast672;
                 this->__isset.status = true;
             } else {
                 xfer += iprot->skip(ftype);

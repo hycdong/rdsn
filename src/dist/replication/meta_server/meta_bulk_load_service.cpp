@@ -297,7 +297,7 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
              primary_addr.to_string(),
              app_name,
              pid.to_string(),
-             enum_to_string(req.meta_bulk_load_status),
+             dsn::enum_to_string(req.meta_bulk_load_status),
              req.remote_provider_name,
              req.cluster_name);
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
@@ -338,7 +338,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                  app_name,
                  pid,
                  response.err.to_string(),
-                 enum_to_string(response.primary_bulk_load_status));
+                 dsn::enum_to_string(response.primary_bulk_load_status));
         handle_bulk_load_failed(pid.get_app_id());
     } else {
         ballot current_ballot;
@@ -414,7 +414,7 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
                 primary_addr.to_string(),
                 app_name,
                 pid.to_string(),
-                enum_to_string(response.primary_bulk_load_status));
+                dsn::enum_to_string(response.primary_bulk_load_status));
         return;
     }
 
@@ -448,7 +448,7 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
              primary_addr.to_string(),
              app_name,
              pid.to_string(),
-             enum_to_string(response.primary_bulk_load_status),
+             dsn::enum_to_string(response.primary_bulk_load_status),
              total_progress);
     {
         zauto_write_lock l(_lock);
@@ -510,7 +510,7 @@ void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
                 primary_addr.to_string(),
                 response.app_name,
                 pid.to_string(),
-                enum_to_string(response.primary_bulk_load_status));
+                dsn::enum_to_string(response.primary_bulk_load_status));
         return;
     }
 
@@ -544,7 +544,7 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
                 primary_addr.to_string(),
                 response.app_name,
                 pid.to_string(),
-                enum_to_string(response.primary_bulk_load_status));
+                dsn::enum_to_string(response.primary_bulk_load_status));
         return;
     }
 
@@ -567,7 +567,7 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
              primary_addr.to_string(),
              response.app_name,
              pid.to_string(),
-             enum_to_string(response.primary_bulk_load_status),
+             dsn::enum_to_string(response.primary_bulk_load_status),
              all_clean_up);
     {
         zauto_write_lock l(_lock);
@@ -612,7 +612,7 @@ void bulk_load_service::try_rollback_to_downloading(int32_t app_id, const std::s
     } else {
         ddebug_f("app({}) status={}, no need to rollback to downloading, wait for next round",
                  app_name,
-                 enum_to_string(app_status));
+                 dsn::enum_to_string(app_status));
     }
 }
 
@@ -637,7 +637,7 @@ void bulk_load_service::handle_app_pausing(const bulk_load_response &response,
                 primary_addr.to_string(),
                 response.app_name,
                 pid.to_string(),
-                enum_to_string(response.primary_bulk_load_status));
+                dsn::enum_to_string(response.primary_bulk_load_status));
         return;
     }
 
@@ -647,7 +647,7 @@ void bulk_load_service::handle_app_pausing(const bulk_load_response &response,
              primary_addr.to_string(),
              response.app_name,
              pid.to_string(),
-             enum_to_string(response.primary_bulk_load_status),
+             dsn::enum_to_string(response.primary_bulk_load_status),
              is_group_paused);
 
     if (is_group_paused) {
@@ -681,8 +681,8 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
         dinfo_f("app({}) partition({}) old status:{} VS new status:{}, ignore it",
                 app_name,
                 pid.to_string(),
-                enum_to_string(pinfo.status),
-                enum_to_string(new_status));
+                dsn::enum_to_string(pinfo.status),
+                dsn::enum_to_string(new_status));
         return;
     }
 
@@ -724,8 +724,8 @@ void bulk_load_service::update_partition_status_on_remote_stroage_rely(
         ddebug_f("app({}) update partition({}) status from {} to {}",
                  app_name,
                  pid.to_string(),
-                 enum_to_string(old_status),
-                 enum_to_string(new_status));
+                 dsn::enum_to_string(old_status),
+                 dsn::enum_to_string(new_status));
 
         if ((new_status == bulk_load_status::BLS_DOWNLOADED ||
              new_status == bulk_load_status::BLS_INGESTING ||
@@ -769,16 +769,16 @@ void bulk_load_service::update_app_status_on_remote_storage_unlock(
     if (old_status == new_status && new_status != bulk_load_status::BLS_DOWNLOADING) {
         dwarn_f("app({}) old status:{} VS new status:{}, ignore it",
                 ainfo.app_name,
-                enum_to_string(old_status),
-                enum_to_string(new_status));
+                dsn::enum_to_string(old_status),
+                dsn::enum_to_string(new_status));
         return;
     }
 
     if (_apps_pending_sync_flag[app_id]) {
         ddebug_f("app({}) has already sync bulk load status, wait and retry, cur={}, new={}",
                  ainfo.app_name,
-                 enum_to_string(old_status),
-                 enum_to_string(new_status));
+                 dsn::enum_to_string(old_status),
+                 dsn::enum_to_string(new_status));
         tasking::enqueue(LPC_META_STATE_NORMAL,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::update_app_status_on_remote_storage_unlock,
@@ -813,8 +813,8 @@ void bulk_load_service::update_app_status_on_remote_storage_reply(const app_bulk
 {
     ddebug_f("update app({}) status from {} to {}",
              ainfo.app_name,
-             enum_to_string(old_status),
-             enum_to_string(new_status));
+             dsn::enum_to_string(old_status),
+             dsn::enum_to_string(new_status));
 
     int32_t app_id = ainfo.app_id;
     {
@@ -1062,7 +1062,7 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         response.partitions_status.resize(partition_count);
         ddebug_f("query app({}) bulk_load_status({}) succeed",
                  app_name,
-                 enum_to_string(response.app_status));
+                 dsn::enum_to_string(response.app_status));
 
         if (response.app_status == bulk_load_status::BLS_DOWNLOADING ||
             response.app_status == bulk_load_status::BLS_DOWNLOADED) {
@@ -1374,7 +1374,7 @@ bool bulk_load_service::check_bulk_load_status(
         derror_f(
             "app({}) bulk_load_status={}, but there are {} partitions lack partition_bulk_load dir",
             ainfo.app_name,
-            enum_to_string(ainfo.status),
+            dsn::enum_to_string(ainfo.status),
             partition_count - partition_size);
         return false;
     }
@@ -1408,7 +1408,7 @@ bool bulk_load_service::validate_partition_bulk_load_status(
                  "with app, {} partitions is different, there are {} partitions not "
                  "existed, this is invalid",
                  ainfo.app_name,
-                 enum_to_string(app_status),
+                 dsn::enum_to_string(app_status),
                  partition_bulk_load_info_map.size() - different_count,
                  different_count,
                  ainfo.partition_count - partition_bulk_load_info_map.size());
@@ -1424,9 +1424,9 @@ bool bulk_load_service::validate_partition_bulk_load_status(
                                                   : bulk_load_status::BLS_SUCCEED;
         ddebug_f("app({}) bulk_load_status={}, valid partition status may be {} or {}",
                  ainfo.app_name,
-                 enum_to_string(app_status),
-                 enum_to_string(app_status),
-                 enum_to_string(valid_status));
+                 dsn::enum_to_string(app_status),
+                 dsn::enum_to_string(app_status),
+                 dsn::enum_to_string(valid_status));
         for (auto iter = different_status_pidx_set.begin(); iter != different_status_pidx_set.end();
              ++iter) {
             int32_t pidx = *iter;
@@ -1436,9 +1436,9 @@ bool bulk_load_service::validate_partition_bulk_load_status(
                          ainfo.app_name,
                          app_status,
                          pidx,
-                         enum_to_string(partition_bulk_load_info_map[pidx].status),
-                         enum_to_string(app_status),
-                         enum_to_string(valid_status));
+                         dsn::enum_to_string(partition_bulk_load_info_map[pidx].status),
+                         dsn::enum_to_string(app_status),
+                         dsn::enum_to_string(valid_status));
                 return false;
             }
         }
@@ -1453,7 +1453,7 @@ bool bulk_load_service::validate_partition_bulk_load_status(
         derror_f("app({}) bulk_load_status={}, {} partitions bulk_load_status is different from "
                  "app, this is invalid",
                  ainfo.app_name,
-                 enum_to_string(app_status),
+                 dsn::enum_to_string(app_status),
                  different_count);
         return false;
     }
@@ -1481,7 +1481,7 @@ void bulk_load_service::do_continue_bulk_load(
              ainfo.app_name,
              app_id,
              partition_count,
-             enum_to_string(app_status),
+             dsn::enum_to_string(app_status),
              partition_bulk_load_info_map.size(),
              same_count,
              different_count);
@@ -1506,7 +1506,7 @@ void bulk_load_service::do_continue_bulk_load(
 
     // if bulk load paused, return directly
     if (app_status == bulk_load_status::BLS_PAUSED) {
-        ddebug_f("app({}) status = {}", ainfo.app_name, enum_to_string(app_status));
+        ddebug_f("app({}) status = {}", ainfo.app_name, dsn::enum_to_string(app_status));
         return;
     }
 
@@ -1677,7 +1677,7 @@ void bulk_load_service::on_control_bulk_load(control_bulk_load_rpc rpc)
         ddebug_f("app({}) start to {} cancel bulk load, original status = {}",
                  app->app_name,
                  request.type == bulk_load_control_type::BLC_FORCE_CANCEL ? "force" : "",
-                 enum_to_string(local_status));
+                 dsn::enum_to_string(local_status));
         update_app_status_on_remote_storage_unlock(request.app_id,
                                                    bulk_load_status::type::BLS_CANCELED,
                                                    local_status == bulk_load_status::BLS_PAUSED);
@@ -1692,7 +1692,7 @@ void bulk_load_service::set_control_response(bulk_load_status::type local_status
                                              configuration_control_bulk_load_response &resp)
 {
     resp.err = ERR_INVALID_STATE;
-    resp.msg = fmt::format("app({}) status={}", app_name, enum_to_string(local_status));
+    resp.msg = fmt::format("app({}) status={}", app_name, dsn::enum_to_string(local_status));
 }
 
 } // namespace replication

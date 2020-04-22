@@ -789,6 +789,21 @@ struct app_partition_split_response
 }
 
 /////////////////// bulk-load-related structs ////////////////////
+
+// app partition bulk load status
+enum bulk_load_status
+{
+    BLS_INVALID,
+    BLS_DOWNLOADING,
+    BLS_DOWNLOADED,
+    BLS_INGESTING,
+    BLS_SUCCEED,
+    BLS_FAILED,
+    BLS_PAUSING,
+    BLS_PAUSED,
+    BLS_CANCELED
+}
+
 enum ingestion_status
 {
     IS_INVALID,
@@ -832,8 +847,8 @@ struct configuration_query_bulk_load_response
 {
     1:dsn.error_code                    err;
     2:string                            app_name;
-    3:dsn.layer2.bulk_load_status       app_status;
-    4:list<dsn.layer2.bulk_load_status> partitions_status;
+    3:bulk_load_status                  app_status;
+    4:list<bulk_load_status>            partitions_status;
     5:i32                               max_replica_count;
     6:optional list<map<dsn.rpc_address, partition_download_progress>> download_progresses;
     7:optional list<bool>               cleanup_flags;
@@ -847,7 +862,7 @@ struct bulk_load_request
     4:string                        remote_provider_name;
     5:string                        cluster_name;
     6:i64                           ballot;
-    7:dsn.layer2.bulk_load_status   meta_bulk_load_status;
+    7:bulk_load_status              meta_bulk_load_status;
     8:bool                          query_bulk_load_metadata;
 }
 
@@ -856,7 +871,7 @@ struct bulk_load_response
     1:dsn.error_code                err;
     2:dsn.gpid                      pid;
     3:string                        app_name;
-    4:dsn.layer2.bulk_load_status   primary_bulk_load_status;
+    4:bulk_load_status              primary_bulk_load_status;
     5:optional bulk_load_metadata   metadata;
     6:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
     7:optional i32                  total_download_progress;
@@ -873,14 +888,14 @@ struct group_bulk_load_request
     3:replica_configuration         config;
     4:string                        provider_name;
     5:string                        cluster_name;
-    6:dsn.layer2.bulk_load_status   meta_bulk_load_status;
+    6:bulk_load_status              meta_bulk_load_status;
 }
 
 struct group_bulk_load_response
 {
     1:dsn.error_code                        err;
     2:dsn.rpc_address                       target_address;
-    3:dsn.layer2.bulk_load_status           status;
+    3:bulk_load_status                      status;
     // used when secondary downloading or downloaded
     4:optional partition_download_progress  download_progress;
     5:optional bool                         is_bulk_load_context_cleaned;

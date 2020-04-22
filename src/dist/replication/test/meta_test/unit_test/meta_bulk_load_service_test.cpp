@@ -164,7 +164,7 @@ public:
                          ainfo.app_name,
                          ainfo.app_id,
                          app_path,
-                         enum_to_string(ainfo.status));
+                         dsn::enum_to_string(ainfo.status));
                 for (auto iter = partition_bulk_load_info_map.begin();
                      iter != partition_bulk_load_info_map.end();
                      ++iter) {
@@ -183,7 +183,7 @@ public:
                 ddebug_f("create partition[{}] bulk load dir({}), bulk_load_status={}",
                          pid.to_string(),
                          partition_path,
-                         enum_to_string(pinfo.status));
+                         dsn::enum_to_string(pinfo.status));
             });
     }
 

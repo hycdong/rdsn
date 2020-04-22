@@ -71,8 +71,6 @@ typedef rpc_holder<configuration_update_app_env_request, configuration_update_ap
 typedef rpc_holder<ddd_diagnose_request, ddd_diagnose_response> ddd_diagnose_rpc;
 typedef rpc_holder<app_partition_split_request, app_partition_split_response>
     app_partition_split_rpc;
-
-// TODO(heyuchen): common - handle rpc_holder
 typedef rpc_holder<start_bulk_load_request, start_bulk_load_response> start_bulk_load_rpc;
 typedef rpc_holder<configuration_query_bulk_load_request, configuration_query_bulk_load_response>
     query_bulk_load_rpc;

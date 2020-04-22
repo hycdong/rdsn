@@ -3,21 +3,6 @@ include "dsn.thrift"
 
 namespace cpp dsn
 
-// TODO(heyuchen): move it into replication.thrift
-// for server supporting bulk load
-enum bulk_load_status
-{
-    BLS_INVALID,
-    BLS_DOWNLOADING,
-    BLS_DOWNLOADED,
-    BLS_INGESTING,
-    BLS_SUCCEED,
-    BLS_FAILED,
-    BLS_PAUSING,
-    BLS_PAUSED,
-    BLS_CANCELED
-}
-
 struct partition_configuration
 {
     1:dsn.gpid              pid;
