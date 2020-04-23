@@ -235,7 +235,7 @@ private:
 
     std::unique_ptr<meta_split_service> _split_svc;
 
-    std::shared_ptr<bulk_load_service> _bulk_load_svc;
+    std::unique_ptr<bulk_load_service> _bulk_load_svc;
 
     // handle all the block filesystems for current meta service
     // (in other words, current service node)
