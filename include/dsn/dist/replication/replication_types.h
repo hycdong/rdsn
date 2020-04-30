@@ -346,8 +346,6 @@ class configuration_query_backup_policy_request;
 
 class configuration_query_backup_policy_response;
 
-class file_meta;
-
 class configuration_report_restore_status_request;
 
 class configuration_report_restore_status_response;
@@ -355,6 +353,8 @@ class configuration_report_restore_status_response;
 class configuration_query_restore_request;
 
 class configuration_query_restore_response;
+
+class file_meta;
 
 class configuration_update_app_env_request;
 
@@ -4590,64 +4590,6 @@ inline std::ostream &operator<<(std::ostream &out,
     return out;
 }
 
-typedef struct _file_meta__isset
-{
-    _file_meta__isset() : name(false), size(false), md5(false) {}
-    bool name : 1;
-    bool size : 1;
-    bool md5 : 1;
-} _file_meta__isset;
-
-class file_meta
-{
-public:
-    file_meta(const file_meta &);
-    file_meta(file_meta &&);
-    file_meta &operator=(const file_meta &);
-    file_meta &operator=(file_meta &&);
-    file_meta() : name(), size(0), md5() {}
-
-    virtual ~file_meta() throw();
-    std::string name;
-    int64_t size;
-    std::string md5;
-
-    _file_meta__isset __isset;
-
-    void __set_name(const std::string &val);
-
-    void __set_size(const int64_t val);
-
-    void __set_md5(const std::string &val);
-
-    bool operator==(const file_meta &rhs) const
-    {
-        if (!(name == rhs.name))
-            return false;
-        if (!(size == rhs.size))
-            return false;
-        if (!(md5 == rhs.md5))
-            return false;
-        return true;
-    }
-    bool operator!=(const file_meta &rhs) const { return !(*this == rhs); }
-
-    bool operator<(const file_meta &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(file_meta &a, file_meta &b);
-
-inline std::ostream &operator<<(std::ostream &out, const file_meta &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
 typedef struct _configuration_report_restore_status_request__isset
 {
     _configuration_report_restore_status_request__isset()
@@ -4887,6 +4829,64 @@ public:
 void swap(configuration_query_restore_response &a, configuration_query_restore_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const configuration_query_restore_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _file_meta__isset
+{
+    _file_meta__isset() : name(false), size(false), md5(false) {}
+    bool name : 1;
+    bool size : 1;
+    bool md5 : 1;
+} _file_meta__isset;
+
+class file_meta
+{
+public:
+    file_meta(const file_meta &);
+    file_meta(file_meta &&);
+    file_meta &operator=(const file_meta &);
+    file_meta &operator=(file_meta &&);
+    file_meta() : name(), size(0), md5() {}
+
+    virtual ~file_meta() throw();
+    std::string name;
+    int64_t size;
+    std::string md5;
+
+    _file_meta__isset __isset;
+
+    void __set_name(const std::string &val);
+
+    void __set_size(const int64_t val);
+
+    void __set_md5(const std::string &val);
+
+    bool operator==(const file_meta &rhs) const
+    {
+        if (!(name == rhs.name))
+            return false;
+        if (!(size == rhs.size))
+            return false;
+        if (!(md5 == rhs.md5))
+            return false;
+        return true;
+    }
+    bool operator!=(const file_meta &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const file_meta &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(file_meta &a, file_meta &b);
+
+inline std::ostream &operator<<(std::ostream &out, const file_meta &obj)
 {
     obj.printTo(out);
     return out;

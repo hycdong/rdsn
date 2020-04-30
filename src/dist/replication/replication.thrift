@@ -594,13 +594,6 @@ struct configuration_query_backup_policy_response
     4:optional string           hint_msg;
 }
 
-struct file_meta
-{
-    1:string    name;
-    2:i64       size;
-    3:string    md5;
-}
-
 struct configuration_report_restore_status_request
 {
     1:dsn.gpid  pid;
@@ -624,6 +617,14 @@ struct configuration_query_restore_response
     1:dsn.error_code        err;
     2:list<dsn.error_code>  restore_status;
     3:list<i32>             restore_progress;
+}
+
+// Used for cold backup and bulk load
+struct file_meta
+{
+    1:string    name;
+    2:i64       size;
+    3:string    md5;
 }
 
 enum app_env_operation

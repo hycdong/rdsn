@@ -122,7 +122,7 @@ public:
     int32_t max_concurrent_uploading_file_count;
     int32_t cold_backup_checkpoint_reserve_minutes;
 
-    std::string bulk_load_root;
+    std::string bulk_load_provider_root;
     int32_t partition_bulk_load_interval_ms;
     int32_t max_concurrent_bulk_load_downloading_count;
 
