@@ -70,6 +70,9 @@ public:
     void query_app_envs(std::map<std::string, std::string> &out) override { out = _envs; }
     decree last_durable_decree() const override { return 0; }
 
+    // TODO(heyuchen): implement this function in further pull request
+    void set_partition_version(int32_t partition_version) override {}
+
     void set_ingestion_status(dsn::replication::ingestion_status::type status)
     {
         _ingestion_status = status;
@@ -126,6 +129,16 @@ public:
 
     void as_secondary() { _config.status = partition_status::PS_SECONDARY; }
 
+    void mock_max_gced_decree(decree d) { _max_gced_decree = d; }
+
+    decree max_gced_decree_no_lock() const override
+    {
+        if (_max_gced_decree == (invalid_decree - 1)) {
+            // if the value is not fake, return the real value from replica.
+            return replica::max_gced_decree_no_lock();
+        }
+        return _max_gced_decree;
+    }
     /// helper functions
     void set_replica_config(replica_configuration &config) { _config = config; }
     void set_partition_status(partition_status::type status) { _config.status = status; }
@@ -133,6 +146,13 @@ public:
     void set_init_child_ballot(ballot b) { _child_init_ballot = b; }
     void set_last_committed_decree(decree d) { _prepare_list->reset(d); }
     prepare_list *get_plist() { return _prepare_list; }
+    void prepare_list_truncate(decree d) { _prepare_list->truncate(d); }
+    void prepare_list_commit_hard(decree d) { _prepare_list->commit(d, COMMIT_TO_DECREE_HARD); }
+    decree get_app_last_committed_decree() { return _app->last_committed_decree(); }
+    void set_app_last_committed_decree(decree d) { _app->_last_committed_decree = d; }
+
+private:
+    decree _max_gced_decree{invalid_decree - 1};
 };
 typedef dsn::ref_ptr<mock_replica> mock_replica_ptr;
 
@@ -152,7 +172,7 @@ inline std::unique_ptr<mock_replica> create_mock_replica(replica_stub *stub,
 class mock_replica_stub : public replica_stub
 {
 public:
-    mock_replica_stub() : replica_stub() {}
+    mock_replica_stub() = default;
 
     ~mock_replica_stub() override = default;
 
@@ -215,6 +235,30 @@ public:
         _replicas[pid] = rep;
 
         return rep;
+    }
+
+    void generate_replicas_base_dir_nodes_for_app(app_info mock_app,
+                                                  int primary_count_for_disk = 1,
+                                                  int secondary_count_for_disk = 2)
+    {
+        const auto &dir_nodes = _fs_manager._dir_nodes;
+        for (auto &dir_node : dir_nodes) {
+            const auto &replica_iter = dir_node->holding_replicas.find(mock_app.app_id);
+            if (replica_iter == dir_node->holding_replicas.end()) {
+                continue;
+            }
+            const std::set<gpid> &pids = replica_iter->second;
+            for (const gpid &pid : pids) {
+                // generate primary replica and secondary replica.
+                if (primary_count_for_disk-- > 0) {
+                    add_replica(generate_replica(
+                        mock_app, pid, partition_status::PS_PRIMARY, mock_app.app_id));
+                } else if (secondary_count_for_disk-- > 0) {
+                    add_replica(generate_replica(
+                        mock_app, pid, partition_status::PS_SECONDARY, mock_app.app_id));
+                }
+            }
+        }
     }
 
     void set_log(mutation_log_ptr log) { _log = log; }

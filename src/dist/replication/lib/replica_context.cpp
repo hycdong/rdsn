@@ -100,6 +100,10 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     membership.ballot = 0;
 
+    caught_up_children.clear();
+
+    sync_send_write_request = false;
+
     cleanup_bulk_load_states();
 }
 
@@ -302,6 +306,7 @@ bool potential_secondary_context::cleanup(bool force)
         learn_app_concurrent_count_increased = false;
     }
     learning_start_prepare_decree = invalid_decree;
+    first_learn_start_decree = invalid_decree;
     learning_status = learner_status::LearningInvalid;
     return true;
 }
@@ -1379,6 +1384,7 @@ bool partition_split_context::cleanup(bool force)
 
     parent_gpid.set_app_id(0);
     is_prepare_list_copied = false;
+    is_caught_up = false;
     return true;
 }
 

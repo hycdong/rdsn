@@ -24,15 +24,6 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     What is this file about?
- *
- * Revision history:
- *     xxxx-xx-xx, author, first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
-
 #pragma once
 
 #include <dsn/tool-api/zlocks.h>
@@ -121,7 +112,23 @@ public:
 
     uint64_t last_prepare_ts_ms;
 
-    /// bulk load
+    // Used for partition split
+    // child addresses who has been caught up with its parent
+    std::unordered_set<dsn::rpc_address> caught_up_children;
+
+    // Used for partition split
+    // whether parent's write request should be sent to child synchronously
+    // if {sync_send_write_request} = true
+    // - parent should recevie prepare ack from child synchronously during 2pc
+    // if {sync_send_write_request} = false and replica is during partition split
+    // - parent should copy mutations to child asynchronously, child is during async-learn
+    // whether a replica is during partition split is determined by a variety named `_child_gpid` of
+    // replica class
+    // if app_id of `_child_gpid` is greater than zero, it means replica is during partition split,
+    // otherwise, not during partition split
+    bool sync_send_write_request{false};
+
+    /// Used for bulk load
     // calls broadcast_group_bulk_load()
     // created in replica::on_bulk_load()
     // cancelled in cleanup() when status changed from PRIMARY to others
@@ -156,7 +163,7 @@ public:
 class potential_secondary_context
 {
 public:
-    potential_secondary_context(replica *r)
+    explicit potential_secondary_context(replica *r)
         : owner_replica(r),
           learning_version(0),
           learning_start_ts_ns(0),
@@ -188,6 +195,10 @@ public:
     volatile bool learning_round_is_running;
     volatile bool learn_app_concurrent_count_increased;
     decree learning_start_prepare_decree;
+
+    // The start decree in the first round of learn.
+    // It indicates the minimum decree under `learn/` dir.
+    decree first_learn_start_decree{invalid_decree};
 
     ::dsn::task_ptr delay_learning_task;
     ::dsn::task_ptr learning_task;
@@ -443,6 +454,7 @@ public:
     uint64_t get_upload_file_size() { return _upload_file_size.load(); }
 
     int64_t get_checkpoint_total_size() { return checkpoint_file_total_size; }
+
 private:
     void read_current_chkpt_file(const dist::block_service::block_file_ptr &file_handle);
     void remote_chkpt_dir_exist(const std::string &chkpt_dirname);
@@ -544,13 +556,15 @@ typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
 class partition_split_context
 {
 public:
-    partition_split_context() : is_prepare_list_copied(false) {}
     bool cleanup(bool force);
     bool is_cleaned() const;
 
 public:
     gpid parent_gpid;
-    bool is_prepare_list_copied;
+    // whether child has copied parent prepare list
+    bool is_prepare_list_copied{false};
+    // whether child has catched up with parent during async-learn
+    bool is_caught_up{false};
 
     // child replica async learn parent states
     dsn::task_ptr async_learn_task;
@@ -612,5 +626,5 @@ inline partition_status::type primary_context::get_node_status(::dsn::rpc_addres
     auto it = statuses.find(addr);
     return it != statuses.end() ? it->second : partition_status::PS_INACTIVE;
 }
-}
-} // end namespace
+} // namespace replication
+} // namespace dsn

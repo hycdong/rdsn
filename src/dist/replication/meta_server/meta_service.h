@@ -48,7 +48,6 @@
 #include "dist/replication/meta_server/meta_state_service_utils.h"
 #include "dist/replication/common/block_service_manager.h"
 
-class meta_service_test_app;
 namespace dsn {
 namespace replication {
 
@@ -181,7 +180,7 @@ private:
 
     // duplication
     void on_add_duplication(duplication_add_rpc rpc);
-    void on_change_duplication_status(duplication_status_change_rpc rpc);
+    void on_modify_duplication(duplication_modify_rpc rpc);
     void on_query_duplication_info(duplication_query_rpc rpc);
     void on_duplication_sync(duplication_sync_rpc rpc);
     void register_duplication_rpc_handlers();
@@ -209,7 +208,7 @@ private:
 private:
     friend class replication_checker;
     friend class test::test_checker;
-    friend class ::meta_service_test_app;
+    friend class meta_service_test_app;
     friend class bulk_load_service_test;
 
     replication_options _opts;
@@ -229,6 +228,7 @@ private:
     friend class meta_test_base;
     friend class meta_duplication_service;
     friend class meta_http_service_test;
+    friend class meta_load_balance_test;
     friend class meta_backup_test_base;
     friend class meta_http_service;
     std::unique_ptr<meta_duplication_service> _dup_svc;

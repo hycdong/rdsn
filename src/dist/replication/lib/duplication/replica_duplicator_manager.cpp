@@ -57,7 +57,32 @@ void replica_duplicator_manager::sync_duplication(const duplication_entry &ent)
         duplication_progress newp = dup->progress().set_confirmed_decree(it->second);
         dcheck_eq_replica(dup->update_progress(newp), error_s::ok());
         dup->update_status_if_needed(next_status);
+        if (ent.__isset.fail_mode) {
+            dup->update_fail_mode(ent.fail_mode);
+        }
     }
+}
+
+decree replica_duplicator_manager::min_confirmed_decree() const
+{
+    zauto_lock l(_lock);
+
+    decree min_decree = invalid_decree;
+    if (_replica->status() == partition_status::PS_PRIMARY) {
+        for (auto &kv : _duplications) {
+            const duplication_progress &p = kv.second->progress();
+            if (min_decree == invalid_decree) {
+                min_decree = p.confirmed_decree;
+            } else {
+                min_decree = std::min(min_decree, p.confirmed_decree);
+            }
+        }
+    } else if (_primary_confirmed_decree > 0) {
+        // if the replica is not primary, use the latest known (from primary)
+        // confirmed_decree instead.
+        min_decree = _primary_confirmed_decree;
+    }
+    return min_decree;
 }
 
 // Remove the duplications that are not in the `new_dup_map`.
@@ -78,6 +103,52 @@ void replica_duplicator_manager::remove_non_existed_duplications(
     for (dupid_t dupid : removal_set) {
         _duplications.erase(dupid);
     }
+}
+
+void replica_duplicator_manager::update_confirmed_decree_if_secondary(decree confirmed)
+{
+    // this function always runs in the same single thread with config-sync
+    if (_replica->status() != partition_status::PS_SECONDARY) {
+        return;
+    }
+
+    zauto_lock l(_lock);
+    remove_all_duplications();
+    if (confirmed >= 0) {
+        // confirmed decree never decreases
+        if (_primary_confirmed_decree < confirmed) {
+            _primary_confirmed_decree = confirmed;
+        }
+    }
+}
+
+int64_t replica_duplicator_manager::get_pending_mutations_count() const
+{
+    int64_t total = 0;
+    for (const auto &dup : _duplications) {
+        total += dup.second->get_pending_mutations_count();
+    }
+    return total;
+}
+
+std::vector<replica_duplicator_manager::dup_state>
+replica_duplicator_manager::get_dup_states() const
+{
+    zauto_lock l(_lock);
+
+    std::vector<dup_state> ret;
+    ret.reserve(_duplications.size());
+    for (const auto &dup : _duplications) {
+        dup_state state;
+        state.dupid = dup.first;
+        state.duplicating = !dup.second->paused();
+        auto progress = dup.second->progress();
+        state.last_decree = progress.last_decree;
+        state.confirmed_decree = progress.confirmed_decree;
+        state.fail_mode = dup.second->fail_mode();
+        ret.emplace_back(state);
+    }
+    return ret;
 }
 
 } // namespace replication

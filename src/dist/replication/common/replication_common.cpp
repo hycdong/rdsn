@@ -27,6 +27,7 @@
 #include "replication_common.h"
 #include <dsn/utility/filesystem.h>
 #include <fstream>
+#include <dsn/dist/replication/replica_envs.h>
 
 namespace dsn {
 namespace replication {
@@ -47,8 +48,7 @@ replication_options::replication_options()
     verbose_commit_log_on_start = false;
     delay_for_fd_timeout_on_start = false;
     empty_write_disabled = false;
-    allow_non_idempotent_write = false;
-    duplication_disabled = true;
+    duplication_enabled = true;
 
     prepare_timeout_ms_for_secondaries = 1000;
     prepare_timeout_ms_for_potential_secondaries = 3000;
@@ -108,6 +108,8 @@ replication_options::replication_options()
     learn_app_max_concurrent_count = 5;
 
     max_concurrent_uploading_file_count = 10;
+
+    cold_backup_checkpoint_reserve_minutes = 10;
 
     max_concurrent_bulk_load_downloading_count = 5;
     partition_bulk_load_interval_ms = 10000;
@@ -267,17 +269,9 @@ void replication_options::initialize()
                                   "empty_write_disabled",
                                   empty_write_disabled,
                                   "whether to disable empty write, default is false");
-    allow_non_idempotent_write =
-        dsn_config_get_value_bool("replication",
-                                  "allow_non_idempotent_write",
-                                  allow_non_idempotent_write,
-                                  "whether to allow non-idempotent write, default is false");
 
-    duplication_disabled = dsn_config_get_value_bool(
-        "replication", "duplication_disabled", duplication_disabled, "is duplication disabled");
-    if (allow_non_idempotent_write && !duplication_disabled) {
-        dassert(false, "duplication and non-idempotent write cannot be enabled together");
-    }
+    duplication_enabled = dsn_config_get_value_bool(
+        "replication", "duplication_enabled", duplication_enabled, "is duplication enabled");
 
     prepare_timeout_ms_for_secondaries = (int)dsn_config_get_value_uint64(
         "replication",
@@ -517,6 +511,12 @@ void replication_options::initialize()
                                              max_concurrent_uploading_file_count,
                                              "concurrent uploading file count");
 
+    cold_backup_checkpoint_reserve_minutes =
+        (int)dsn_config_get_value_uint64("replication",
+                                         "cold_backup_checkpoint_reserve_minutes",
+                                         cold_backup_checkpoint_reserve_minutes,
+                                         "reserve minutes of cold backup checkpoint");
+
     bulk_load_root = dsn_config_get_value_string(
         "replication", "bulk_load_root", "", "bulk load remote file provider path prefix");
 
@@ -618,6 +618,35 @@ const std::string backup_restore_constant::SKIP_BAD_PARTITION("restore.skip_bad_
 const std::string replica_envs::DENY_CLIENT_WRITE("replica.deny_client_write");
 const std::string replica_envs::WRITE_QPS_THROTTLING("replica.write_throttling");
 const std::string replica_envs::WRITE_SIZE_THROTTLING("replica.write_throttling_by_size");
+const uint64_t replica_envs::MIN_SLOW_QUERY_THRESHOLD_MS = 20;
+const std::string replica_envs::SLOW_QUERY_THRESHOLD("replica.slow_query_threshold");
+const std::string replica_envs::ROCKSDB_USAGE_SCENARIO("rocksdb.usage_scenario");
+const std::string replica_envs::TABLE_LEVEL_DEFAULT_TTL("default_ttl");
+const std::string MANUAL_COMPACT_PREFIX("manual_compact.");
+const std::string replica_envs::MANUAL_COMPACT_DISABLED(MANUAL_COMPACT_PREFIX + "disabled");
+const std::string replica_envs::MANUAL_COMPACT_MAX_CONCURRENT_RUNNING_COUNT(
+    MANUAL_COMPACT_PREFIX + "max_concurrent_running_count");
+const std::string MANUAL_COMPACT_ONCE_PREFIX(MANUAL_COMPACT_PREFIX + "once.");
+const std::string replica_envs::MANUAL_COMPACT_ONCE_TRIGGER_TIME(MANUAL_COMPACT_ONCE_PREFIX +
+                                                                 "trigger_time");
+const std::string replica_envs::MANUAL_COMPACT_ONCE_TARGET_LEVEL(MANUAL_COMPACT_ONCE_PREFIX +
+                                                                 "target_level");
+const std::string replica_envs::MANUAL_COMPACT_ONCE_BOTTOMMOST_LEVEL_COMPACTION(
+    MANUAL_COMPACT_ONCE_PREFIX + "bottommost_level_compaction");
+const std::string MANUAL_COMPACT_PERIODIC_PREFIX(MANUAL_COMPACT_PREFIX + "periodic.");
+const std::string replica_envs::MANUAL_COMPACT_PERIODIC_TRIGGER_TIME(
+    MANUAL_COMPACT_PERIODIC_PREFIX + "trigger_time");
+const std::string replica_envs::MANUAL_COMPACT_PERIODIC_TARGET_LEVEL(
+    MANUAL_COMPACT_PERIODIC_PREFIX + "target_level");
+const std::string replica_envs::MANUAL_COMPACT_PERIODIC_BOTTOMMOST_LEVEL_COMPACTION(
+    MANUAL_COMPACT_PERIODIC_PREFIX + "bottommost_level_compaction");
+const std::string
+    replica_envs::ROCKSDB_CHECKPOINT_RESERVE_MIN_COUNT("rocksdb.checkpoint.reserve_min_count");
+const std::string replica_envs::ROCKSDB_CHECKPOINT_RESERVE_TIME_SECONDS(
+    "rocksdb.checkpoint.reserve_time_seconds");
+const std::string replica_envs::ROCKSDB_ITERATION_THRESHOLD_TIME_MS(
+    "replica.rocksdb_iteration_threshold_time_ms");
+const std::string replica_envs::BUSINESS_INFO("business.info");
 
 const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
 const std::string bulk_load_constant::BULK_LOAD_METADATA("bulk_load_metadata");

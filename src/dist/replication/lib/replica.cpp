@@ -55,7 +55,8 @@ replica::replica(
       _cur_download_size(0),
       _restore_progress(0),
       _restore_status(ERR_OK),
-      _duplication_mgr(new replica_duplicator_manager(this))
+      _duplication_mgr(new replica_duplicator_manager(this)),
+      _duplicating(app.duplicating)
 {
     dassert(_app_info.app_type != "", "");
     dassert(stub != nullptr, "");
@@ -64,6 +65,7 @@ replica::replica(
     _options = &stub->options();
     init_state();
     _config.pid = gpid;
+    _partition_version = app.partition_count - 1;
 
     std::string counter_str = fmt::format("private.log.size(MB)@{}", gpid);
     _counter_private_log_size.init_app_counter(
@@ -75,6 +77,10 @@ replica::replica(
 
     counter_str = fmt::format("recent.write.throttling.reject.count@{}", gpid);
     _counter_recent_write_throttling_reject_count.init_app_counter(
+        "eon.replica", counter_str.c_str(), COUNTER_TYPE_VOLATILE_NUMBER, counter_str.c_str());
+
+    counter_str = fmt::format("dup.disabled_non_idempotent_write_count@{}", _app_info.app_name);
+    _counter_dup_disabled_non_idempotent_write_count.init_app_counter(
         "eon.replica", counter_str.c_str(), COUNTER_TYPE_VOLATILE_NUMBER, counter_str.c_str());
 
     // init table level latency perf counters
@@ -397,6 +403,10 @@ void replica::close()
     }
 
     _counter_private_log_size.clear();
+
+    // duplication_impl may have ongoing tasks.
+    // release it before release replica.
+    _duplication_mgr.reset();
 
     ddebug("%s: replica closed, time_used = %" PRIu64 "ms", name(), dsn_now_ms() - start_time);
 }

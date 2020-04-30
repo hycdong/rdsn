@@ -63,10 +63,6 @@ error_code service_node::init_io_engine()
     _node_io.disk = make_unique<disk_engine>(this);
     aio_provider *aio = factory_store<aio_provider>::create(
         spec.aio_factory_name.c_str(), ::dsn::PROVIDER_TYPE_MAIN, _node_io.disk.get(), nullptr);
-    for (auto it = spec.aio_aspects.begin(); it != spec.aio_aspects.end(); it++) {
-        aio = factory_store<aio_provider>::create(
-            it->c_str(), PROVIDER_TYPE_ASPECT, _node_io.disk.get(), aio);
-    }
     _node_io.aio.reset(aio);
 
     // init rpc engine
@@ -77,7 +73,6 @@ error_code service_node::init_io_engine()
 
 error_code service_node::start_io_engine_in_main()
 {
-    auto &spec = service_engine::instance().spec();
     error_code err = ERR_OK;
 
     // start disk engine
@@ -218,10 +213,6 @@ void service_engine::init_before_toollets(const service_spec &spec)
 {
     _spec = spec;
 
-    // init common providers (first half)
-    _logging.reset(factory_store<logging_provider>::create(
-        spec.logging_factory_name.c_str(), ::dsn::PROVIDER_TYPE_MAIN, spec.dir_log.c_str()));
-
     // init common for all per-node providers
     message_ex::s_local_hash =
         (uint32_t)dsn_config_get_value_uint64("core",
@@ -239,9 +230,6 @@ void service_engine::init_after_toollets()
     // init common providers (second half)
     _env = factory_store<env_provider>::create(
         _spec.env_factory_name.c_str(), PROVIDER_TYPE_MAIN, nullptr);
-    for (auto it = _spec.env_aspects.begin(); it != _spec.env_aspects.end(); it++) {
-        _env = factory_store<env_provider>::create(it->c_str(), PROVIDER_TYPE_ASPECT, _env);
-    }
     tls_dsn.env = _env;
 }
 

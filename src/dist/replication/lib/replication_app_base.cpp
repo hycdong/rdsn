@@ -35,6 +35,7 @@
 #include <fstream>
 #include <sstream>
 #include <memory>
+#include <dsn/utility/fail_point.h>
 
 namespace dsn {
 namespace replication {
@@ -325,6 +326,8 @@ bool replication_app_base::is_primary() const
     return _replica->status() == partition_status::PS_PRIMARY;
 }
 
+bool replication_app_base::is_duplicating() const { return _replica->is_duplicating(); }
+
 error_code replication_app_base::open_internal(replica *r)
 {
     if (!dsn::utils::filesystem::directory_exists(_dir_data)) {
@@ -456,6 +459,9 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
 
 ::dsn::error_code replication_app_base::apply_mutation(const mutation *mu)
 {
+    FAIL_POINT_INJECT_F("replication_app_base_apply_mutation",
+                        [](dsn::string_view) { return ERR_OK; });
+
     dassert(mu->data.header.decree == last_committed_decree() + 1,
             "invalid mutation decree, decree = %" PRId64 " VS %" PRId64 "",
             mu->data.header.decree,

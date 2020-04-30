@@ -43,6 +43,31 @@ public:
     /// collect updated duplication confirm points from this replica.
     std::vector<duplication_confirm_entry> get_duplication_confirms_to_update() const;
 
+    /// mutations <= min_confirmed_decree are assumed to be cleanable.
+    /// If there's no duplication,　invalid_decree is returned, mean that all logs are cleanable.
+    /// THREAD_POOL_REPLICATION
+    /// \see replica::on_checkpoint_timer()
+    decree min_confirmed_decree() const;
+
+    /// Updates the latest known confirmed decree on this replica if it's secondary.
+    /// THREAD_POOL_REPLICATION
+    /// \see replica_check.cpp
+    void update_confirmed_decree_if_secondary(decree confirmed);
+
+    /// Sums up the number of pending mutations for all duplications
+    /// on this replica, for metric "dup.pending_mutations_count".
+    int64_t get_pending_mutations_count() const;
+
+    struct dup_state
+    {
+        dupid_t dupid{0};
+        bool duplicating{false};
+        decree last_decree{invalid_decree};
+        decree confirmed_decree{invalid_decree};
+        duplication_fail_mode::type fail_mode{duplication_fail_mode::FAIL_SLOW};
+    };
+    std::vector<dup_state> get_dup_states() const;
+
 private:
     void sync_duplication(const duplication_entry &ent);
 
@@ -65,6 +90,8 @@ private:
     replica *_replica;
 
     std::map<dupid_t, replica_duplicator_u_ptr> _duplications;
+
+    decree _primary_confirmed_decree{invalid_decree};
 
     // avoid thread conflict between replica::on_checkpoint_timer and
     // duplication_sync_timer.

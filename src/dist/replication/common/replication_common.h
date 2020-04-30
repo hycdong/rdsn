@@ -59,8 +59,7 @@ public:
     bool verbose_commit_log_on_start;
     bool delay_for_fd_timeout_on_start;
     bool empty_write_disabled;
-    bool allow_non_idempotent_write;
-    bool duplication_disabled;
+    bool duplication_enabled;
 
     int32_t prepare_timeout_ms_for_secondaries;
     int32_t prepare_timeout_ms_for_potential_secondaries;
@@ -121,6 +120,7 @@ public:
 
     std::string cold_backup_root;
     int32_t max_concurrent_uploading_file_count;
+    int32_t cold_backup_checkpoint_reserve_minutes;
 
     std::string bulk_load_root;
     int32_t partition_bulk_load_interval_ms;
@@ -159,14 +159,6 @@ public:
     static const std::string APP_ID;
     static const std::string BACKUP_ID;
     static const std::string SKIP_BAD_PARTITION;
-};
-
-class replica_envs
-{
-public:
-    static const std::string DENY_CLIENT_WRITE;
-    static const std::string WRITE_QPS_THROTTLING;
-    static const std::string WRITE_SIZE_THROTTLING;
 };
 
 class bulk_load_constant
