@@ -15,6 +15,8 @@
 namespace dsn {
 namespace replication {
 
+typedef rpc_holder<group_bulk_load_request, group_bulk_load_response> group_bulk_load_rpc;
+
 void replica::on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response)
 {
     _checker.only_one_thread_access();
@@ -91,7 +93,7 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
         if (addr == _stub->_primary_address)
             continue;
 
-        std::shared_ptr<group_bulk_load_request> request(new group_bulk_load_request);
+        std::unique_ptr<group_bulk_load_request> request = make_unique<group_bulk_load_request>();
         request->app_name = _app_info.app_name;
         request->target_address = addr;
         _primary_states.get_replica_config(partition_status::PS_SECONDARY, request->config);
@@ -101,18 +103,11 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
 
         ddebug_replica("send group_bulk_load_request to {}", addr.to_string());
 
+        group_bulk_load_rpc rpc(std::move(request), RPC_GROUP_BULK_LOAD, get_gpid().thread_hash());
         dsn::task_ptr callback_task =
-            rpc::call(addr,
-                      RPC_GROUP_BULK_LOAD,
-                      *request,
-                      &_tracker,
-                      [=](error_code err, group_bulk_load_response &&resp) {
-                          auto response =
-                              std::make_shared<group_bulk_load_response>(std::move(resp));
-                          on_group_bulk_load_reply(err, request, response);
-                      },
-                      std::chrono::milliseconds(0),
-                      get_gpid().thread_hash());
+            rpc.call(addr, tracker(), [this, rpc](error_code err) mutable {
+                on_group_bulk_load_reply(err, rpc.request(), rpc.response());
+            });
         _primary_states.group_bulk_load_pending_replies[addr] = callback_task;
     }
 }
@@ -170,8 +165,8 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
 }
 
 void replica::on_group_bulk_load_reply(error_code err,
-                                       const std::shared_ptr<group_bulk_load_request> &req,
-                                       const std::shared_ptr<group_bulk_load_response> &resp)
+                                       const group_bulk_load_request &req,
+                                       const group_bulk_load_response &resp)
 {
     _checker.only_one_thread_access();
 
@@ -182,45 +177,41 @@ void replica::on_group_bulk_load_reply(error_code err,
         return;
     }
 
-    _primary_states.group_bulk_load_pending_replies.erase(req->target_address);
+    _primary_states.group_bulk_load_pending_replies.erase(req.target_address);
 
     if (err != ERR_OK) {
         derror_replica("get group_bulk_load_reply from {} failed, error = {}",
-                       req->target_address.to_string(),
+                       req.target_address.to_string(),
                        err.to_string());
-        _primary_states.reset_group_bulk_load_states(req->target_address,
-                                                     req->meta_bulk_load_status);
+        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
 
         return;
     }
 
-    if (resp->err == ERR_BUSY) {
+    if (resp.err == ERR_BUSY) {
         // TODO(heyuchen): remove concurrent
         dwarn_replica("concurrent: node[{}] has enough replica downloading, wait for next round",
-                      req->target_address.to_string());
-        _primary_states.reset_group_bulk_load_states(req->target_address,
-                                                     req->meta_bulk_load_status);
+                      req.target_address.to_string());
+        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
         return;
     }
 
-    if (resp->err != ERR_OK) {
+    if (resp.err != ERR_OK) {
         derror_replica("on_group_bulk_load from {} failed, error = {}",
-                       req->target_address.to_string(),
-                       resp->err.to_string());
-        _primary_states.reset_group_bulk_load_states(req->target_address,
-                                                     req->meta_bulk_load_status);
-    } else if (req->config.ballot != get_ballot()) {
+                       req.target_address.to_string(),
+                       resp.err.to_string());
+        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
+    } else if (req.config.ballot != get_ballot()) {
         derror_replica(
             "recevied wrong on_group_bulk_load_reply from {}, request ballot={}, current ballot={}",
-            req->target_address.to_string(),
-            req->config.ballot,
+            req.target_address.to_string(),
+            req.config.ballot,
             get_ballot());
         // TODO(heyuchen): consider here
-        _primary_states.reset_group_bulk_load_states(req->target_address,
-                                                     req->meta_bulk_load_status);
+        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
     } else {
         _primary_states.set_group_bulk_load_states(
-            resp, req->target_address, !_bulk_load_context.is_cleanup());
+            resp, req.target_address, !_bulk_load_context.is_cleanup());
     }
 }
 

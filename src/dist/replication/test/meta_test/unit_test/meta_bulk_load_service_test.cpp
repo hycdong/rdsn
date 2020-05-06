@@ -270,13 +270,10 @@ public:
     }
 
     void on_partition_bulk_load_reply(error_code err,
-                                      ballot b,
-                                      bulk_load_response &response,
-                                      const gpid &pid,
-                                      const rpc_address &primary_addr)
+                                      const bulk_load_request &request,
+                                      const bulk_load_response &response)
     {
-        bulk_svc().on_partition_bulk_load_reply(
-            err, APP_NAME, b, std::move(response), pid, primary_addr);
+        bulk_svc().on_partition_bulk_load_reply(err, request, response);
     }
 
     void reset_local_bulk_load_states(int32_t app_id, const std::string &app_name)
@@ -452,6 +449,16 @@ public:
         bulk_load_service_test::TearDown();
     }
 
+    void create_request(bulk_load_status::type status)
+    {
+        _req.app_name = APP_NAME;
+        _req.ballot = BALLOT;
+        _req.cluster_name = CLUSTER;
+        _req.pid = gpid(_app_id, _pidx);
+        _req.primary_addr = _primary;
+        _req.meta_bulk_load_status = status;
+    }
+
     void create_basic_response(error_code err, bulk_load_status::type status, int32_t pidx = 0)
     {
         _resp.app_name = APP_NAME;
@@ -535,9 +542,10 @@ public:
                                            error_code resp_err = ERR_OK)
     {
         mock_meta_bulk_load_context(_app_id, in_progress_count, status);
+        create_request(status);
         auto response = _resp;
         response.err = resp_err;
-        on_partition_bulk_load_reply(ERR_OK, BALLOT, response, gpid(_app_id, _pidx), _primary);
+        on_partition_bulk_load_reply(ERR_OK, _req, response);
         wait_all();
     }
 
@@ -557,6 +565,7 @@ public:
     int32_t _app_id = 3;
     int32_t _pidx = 0;
     int32_t _partition_count = 4;
+    bulk_load_request _req;
     bulk_load_response _resp;
     rpc_address _primary = rpc_address("127.0.0.1", 10086);
     ingestion_response _ingest_resp;
@@ -669,7 +678,8 @@ TEST_F(bulk_load_process_test, pause_succeed)
 TEST_F(bulk_load_process_test, rpc_error)
 {
     mock_meta_bulk_load_context(_app_id, _partition_count, bulk_load_status::BLS_DOWNLOADED);
-    on_partition_bulk_load_reply(ERR_TIMEOUT, BALLOT, _resp, gpid(_app_id, _pidx), _primary);
+    create_request(bulk_load_status::BLS_DOWNLOADED);
+    on_partition_bulk_load_reply(ERR_TIMEOUT, _req, _resp);
     wait_all();
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
     ASSERT_EQ(get_app_in_process_count(_app_id), _partition_count);

@@ -42,6 +42,7 @@ typedef rpc_holder<configuration_query_bulk_load_request, configuration_query_bu
 typedef rpc_holder<configuration_control_bulk_load_request,
                    configuration_control_bulk_load_response>
     control_bulk_load_rpc;
+typedef rpc_holder<bulk_load_request, bulk_load_response> bulk_load_rpc;
 
 class replication_options
 {

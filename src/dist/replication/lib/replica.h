@@ -430,8 +430,8 @@ private:
     void on_group_bulk_load(const group_bulk_load_request &request,
                             /*out*/ group_bulk_load_response &response);
     void on_group_bulk_load_reply(error_code err,
-                                  const std::shared_ptr<group_bulk_load_request> &req,
-                                  const std::shared_ptr<group_bulk_load_response> &resp);
+                                  const group_bulk_load_request &req,
+                                  const group_bulk_load_response &resp);
 
     dsn::error_code do_bulk_load(const std::string &app_name,
                                  bulk_load_status::type meta_status,

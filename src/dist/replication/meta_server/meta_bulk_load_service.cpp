@@ -103,7 +103,7 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
     }
 
     // sync get bulk_load_info file_handler
-    std::string remote_path = get_bulk_load_info_path(app_name, cluster_name);
+    const std::string remote_path = get_bulk_load_info_path(app_name, cluster_name);
     dsn::dist::block_service::create_file_request cf_req;
     cf_req.file_name = remote_path;
     cf_req.ignore_metadata = true;
@@ -273,8 +273,7 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
     }
 
     if (primary_addr.is_invalid()) {
-        dwarn_f(
-            "app({}) partition({}) primary is invalid, try it later", app_name, pid.to_string());
+        dwarn_f("app({}) partition({}) primary is invalid, try it later", app_name, pid);
         tasking::enqueue(LPC_META_STATE_NORMAL,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_bulk_load, this, app_name, pid),
@@ -285,56 +284,51 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
 
     zauto_read_lock l(_lock);
     app_bulk_load_info ainfo = _app_bulk_load_info[pid.get_app_id()];
-    bulk_load_request req;
-    req.pid = pid;
-    req.app_name = app_name;
-    req.primary_addr = primary_addr;
-    req.remote_provider_name = ainfo.file_provider_type;
-    req.cluster_name = ainfo.cluster_name;
-    req.meta_bulk_load_status = get_partition_bulk_load_status_unlock(pid);
-    req.ballot = b;
-    req.query_bulk_load_metadata = is_partition_metadata_not_updated_unlock(pid);
+    auto req = make_unique<bulk_load_request>();
+    req->pid = pid;
+    req->app_name = app_name;
+    req->primary_addr = primary_addr;
+    req->remote_provider_name = ainfo.file_provider_type;
+    req->cluster_name = ainfo.cluster_name;
+    req->meta_bulk_load_status = get_partition_bulk_load_status_unlock(pid);
+    req->ballot = b;
+    req->query_bulk_load_metadata = is_partition_metadata_not_updated_unlock(pid);
 
-    dsn::message_ex *msg = dsn::message_ex::create_request(RPC_BULK_LOAD, 0, pid.thread_hash());
-    dsn::marshall(msg, req);
-    dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
-        msg,
-        _meta_svc->tracker(),
-        [this, req, pid, app_name, primary_addr](error_code err, bulk_load_response &&resp) {
-            on_partition_bulk_load_reply(
-                err, app_name, req.ballot, std::move(resp), pid, primary_addr);
-        });
     ddebug_f("send bulk load request to replica server({}), app({}), partition({}), partition "
              "status = {}, remote provider = {}, cluster_name = {}",
              primary_addr.to_string(),
              app_name,
-             pid.to_string(),
-             dsn::enum_to_string(req.meta_bulk_load_status),
-             req.remote_provider_name,
-             req.cluster_name);
-    _meta_svc->send_request(msg, primary_addr, rpc_callback);
+             pid,
+             dsn::enum_to_string(req->meta_bulk_load_status),
+             req->remote_provider_name,
+             req->cluster_name);
+
+    bulk_load_rpc rpc(std::move(req), RPC_BULK_LOAD, pid.thread_hash());
+    rpc.call(primary_addr, _meta_svc->tracker(), [this, rpc](error_code err) mutable {
+        on_partition_bulk_load_reply(err, rpc.request(), rpc.response());
+    });
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::on_partition_bulk_load_reply(error_code err,
-                                                     const std::string &app_name,
-                                                     ballot req_ballot,
-                                                     bulk_load_response &&response,
-                                                     const gpid &pid,
-                                                     const rpc_address &primary_addr)
+                                                     const bulk_load_request &request,
+                                                     const bulk_load_response &response)
 {
+    const std::string &app_name = request.app_name;
+    const gpid &pid = request.pid;
+    const rpc_address &primary_addr = request.primary_addr;
     int32_t interval_ms = _meta_svc->get_options().partition_bulk_load_interval_ms;
 
     if (err != ERR_OK) {
         dwarn_f("app({}), partition({}) failed to recevie bulk load response, error = {}",
                 pid.get_app_id(),
-                pid.to_string(),
+                pid,
                 err.to_string());
         try_rollback_to_downloading(pid.get_app_id(), app_name);
     } else if (response.err == ERR_OBJECT_NOT_FOUND || response.err == ERR_INVALID_STATE) {
         dwarn_f("app({}), partition({}) doesn't exist or has invalid state on node({}), error = {}",
                 app_name,
-                pid.to_string(),
+                pid,
                 primary_addr.to_string(),
                 response.err.to_string());
         try_rollback_to_downloading(pid.get_app_id(), app_name);
@@ -343,7 +337,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                 "request for app({}), partition({})",
                 primary_addr.to_string(),
                 app_name,
-                pid.to_string());
+                pid);
     } else if (response.err != ERR_OK) {
         derror_f("app({}), partition({}) handle bulk load response failed, error = {}, primary "
                  "status = {}",
@@ -367,12 +361,12 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
             current_ballot = app->partitions[pid.get_partition_index()].ballot;
         }
 
-        if (req_ballot < current_ballot) {
+        if (request.ballot < current_ballot) {
             dwarn_f("receive out-date response, app({}), partition({}), request ballot = {}, "
                     "current ballot= {}",
                     app_name,
-                    pid.to_string(),
-                    req_ballot,
+                    pid,
+                    request.ballot,
                     current_ballot);
             try_rollback_to_downloading(pid.get_app_id(), app_name);
         }

@@ -176,22 +176,21 @@ bool primary_context::check_exist(::dsn::rpc_address node, partition_status::typ
     }
 }
 
-void primary_context::set_group_bulk_load_states(
-    const std::shared_ptr<group_bulk_load_response> &resp,
-    const rpc_address &node,
-    bool update_progress)
+void primary_context::set_group_bulk_load_states(const group_bulk_load_response &resp,
+                                                 const rpc_address &node,
+                                                 bool update_progress)
 {
-    if (resp->__isset.download_progress && update_progress) {
-        group_download_progress[node] = resp->download_progress;
+    if (resp.__isset.download_progress && update_progress) {
+        group_download_progress[node] = resp.download_progress;
     }
-    if (resp->__isset.istatus) {
-        group_ingestion_status[node] = resp->istatus;
+    if (resp.__isset.istatus) {
+        group_ingestion_status[node] = resp.istatus;
     }
-    if (resp->__isset.is_bulk_load_context_cleaned) {
-        group_bulk_load_context_flag[node] = resp->is_bulk_load_context_cleaned;
+    if (resp.__isset.is_bulk_load_context_cleaned) {
+        group_bulk_load_context_flag[node] = resp.is_bulk_load_context_cleaned;
     }
-    if (resp->__isset.is_bulk_load_paused) {
-        group_bulk_load_paused[node] = resp->is_bulk_load_paused;
+    if (resp.__isset.is_bulk_load_paused) {
+        group_bulk_load_paused[node] = resp.is_bulk_load_paused;
     }
 }
 

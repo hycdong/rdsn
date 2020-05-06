@@ -169,14 +169,9 @@ public:
                                        error_code rpc_error = ERR_OK)
     {
         create_group_bulk_load_request(req_status, req_ballot);
-
-        std::shared_ptr<group_bulk_load_request> req =
-            std::make_shared<group_bulk_load_request>(_group_req);
-        std::shared_ptr<group_bulk_load_response> resp =
-            std::make_shared<group_bulk_load_response>();
-        resp->err = resp_error;
-
-        _replica->on_group_bulk_load_reply(rpc_error, req, resp);
+        group_bulk_load_response resp;
+        resp.err = resp_error;
+        _replica->on_group_bulk_load_reply(rpc_error, _group_req, resp);
     }
 
     bool validate_status(bulk_load_status::type meta_status, bulk_load_status::type local_status)

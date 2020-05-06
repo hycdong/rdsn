@@ -120,11 +120,8 @@ private:
     void partition_bulk_load(const std::string &app_name, const gpid &pid);
 
     void on_partition_bulk_load_reply(error_code err,
-                                      const std::string &app_name,
-                                      ballot req_ballot,
-                                      bulk_load_response &&response,
-                                      const gpid &pid,
-                                      const rpc_address &primary_addr);
+                                      const bulk_load_request &request,
+                                      const bulk_load_response &response);
 
     void handle_app_downloading(const bulk_load_response &response,
                                 const rpc_address &primary_addr);
@@ -326,12 +323,6 @@ private:
         } else {
             return false;
         }
-    }
-
-    bulk_load_status::type get_partition_bulk_load_status(gpid pid)
-    {
-        zauto_read_lock l(_lock);
-        return get_partition_bulk_load_status_unlock(pid);
     }
 
     bulk_load_status::type get_partition_bulk_load_status_unlock(gpid pid)
