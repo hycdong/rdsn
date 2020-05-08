@@ -14453,125 +14453,6 @@ void bulk_load_metadata::printTo(std::ostream &out) const
     out << ")";
 }
 
-partition_download_progress::~partition_download_progress() throw() {}
-
-void partition_download_progress::__set_progress(const int32_t val) { this->progress = val; }
-
-void partition_download_progress::__set_status(const ::dsn::error_code &val) { this->status = val; }
-
-uint32_t partition_download_progress::read(::apache::thrift::protocol::TProtocol *iprot)
-{
-
-    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
-    uint32_t xfer = 0;
-    std::string fname;
-    ::apache::thrift::protocol::TType ftype;
-    int16_t fid;
-
-    xfer += iprot->readStructBegin(fname);
-
-    using ::apache::thrift::protocol::TProtocolException;
-
-    while (true) {
-        xfer += iprot->readFieldBegin(fname, ftype, fid);
-        if (ftype == ::apache::thrift::protocol::T_STOP) {
-            break;
-        }
-        switch (fid) {
-        case 1:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
-                xfer += iprot->readI32(this->progress);
-                this->__isset.progress = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 2:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->status.read(iprot);
-                this->__isset.status = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        default:
-            xfer += iprot->skip(ftype);
-            break;
-        }
-        xfer += iprot->readFieldEnd();
-    }
-
-    xfer += iprot->readStructEnd();
-
-    return xfer;
-}
-
-uint32_t partition_download_progress::write(::apache::thrift::protocol::TProtocol *oprot) const
-{
-    uint32_t xfer = 0;
-    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("partition_download_progress");
-
-    xfer += oprot->writeFieldBegin("progress", ::apache::thrift::protocol::T_I32, 1);
-    xfer += oprot->writeI32(this->progress);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("status", ::apache::thrift::protocol::T_STRUCT, 2);
-    xfer += this->status.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldStop();
-    xfer += oprot->writeStructEnd();
-    return xfer;
-}
-
-void swap(partition_download_progress &a, partition_download_progress &b)
-{
-    using ::std::swap;
-    swap(a.progress, b.progress);
-    swap(a.status, b.status);
-    swap(a.__isset, b.__isset);
-}
-
-partition_download_progress::partition_download_progress(
-    const partition_download_progress &other636)
-{
-    progress = other636.progress;
-    status = other636.status;
-    __isset = other636.__isset;
-}
-partition_download_progress::partition_download_progress(partition_download_progress &&other637)
-{
-    progress = std::move(other637.progress);
-    status = std::move(other637.status);
-    __isset = std::move(other637.__isset);
-}
-partition_download_progress &partition_download_progress::
-operator=(const partition_download_progress &other638)
-{
-    progress = other638.progress;
-    status = other638.status;
-    __isset = other638.__isset;
-    return *this;
-}
-partition_download_progress &partition_download_progress::
-operator=(partition_download_progress &&other639)
-{
-    progress = std::move(other639.progress);
-    status = std::move(other639.status);
-    __isset = std::move(other639.__isset);
-    return *this;
-}
-void partition_download_progress::printTo(std::ostream &out) const
-{
-    using ::apache::thrift::to_string;
-    out << "partition_download_progress(";
-    out << "progress=" << to_string(progress);
-    out << ", "
-        << "status=" << to_string(status);
-    out << ")";
-}
-
 start_bulk_load_request::~start_bulk_load_request() throw() {}
 
 void start_bulk_load_request::__set_app_name(const std::string &val) { this->app_name = val; }
@@ -14673,34 +14554,34 @@ void swap(start_bulk_load_request &a, start_bulk_load_request &b)
     swap(a.__isset, b.__isset);
 }
 
-start_bulk_load_request::start_bulk_load_request(const start_bulk_load_request &other640)
+start_bulk_load_request::start_bulk_load_request(const start_bulk_load_request &other636)
 {
-    app_name = other640.app_name;
-    cluster_name = other640.cluster_name;
-    file_provider_type = other640.file_provider_type;
-    __isset = other640.__isset;
+    app_name = other636.app_name;
+    cluster_name = other636.cluster_name;
+    file_provider_type = other636.file_provider_type;
+    __isset = other636.__isset;
 }
-start_bulk_load_request::start_bulk_load_request(start_bulk_load_request &&other641)
+start_bulk_load_request::start_bulk_load_request(start_bulk_load_request &&other637)
 {
-    app_name = std::move(other641.app_name);
-    cluster_name = std::move(other641.cluster_name);
-    file_provider_type = std::move(other641.file_provider_type);
-    __isset = std::move(other641.__isset);
+    app_name = std::move(other637.app_name);
+    cluster_name = std::move(other637.cluster_name);
+    file_provider_type = std::move(other637.file_provider_type);
+    __isset = std::move(other637.__isset);
 }
-start_bulk_load_request &start_bulk_load_request::operator=(const start_bulk_load_request &other642)
+start_bulk_load_request &start_bulk_load_request::operator=(const start_bulk_load_request &other638)
 {
-    app_name = other642.app_name;
-    cluster_name = other642.cluster_name;
-    file_provider_type = other642.file_provider_type;
-    __isset = other642.__isset;
+    app_name = other638.app_name;
+    cluster_name = other638.cluster_name;
+    file_provider_type = other638.file_provider_type;
+    __isset = other638.__isset;
     return *this;
 }
-start_bulk_load_request &start_bulk_load_request::operator=(start_bulk_load_request &&other643)
+start_bulk_load_request &start_bulk_load_request::operator=(start_bulk_load_request &&other639)
 {
-    app_name = std::move(other643.app_name);
-    cluster_name = std::move(other643.cluster_name);
-    file_provider_type = std::move(other643.file_provider_type);
-    __isset = std::move(other643.__isset);
+    app_name = std::move(other639.app_name);
+    cluster_name = std::move(other639.cluster_name);
+    file_provider_type = std::move(other639.file_provider_type);
+    __isset = std::move(other639.__isset);
     return *this;
 }
 void start_bulk_load_request::printTo(std::ostream &out) const
@@ -14795,31 +14676,31 @@ void swap(start_bulk_load_response &a, start_bulk_load_response &b)
     swap(a.__isset, b.__isset);
 }
 
-start_bulk_load_response::start_bulk_load_response(const start_bulk_load_response &other644)
+start_bulk_load_response::start_bulk_load_response(const start_bulk_load_response &other640)
 {
-    err = other644.err;
-    hint_msg = other644.hint_msg;
-    __isset = other644.__isset;
+    err = other640.err;
+    hint_msg = other640.hint_msg;
+    __isset = other640.__isset;
 }
-start_bulk_load_response::start_bulk_load_response(start_bulk_load_response &&other645)
+start_bulk_load_response::start_bulk_load_response(start_bulk_load_response &&other641)
 {
-    err = std::move(other645.err);
-    hint_msg = std::move(other645.hint_msg);
-    __isset = std::move(other645.__isset);
+    err = std::move(other641.err);
+    hint_msg = std::move(other641.hint_msg);
+    __isset = std::move(other641.__isset);
 }
 start_bulk_load_response &start_bulk_load_response::
-operator=(const start_bulk_load_response &other646)
+operator=(const start_bulk_load_response &other642)
 {
-    err = other646.err;
-    hint_msg = other646.hint_msg;
-    __isset = other646.__isset;
+    err = other642.err;
+    hint_msg = other642.hint_msg;
+    __isset = other642.__isset;
     return *this;
 }
-start_bulk_load_response &start_bulk_load_response::operator=(start_bulk_load_response &&other647)
+start_bulk_load_response &start_bulk_load_response::operator=(start_bulk_load_response &&other643)
 {
-    err = std::move(other647.err);
-    hint_msg = std::move(other647.hint_msg);
-    __isset = std::move(other647.__isset);
+    err = std::move(other643.err);
+    hint_msg = std::move(other643.hint_msg);
+    __isset = std::move(other643.__isset);
     return *this;
 }
 void start_bulk_load_response::printTo(std::ostream &out) const
@@ -14832,14 +14713,13 @@ void start_bulk_load_response::printTo(std::ostream &out) const
     out << ")";
 }
 
-configuration_query_bulk_load_request::~configuration_query_bulk_load_request() throw() {}
+partition_download_progress::~partition_download_progress() throw() {}
 
-void configuration_query_bulk_load_request::__set_app_name(const std::string &val)
-{
-    this->app_name = val;
-}
+void partition_download_progress::__set_progress(const int32_t val) { this->progress = val; }
 
-uint32_t configuration_query_bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
+void partition_download_progress::__set_status(const ::dsn::error_code &val) { this->status = val; }
+
+uint32_t partition_download_progress::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -14859,9 +14739,17 @@ uint32_t configuration_query_bulk_load_request::read(::apache::thrift::protocol:
         }
         switch (fid) {
         case 1:
-            if (ftype == ::apache::thrift::protocol::T_STRING) {
-                xfer += iprot->readString(this->app_name);
-                this->__isset.app_name = true;
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->progress);
+                this->__isset.progress = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->status.read(iprot);
+                this->__isset.status = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -14878,15 +14766,18 @@ uint32_t configuration_query_bulk_load_request::read(::apache::thrift::protocol:
     return xfer;
 }
 
-uint32_t
-configuration_query_bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t partition_download_progress::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("configuration_query_bulk_load_request");
+    xfer += oprot->writeStructBegin("partition_download_progress");
 
-    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
-    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldBegin("progress", ::apache::thrift::protocol::T_I32, 1);
+    xfer += oprot->writeI32(this->progress);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("status", ::apache::thrift::protocol::T_STRUCT, 2);
+    xfer += this->status.write(oprot);
     xfer += oprot->writeFieldEnd();
 
     xfer += oprot->writeFieldStop();
@@ -14894,89 +14785,86 @@ configuration_query_bulk_load_request::write(::apache::thrift::protocol::TProtoc
     return xfer;
 }
 
-void swap(configuration_query_bulk_load_request &a, configuration_query_bulk_load_request &b)
+void swap(partition_download_progress &a, partition_download_progress &b)
 {
     using ::std::swap;
-    swap(a.app_name, b.app_name);
+    swap(a.progress, b.progress);
+    swap(a.status, b.status);
     swap(a.__isset, b.__isset);
 }
 
-configuration_query_bulk_load_request::configuration_query_bulk_load_request(
-    const configuration_query_bulk_load_request &other648)
+partition_download_progress::partition_download_progress(
+    const partition_download_progress &other644)
 {
-    app_name = other648.app_name;
-    __isset = other648.__isset;
+    progress = other644.progress;
+    status = other644.status;
+    __isset = other644.__isset;
 }
-configuration_query_bulk_load_request::configuration_query_bulk_load_request(
-    configuration_query_bulk_load_request &&other649)
+partition_download_progress::partition_download_progress(partition_download_progress &&other645)
 {
-    app_name = std::move(other649.app_name);
-    __isset = std::move(other649.__isset);
+    progress = std::move(other645.progress);
+    status = std::move(other645.status);
+    __isset = std::move(other645.__isset);
 }
-configuration_query_bulk_load_request &configuration_query_bulk_load_request::
-operator=(const configuration_query_bulk_load_request &other650)
+partition_download_progress &partition_download_progress::
+operator=(const partition_download_progress &other646)
 {
-    app_name = other650.app_name;
-    __isset = other650.__isset;
+    progress = other646.progress;
+    status = other646.status;
+    __isset = other646.__isset;
     return *this;
 }
-configuration_query_bulk_load_request &configuration_query_bulk_load_request::
-operator=(configuration_query_bulk_load_request &&other651)
+partition_download_progress &partition_download_progress::
+operator=(partition_download_progress &&other647)
 {
-    app_name = std::move(other651.app_name);
-    __isset = std::move(other651.__isset);
+    progress = std::move(other647.progress);
+    status = std::move(other647.status);
+    __isset = std::move(other647.__isset);
     return *this;
 }
-void configuration_query_bulk_load_request::printTo(std::ostream &out) const
+void partition_download_progress::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "configuration_query_bulk_load_request(";
-    out << "app_name=" << to_string(app_name);
+    out << "partition_download_progress(";
+    out << "progress=" << to_string(progress);
+    out << ", "
+        << "status=" << to_string(status);
     out << ")";
 }
 
-configuration_query_bulk_load_response::~configuration_query_bulk_load_response() throw() {}
+partition_bulk_load_state::~partition_bulk_load_state() throw() {}
 
-void configuration_query_bulk_load_response::__set_err(const ::dsn::error_code &val)
+void partition_bulk_load_state::__set_download_progress(const int32_t val)
 {
-    this->err = val;
+    this->download_progress = val;
+    __isset.download_progress = true;
 }
 
-void configuration_query_bulk_load_response::__set_app_name(const std::string &val)
+void partition_bulk_load_state::__set_download_status(const ::dsn::error_code &val)
 {
-    this->app_name = val;
+    this->download_status = val;
+    __isset.download_status = true;
 }
 
-void configuration_query_bulk_load_response::__set_app_status(const bulk_load_status::type val)
+void partition_bulk_load_state::__set_ingest_status(const ingestion_status::type val)
 {
-    this->app_status = val;
+    this->ingest_status = val;
+    __isset.ingest_status = true;
 }
 
-void configuration_query_bulk_load_response::__set_partitions_status(
-    const std::vector<bulk_load_status::type> &val)
+void partition_bulk_load_state::__set_is_cleanuped(const bool val)
 {
-    this->partitions_status = val;
+    this->is_cleanuped = val;
+    __isset.is_cleanuped = true;
 }
 
-void configuration_query_bulk_load_response::__set_max_replica_count(const int32_t val)
+void partition_bulk_load_state::__set_is_paused(const bool val)
 {
-    this->max_replica_count = val;
+    this->is_paused = val;
+    __isset.is_paused = true;
 }
 
-void configuration_query_bulk_load_response::__set_download_progresses(
-    const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val)
-{
-    this->download_progresses = val;
-    __isset.download_progresses = true;
-}
-
-void configuration_query_bulk_load_response::__set_cleanup_flags(const std::vector<bool> &val)
-{
-    this->cleanup_flags = val;
-    __isset.cleanup_flags = true;
-}
-
-uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t partition_bulk_load_state::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -14996,109 +14884,43 @@ uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol
         }
         switch (fid) {
         case 1:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->err.read(iprot);
-                this->__isset.err = true;
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->download_progress);
+                this->__isset.download_progress = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
             break;
         case 2:
-            if (ftype == ::apache::thrift::protocol::T_STRING) {
-                xfer += iprot->readString(this->app_name);
-                this->__isset.app_name = true;
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->download_status.read(iprot);
+                this->__isset.download_status = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
             break;
         case 3:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast652;
-                xfer += iprot->readI32(ecast652);
-                this->app_status = (bulk_load_status::type)ecast652;
-                this->__isset.app_status = true;
+                int32_t ecast648;
+                xfer += iprot->readI32(ecast648);
+                this->ingest_status = (ingestion_status::type)ecast648;
+                this->__isset.ingest_status = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
             break;
         case 4:
-            if (ftype == ::apache::thrift::protocol::T_LIST) {
-                {
-                    this->partitions_status.clear();
-                    uint32_t _size653;
-                    ::apache::thrift::protocol::TType _etype656;
-                    xfer += iprot->readListBegin(_etype656, _size653);
-                    this->partitions_status.resize(_size653);
-                    uint32_t _i657;
-                    for (_i657 = 0; _i657 < _size653; ++_i657) {
-                        int32_t ecast658;
-                        xfer += iprot->readI32(ecast658);
-                        this->partitions_status[_i657] = (bulk_load_status::type)ecast658;
-                    }
-                    xfer += iprot->readListEnd();
-                }
-                this->__isset.partitions_status = true;
+            if (ftype == ::apache::thrift::protocol::T_BOOL) {
+                xfer += iprot->readBool(this->is_cleanuped);
+                this->__isset.is_cleanuped = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
             break;
         case 5:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
-                xfer += iprot->readI32(this->max_replica_count);
-                this->__isset.max_replica_count = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 6:
-            if (ftype == ::apache::thrift::protocol::T_LIST) {
-                {
-                    this->download_progresses.clear();
-                    uint32_t _size659;
-                    ::apache::thrift::protocol::TType _etype662;
-                    xfer += iprot->readListBegin(_etype662, _size659);
-                    this->download_progresses.resize(_size659);
-                    uint32_t _i663;
-                    for (_i663 = 0; _i663 < _size659; ++_i663) {
-                        {
-                            this->download_progresses[_i663].clear();
-                            uint32_t _size664;
-                            ::apache::thrift::protocol::TType _ktype665;
-                            ::apache::thrift::protocol::TType _vtype666;
-                            xfer += iprot->readMapBegin(_ktype665, _vtype666, _size664);
-                            uint32_t _i668;
-                            for (_i668 = 0; _i668 < _size664; ++_i668) {
-                                ::dsn::rpc_address _key669;
-                                xfer += _key669.read(iprot);
-                                partition_download_progress &_val670 =
-                                    this->download_progresses[_i663][_key669];
-                                xfer += _val670.read(iprot);
-                            }
-                            xfer += iprot->readMapEnd();
-                        }
-                    }
-                    xfer += iprot->readListEnd();
-                }
-                this->__isset.download_progresses = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 7:
-            if (ftype == ::apache::thrift::protocol::T_LIST) {
-                {
-                    this->cleanup_flags.clear();
-                    uint32_t _size671;
-                    ::apache::thrift::protocol::TType _etype674;
-                    xfer += iprot->readListBegin(_etype674, _size671);
-                    this->cleanup_flags.resize(_size671);
-                    uint32_t _i675;
-                    for (_i675 = 0; _i675 < _size671; ++_i675) {
-                        xfer += iprot->readBool(this->cleanup_flags[_i675]);
-                    }
-                    xfer += iprot->readListEnd();
-                }
-                this->__isset.cleanup_flags = true;
+            if (ftype == ::apache::thrift::protocol::T_BOOL) {
+                xfer += iprot->readBool(this->is_paused);
+                this->__isset.is_paused = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -15115,83 +14937,35 @@ uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol
     return xfer;
 }
 
-uint32_t
-configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t partition_bulk_load_state::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("configuration_query_bulk_load_response");
+    xfer += oprot->writeStructBegin("partition_bulk_load_state");
 
-    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
-    xfer += this->err.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 2);
-    xfer += oprot->writeString(this->app_name);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("app_status", ::apache::thrift::protocol::T_I32, 3);
-    xfer += oprot->writeI32((int32_t)this->app_status);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("partitions_status", ::apache::thrift::protocol::T_LIST, 4);
-    {
-        xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I32,
-                                      static_cast<uint32_t>(this->partitions_status.size()));
-        std::vector<bulk_load_status::type>::const_iterator _iter676;
-        for (_iter676 = this->partitions_status.begin(); _iter676 != this->partitions_status.end();
-             ++_iter676) {
-            xfer += oprot->writeI32((int32_t)(*_iter676));
-        }
-        xfer += oprot->writeListEnd();
-    }
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("max_replica_count", ::apache::thrift::protocol::T_I32, 5);
-    xfer += oprot->writeI32(this->max_replica_count);
-    xfer += oprot->writeFieldEnd();
-
-    if (this->__isset.download_progresses) {
-        xfer +=
-            oprot->writeFieldBegin("download_progresses", ::apache::thrift::protocol::T_LIST, 6);
-        {
-            xfer += oprot->writeListBegin(::apache::thrift::protocol::T_MAP,
-                                          static_cast<uint32_t>(this->download_progresses.size()));
-            std::vector<std::map<::dsn::rpc_address, partition_download_progress>>::const_iterator
-                _iter677;
-            for (_iter677 = this->download_progresses.begin();
-                 _iter677 != this->download_progresses.end();
-                 ++_iter677) {
-                {
-                    xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
-                                                 ::apache::thrift::protocol::T_STRUCT,
-                                                 static_cast<uint32_t>((*_iter677).size()));
-                    std::map<::dsn::rpc_address, partition_download_progress>::const_iterator
-                        _iter678;
-                    for (_iter678 = (*_iter677).begin(); _iter678 != (*_iter677).end();
-                         ++_iter678) {
-                        xfer += _iter678->first.write(oprot);
-                        xfer += _iter678->second.write(oprot);
-                    }
-                    xfer += oprot->writeMapEnd();
-                }
-            }
-            xfer += oprot->writeListEnd();
-        }
+    if (this->__isset.download_progress) {
+        xfer += oprot->writeFieldBegin("download_progress", ::apache::thrift::protocol::T_I32, 1);
+        xfer += oprot->writeI32(this->download_progress);
         xfer += oprot->writeFieldEnd();
     }
-    if (this->__isset.cleanup_flags) {
-        xfer += oprot->writeFieldBegin("cleanup_flags", ::apache::thrift::protocol::T_LIST, 7);
-        {
-            xfer += oprot->writeListBegin(::apache::thrift::protocol::T_BOOL,
-                                          static_cast<uint32_t>(this->cleanup_flags.size()));
-            std::vector<bool>::const_iterator _iter679;
-            for (_iter679 = this->cleanup_flags.begin(); _iter679 != this->cleanup_flags.end();
-                 ++_iter679) {
-                xfer += oprot->writeBool((*_iter679));
-            }
-            xfer += oprot->writeListEnd();
-        }
+    if (this->__isset.download_status) {
+        xfer += oprot->writeFieldBegin("download_status", ::apache::thrift::protocol::T_STRUCT, 2);
+        xfer += this->download_status.write(oprot);
+        xfer += oprot->writeFieldEnd();
+    }
+    if (this->__isset.ingest_status) {
+        xfer += oprot->writeFieldBegin("ingest_status", ::apache::thrift::protocol::T_I32, 3);
+        xfer += oprot->writeI32((int32_t)this->ingest_status);
+        xfer += oprot->writeFieldEnd();
+    }
+    if (this->__isset.is_cleanuped) {
+        xfer += oprot->writeFieldBegin("is_cleanuped", ::apache::thrift::protocol::T_BOOL, 4);
+        xfer += oprot->writeBool(this->is_cleanuped);
+        xfer += oprot->writeFieldEnd();
+    }
+    if (this->__isset.is_paused) {
+        xfer += oprot->writeFieldBegin("is_paused", ::apache::thrift::protocol::T_BOOL, 5);
+        xfer += oprot->writeBool(this->is_paused);
         xfer += oprot->writeFieldEnd();
     }
     xfer += oprot->writeFieldStop();
@@ -15199,88 +14973,75 @@ configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProto
     return xfer;
 }
 
-void swap(configuration_query_bulk_load_response &a, configuration_query_bulk_load_response &b)
+void swap(partition_bulk_load_state &a, partition_bulk_load_state &b)
 {
     using ::std::swap;
-    swap(a.err, b.err);
-    swap(a.app_name, b.app_name);
-    swap(a.app_status, b.app_status);
-    swap(a.partitions_status, b.partitions_status);
-    swap(a.max_replica_count, b.max_replica_count);
-    swap(a.download_progresses, b.download_progresses);
-    swap(a.cleanup_flags, b.cleanup_flags);
+    swap(a.download_progress, b.download_progress);
+    swap(a.download_status, b.download_status);
+    swap(a.ingest_status, b.ingest_status);
+    swap(a.is_cleanuped, b.is_cleanuped);
+    swap(a.is_paused, b.is_paused);
     swap(a.__isset, b.__isset);
 }
 
-configuration_query_bulk_load_response::configuration_query_bulk_load_response(
-    const configuration_query_bulk_load_response &other680)
+partition_bulk_load_state::partition_bulk_load_state(const partition_bulk_load_state &other649)
 {
-    err = other680.err;
-    app_name = other680.app_name;
-    app_status = other680.app_status;
-    partitions_status = other680.partitions_status;
-    max_replica_count = other680.max_replica_count;
-    download_progresses = other680.download_progresses;
-    cleanup_flags = other680.cleanup_flags;
-    __isset = other680.__isset;
+    download_progress = other649.download_progress;
+    download_status = other649.download_status;
+    ingest_status = other649.ingest_status;
+    is_cleanuped = other649.is_cleanuped;
+    is_paused = other649.is_paused;
+    __isset = other649.__isset;
 }
-configuration_query_bulk_load_response::configuration_query_bulk_load_response(
-    configuration_query_bulk_load_response &&other681)
+partition_bulk_load_state::partition_bulk_load_state(partition_bulk_load_state &&other650)
 {
-    err = std::move(other681.err);
-    app_name = std::move(other681.app_name);
-    app_status = std::move(other681.app_status);
-    partitions_status = std::move(other681.partitions_status);
-    max_replica_count = std::move(other681.max_replica_count);
-    download_progresses = std::move(other681.download_progresses);
-    cleanup_flags = std::move(other681.cleanup_flags);
-    __isset = std::move(other681.__isset);
+    download_progress = std::move(other650.download_progress);
+    download_status = std::move(other650.download_status);
+    ingest_status = std::move(other650.ingest_status);
+    is_cleanuped = std::move(other650.is_cleanuped);
+    is_paused = std::move(other650.is_paused);
+    __isset = std::move(other650.__isset);
 }
-configuration_query_bulk_load_response &configuration_query_bulk_load_response::
-operator=(const configuration_query_bulk_load_response &other682)
+partition_bulk_load_state &partition_bulk_load_state::
+operator=(const partition_bulk_load_state &other651)
 {
-    err = other682.err;
-    app_name = other682.app_name;
-    app_status = other682.app_status;
-    partitions_status = other682.partitions_status;
-    max_replica_count = other682.max_replica_count;
-    download_progresses = other682.download_progresses;
-    cleanup_flags = other682.cleanup_flags;
-    __isset = other682.__isset;
+    download_progress = other651.download_progress;
+    download_status = other651.download_status;
+    ingest_status = other651.ingest_status;
+    is_cleanuped = other651.is_cleanuped;
+    is_paused = other651.is_paused;
+    __isset = other651.__isset;
     return *this;
 }
-configuration_query_bulk_load_response &configuration_query_bulk_load_response::
-operator=(configuration_query_bulk_load_response &&other683)
+partition_bulk_load_state &partition_bulk_load_state::
+operator=(partition_bulk_load_state &&other652)
 {
-    err = std::move(other683.err);
-    app_name = std::move(other683.app_name);
-    app_status = std::move(other683.app_status);
-    partitions_status = std::move(other683.partitions_status);
-    max_replica_count = std::move(other683.max_replica_count);
-    download_progresses = std::move(other683.download_progresses);
-    cleanup_flags = std::move(other683.cleanup_flags);
-    __isset = std::move(other683.__isset);
+    download_progress = std::move(other652.download_progress);
+    download_status = std::move(other652.download_status);
+    ingest_status = std::move(other652.ingest_status);
+    is_cleanuped = std::move(other652.is_cleanuped);
+    is_paused = std::move(other652.is_paused);
+    __isset = std::move(other652.__isset);
     return *this;
 }
-void configuration_query_bulk_load_response::printTo(std::ostream &out) const
+void partition_bulk_load_state::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "configuration_query_bulk_load_response(";
-    out << "err=" << to_string(err);
+    out << "partition_bulk_load_state(";
+    out << "download_progress=";
+    (__isset.download_progress ? (out << to_string(download_progress)) : (out << "<null>"));
     out << ", "
-        << "app_name=" << to_string(app_name);
+        << "download_status=";
+    (__isset.download_status ? (out << to_string(download_status)) : (out << "<null>"));
     out << ", "
-        << "app_status=" << to_string(app_status);
+        << "ingest_status=";
+    (__isset.ingest_status ? (out << to_string(ingest_status)) : (out << "<null>"));
     out << ", "
-        << "partitions_status=" << to_string(partitions_status);
+        << "is_cleanuped=";
+    (__isset.is_cleanuped ? (out << to_string(is_cleanuped)) : (out << "<null>"));
     out << ", "
-        << "max_replica_count=" << to_string(max_replica_count);
-    out << ", "
-        << "download_progresses=";
-    (__isset.download_progresses ? (out << to_string(download_progresses)) : (out << "<null>"));
-    out << ", "
-        << "cleanup_flags=";
-    (__isset.cleanup_flags ? (out << to_string(cleanup_flags)) : (out << "<null>"));
+        << "is_paused=";
+    (__isset.is_paused ? (out << to_string(is_paused)) : (out << "<null>"));
     out << ")";
 }
 
@@ -15383,9 +15144,9 @@ uint32_t bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
             break;
         case 7:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast684;
-                xfer += iprot->readI32(ecast684);
-                this->meta_bulk_load_status = (bulk_load_status::type)ecast684;
+                int32_t ecast653;
+                xfer += iprot->readI32(ecast653);
+                this->meta_bulk_load_status = (bulk_load_status::type)ecast653;
                 this->__isset.meta_bulk_load_status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -15469,54 +15230,54 @@ void swap(bulk_load_request &a, bulk_load_request &b)
     swap(a.__isset, b.__isset);
 }
 
-bulk_load_request::bulk_load_request(const bulk_load_request &other685)
+bulk_load_request::bulk_load_request(const bulk_load_request &other654)
 {
-    pid = other685.pid;
-    app_name = other685.app_name;
-    primary_addr = other685.primary_addr;
-    remote_provider_name = other685.remote_provider_name;
-    cluster_name = other685.cluster_name;
-    ballot = other685.ballot;
-    meta_bulk_load_status = other685.meta_bulk_load_status;
-    query_bulk_load_metadata = other685.query_bulk_load_metadata;
-    __isset = other685.__isset;
+    pid = other654.pid;
+    app_name = other654.app_name;
+    primary_addr = other654.primary_addr;
+    remote_provider_name = other654.remote_provider_name;
+    cluster_name = other654.cluster_name;
+    ballot = other654.ballot;
+    meta_bulk_load_status = other654.meta_bulk_load_status;
+    query_bulk_load_metadata = other654.query_bulk_load_metadata;
+    __isset = other654.__isset;
 }
-bulk_load_request::bulk_load_request(bulk_load_request &&other686)
+bulk_load_request::bulk_load_request(bulk_load_request &&other655)
 {
-    pid = std::move(other686.pid);
-    app_name = std::move(other686.app_name);
-    primary_addr = std::move(other686.primary_addr);
-    remote_provider_name = std::move(other686.remote_provider_name);
-    cluster_name = std::move(other686.cluster_name);
-    ballot = std::move(other686.ballot);
-    meta_bulk_load_status = std::move(other686.meta_bulk_load_status);
-    query_bulk_load_metadata = std::move(other686.query_bulk_load_metadata);
-    __isset = std::move(other686.__isset);
+    pid = std::move(other655.pid);
+    app_name = std::move(other655.app_name);
+    primary_addr = std::move(other655.primary_addr);
+    remote_provider_name = std::move(other655.remote_provider_name);
+    cluster_name = std::move(other655.cluster_name);
+    ballot = std::move(other655.ballot);
+    meta_bulk_load_status = std::move(other655.meta_bulk_load_status);
+    query_bulk_load_metadata = std::move(other655.query_bulk_load_metadata);
+    __isset = std::move(other655.__isset);
 }
-bulk_load_request &bulk_load_request::operator=(const bulk_load_request &other687)
+bulk_load_request &bulk_load_request::operator=(const bulk_load_request &other656)
 {
-    pid = other687.pid;
-    app_name = other687.app_name;
-    primary_addr = other687.primary_addr;
-    remote_provider_name = other687.remote_provider_name;
-    cluster_name = other687.cluster_name;
-    ballot = other687.ballot;
-    meta_bulk_load_status = other687.meta_bulk_load_status;
-    query_bulk_load_metadata = other687.query_bulk_load_metadata;
-    __isset = other687.__isset;
+    pid = other656.pid;
+    app_name = other656.app_name;
+    primary_addr = other656.primary_addr;
+    remote_provider_name = other656.remote_provider_name;
+    cluster_name = other656.cluster_name;
+    ballot = other656.ballot;
+    meta_bulk_load_status = other656.meta_bulk_load_status;
+    query_bulk_load_metadata = other656.query_bulk_load_metadata;
+    __isset = other656.__isset;
     return *this;
 }
-bulk_load_request &bulk_load_request::operator=(bulk_load_request &&other688)
+bulk_load_request &bulk_load_request::operator=(bulk_load_request &&other657)
 {
-    pid = std::move(other688.pid);
-    app_name = std::move(other688.app_name);
-    primary_addr = std::move(other688.primary_addr);
-    remote_provider_name = std::move(other688.remote_provider_name);
-    cluster_name = std::move(other688.cluster_name);
-    ballot = std::move(other688.ballot);
-    meta_bulk_load_status = std::move(other688.meta_bulk_load_status);
-    query_bulk_load_metadata = std::move(other688.query_bulk_load_metadata);
-    __isset = std::move(other688.__isset);
+    pid = std::move(other657.pid);
+    app_name = std::move(other657.app_name);
+    primary_addr = std::move(other657.primary_addr);
+    remote_provider_name = std::move(other657.remote_provider_name);
+    cluster_name = std::move(other657.cluster_name);
+    ballot = std::move(other657.ballot);
+    meta_bulk_load_status = std::move(other657.meta_bulk_load_status);
+    query_bulk_load_metadata = std::move(other657.query_bulk_load_metadata);
+    __isset = std::move(other657.__isset);
     return *this;
 }
 void bulk_load_request::printTo(std::ostream &out) const
@@ -15554,30 +15315,22 @@ void bulk_load_response::__set_primary_bulk_load_status(const bulk_load_status::
     this->primary_bulk_load_status = val;
 }
 
+void bulk_load_response::__set_group_bulk_load_state(
+    const std::map<::dsn::rpc_address, partition_bulk_load_state> &val)
+{
+    this->group_bulk_load_state = val;
+}
+
 void bulk_load_response::__set_metadata(const bulk_load_metadata &val)
 {
     this->metadata = val;
     __isset.metadata = true;
 }
 
-void bulk_load_response::__set_download_progresses(
-    const std::map<::dsn::rpc_address, partition_download_progress> &val)
-{
-    this->download_progresses = val;
-    __isset.download_progresses = true;
-}
-
 void bulk_load_response::__set_total_download_progress(const int32_t val)
 {
     this->total_download_progress = val;
     __isset.total_download_progress = true;
-}
-
-void bulk_load_response::__set_group_ingestion_status(
-    const std::map<::dsn::rpc_address, ingestion_status::type> &val)
-{
-    this->group_ingestion_status = val;
-    __isset.group_ingestion_status = true;
 }
 
 void bulk_load_response::__set_is_group_ingestion_finished(const bool val)
@@ -15643,40 +15396,40 @@ uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
             break;
         case 4:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast689;
-                xfer += iprot->readI32(ecast689);
-                this->primary_bulk_load_status = (bulk_load_status::type)ecast689;
+                int32_t ecast658;
+                xfer += iprot->readI32(ecast658);
+                this->primary_bulk_load_status = (bulk_load_status::type)ecast658;
                 this->__isset.primary_bulk_load_status = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
             break;
         case 5:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->metadata.read(iprot);
-                this->__isset.metadata = true;
+            if (ftype == ::apache::thrift::protocol::T_MAP) {
+                {
+                    this->group_bulk_load_state.clear();
+                    uint32_t _size659;
+                    ::apache::thrift::protocol::TType _ktype660;
+                    ::apache::thrift::protocol::TType _vtype661;
+                    xfer += iprot->readMapBegin(_ktype660, _vtype661, _size659);
+                    uint32_t _i663;
+                    for (_i663 = 0; _i663 < _size659; ++_i663) {
+                        ::dsn::rpc_address _key664;
+                        xfer += _key664.read(iprot);
+                        partition_bulk_load_state &_val665 = this->group_bulk_load_state[_key664];
+                        xfer += _val665.read(iprot);
+                    }
+                    xfer += iprot->readMapEnd();
+                }
+                this->__isset.group_bulk_load_state = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
             break;
         case 6:
-            if (ftype == ::apache::thrift::protocol::T_MAP) {
-                {
-                    this->download_progresses.clear();
-                    uint32_t _size690;
-                    ::apache::thrift::protocol::TType _ktype691;
-                    ::apache::thrift::protocol::TType _vtype692;
-                    xfer += iprot->readMapBegin(_ktype691, _vtype692, _size690);
-                    uint32_t _i694;
-                    for (_i694 = 0; _i694 < _size690; ++_i694) {
-                        ::dsn::rpc_address _key695;
-                        xfer += _key695.read(iprot);
-                        partition_download_progress &_val696 = this->download_progresses[_key695];
-                        xfer += _val696.read(iprot);
-                    }
-                    xfer += iprot->readMapEnd();
-                }
-                this->__isset.download_progresses = true;
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->metadata.read(iprot);
+                this->__isset.metadata = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -15690,30 +15443,6 @@ uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
             }
             break;
         case 8:
-            if (ftype == ::apache::thrift::protocol::T_MAP) {
-                {
-                    this->group_ingestion_status.clear();
-                    uint32_t _size697;
-                    ::apache::thrift::protocol::TType _ktype698;
-                    ::apache::thrift::protocol::TType _vtype699;
-                    xfer += iprot->readMapBegin(_ktype698, _vtype699, _size697);
-                    uint32_t _i701;
-                    for (_i701 = 0; _i701 < _size697; ++_i701) {
-                        ::dsn::rpc_address _key702;
-                        xfer += _key702.read(iprot);
-                        ingestion_status::type &_val703 = this->group_ingestion_status[_key702];
-                        int32_t ecast704;
-                        xfer += iprot->readI32(ecast704);
-                        _val703 = (ingestion_status::type)ecast704;
-                    }
-                    xfer += iprot->readMapEnd();
-                }
-                this->__isset.group_ingestion_status = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 9:
             if (ftype == ::apache::thrift::protocol::T_BOOL) {
                 xfer += iprot->readBool(this->is_group_ingestion_finished);
                 this->__isset.is_group_ingestion_finished = true;
@@ -15721,7 +15450,7 @@ uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 10:
+        case 9:
             if (ftype == ::apache::thrift::protocol::T_BOOL) {
                 xfer += iprot->readBool(this->is_group_bulk_load_context_cleaned);
                 this->__isset.is_group_bulk_load_context_cleaned = true;
@@ -15729,7 +15458,7 @@ uint32_t bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 11:
+        case 10:
             if (ftype == ::apache::thrift::protocol::T_BOOL) {
                 xfer += iprot->readBool(this->is_group_bulk_load_paused);
                 this->__isset.is_group_bulk_load_paused = true;
@@ -15772,26 +15501,25 @@ uint32_t bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot)
     xfer += oprot->writeI32((int32_t)this->primary_bulk_load_status);
     xfer += oprot->writeFieldEnd();
 
-    if (this->__isset.metadata) {
-        xfer += oprot->writeFieldBegin("metadata", ::apache::thrift::protocol::T_STRUCT, 5);
-        xfer += this->metadata.write(oprot);
-        xfer += oprot->writeFieldEnd();
-    }
-    if (this->__isset.download_progresses) {
-        xfer += oprot->writeFieldBegin("download_progresses", ::apache::thrift::protocol::T_MAP, 6);
-        {
-            xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
-                                         ::apache::thrift::protocol::T_STRUCT,
-                                         static_cast<uint32_t>(this->download_progresses.size()));
-            std::map<::dsn::rpc_address, partition_download_progress>::const_iterator _iter705;
-            for (_iter705 = this->download_progresses.begin();
-                 _iter705 != this->download_progresses.end();
-                 ++_iter705) {
-                xfer += _iter705->first.write(oprot);
-                xfer += _iter705->second.write(oprot);
-            }
-            xfer += oprot->writeMapEnd();
+    xfer += oprot->writeFieldBegin("group_bulk_load_state", ::apache::thrift::protocol::T_MAP, 5);
+    {
+        xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
+                                     ::apache::thrift::protocol::T_STRUCT,
+                                     static_cast<uint32_t>(this->group_bulk_load_state.size()));
+        std::map<::dsn::rpc_address, partition_bulk_load_state>::const_iterator _iter666;
+        for (_iter666 = this->group_bulk_load_state.begin();
+             _iter666 != this->group_bulk_load_state.end();
+             ++_iter666) {
+            xfer += _iter666->first.write(oprot);
+            xfer += _iter666->second.write(oprot);
         }
+        xfer += oprot->writeMapEnd();
+    }
+    xfer += oprot->writeFieldEnd();
+
+    if (this->__isset.metadata) {
+        xfer += oprot->writeFieldBegin("metadata", ::apache::thrift::protocol::T_STRUCT, 6);
+        xfer += this->metadata.write(oprot);
         xfer += oprot->writeFieldEnd();
     }
     if (this->__isset.total_download_progress) {
@@ -15800,40 +15528,21 @@ uint32_t bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot)
         xfer += oprot->writeI32(this->total_download_progress);
         xfer += oprot->writeFieldEnd();
     }
-    if (this->__isset.group_ingestion_status) {
-        xfer +=
-            oprot->writeFieldBegin("group_ingestion_status", ::apache::thrift::protocol::T_MAP, 8);
-        {
-            xfer +=
-                oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
-                                     ::apache::thrift::protocol::T_I32,
-                                     static_cast<uint32_t>(this->group_ingestion_status.size()));
-            std::map<::dsn::rpc_address, ingestion_status::type>::const_iterator _iter706;
-            for (_iter706 = this->group_ingestion_status.begin();
-                 _iter706 != this->group_ingestion_status.end();
-                 ++_iter706) {
-                xfer += _iter706->first.write(oprot);
-                xfer += oprot->writeI32((int32_t)_iter706->second);
-            }
-            xfer += oprot->writeMapEnd();
-        }
-        xfer += oprot->writeFieldEnd();
-    }
     if (this->__isset.is_group_ingestion_finished) {
         xfer += oprot->writeFieldBegin(
-            "is_group_ingestion_finished", ::apache::thrift::protocol::T_BOOL, 9);
+            "is_group_ingestion_finished", ::apache::thrift::protocol::T_BOOL, 8);
         xfer += oprot->writeBool(this->is_group_ingestion_finished);
         xfer += oprot->writeFieldEnd();
     }
     if (this->__isset.is_group_bulk_load_context_cleaned) {
         xfer += oprot->writeFieldBegin(
-            "is_group_bulk_load_context_cleaned", ::apache::thrift::protocol::T_BOOL, 10);
+            "is_group_bulk_load_context_cleaned", ::apache::thrift::protocol::T_BOOL, 9);
         xfer += oprot->writeBool(this->is_group_bulk_load_context_cleaned);
         xfer += oprot->writeFieldEnd();
     }
     if (this->__isset.is_group_bulk_load_paused) {
         xfer += oprot->writeFieldBegin(
-            "is_group_bulk_load_paused", ::apache::thrift::protocol::T_BOOL, 11);
+            "is_group_bulk_load_paused", ::apache::thrift::protocol::T_BOOL, 10);
         xfer += oprot->writeBool(this->is_group_bulk_load_paused);
         xfer += oprot->writeFieldEnd();
     }
@@ -15849,76 +15558,71 @@ void swap(bulk_load_response &a, bulk_load_response &b)
     swap(a.pid, b.pid);
     swap(a.app_name, b.app_name);
     swap(a.primary_bulk_load_status, b.primary_bulk_load_status);
+    swap(a.group_bulk_load_state, b.group_bulk_load_state);
     swap(a.metadata, b.metadata);
-    swap(a.download_progresses, b.download_progresses);
     swap(a.total_download_progress, b.total_download_progress);
-    swap(a.group_ingestion_status, b.group_ingestion_status);
     swap(a.is_group_ingestion_finished, b.is_group_ingestion_finished);
     swap(a.is_group_bulk_load_context_cleaned, b.is_group_bulk_load_context_cleaned);
     swap(a.is_group_bulk_load_paused, b.is_group_bulk_load_paused);
     swap(a.__isset, b.__isset);
 }
 
-bulk_load_response::bulk_load_response(const bulk_load_response &other707)
+bulk_load_response::bulk_load_response(const bulk_load_response &other667)
 {
-    err = other707.err;
-    pid = other707.pid;
-    app_name = other707.app_name;
-    primary_bulk_load_status = other707.primary_bulk_load_status;
-    metadata = other707.metadata;
-    download_progresses = other707.download_progresses;
-    total_download_progress = other707.total_download_progress;
-    group_ingestion_status = other707.group_ingestion_status;
-    is_group_ingestion_finished = other707.is_group_ingestion_finished;
-    is_group_bulk_load_context_cleaned = other707.is_group_bulk_load_context_cleaned;
-    is_group_bulk_load_paused = other707.is_group_bulk_load_paused;
-    __isset = other707.__isset;
+    err = other667.err;
+    pid = other667.pid;
+    app_name = other667.app_name;
+    primary_bulk_load_status = other667.primary_bulk_load_status;
+    group_bulk_load_state = other667.group_bulk_load_state;
+    metadata = other667.metadata;
+    total_download_progress = other667.total_download_progress;
+    is_group_ingestion_finished = other667.is_group_ingestion_finished;
+    is_group_bulk_load_context_cleaned = other667.is_group_bulk_load_context_cleaned;
+    is_group_bulk_load_paused = other667.is_group_bulk_load_paused;
+    __isset = other667.__isset;
 }
-bulk_load_response::bulk_load_response(bulk_load_response &&other708)
+bulk_load_response::bulk_load_response(bulk_load_response &&other668)
 {
-    err = std::move(other708.err);
-    pid = std::move(other708.pid);
-    app_name = std::move(other708.app_name);
-    primary_bulk_load_status = std::move(other708.primary_bulk_load_status);
-    metadata = std::move(other708.metadata);
-    download_progresses = std::move(other708.download_progresses);
-    total_download_progress = std::move(other708.total_download_progress);
-    group_ingestion_status = std::move(other708.group_ingestion_status);
-    is_group_ingestion_finished = std::move(other708.is_group_ingestion_finished);
-    is_group_bulk_load_context_cleaned = std::move(other708.is_group_bulk_load_context_cleaned);
-    is_group_bulk_load_paused = std::move(other708.is_group_bulk_load_paused);
-    __isset = std::move(other708.__isset);
+    err = std::move(other668.err);
+    pid = std::move(other668.pid);
+    app_name = std::move(other668.app_name);
+    primary_bulk_load_status = std::move(other668.primary_bulk_load_status);
+    group_bulk_load_state = std::move(other668.group_bulk_load_state);
+    metadata = std::move(other668.metadata);
+    total_download_progress = std::move(other668.total_download_progress);
+    is_group_ingestion_finished = std::move(other668.is_group_ingestion_finished);
+    is_group_bulk_load_context_cleaned = std::move(other668.is_group_bulk_load_context_cleaned);
+    is_group_bulk_load_paused = std::move(other668.is_group_bulk_load_paused);
+    __isset = std::move(other668.__isset);
 }
-bulk_load_response &bulk_load_response::operator=(const bulk_load_response &other709)
+bulk_load_response &bulk_load_response::operator=(const bulk_load_response &other669)
 {
-    err = other709.err;
-    pid = other709.pid;
-    app_name = other709.app_name;
-    primary_bulk_load_status = other709.primary_bulk_load_status;
-    metadata = other709.metadata;
-    download_progresses = other709.download_progresses;
-    total_download_progress = other709.total_download_progress;
-    group_ingestion_status = other709.group_ingestion_status;
-    is_group_ingestion_finished = other709.is_group_ingestion_finished;
-    is_group_bulk_load_context_cleaned = other709.is_group_bulk_load_context_cleaned;
-    is_group_bulk_load_paused = other709.is_group_bulk_load_paused;
-    __isset = other709.__isset;
+    err = other669.err;
+    pid = other669.pid;
+    app_name = other669.app_name;
+    primary_bulk_load_status = other669.primary_bulk_load_status;
+    group_bulk_load_state = other669.group_bulk_load_state;
+    metadata = other669.metadata;
+    total_download_progress = other669.total_download_progress;
+    is_group_ingestion_finished = other669.is_group_ingestion_finished;
+    is_group_bulk_load_context_cleaned = other669.is_group_bulk_load_context_cleaned;
+    is_group_bulk_load_paused = other669.is_group_bulk_load_paused;
+    __isset = other669.__isset;
     return *this;
 }
-bulk_load_response &bulk_load_response::operator=(bulk_load_response &&other710)
+bulk_load_response &bulk_load_response::operator=(bulk_load_response &&other670)
 {
-    err = std::move(other710.err);
-    pid = std::move(other710.pid);
-    app_name = std::move(other710.app_name);
-    primary_bulk_load_status = std::move(other710.primary_bulk_load_status);
-    metadata = std::move(other710.metadata);
-    download_progresses = std::move(other710.download_progresses);
-    total_download_progress = std::move(other710.total_download_progress);
-    group_ingestion_status = std::move(other710.group_ingestion_status);
-    is_group_ingestion_finished = std::move(other710.is_group_ingestion_finished);
-    is_group_bulk_load_context_cleaned = std::move(other710.is_group_bulk_load_context_cleaned);
-    is_group_bulk_load_paused = std::move(other710.is_group_bulk_load_paused);
-    __isset = std::move(other710.__isset);
+    err = std::move(other670.err);
+    pid = std::move(other670.pid);
+    app_name = std::move(other670.app_name);
+    primary_bulk_load_status = std::move(other670.primary_bulk_load_status);
+    group_bulk_load_state = std::move(other670.group_bulk_load_state);
+    metadata = std::move(other670.metadata);
+    total_download_progress = std::move(other670.total_download_progress);
+    is_group_ingestion_finished = std::move(other670.is_group_ingestion_finished);
+    is_group_bulk_load_context_cleaned = std::move(other670.is_group_bulk_load_context_cleaned);
+    is_group_bulk_load_paused = std::move(other670.is_group_bulk_load_paused);
+    __isset = std::move(other670.__isset);
     return *this;
 }
 void bulk_load_response::printTo(std::ostream &out) const
@@ -15933,19 +15637,14 @@ void bulk_load_response::printTo(std::ostream &out) const
     out << ", "
         << "primary_bulk_load_status=" << to_string(primary_bulk_load_status);
     out << ", "
+        << "group_bulk_load_state=" << to_string(group_bulk_load_state);
+    out << ", "
         << "metadata=";
     (__isset.metadata ? (out << to_string(metadata)) : (out << "<null>"));
-    out << ", "
-        << "download_progresses=";
-    (__isset.download_progresses ? (out << to_string(download_progresses)) : (out << "<null>"));
     out << ", "
         << "total_download_progress=";
     (__isset.total_download_progress ? (out << to_string(total_download_progress))
                                      : (out << "<null>"));
-    out << ", "
-        << "group_ingestion_status=";
-    (__isset.group_ingestion_status ? (out << to_string(group_ingestion_status))
-                                    : (out << "<null>"));
     out << ", "
         << "is_group_ingestion_finished=";
     (__isset.is_group_ingestion_finished ? (out << to_string(is_group_ingestion_finished))
@@ -16049,9 +15748,9 @@ uint32_t group_bulk_load_request::read(::apache::thrift::protocol::TProtocol *ip
             break;
         case 6:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast711;
-                xfer += iprot->readI32(ecast711);
-                this->meta_bulk_load_status = (bulk_load_status::type)ecast711;
+                int32_t ecast671;
+                xfer += iprot->readI32(ecast671);
+                this->meta_bulk_load_status = (bulk_load_status::type)ecast671;
                 this->__isset.meta_bulk_load_status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -16116,46 +15815,46 @@ void swap(group_bulk_load_request &a, group_bulk_load_request &b)
     swap(a.__isset, b.__isset);
 }
 
-group_bulk_load_request::group_bulk_load_request(const group_bulk_load_request &other712)
+group_bulk_load_request::group_bulk_load_request(const group_bulk_load_request &other672)
 {
-    app_name = other712.app_name;
-    target_address = other712.target_address;
-    config = other712.config;
-    provider_name = other712.provider_name;
-    cluster_name = other712.cluster_name;
-    meta_bulk_load_status = other712.meta_bulk_load_status;
-    __isset = other712.__isset;
+    app_name = other672.app_name;
+    target_address = other672.target_address;
+    config = other672.config;
+    provider_name = other672.provider_name;
+    cluster_name = other672.cluster_name;
+    meta_bulk_load_status = other672.meta_bulk_load_status;
+    __isset = other672.__isset;
 }
-group_bulk_load_request::group_bulk_load_request(group_bulk_load_request &&other713)
+group_bulk_load_request::group_bulk_load_request(group_bulk_load_request &&other673)
 {
-    app_name = std::move(other713.app_name);
-    target_address = std::move(other713.target_address);
-    config = std::move(other713.config);
-    provider_name = std::move(other713.provider_name);
-    cluster_name = std::move(other713.cluster_name);
-    meta_bulk_load_status = std::move(other713.meta_bulk_load_status);
-    __isset = std::move(other713.__isset);
+    app_name = std::move(other673.app_name);
+    target_address = std::move(other673.target_address);
+    config = std::move(other673.config);
+    provider_name = std::move(other673.provider_name);
+    cluster_name = std::move(other673.cluster_name);
+    meta_bulk_load_status = std::move(other673.meta_bulk_load_status);
+    __isset = std::move(other673.__isset);
 }
-group_bulk_load_request &group_bulk_load_request::operator=(const group_bulk_load_request &other714)
+group_bulk_load_request &group_bulk_load_request::operator=(const group_bulk_load_request &other674)
 {
-    app_name = other714.app_name;
-    target_address = other714.target_address;
-    config = other714.config;
-    provider_name = other714.provider_name;
-    cluster_name = other714.cluster_name;
-    meta_bulk_load_status = other714.meta_bulk_load_status;
-    __isset = other714.__isset;
+    app_name = other674.app_name;
+    target_address = other674.target_address;
+    config = other674.config;
+    provider_name = other674.provider_name;
+    cluster_name = other674.cluster_name;
+    meta_bulk_load_status = other674.meta_bulk_load_status;
+    __isset = other674.__isset;
     return *this;
 }
-group_bulk_load_request &group_bulk_load_request::operator=(group_bulk_load_request &&other715)
+group_bulk_load_request &group_bulk_load_request::operator=(group_bulk_load_request &&other675)
 {
-    app_name = std::move(other715.app_name);
-    target_address = std::move(other715.target_address);
-    config = std::move(other715.config);
-    provider_name = std::move(other715.provider_name);
-    cluster_name = std::move(other715.cluster_name);
-    meta_bulk_load_status = std::move(other715.meta_bulk_load_status);
-    __isset = std::move(other715.__isset);
+    app_name = std::move(other675.app_name);
+    target_address = std::move(other675.target_address);
+    config = std::move(other675.config);
+    provider_name = std::move(other675.provider_name);
+    cluster_name = std::move(other675.cluster_name);
+    meta_bulk_load_status = std::move(other675.meta_bulk_load_status);
+    __isset = std::move(other675.__isset);
     return *this;
 }
 void group_bulk_load_request::printTo(std::ostream &out) const
@@ -16190,28 +15889,9 @@ void group_bulk_load_response::__set_status(const bulk_load_status::type val)
     this->status = val;
 }
 
-void group_bulk_load_response::__set_download_progress(const partition_download_progress &val)
+void group_bulk_load_response::__set_bulk_load_state(const partition_bulk_load_state &val)
 {
-    this->download_progress = val;
-    __isset.download_progress = true;
-}
-
-void group_bulk_load_response::__set_is_bulk_load_context_cleaned(const bool val)
-{
-    this->is_bulk_load_context_cleaned = val;
-    __isset.is_bulk_load_context_cleaned = true;
-}
-
-void group_bulk_load_response::__set_istatus(const ingestion_status::type val)
-{
-    this->istatus = val;
-    __isset.istatus = true;
-}
-
-void group_bulk_load_response::__set_is_bulk_load_paused(const bool val)
-{
-    this->is_bulk_load_paused = val;
-    __isset.is_bulk_load_paused = true;
+    this->bulk_load_state = val;
 }
 
 uint32_t group_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
@@ -16251,9 +15931,9 @@ uint32_t group_bulk_load_response::read(::apache::thrift::protocol::TProtocol *i
             break;
         case 3:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast716;
-                xfer += iprot->readI32(ecast716);
-                this->status = (bulk_load_status::type)ecast716;
+                int32_t ecast676;
+                xfer += iprot->readI32(ecast676);
+                this->status = (bulk_load_status::type)ecast676;
                 this->__isset.status = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -16261,34 +15941,8 @@ uint32_t group_bulk_load_response::read(::apache::thrift::protocol::TProtocol *i
             break;
         case 4:
             if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->download_progress.read(iprot);
-                this->__isset.download_progress = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 5:
-            if (ftype == ::apache::thrift::protocol::T_BOOL) {
-                xfer += iprot->readBool(this->is_bulk_load_context_cleaned);
-                this->__isset.is_bulk_load_context_cleaned = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 6:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast717;
-                xfer += iprot->readI32(ecast717);
-                this->istatus = (ingestion_status::type)ecast717;
-                this->__isset.istatus = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 7:
-            if (ftype == ::apache::thrift::protocol::T_BOOL) {
-                xfer += iprot->readBool(this->is_bulk_load_paused);
-                this->__isset.is_bulk_load_paused = true;
+                xfer += this->bulk_load_state.read(iprot);
+                this->__isset.bulk_load_state = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -16323,29 +15977,10 @@ uint32_t group_bulk_load_response::write(::apache::thrift::protocol::TProtocol *
     xfer += oprot->writeI32((int32_t)this->status);
     xfer += oprot->writeFieldEnd();
 
-    if (this->__isset.download_progress) {
-        xfer +=
-            oprot->writeFieldBegin("download_progress", ::apache::thrift::protocol::T_STRUCT, 4);
-        xfer += this->download_progress.write(oprot);
-        xfer += oprot->writeFieldEnd();
-    }
-    if (this->__isset.is_bulk_load_context_cleaned) {
-        xfer += oprot->writeFieldBegin(
-            "is_bulk_load_context_cleaned", ::apache::thrift::protocol::T_BOOL, 5);
-        xfer += oprot->writeBool(this->is_bulk_load_context_cleaned);
-        xfer += oprot->writeFieldEnd();
-    }
-    if (this->__isset.istatus) {
-        xfer += oprot->writeFieldBegin("istatus", ::apache::thrift::protocol::T_I32, 6);
-        xfer += oprot->writeI32((int32_t)this->istatus);
-        xfer += oprot->writeFieldEnd();
-    }
-    if (this->__isset.is_bulk_load_paused) {
-        xfer +=
-            oprot->writeFieldBegin("is_bulk_load_paused", ::apache::thrift::protocol::T_BOOL, 7);
-        xfer += oprot->writeBool(this->is_bulk_load_paused);
-        xfer += oprot->writeFieldEnd();
-    }
+    xfer += oprot->writeFieldBegin("bulk_load_state", ::apache::thrift::protocol::T_STRUCT, 4);
+    xfer += this->bulk_load_state.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -16357,58 +15992,43 @@ void swap(group_bulk_load_response &a, group_bulk_load_response &b)
     swap(a.err, b.err);
     swap(a.target_address, b.target_address);
     swap(a.status, b.status);
-    swap(a.download_progress, b.download_progress);
-    swap(a.is_bulk_load_context_cleaned, b.is_bulk_load_context_cleaned);
-    swap(a.istatus, b.istatus);
-    swap(a.is_bulk_load_paused, b.is_bulk_load_paused);
+    swap(a.bulk_load_state, b.bulk_load_state);
     swap(a.__isset, b.__isset);
 }
 
-group_bulk_load_response::group_bulk_load_response(const group_bulk_load_response &other718)
+group_bulk_load_response::group_bulk_load_response(const group_bulk_load_response &other677)
 {
-    err = other718.err;
-    target_address = other718.target_address;
-    status = other718.status;
-    download_progress = other718.download_progress;
-    is_bulk_load_context_cleaned = other718.is_bulk_load_context_cleaned;
-    istatus = other718.istatus;
-    is_bulk_load_paused = other718.is_bulk_load_paused;
-    __isset = other718.__isset;
+    err = other677.err;
+    target_address = other677.target_address;
+    status = other677.status;
+    bulk_load_state = other677.bulk_load_state;
+    __isset = other677.__isset;
 }
-group_bulk_load_response::group_bulk_load_response(group_bulk_load_response &&other719)
+group_bulk_load_response::group_bulk_load_response(group_bulk_load_response &&other678)
 {
-    err = std::move(other719.err);
-    target_address = std::move(other719.target_address);
-    status = std::move(other719.status);
-    download_progress = std::move(other719.download_progress);
-    is_bulk_load_context_cleaned = std::move(other719.is_bulk_load_context_cleaned);
-    istatus = std::move(other719.istatus);
-    is_bulk_load_paused = std::move(other719.is_bulk_load_paused);
-    __isset = std::move(other719.__isset);
+    err = std::move(other678.err);
+    target_address = std::move(other678.target_address);
+    status = std::move(other678.status);
+    bulk_load_state = std::move(other678.bulk_load_state);
+    __isset = std::move(other678.__isset);
 }
 group_bulk_load_response &group_bulk_load_response::
-operator=(const group_bulk_load_response &other720)
+operator=(const group_bulk_load_response &other679)
 {
-    err = other720.err;
-    target_address = other720.target_address;
-    status = other720.status;
-    download_progress = other720.download_progress;
-    is_bulk_load_context_cleaned = other720.is_bulk_load_context_cleaned;
-    istatus = other720.istatus;
-    is_bulk_load_paused = other720.is_bulk_load_paused;
-    __isset = other720.__isset;
+    err = other679.err;
+    target_address = other679.target_address;
+    status = other679.status;
+    bulk_load_state = other679.bulk_load_state;
+    __isset = other679.__isset;
     return *this;
 }
-group_bulk_load_response &group_bulk_load_response::operator=(group_bulk_load_response &&other721)
+group_bulk_load_response &group_bulk_load_response::operator=(group_bulk_load_response &&other680)
 {
-    err = std::move(other721.err);
-    target_address = std::move(other721.target_address);
-    status = std::move(other721.status);
-    download_progress = std::move(other721.download_progress);
-    is_bulk_load_context_cleaned = std::move(other721.is_bulk_load_context_cleaned);
-    istatus = std::move(other721.istatus);
-    is_bulk_load_paused = std::move(other721.is_bulk_load_paused);
-    __isset = std::move(other721.__isset);
+    err = std::move(other680.err);
+    target_address = std::move(other680.target_address);
+    status = std::move(other680.status);
+    bulk_load_state = std::move(other680.bulk_load_state);
+    __isset = std::move(other680.__isset);
     return *this;
 }
 void group_bulk_load_response::printTo(std::ostream &out) const
@@ -16421,18 +16041,7 @@ void group_bulk_load_response::printTo(std::ostream &out) const
     out << ", "
         << "status=" << to_string(status);
     out << ", "
-        << "download_progress=";
-    (__isset.download_progress ? (out << to_string(download_progress)) : (out << "<null>"));
-    out << ", "
-        << "is_bulk_load_context_cleaned=";
-    (__isset.is_bulk_load_context_cleaned ? (out << to_string(is_bulk_load_context_cleaned))
-                                          : (out << "<null>"));
-    out << ", "
-        << "istatus=";
-    (__isset.istatus ? (out << to_string(istatus)) : (out << "<null>"));
-    out << ", "
-        << "is_bulk_load_paused=";
-    (__isset.is_bulk_load_paused ? (out << to_string(is_bulk_load_paused)) : (out << "<null>"));
+        << "bulk_load_state=" << to_string(bulk_load_state);
     out << ")";
 }
 
@@ -16516,30 +16125,30 @@ void swap(ingestion_request &a, ingestion_request &b)
     swap(a.__isset, b.__isset);
 }
 
-ingestion_request::ingestion_request(const ingestion_request &other722)
+ingestion_request::ingestion_request(const ingestion_request &other681)
 {
-    app_name = other722.app_name;
-    metadata = other722.metadata;
-    __isset = other722.__isset;
+    app_name = other681.app_name;
+    metadata = other681.metadata;
+    __isset = other681.__isset;
 }
-ingestion_request::ingestion_request(ingestion_request &&other723)
+ingestion_request::ingestion_request(ingestion_request &&other682)
 {
-    app_name = std::move(other723.app_name);
-    metadata = std::move(other723.metadata);
-    __isset = std::move(other723.__isset);
+    app_name = std::move(other682.app_name);
+    metadata = std::move(other682.metadata);
+    __isset = std::move(other682.__isset);
 }
-ingestion_request &ingestion_request::operator=(const ingestion_request &other724)
+ingestion_request &ingestion_request::operator=(const ingestion_request &other683)
 {
-    app_name = other724.app_name;
-    metadata = other724.metadata;
-    __isset = other724.__isset;
+    app_name = other683.app_name;
+    metadata = other683.metadata;
+    __isset = other683.__isset;
     return *this;
 }
-ingestion_request &ingestion_request::operator=(ingestion_request &&other725)
+ingestion_request &ingestion_request::operator=(ingestion_request &&other684)
 {
-    app_name = std::move(other725.app_name);
-    metadata = std::move(other725.metadata);
-    __isset = std::move(other725.__isset);
+    app_name = std::move(other684.app_name);
+    metadata = std::move(other684.metadata);
+    __isset = std::move(other684.__isset);
     return *this;
 }
 void ingestion_request::printTo(std::ostream &out) const
@@ -16632,30 +16241,30 @@ void swap(ingestion_response &a, ingestion_response &b)
     swap(a.__isset, b.__isset);
 }
 
-ingestion_response::ingestion_response(const ingestion_response &other726)
+ingestion_response::ingestion_response(const ingestion_response &other685)
 {
-    err = other726.err;
-    rocksdb_error = other726.rocksdb_error;
-    __isset = other726.__isset;
+    err = other685.err;
+    rocksdb_error = other685.rocksdb_error;
+    __isset = other685.__isset;
 }
-ingestion_response::ingestion_response(ingestion_response &&other727)
+ingestion_response::ingestion_response(ingestion_response &&other686)
 {
-    err = std::move(other727.err);
-    rocksdb_error = std::move(other727.rocksdb_error);
-    __isset = std::move(other727.__isset);
+    err = std::move(other686.err);
+    rocksdb_error = std::move(other686.rocksdb_error);
+    __isset = std::move(other686.__isset);
 }
-ingestion_response &ingestion_response::operator=(const ingestion_response &other728)
+ingestion_response &ingestion_response::operator=(const ingestion_response &other687)
 {
-    err = other728.err;
-    rocksdb_error = other728.rocksdb_error;
-    __isset = other728.__isset;
+    err = other687.err;
+    rocksdb_error = other687.rocksdb_error;
+    __isset = other687.__isset;
     return *this;
 }
-ingestion_response &ingestion_response::operator=(ingestion_response &&other729)
+ingestion_response &ingestion_response::operator=(ingestion_response &&other688)
 {
-    err = std::move(other729.err);
-    rocksdb_error = std::move(other729.rocksdb_error);
-    __isset = std::move(other729.__isset);
+    err = std::move(other688.err);
+    rocksdb_error = std::move(other688.rocksdb_error);
+    __isset = std::move(other688.__isset);
     return *this;
 }
 void ingestion_response::printTo(std::ostream &out) const
@@ -16665,6 +16274,529 @@ void ingestion_response::printTo(std::ostream &out) const
     out << "err=" << to_string(err);
     out << ", "
         << "rocksdb_error=" << to_string(rocksdb_error);
+    out << ")";
+}
+
+configuration_query_bulk_load_request::~configuration_query_bulk_load_request() throw() {}
+
+void configuration_query_bulk_load_request::__set_app_name(const std::string &val)
+{
+    this->app_name = val;
+}
+
+uint32_t configuration_query_bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->app_name);
+                this->__isset.app_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t
+configuration_query_bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("configuration_query_bulk_load_request");
+
+    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(configuration_query_bulk_load_request &a, configuration_query_bulk_load_request &b)
+{
+    using ::std::swap;
+    swap(a.app_name, b.app_name);
+    swap(a.__isset, b.__isset);
+}
+
+configuration_query_bulk_load_request::configuration_query_bulk_load_request(
+    const configuration_query_bulk_load_request &other689)
+{
+    app_name = other689.app_name;
+    __isset = other689.__isset;
+}
+configuration_query_bulk_load_request::configuration_query_bulk_load_request(
+    configuration_query_bulk_load_request &&other690)
+{
+    app_name = std::move(other690.app_name);
+    __isset = std::move(other690.__isset);
+}
+configuration_query_bulk_load_request &configuration_query_bulk_load_request::
+operator=(const configuration_query_bulk_load_request &other691)
+{
+    app_name = other691.app_name;
+    __isset = other691.__isset;
+    return *this;
+}
+configuration_query_bulk_load_request &configuration_query_bulk_load_request::
+operator=(configuration_query_bulk_load_request &&other692)
+{
+    app_name = std::move(other692.app_name);
+    __isset = std::move(other692.__isset);
+    return *this;
+}
+void configuration_query_bulk_load_request::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "configuration_query_bulk_load_request(";
+    out << "app_name=" << to_string(app_name);
+    out << ")";
+}
+
+configuration_query_bulk_load_response::~configuration_query_bulk_load_response() throw() {}
+
+void configuration_query_bulk_load_response::__set_err(const ::dsn::error_code &val)
+{
+    this->err = val;
+}
+
+void configuration_query_bulk_load_response::__set_app_name(const std::string &val)
+{
+    this->app_name = val;
+}
+
+void configuration_query_bulk_load_response::__set_app_status(const bulk_load_status::type val)
+{
+    this->app_status = val;
+}
+
+void configuration_query_bulk_load_response::__set_partitions_status(
+    const std::vector<bulk_load_status::type> &val)
+{
+    this->partitions_status = val;
+}
+
+void configuration_query_bulk_load_response::__set_max_replica_count(const int32_t val)
+{
+    this->max_replica_count = val;
+}
+
+void configuration_query_bulk_load_response::__set_bulk_load_states(
+    const std::vector<std::map<::dsn::rpc_address, partition_bulk_load_state>> &val)
+{
+    this->bulk_load_states = val;
+}
+
+void configuration_query_bulk_load_response::__set_download_progresses(
+    const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val)
+{
+    this->download_progresses = val;
+    __isset.download_progresses = true;
+}
+
+void configuration_query_bulk_load_response::__set_cleanup_flags(const std::vector<bool> &val)
+{
+    this->cleanup_flags = val;
+    __isset.cleanup_flags = true;
+}
+
+uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->err.read(iprot);
+                this->__isset.err = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->app_name);
+                this->__isset.app_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                int32_t ecast693;
+                xfer += iprot->readI32(ecast693);
+                this->app_status = (bulk_load_status::type)ecast693;
+                this->__isset.app_status = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 4:
+            if (ftype == ::apache::thrift::protocol::T_LIST) {
+                {
+                    this->partitions_status.clear();
+                    uint32_t _size694;
+                    ::apache::thrift::protocol::TType _etype697;
+                    xfer += iprot->readListBegin(_etype697, _size694);
+                    this->partitions_status.resize(_size694);
+                    uint32_t _i698;
+                    for (_i698 = 0; _i698 < _size694; ++_i698) {
+                        int32_t ecast699;
+                        xfer += iprot->readI32(ecast699);
+                        this->partitions_status[_i698] = (bulk_load_status::type)ecast699;
+                    }
+                    xfer += iprot->readListEnd();
+                }
+                this->__isset.partitions_status = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 5:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->max_replica_count);
+                this->__isset.max_replica_count = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 6:
+            if (ftype == ::apache::thrift::protocol::T_LIST) {
+                {
+                    this->bulk_load_states.clear();
+                    uint32_t _size700;
+                    ::apache::thrift::protocol::TType _etype703;
+                    xfer += iprot->readListBegin(_etype703, _size700);
+                    this->bulk_load_states.resize(_size700);
+                    uint32_t _i704;
+                    for (_i704 = 0; _i704 < _size700; ++_i704) {
+                        {
+                            this->bulk_load_states[_i704].clear();
+                            uint32_t _size705;
+                            ::apache::thrift::protocol::TType _ktype706;
+                            ::apache::thrift::protocol::TType _vtype707;
+                            xfer += iprot->readMapBegin(_ktype706, _vtype707, _size705);
+                            uint32_t _i709;
+                            for (_i709 = 0; _i709 < _size705; ++_i709) {
+                                ::dsn::rpc_address _key710;
+                                xfer += _key710.read(iprot);
+                                partition_bulk_load_state &_val711 =
+                                    this->bulk_load_states[_i704][_key710];
+                                xfer += _val711.read(iprot);
+                            }
+                            xfer += iprot->readMapEnd();
+                        }
+                    }
+                    xfer += iprot->readListEnd();
+                }
+                this->__isset.bulk_load_states = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 7:
+            if (ftype == ::apache::thrift::protocol::T_LIST) {
+                {
+                    this->download_progresses.clear();
+                    uint32_t _size712;
+                    ::apache::thrift::protocol::TType _etype715;
+                    xfer += iprot->readListBegin(_etype715, _size712);
+                    this->download_progresses.resize(_size712);
+                    uint32_t _i716;
+                    for (_i716 = 0; _i716 < _size712; ++_i716) {
+                        {
+                            this->download_progresses[_i716].clear();
+                            uint32_t _size717;
+                            ::apache::thrift::protocol::TType _ktype718;
+                            ::apache::thrift::protocol::TType _vtype719;
+                            xfer += iprot->readMapBegin(_ktype718, _vtype719, _size717);
+                            uint32_t _i721;
+                            for (_i721 = 0; _i721 < _size717; ++_i721) {
+                                ::dsn::rpc_address _key722;
+                                xfer += _key722.read(iprot);
+                                partition_download_progress &_val723 =
+                                    this->download_progresses[_i716][_key722];
+                                xfer += _val723.read(iprot);
+                            }
+                            xfer += iprot->readMapEnd();
+                        }
+                    }
+                    xfer += iprot->readListEnd();
+                }
+                this->__isset.download_progresses = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 8:
+            if (ftype == ::apache::thrift::protocol::T_LIST) {
+                {
+                    this->cleanup_flags.clear();
+                    uint32_t _size724;
+                    ::apache::thrift::protocol::TType _etype727;
+                    xfer += iprot->readListBegin(_etype727, _size724);
+                    this->cleanup_flags.resize(_size724);
+                    uint32_t _i728;
+                    for (_i728 = 0; _i728 < _size724; ++_i728) {
+                        xfer += iprot->readBool(this->cleanup_flags[_i728]);
+                    }
+                    xfer += iprot->readListEnd();
+                }
+                this->__isset.cleanup_flags = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t
+configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("configuration_query_bulk_load_response");
+
+    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->err.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 2);
+    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("app_status", ::apache::thrift::protocol::T_I32, 3);
+    xfer += oprot->writeI32((int32_t)this->app_status);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("partitions_status", ::apache::thrift::protocol::T_LIST, 4);
+    {
+        xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I32,
+                                      static_cast<uint32_t>(this->partitions_status.size()));
+        std::vector<bulk_load_status::type>::const_iterator _iter729;
+        for (_iter729 = this->partitions_status.begin(); _iter729 != this->partitions_status.end();
+             ++_iter729) {
+            xfer += oprot->writeI32((int32_t)(*_iter729));
+        }
+        xfer += oprot->writeListEnd();
+    }
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("max_replica_count", ::apache::thrift::protocol::T_I32, 5);
+    xfer += oprot->writeI32(this->max_replica_count);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("bulk_load_states", ::apache::thrift::protocol::T_LIST, 6);
+    {
+        xfer += oprot->writeListBegin(::apache::thrift::protocol::T_MAP,
+                                      static_cast<uint32_t>(this->bulk_load_states.size()));
+        std::vector<std::map<::dsn::rpc_address, partition_bulk_load_state>>::const_iterator
+            _iter730;
+        for (_iter730 = this->bulk_load_states.begin(); _iter730 != this->bulk_load_states.end();
+             ++_iter730) {
+            {
+                xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
+                                             ::apache::thrift::protocol::T_STRUCT,
+                                             static_cast<uint32_t>((*_iter730).size()));
+                std::map<::dsn::rpc_address, partition_bulk_load_state>::const_iterator _iter731;
+                for (_iter731 = (*_iter730).begin(); _iter731 != (*_iter730).end(); ++_iter731) {
+                    xfer += _iter731->first.write(oprot);
+                    xfer += _iter731->second.write(oprot);
+                }
+                xfer += oprot->writeMapEnd();
+            }
+        }
+        xfer += oprot->writeListEnd();
+    }
+    xfer += oprot->writeFieldEnd();
+
+    if (this->__isset.download_progresses) {
+        xfer +=
+            oprot->writeFieldBegin("download_progresses", ::apache::thrift::protocol::T_LIST, 7);
+        {
+            xfer += oprot->writeListBegin(::apache::thrift::protocol::T_MAP,
+                                          static_cast<uint32_t>(this->download_progresses.size()));
+            std::vector<std::map<::dsn::rpc_address, partition_download_progress>>::const_iterator
+                _iter732;
+            for (_iter732 = this->download_progresses.begin();
+                 _iter732 != this->download_progresses.end();
+                 ++_iter732) {
+                {
+                    xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_STRUCT,
+                                                 ::apache::thrift::protocol::T_STRUCT,
+                                                 static_cast<uint32_t>((*_iter732).size()));
+                    std::map<::dsn::rpc_address, partition_download_progress>::const_iterator
+                        _iter733;
+                    for (_iter733 = (*_iter732).begin(); _iter733 != (*_iter732).end();
+                         ++_iter733) {
+                        xfer += _iter733->first.write(oprot);
+                        xfer += _iter733->second.write(oprot);
+                    }
+                    xfer += oprot->writeMapEnd();
+                }
+            }
+            xfer += oprot->writeListEnd();
+        }
+        xfer += oprot->writeFieldEnd();
+    }
+    if (this->__isset.cleanup_flags) {
+        xfer += oprot->writeFieldBegin("cleanup_flags", ::apache::thrift::protocol::T_LIST, 8);
+        {
+            xfer += oprot->writeListBegin(::apache::thrift::protocol::T_BOOL,
+                                          static_cast<uint32_t>(this->cleanup_flags.size()));
+            std::vector<bool>::const_iterator _iter734;
+            for (_iter734 = this->cleanup_flags.begin(); _iter734 != this->cleanup_flags.end();
+                 ++_iter734) {
+                xfer += oprot->writeBool((*_iter734));
+            }
+            xfer += oprot->writeListEnd();
+        }
+        xfer += oprot->writeFieldEnd();
+    }
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(configuration_query_bulk_load_response &a, configuration_query_bulk_load_response &b)
+{
+    using ::std::swap;
+    swap(a.err, b.err);
+    swap(a.app_name, b.app_name);
+    swap(a.app_status, b.app_status);
+    swap(a.partitions_status, b.partitions_status);
+    swap(a.max_replica_count, b.max_replica_count);
+    swap(a.bulk_load_states, b.bulk_load_states);
+    swap(a.download_progresses, b.download_progresses);
+    swap(a.cleanup_flags, b.cleanup_flags);
+    swap(a.__isset, b.__isset);
+}
+
+configuration_query_bulk_load_response::configuration_query_bulk_load_response(
+    const configuration_query_bulk_load_response &other735)
+{
+    err = other735.err;
+    app_name = other735.app_name;
+    app_status = other735.app_status;
+    partitions_status = other735.partitions_status;
+    max_replica_count = other735.max_replica_count;
+    bulk_load_states = other735.bulk_load_states;
+    download_progresses = other735.download_progresses;
+    cleanup_flags = other735.cleanup_flags;
+    __isset = other735.__isset;
+}
+configuration_query_bulk_load_response::configuration_query_bulk_load_response(
+    configuration_query_bulk_load_response &&other736)
+{
+    err = std::move(other736.err);
+    app_name = std::move(other736.app_name);
+    app_status = std::move(other736.app_status);
+    partitions_status = std::move(other736.partitions_status);
+    max_replica_count = std::move(other736.max_replica_count);
+    bulk_load_states = std::move(other736.bulk_load_states);
+    download_progresses = std::move(other736.download_progresses);
+    cleanup_flags = std::move(other736.cleanup_flags);
+    __isset = std::move(other736.__isset);
+}
+configuration_query_bulk_load_response &configuration_query_bulk_load_response::
+operator=(const configuration_query_bulk_load_response &other737)
+{
+    err = other737.err;
+    app_name = other737.app_name;
+    app_status = other737.app_status;
+    partitions_status = other737.partitions_status;
+    max_replica_count = other737.max_replica_count;
+    bulk_load_states = other737.bulk_load_states;
+    download_progresses = other737.download_progresses;
+    cleanup_flags = other737.cleanup_flags;
+    __isset = other737.__isset;
+    return *this;
+}
+configuration_query_bulk_load_response &configuration_query_bulk_load_response::
+operator=(configuration_query_bulk_load_response &&other738)
+{
+    err = std::move(other738.err);
+    app_name = std::move(other738.app_name);
+    app_status = std::move(other738.app_status);
+    partitions_status = std::move(other738.partitions_status);
+    max_replica_count = std::move(other738.max_replica_count);
+    bulk_load_states = std::move(other738.bulk_load_states);
+    download_progresses = std::move(other738.download_progresses);
+    cleanup_flags = std::move(other738.cleanup_flags);
+    __isset = std::move(other738.__isset);
+    return *this;
+}
+void configuration_query_bulk_load_response::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "configuration_query_bulk_load_response(";
+    out << "err=" << to_string(err);
+    out << ", "
+        << "app_name=" << to_string(app_name);
+    out << ", "
+        << "app_status=" << to_string(app_status);
+    out << ", "
+        << "partitions_status=" << to_string(partitions_status);
+    out << ", "
+        << "max_replica_count=" << to_string(max_replica_count);
+    out << ", "
+        << "bulk_load_states=" << to_string(bulk_load_states);
+    out << ", "
+        << "download_progresses=";
+    (__isset.download_progresses ? (out << to_string(download_progresses)) : (out << "<null>"));
+    out << ", "
+        << "cleanup_flags=";
+    (__isset.cleanup_flags ? (out << to_string(cleanup_flags)) : (out << "<null>"));
     out << ")";
 }
 
@@ -16709,9 +16841,9 @@ uint32_t configuration_control_bulk_load_request::read(::apache::thrift::protoco
             break;
         case 2:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast730;
-                xfer += iprot->readI32(ecast730);
-                this->type = (bulk_load_control_type::type)ecast730;
+                int32_t ecast739;
+                xfer += iprot->readI32(ecast739);
+                this->type = (bulk_load_control_type::type)ecast739;
                 this->__isset.type = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -16758,33 +16890,33 @@ void swap(configuration_control_bulk_load_request &a, configuration_control_bulk
 }
 
 configuration_control_bulk_load_request::configuration_control_bulk_load_request(
-    const configuration_control_bulk_load_request &other731)
+    const configuration_control_bulk_load_request &other740)
 {
-    app_id = other731.app_id;
-    type = other731.type;
-    __isset = other731.__isset;
+    app_id = other740.app_id;
+    type = other740.type;
+    __isset = other740.__isset;
 }
 configuration_control_bulk_load_request::configuration_control_bulk_load_request(
-    configuration_control_bulk_load_request &&other732)
+    configuration_control_bulk_load_request &&other741)
 {
-    app_id = std::move(other732.app_id);
-    type = std::move(other732.type);
-    __isset = std::move(other732.__isset);
+    app_id = std::move(other741.app_id);
+    type = std::move(other741.type);
+    __isset = std::move(other741.__isset);
 }
 configuration_control_bulk_load_request &configuration_control_bulk_load_request::
-operator=(const configuration_control_bulk_load_request &other733)
+operator=(const configuration_control_bulk_load_request &other742)
 {
-    app_id = other733.app_id;
-    type = other733.type;
-    __isset = other733.__isset;
+    app_id = other742.app_id;
+    type = other742.type;
+    __isset = other742.__isset;
     return *this;
 }
 configuration_control_bulk_load_request &configuration_control_bulk_load_request::
-operator=(configuration_control_bulk_load_request &&other734)
+operator=(configuration_control_bulk_load_request &&other743)
 {
-    app_id = std::move(other734.app_id);
-    type = std::move(other734.type);
-    __isset = std::move(other734.__isset);
+    app_id = std::move(other743.app_id);
+    type = std::move(other743.type);
+    __isset = std::move(other743.__isset);
     return *this;
 }
 void configuration_control_bulk_load_request::printTo(std::ostream &out) const
@@ -16886,33 +17018,33 @@ void swap(configuration_control_bulk_load_response &a, configuration_control_bul
 }
 
 configuration_control_bulk_load_response::configuration_control_bulk_load_response(
-    const configuration_control_bulk_load_response &other735)
+    const configuration_control_bulk_load_response &other744)
 {
-    err = other735.err;
-    msg = other735.msg;
-    __isset = other735.__isset;
+    err = other744.err;
+    msg = other744.msg;
+    __isset = other744.__isset;
 }
 configuration_control_bulk_load_response::configuration_control_bulk_load_response(
-    configuration_control_bulk_load_response &&other736)
+    configuration_control_bulk_load_response &&other745)
 {
-    err = std::move(other736.err);
-    msg = std::move(other736.msg);
-    __isset = std::move(other736.__isset);
+    err = std::move(other745.err);
+    msg = std::move(other745.msg);
+    __isset = std::move(other745.__isset);
 }
 configuration_control_bulk_load_response &configuration_control_bulk_load_response::
-operator=(const configuration_control_bulk_load_response &other737)
+operator=(const configuration_control_bulk_load_response &other746)
 {
-    err = other737.err;
-    msg = other737.msg;
-    __isset = other737.__isset;
+    err = other746.err;
+    msg = other746.msg;
+    __isset = other746.__isset;
     return *this;
 }
 configuration_control_bulk_load_response &configuration_control_bulk_load_response::
-operator=(configuration_control_bulk_load_response &&other738)
+operator=(configuration_control_bulk_load_response &&other747)
 {
-    err = std::move(other738.err);
-    msg = std::move(other738.msg);
-    __isset = std::move(other738.__isset);
+    err = std::move(other747.err);
+    msg = std::move(other747.msg);
+    __isset = std::move(other747.__isset);
     return *this;
 }
 void configuration_control_bulk_load_response::printTo(std::ostream &out) const

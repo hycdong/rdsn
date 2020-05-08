@@ -155,9 +155,10 @@ public:
     bool test_report_group_is_paused(bulk_load_status::type status)
     {
         mock_group_progress(status, 10, 50, 50);
-        _replica->_primary_states.group_bulk_load_paused[SECONDARY] = true;
-        _replica->_primary_states.group_bulk_load_paused[SECONDARY2] = true;
-
+        partition_bulk_load_state state;
+        state.__set_is_paused(true);
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state;
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state;
         bulk_load_response response;
         _replica->report_group_is_paused(response);
         return response.is_group_bulk_load_paused;
@@ -335,11 +336,13 @@ public:
     void mock_secondary_progress(int32_t secondary_progress1, int32_t secondary_progress2)
     {
         mock_primary_states();
-        partition_download_progress progress1, progress2;
-        progress1.progress = secondary_progress1;
-        progress2.progress = secondary_progress2;
-        _replica->_primary_states.group_download_progress[SECONDARY] = progress1;
-        _replica->_primary_states.group_download_progress[SECONDARY2] = progress2;
+        partition_bulk_load_state state1, state2;
+        state1.__set_download_status(ERR_OK);
+        state1.__set_download_progress(secondary_progress1);
+        state2.__set_download_status(ERR_OK);
+        state2.__set_download_progress(secondary_progress2);
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state1;
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state2;
     }
 
     void mock_secondary_ingestion_states(ingestion_status::type status1,
@@ -348,8 +351,12 @@ public:
     {
         mock_secondary_progress(100, 100);
         _replica->_primary_states.is_ingestion_commit = is_ingestion_commit;
-        _replica->_primary_states.group_ingestion_status[SECONDARY] = status1;
-        _replica->_primary_states.group_ingestion_status[SECONDARY2] = status2;
+
+        partition_bulk_load_state state1, state2;
+        state1.__set_ingest_status(status1);
+        state2.__set_ingest_status(status2);
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state1;
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state2;
     }
 
     void mock_group_progress(bulk_load_status::type p_status,
@@ -391,8 +398,12 @@ public:
         mock_bulk_load_states(primary_status, primary_progress, ingestion_status::IS_INVALID);
         mock_secondary_ingestion_states(
             ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, true);
-        _replica->_primary_states.group_bulk_load_context_flag[SECONDARY] = secondary1_cleanup;
-        _replica->_primary_states.group_bulk_load_context_flag[SECONDARY2] = secondary2_cleanup;
+
+        partition_bulk_load_state state1, state2;
+        state1.__set_is_cleanuped(secondary1_cleanup);
+        state2.__set_is_cleanuped(secondary2_cleanup);
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state1;
+        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state2;
     }
 
     void mock_primary_state_unhealthy()
@@ -429,25 +440,31 @@ public:
 
     bool is_download_progress_reset()
     {
-        partition_download_progress p =
-            _replica->_primary_states.group_download_progress[SECONDARY];
-        return (p.progress == 0 && p.status == ERR_OK);
+        partition_bulk_load_state s =
+            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
+        return (s.__isset.download_progress && s.__isset.download_status &&
+                s.download_progress == 0 && s.download_status == ERR_OK);
     }
 
     bool is_ingestion_status_reset()
     {
-        return (_replica->_primary_states.group_ingestion_status[SECONDARY] ==
-                ingestion_status::IS_INVALID);
+        partition_bulk_load_state s =
+            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
+        return (s.__isset.ingest_status && s.ingest_status == ingestion_status::IS_INVALID);
     }
 
     bool is_cleanup_flag_reset()
     {
-        return !_replica->_primary_states.group_bulk_load_context_flag[SECONDARY];
+        partition_bulk_load_state s =
+            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
+        return (s.__isset.is_cleanuped && !s.is_cleanuped);
     }
 
     bool is_paused_flag_reset()
     {
-        return !_replica->_primary_states.group_bulk_load_paused[SECONDARY];
+        partition_bulk_load_state s =
+            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
+        return (s.__isset.is_paused && !s.is_paused);
     }
 
     bool primary_is_bulk_load_states_cleaned()
@@ -457,10 +474,7 @@ public:
         }
         auto pstates = _replica->_primary_states;
         return (pstates.is_ingestion_commit == false &&
-                pstates.group_download_progress.size() == 0 &&
-                pstates.group_bulk_load_context_flag.size() == 0 &&
-                pstates.group_ingestion_status.size() == 0 &&
-                pstates.group_bulk_load_paused.size() == 0);
+                pstates.secondary_bulk_load_states.size() == 0);
     }
 
 public:

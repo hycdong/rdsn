@@ -885,12 +885,6 @@ struct bulk_load_metadata
     2:i64               file_total_size;
 }
 
-struct partition_download_progress
-{
-    1:i32               progress;
-    2:dsn.error_code    status;
-}
-
 // client -> meta start bulk load, including downloading sst files and ingest them
 struct start_bulk_load_request
 {
@@ -915,21 +909,19 @@ struct start_bulk_load_response
     2:string            hint_msg;
 }
 
-
-struct configuration_query_bulk_load_request
+struct partition_download_progress
 {
-    1:string   app_name;
+    1:i32               progress;
+    2:dsn.error_code    status;
 }
 
-struct configuration_query_bulk_load_response
+struct partition_bulk_load_state
 {
-    1:dsn.error_code                    err;
-    2:string                            app_name;
-    3:bulk_load_status                  app_status;
-    4:list<bulk_load_status>            partitions_status;
-    5:i32                               max_replica_count;
-    6:optional list<map<dsn.rpc_address, partition_download_progress>> download_progresses;
-    7:optional list<bool>               cleanup_flags;
+    1:optional i32              download_progress = 0;
+    2:optional dsn.error_code   download_status;
+    3:optional ingestion_status ingest_status = ingestion_status.IS_INVALID;
+    4:optional bool             is_cleanuped = false;
+    5:optional bool             is_paused = false;
 }
 
 struct bulk_load_request
@@ -946,17 +938,16 @@ struct bulk_load_request
 
 struct bulk_load_response
 {
-    1:dsn.error_code                err;
-    2:dsn.gpid                      pid;
-    3:string                        app_name;
-    4:bulk_load_status              primary_bulk_load_status;
-    5:optional bulk_load_metadata   metadata;
-    6:optional map<dsn.rpc_address, partition_download_progress>    download_progresses;
-    7:optional i32                  total_download_progress;
-    8:optional map<dsn.rpc_address, ingestion_status>               group_ingestion_status;
-    9:optional bool                 is_group_ingestion_finished;
-    10:optional bool                is_group_bulk_load_context_cleaned;
-    11:optional bool                is_group_bulk_load_paused;
+    1:dsn.error_code                                    err;
+    2:dsn.gpid                                          pid;
+    3:string                                            app_name;
+    4:bulk_load_status                                  primary_bulk_load_status;
+    5:map<dsn.rpc_address, partition_bulk_load_state>   group_bulk_load_state;
+    6:optional bulk_load_metadata                       metadata;
+    7:optional i32                                      total_download_progress;
+    8:optional bool                                     is_group_ingestion_finished;
+    9:optional bool                                     is_group_bulk_load_context_cleaned;
+    10:optional bool                                    is_group_bulk_load_paused;
 }
 
 struct group_bulk_load_request
@@ -971,14 +962,10 @@ struct group_bulk_load_request
 
 struct group_bulk_load_response
 {
-    1:dsn.error_code                        err;
-    2:dsn.rpc_address                       target_address;
-    3:bulk_load_status                      status;
-    // used when secondary downloading or downloaded
-    4:optional partition_download_progress  download_progress;
-    5:optional bool                         is_bulk_load_context_cleaned;
-    6:optional ingestion_status             istatus;
-    7:optional bool                         is_bulk_load_paused;
+    1:dsn.error_code            err;
+    2:dsn.rpc_address           target_address;
+    3:bulk_load_status          status;
+    4:partition_bulk_load_state bulk_load_state;
 }
 
 struct ingestion_request
@@ -991,6 +978,24 @@ struct ingestion_response
 {
     1:dsn.error_code    err;
     2:i32               rocksdb_error;
+}
+
+struct configuration_query_bulk_load_request
+{
+    1:string   app_name;
+}
+
+struct configuration_query_bulk_load_response
+{
+    1:dsn.error_code                    err;
+    2:string                            app_name;
+    3:bulk_load_status                  app_status;
+    4:list<bulk_load_status>            partitions_status;
+    5:i32                               max_replica_count;
+    6:list<map<dsn.rpc_address, partition_bulk_load_state>> bulk_load_states;
+    // TODO(heyuchen): refactor to remove fields
+    7:optional list<map<dsn.rpc_address, partition_download_progress>> download_progresses;
+    8:optional list<bool>               cleanup_flags;
 }
 
 enum bulk_load_control_type

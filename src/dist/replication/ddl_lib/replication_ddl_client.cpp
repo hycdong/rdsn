@@ -1615,6 +1615,7 @@ replication_ddl_client::query_bulk_load(const std::string &app_name, int32_t pid
         return ERR_INVALID_PARAMETERS;
     }
 
+    // TODO(heyuchen): refactor print this function
     bool print_progress = resp.__isset.download_progresses;
     std::unordered_map<int32_t, int32_t> partitions_progress;
     int total_progress = 0;

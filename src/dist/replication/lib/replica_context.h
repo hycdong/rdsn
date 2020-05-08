@@ -74,10 +74,7 @@ public:
 
     void do_cleanup_pending_mutations(bool clean_pending_mutations = true);
 
-    void set_group_bulk_load_states(const group_bulk_load_response &resp,
-                                    const rpc_address &node,
-                                    bool update_progress);
-
+    // TODO(heyuchen): add comments and rename
     void reset_group_bulk_load_states(const rpc_address &node, bulk_load_status::type meta_status);
 
     void cleanup_bulk_load_states();
@@ -134,14 +131,9 @@ public:
     // cancelled in cleanup() when status changed from PRIMARY to others
     // group bulk_load response tasks of RPC_GROUP_BULK_LOAD for each secondary replica
     node_tasks group_bulk_load_pending_replies;
-    // bulk load download progress
-    std::unordered_map<rpc_address, partition_download_progress> group_download_progress;
-    // bulk load ingestion status
-    std::unordered_map<rpc_address, ingestion_status::type> group_ingestion_status;
-    // bulk load cleanup flag
-    std::unordered_map<rpc_address, bool> group_bulk_load_context_flag;
-    // bulk load pause flag
-    std::unordered_map<rpc_address, bool> group_bulk_load_paused;
+
+    // bulk_load_state of secondary replicas
+    std::unordered_map<rpc_address, partition_bulk_load_state> secondary_bulk_load_states;
 
     bool is_ingestion_commit;
 };

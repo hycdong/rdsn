@@ -176,24 +176,6 @@ bool primary_context::check_exist(::dsn::rpc_address node, partition_status::typ
     }
 }
 
-void primary_context::set_group_bulk_load_states(const group_bulk_load_response &resp,
-                                                 const rpc_address &node,
-                                                 bool update_progress)
-{
-    if (resp.__isset.download_progress && update_progress) {
-        group_download_progress[node] = resp.download_progress;
-    }
-    if (resp.__isset.istatus) {
-        group_ingestion_status[node] = resp.istatus;
-    }
-    if (resp.__isset.is_bulk_load_context_cleaned) {
-        group_bulk_load_context_flag[node] = resp.is_bulk_load_context_cleaned;
-    }
-    if (resp.__isset.is_bulk_load_paused) {
-        group_bulk_load_paused[node] = resp.is_bulk_load_paused;
-    }
-}
-
 void primary_context::reset_group_bulk_load_states(const rpc_address &node,
                                                    bulk_load_status::type meta_status)
 {
@@ -218,35 +200,25 @@ void primary_context::reset_group_bulk_load_states(const rpc_address &node,
                              meta_status == bulk_load_status::type::BLS_SUCCEED ||
                              meta_status == bulk_load_status::type::BLS_FAILED ||
                              meta_status == bulk_load_status::BLS_CANCELED);
-
     if (reset_progress) {
-        partition_download_progress download_progress;
-        download_progress.progress = 0;
-        download_progress.status = ERR_OK;
-        group_download_progress[node] = download_progress;
+        secondary_bulk_load_states[node].__set_download_progress(0);
+        secondary_bulk_load_states[node].__set_download_status(ERR_OK);
     }
     if (reset_ingestion) {
-        group_ingestion_status[node] = ingestion_status::IS_INVALID;
+        secondary_bulk_load_states[node].__set_ingest_status(ingestion_status::IS_INVALID);
     }
     if (reset_cleanup_flag) {
-        group_bulk_load_context_flag[node] = false;
+        secondary_bulk_load_states[node].__set_is_cleanuped(false);
     }
     if (reset_pause_flag) {
-        group_bulk_load_paused[node] = false;
+        secondary_bulk_load_states[node].__set_is_paused(false);
     }
 }
 
 void primary_context::cleanup_bulk_load_states()
 {
-    group_download_progress.erase(group_download_progress.begin(), group_download_progress.end());
-
-    group_ingestion_status.erase(group_ingestion_status.begin(), group_ingestion_status.end());
-
-    group_bulk_load_context_flag.erase(group_bulk_load_context_flag.begin(),
-                                       group_bulk_load_context_flag.end());
-
-    group_bulk_load_paused.erase(group_bulk_load_paused.begin(), group_bulk_load_paused.end());
-
+    secondary_bulk_load_states.erase(secondary_bulk_load_states.begin(),
+                                     secondary_bulk_load_states.end());
     is_ingestion_commit = false;
 }
 

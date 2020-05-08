@@ -322,11 +322,6 @@ public:
         return bulk_svc().on_partition_ingestion_reply(err, std::move(resp), APP_NAME, pid);
     }
 
-    /// helper functions
-    // bulk_load_service *bulk_svc() { return _ms->_bulk_load_svc.get(); }
-    // std::shared_ptr<app_state> find_app(const std::string &name) { return _ss->get_app(name); }
-    // void wait_all() { _ms->tracker()->wait_outstanding_tasks(); }
-
 public:
     int32_t APP_ID = 1;
     std::string APP_NAME = "bulk_load_test";
@@ -470,27 +465,26 @@ public:
     void mock_response_progress(error_code progress_err, bool finish_download)
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_DOWNLOADING, _pidx);
-        partition_download_progress progress;
-        progress.progress = 100;
-        progress.status = ERR_OK;
 
-        _resp.__isset.download_progresses = true;
+        partition_bulk_load_state state;
+        state.__set_download_progress(100);
+        state.__set_download_status(ERR_OK);
+
         _resp.__isset.total_download_progress = true;
-        _resp.download_progresses[rpc_address("127.0.0.1", 10085)] = progress;
-        _resp.download_progresses[_primary] = progress;
-
+        _resp.group_bulk_load_state[_primary] = state;
+        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
         if (finish_download) {
-            _resp.download_progresses[rpc_address("127.0.0.1", 10087)] = progress;
-            _resp.total_download_progress = 100;
+            _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+            _resp.__set_total_download_progress(100);
         } else {
-            progress.progress = 0;
-            _resp.download_progresses[rpc_address("127.0.0.1", 10087)] = progress;
-            _resp.total_download_progress = 66;
+            state.__set_download_progress(0);
+            _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+            _resp.__set_total_download_progress(66);
         }
 
         if (progress_err != ERR_OK) {
-            progress.status = progress_err;
-            _resp.download_progresses[rpc_address("127.0.0.1", 10087)] = progress;
+            state.__set_download_status(progress_err);
+            _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
         }
     }
 
@@ -514,27 +508,39 @@ public:
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_INGESTING, _pidx);
 
-        _resp.__isset.group_ingestion_status = true;
-        _resp.group_ingestion_status[_primary] = ingestion_status::IS_SUCCEED;
-        _resp.group_ingestion_status[rpc_address("127.0.0.1", 10085)] =
-            ingestion_status::IS_SUCCEED;
-        _resp.group_ingestion_status[rpc_address("127.0.0.1", 10087)] = secondary_istatus;
-
+        partition_bulk_load_state state;
+        state.__set_ingest_status(ingestion_status::IS_SUCCEED);
+        _resp.group_bulk_load_state[_primary] = state;
+        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
+        state.__set_ingest_status(secondary_istatus);
+        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
         _resp.__set_is_group_ingestion_finished(secondary_istatus == ingestion_status::IS_SUCCEED);
     }
 
     void mock_response_cleanup_flag(bool finish_cleanup, bulk_load_status::type status)
     {
         create_basic_response(ERR_OK, status, _pidx);
-        _resp.__isset.is_group_bulk_load_context_cleaned = true;
-        _resp.is_group_bulk_load_context_cleaned = finish_cleanup;
+
+        partition_bulk_load_state state;
+        state.__set_is_cleanuped(true);
+        _resp.group_bulk_load_state[_primary] = state;
+        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
+        state.__set_is_cleanuped(finish_cleanup);
+        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+        _resp.__set_is_group_bulk_load_context_cleaned(finish_cleanup);
     }
 
     void mock_response_paused(bool is_group_paused)
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_PAUSED, _pidx);
-        _resp.__isset.is_group_bulk_load_paused = true;
-        _resp.is_group_bulk_load_paused = is_group_paused;
+
+        partition_bulk_load_state state;
+        state.__set_is_paused(true);
+        _resp.group_bulk_load_state[_primary] = state;
+        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
+        state.__set_is_paused(is_group_paused);
+        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+        _resp.__set_is_group_bulk_load_paused(is_group_paused);
     }
 
     void test_on_partition_bulk_load_reply(int32_t in_progress_count,

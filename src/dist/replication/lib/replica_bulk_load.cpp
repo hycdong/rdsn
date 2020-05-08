@@ -210,8 +210,7 @@ void replica::on_group_bulk_load_reply(error_code err,
         // TODO(heyuchen): consider here
         _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
     } else {
-        _primary_states.set_group_bulk_load_states(
-            resp, req.target_address, !_bulk_load_context.is_cleanup());
+        _primary_states.secondary_bulk_load_states[req.target_address] = resp.bulk_load_state;
     }
 }
 
@@ -850,29 +849,29 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
         return;
     }
 
-    auto cur_bulk_load_status = get_bulk_load_status();
+    partition_bulk_load_state bulk_load_state;
+    bulk_load_status::type cur_bulk_load_status = get_bulk_load_status();
     bulk_load_report_flag flag = get_report_flag(remote_status, cur_bulk_load_status);
     switch (flag) {
     case ReportDownloadProgress: {
-        partition_download_progress secondary_progress;
-        secondary_progress.progress = _bulk_load_context._download_progress.load();
-        secondary_progress.status = _bulk_load_context._download_status;
-        response.__set_download_progress(secondary_progress);
+        bulk_load_state.__set_download_progress(_bulk_load_context._download_progress.load());
+        bulk_load_state.__set_download_status(_bulk_load_context._download_status);
     } break;
     case ReportIngestionStatus:
-        response.__set_istatus(_app->get_ingestion_status());
+        bulk_load_state.__set_ingest_status(_app->get_ingestion_status());
         break;
     case ReportCleanupFlag:
-        response.__set_is_bulk_load_context_cleaned(_bulk_load_context.is_cleanup());
+        bulk_load_state.__set_is_cleanuped(_bulk_load_context.is_cleanup());
         break;
     case ReportIsPaused:
-        response.__set_is_bulk_load_paused(cur_bulk_load_status == bulk_load_status::BLS_PAUSED);
+        bulk_load_state.__set_is_paused(cur_bulk_load_status == bulk_load_status::BLS_PAUSED);
     case ReportNothing:
         break;
     default:
         break;
     }
     response.status = cur_bulk_load_status;
+    response.bulk_load_state = bulk_load_state;
 }
 
 void replica::report_group_download_progress(bulk_load_response &response)
@@ -883,27 +882,29 @@ void replica::report_group_download_progress(bulk_load_response &response)
         return;
     }
 
-    response.__isset.download_progresses = true;
-    partition_download_progress primary_progress;
-    primary_progress.progress = _bulk_load_context._download_progress.load();
-    primary_progress.status = _bulk_load_context._download_status;
-    response.download_progresses[_primary_states.membership.primary] = primary_progress;
+    partition_bulk_load_state p_state;
+    p_state.__set_download_progress(_bulk_load_context._download_progress.load());
+    p_state.__set_download_status(_bulk_load_context._download_status);
+    response.group_bulk_load_state[_primary_states.membership.primary] = p_state;
     ddebug_replica("primary = {}, download progress = {}%, status={}",
                    _primary_states.membership.primary.to_string(),
-                   primary_progress.progress,
-                   primary_progress.status.to_string());
+                   p_state.download_progress,
+                   p_state.download_status.to_string());
 
-    int32_t total_progress = primary_progress.progress;
+    int32_t total_progress = p_state.download_progress;
     for (const auto &target_address : _primary_states.membership.secondaries) {
-        partition_download_progress sprogress =
-            _primary_states.group_download_progress[target_address];
+        partition_bulk_load_state s_state =
+            _primary_states.secondary_bulk_load_states[target_address];
+        int32_t s_progress = s_state.__isset.download_progress ? s_state.download_progress : 0;
+        error_code s_status = s_state.__isset.download_status ? s_state.download_status : ERR_OK;
         ddebug_replica("secondary = {}, download progress = {}%, status={}",
                        target_address.to_string(),
-                       sprogress.progress,
-                       sprogress.status.to_string());
-        response.download_progresses[target_address] = sprogress;
-        total_progress += sprogress.progress;
+                       s_progress,
+                       s_status);
+        response.group_bulk_load_state[target_address] = s_state;
+        total_progress += s_progress;
     }
+
     total_progress /= _primary_states.membership.max_replica_count;
     ddebug_replica("total download progress = {}%", total_progress);
 
@@ -918,32 +919,31 @@ void replica::report_group_ingestion_status(bulk_load_response &response)
         return;
     }
 
-    response.__isset.group_ingestion_status = true;
-    response.group_ingestion_status[_primary_states.membership.primary] =
-        _app->get_ingestion_status();
-
+    partition_bulk_load_state p_state;
+    p_state.__set_ingest_status(_app->get_ingestion_status());
+    response.group_bulk_load_state[_primary_states.membership.primary] = p_state;
     ddebug_replica("primary = {}, ingestion status = {}",
                    _primary_states.membership.primary.to_string(),
-                   response.group_ingestion_status[_primary_states.membership.primary]);
+                   p_state.ingest_status);
 
+    bool is_group_ingestion_finish = p_state.ingest_status == ingestion_status::IS_SUCCEED;
+    // TODO(heyuchen): remove this log
+    ddebug_replica("hyc: is_group_ingestion_finish = {}", is_group_ingestion_finish);
     for (const auto &target_address : _primary_states.membership.secondaries) {
-        response.group_ingestion_status[target_address] =
-            _primary_states.group_ingestion_status[target_address];
-        ddebug_replica("secondary = {}, ingestion status={}",
-                       target_address.to_string(),
-                       response.group_ingestion_status[target_address]);
+        partition_bulk_load_state s_state =
+            _primary_states.secondary_bulk_load_states[target_address];
+        ingestion_status::type i_status =
+            s_state.__isset.ingest_status ? s_state.ingest_status : ingestion_status::IS_INVALID;
+        ddebug_replica("secondary = {}, ingestion status={}", target_address.to_string(), i_status);
+        response.group_bulk_load_state[target_address] = s_state;
+        is_group_ingestion_finish =
+            is_group_ingestion_finish && (i_status == ingestion_status::IS_SUCCEED);
+        // TODO(heyuchen): remove this log
+        ddebug_replica("hyc: is_group_ingestion_finish = {}", is_group_ingestion_finish);
     }
-
-    bool is_group_ingestion_finish = true;
-    for (auto iter = response.group_ingestion_status.begin();
-         iter != response.group_ingestion_status.end();
-         ++iter) {
-        if (iter->second != ingestion_status::IS_SUCCEED) {
-            is_group_ingestion_finish = false;
-            break;
-        }
-    }
-    response.__set_is_group_ingestion_finished(is_group_ingestion_finish);
+    response.__set_is_group_ingestion_finished(is_group_ingestion_finish &&
+                                               (_primary_states.membership.secondaries.size() + 1 ==
+                                                _primary_states.membership.max_replica_count));
 
     if (is_group_ingestion_finish) {
         // group ingestion finish will recover wirte
@@ -961,25 +961,27 @@ void replica::report_group_context_clean_flag(bulk_load_response &response)
         return;
     }
 
+    partition_bulk_load_state p_state;
+    p_state.__set_is_cleanuped(_bulk_load_context.is_cleanup());
+    response.group_bulk_load_state[_primary_states.membership.primary] = p_state;
     ddebug_replica("primary = {}, bulk_load_context cleanup = {}",
                    _primary_states.membership.primary.to_string(),
-                   _bulk_load_context.is_cleanup());
+                   p_state.is_cleanuped);
 
-    if (_primary_states.membership.secondaries.size() + 1 !=
-        _primary_states.membership.max_replica_count) {
-        response.__set_is_group_bulk_load_context_cleaned(false);
-        return;
-    }
-
-    bool group_flag = _bulk_load_context.is_cleanup();
+    bool group_flag = p_state.is_cleanuped;
     for (const auto &target_address : _primary_states.membership.secondaries) {
-        bool is_clean_up = _primary_states.group_bulk_load_context_flag[target_address];
+        partition_bulk_load_state s_state =
+            _primary_states.secondary_bulk_load_states[target_address];
+        bool is_cleanup = s_state.__isset.is_cleanuped ? s_state.is_cleanuped : false;
         ddebug_replica("secondary = {}, bulk_load_context cleanup = {}",
                        target_address.to_string(),
-                       is_clean_up);
-        group_flag = group_flag && is_clean_up;
+                       is_cleanup);
+        response.group_bulk_load_state[target_address] = s_state;
+        group_flag = group_flag && is_cleanup;
     }
-    response.__set_is_group_bulk_load_context_cleaned(group_flag);
+    response.__set_is_group_bulk_load_context_cleaned(
+        group_flag && (_primary_states.membership.secondaries.size() + 1 ==
+                       _primary_states.membership.max_replica_count));
 }
 
 void replica::report_group_is_paused(bulk_load_response &response)
@@ -990,24 +992,26 @@ void replica::report_group_is_paused(bulk_load_response &response)
         return;
     }
 
-    if (_primary_states.membership.secondaries.size() + 1 !=
-        _primary_states.membership.max_replica_count) {
-        response.__set_is_group_bulk_load_context_cleaned(false);
-        return;
-    }
-
-    bool group_is_paused = (get_bulk_load_status() == bulk_load_status::BLS_PAUSED);
+    partition_bulk_load_state p_state;
+    p_state.__set_is_paused(get_bulk_load_status() == bulk_load_status::BLS_PAUSED);
+    response.group_bulk_load_state[_primary_states.membership.primary] = p_state;
     ddebug_replica("primary = {}, bulk_load is_paused = {}",
                    _primary_states.membership.primary.to_string(),
-                   group_is_paused);
+                   p_state.is_paused);
+
+    bool group_is_paused = p_state.is_paused;
     for (const auto &target_address : _primary_states.membership.secondaries) {
-        bool is_paused = _primary_states.group_bulk_load_paused[target_address];
-        ddebug_replica("secondary = {}, bulk_load_context cleanup = {}",
-                       target_address.to_string(),
-                       is_paused);
+        partition_bulk_load_state s_state =
+            _primary_states.secondary_bulk_load_states[target_address];
+        bool is_paused = s_state.__isset.is_paused ? s_state.is_paused : false;
+        ddebug_replica(
+            "secondary = {}, bulk_load is_paused = {}", target_address.to_string(), is_paused);
+        response.group_bulk_load_state[target_address] = s_state;
         group_is_paused = group_is_paused && is_paused;
     }
-    response.__set_is_group_bulk_load_paused(group_is_paused);
+    response.__set_is_group_bulk_load_paused(group_is_paused &&
+                                             (_primary_states.membership.secondaries.size() + 1 ==
+                                              _primary_states.membership.max_replica_count));
 }
 
 } // namespace replication
