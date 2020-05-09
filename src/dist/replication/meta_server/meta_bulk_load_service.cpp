@@ -194,7 +194,7 @@ void bulk_load_service::create_app_bulk_load_dir(const std::string &app_name,
                                                  int32_t partition_count,
                                                  start_bulk_load_rpc rpc)
 {
-    const auto req = rpc.request();
+    const auto &req = rpc.request();
 
     app_bulk_load_info ainfo;
     ainfo.app_id = app_id;

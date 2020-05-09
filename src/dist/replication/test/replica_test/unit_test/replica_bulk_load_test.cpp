@@ -6,23 +6,23 @@
 #include <fstream>
 #include <gtest/gtest.h>
 
-#include "mock_utils.h"
+#include "replica_test_base.h"
 
 namespace dsn {
 namespace replication {
 
-class replica_bulk_load_test : public ::testing::Test
+class replica_bulk_load_test : public replica_test_base
 {
-    void SetUp()
+public:
+    replica_bulk_load_test()
     {
-        _stub = make_unique<mock_replica_stub>();
-        _replica = create_mock_replica(_stub.get());
-        _fs = _stub->get_block_filesystem();
+        _replica = create_mock_replica(stub.get());
+        _fs = stub->get_block_filesystem();
         utils::filesystem::create_directory(LOCAL_DIR);
         fail::setup();
     }
 
-    void TearDown()
+    ~replica_bulk_load_test()
     {
         fail::teardown();
         utils::filesystem::remove_path(LOCAL_DIR);
@@ -269,7 +269,7 @@ public:
         _req.meta_bulk_load_status = status;
         _req.pid = PID;
         _req.remote_provider_name = PROVIDER;
-        _stub->set_bulk_load_recent_downloading_replica_count(downloading_count);
+        stub->set_bulk_load_recent_downloading_replica_count(downloading_count);
     }
 
     void create_bulk_load_request(bulk_load_status::type status, int32_t downloading_count = 0)
@@ -414,7 +414,7 @@ public:
 
     void mock_stub_downloading_count(int32_t count)
     {
-        _stub->set_bulk_load_recent_downloading_replica_count(count);
+        stub->set_bulk_load_recent_downloading_replica_count(count);
     }
 
     /// getter functions
@@ -431,7 +431,7 @@ public:
     bulk_load_status::type get_bulk_load_status() { return _replica->_bulk_load_context._status; }
     int32_t get_stub_downloading_count()
     {
-        return _stub->get_bulk_load_recent_downloading_replica_count();
+        return stub->get_bulk_load_recent_downloading_replica_count();
     }
 
     ingestion_status::type get_ingestion_status() { return _replica->_app->get_ingestion_status(); }
@@ -478,7 +478,6 @@ public:
     }
 
 public:
-    std::unique_ptr<mock_replica_stub> _stub;
     std::unique_ptr<mock_replica> _replica;
     std::unique_ptr<block_service_mock> _fs;
     file_meta _file_meta;

@@ -371,7 +371,7 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
     dsn::error_code err = ERR_OK;
     dsn::task_tracker tracker;
 
-    // download metadata file sync
+    // download metadata file synchronously
     std::string meta_name = bulk_load_constant::BULK_LOAD_METADATA;
     do_download(remote_dir, local_dir, meta_name, fs, false, err, tracker);
     if (err != ERR_OK) {
@@ -390,7 +390,7 @@ dsn::error_code replica::download_sst_files(const std::string &app_name,
     _bulk_load_context._metadata = metadata;
     _bulk_load_context._file_total_size = metadata.file_total_size;
 
-    // download sst files async
+    // download sst files asynchronously
     for (const auto &f_meta : metadata.files) {
         auto bulk_load_download_task = tasking::enqueue(
             LPC_BACKGROUND_BULK_LOAD, &_tracker, [this, remote_dir, local_dir, f_meta, fs]() {
@@ -551,7 +551,6 @@ void replica::do_download(const std::string &remote_dir,
                                    update_progress),
                          &tracker);
         }
-
     };
 
     fs->create_file(dsn::dist::block_service::create_file_request{remote_file_name, false},
