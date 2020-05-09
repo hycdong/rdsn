@@ -93,7 +93,7 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
         if (addr == _stub->_primary_address)
             continue;
 
-        std::unique_ptr<group_bulk_load_request> request = make_unique<group_bulk_load_request>();
+        auto request = make_unique<group_bulk_load_request>();
         request->app_name = _app_info.app_name;
         request->target_address = addr;
         _primary_states.get_replica_config(partition_status::PS_SECONDARY, request->config);
@@ -103,7 +103,8 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
 
         ddebug_replica("send group_bulk_load_request to {}", addr.to_string());
 
-        group_bulk_load_rpc rpc(std::move(request), RPC_GROUP_BULK_LOAD, get_gpid().thread_hash());
+        group_bulk_load_rpc rpc(
+            std::move(request), RPC_GROUP_BULK_LOAD, 0_ms, 0, get_gpid().thread_hash());
         dsn::task_ptr callback_task =
             rpc.call(addr, tracker(), [this, rpc](error_code err) mutable {
                 on_group_bulk_load_reply(err, rpc.request(), rpc.response());
@@ -118,7 +119,6 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
     _checker.only_one_thread_access();
 
     response.err = ERR_OK;
-    response.target_address = _stub->_primary_address;
 
     if (request.config.ballot < get_ballot()) {
         response.err = ERR_VERSION_OUTDATED;
@@ -184,15 +184,6 @@ void replica::on_group_bulk_load_reply(error_code err,
                        req.target_address.to_string(),
                        err.to_string());
         _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
-
-        return;
-    }
-
-    if (resp.err == ERR_BUSY) {
-        // TODO(heyuchen): remove concurrent
-        dwarn_replica("concurrent: node[{}] has enough replica downloading, wait for next round",
-                      req.target_address.to_string());
-        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
         return;
     }
 
@@ -201,17 +192,19 @@ void replica::on_group_bulk_load_reply(error_code err,
                        req.target_address.to_string(),
                        resp.err.to_string());
         _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
-    } else if (req.config.ballot != get_ballot()) {
+        return;
+    }
+
+    if (req.config.ballot != get_ballot()) {
         derror_replica(
             "recevied wrong on_group_bulk_load_reply from {}, request ballot={}, current ballot={}",
             req.target_address.to_string(),
             req.config.ballot,
             get_ballot());
-        // TODO(heyuchen): consider here
         _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
-    } else {
-        _primary_states.secondary_bulk_load_states[req.target_address] = resp.bulk_load_state;
     }
+
+    _primary_states.secondary_bulk_load_states[req.target_address] = resp.bulk_load_state;
 }
 
 dsn::error_code replica::do_bulk_load(const std::string &app_name,

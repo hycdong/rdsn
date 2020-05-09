@@ -903,7 +903,7 @@ struct start_bulk_load_response
     // - ERR_INVALID_PARAMETERS: wrong file_provider type
     // - ERR_FILE_OPERATION_FAILED: remote file_provider error
     // - ERR_OBJECT_NOT_FOUND: bulk_load_info not exist on file_provider
-    // - ERR_INCOMPLETE_DATA: bulk_load_info is damaged on file_provider
+    // - ERR_CORRUPTION: bulk_load_info is damaged on file_provider
     // - ERR_INCONSISTENT_STATE: app_id or partition_count inconsistent
     1:dsn.error_code    err;
     2:string            hint_msg;
@@ -938,6 +938,13 @@ struct bulk_load_request
 
 struct bulk_load_response
 {
+    // Possible error:
+    // - ERR_OBJECT_NOT_FOUND: replica not found
+    // - ERR_INVALID_STATE: replica has invalid state
+    // - ERR_BUSY: node has enough replica executing bulk load downloading
+    // - ERR_FILE_OPERATION_FAILED: local file system error during bulk load downloading
+    // - ERR_FS_INTERNAL: remote file provider error during bulk load downloading
+    // - ERR_CORRUPTION: metadata corruption during bulk load downloading
     1:dsn.error_code                                    err;
     2:dsn.gpid                                          pid;
     3:string                                            app_name;
@@ -962,10 +969,17 @@ struct group_bulk_load_request
 
 struct group_bulk_load_response
 {
+    // Possible error:
+    // - ERR_OBJECT_NOT_FOUND: replica not found
+    // - ERR_VERSION_OUTDATED: request out-dated
+    // - ERR_INVALID_STATE: replica has invalid state
+    // - ERR_BUSY: node has enough replica executing bulk load downloading
+    // - ERR_FILE_OPERATION_FAILED: local file system error during bulk load downloading
+    // - ERR_FS_INTERNAL: remote file provider error during bulk load downloading
+    // - ERR_CORRUPTION: metadata corruption during bulk load downloading
     1:dsn.error_code            err;
-    2:dsn.rpc_address           target_address;
-    3:bulk_load_status          status;
-    4:partition_bulk_load_state bulk_load_state;
+    2:bulk_load_status          status;
+    3:partition_bulk_load_state bulk_load_state;
 }
 
 struct ingestion_request

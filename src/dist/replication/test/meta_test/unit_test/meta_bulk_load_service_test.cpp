@@ -40,14 +40,6 @@ class bulk_load_service_test : public meta_test_base
 public:
     bulk_load_service_test() {}
 
-    void SetUp() override
-    {
-        meta_test_base::SetUp();
-        _app_root = _ss->_apps_root;
-    }
-
-    void TearDown() override { meta_test_base::TearDown(); }
-
     /// initialize functions
     void initialize_meta_server_with_mock_bulk_load(
         std::unordered_set<int32_t> app_id_set,
@@ -333,8 +325,6 @@ public:
     std::string SYNC_APP_NAME = "bulk_load_failover_table";
     int32_t SYNC_APP_ID = 2;
     int32_t SYNC_PARTITION_COUNT = 4;
-
-    std::string _app_root;
 };
 
 /// start bulk load unit tests

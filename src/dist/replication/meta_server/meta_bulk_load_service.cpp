@@ -146,7 +146,7 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
     if (!::dsn::json::json_forwarder<bulk_load_info>::decode(r_resp.buffer, bl_info)) {
         derror_f("file({}) is damaged on remote file provider({})", remote_path, file_provider);
         hint_msg = "bulk_load_info damaged";
-        return ERR_INCOMPLETE_DATA;
+        return ERR_CORRUPTION;
     }
 
     if (bl_info.app_id != app_id || bl_info.partition_count != partition_count) {
@@ -157,7 +157,7 @@ error_code bulk_load_service::check_bulk_load_request_params(const std::string &
                  bl_info.app_id,
                  partition_count,
                  bl_info.partition_count);
-        hint_msg = "app_id or partition_count inconsistent";
+        hint_msg = "app_id or partition_count is inconsistent";
         return ERR_INCONSISTENT_STATE;
     }
 
@@ -303,7 +303,7 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
              req->remote_provider_name,
              req->cluster_name);
 
-    bulk_load_rpc rpc(std::move(req), RPC_BULK_LOAD, pid.thread_hash());
+    bulk_load_rpc rpc(std::move(req), RPC_BULK_LOAD, 0_ms, 0, pid.thread_hash());
     rpc.call(primary_addr, _meta_svc->tracker(), [this, rpc](error_code err) mutable {
         on_partition_bulk_load_reply(err, rpc.request(), rpc.response());
     });
