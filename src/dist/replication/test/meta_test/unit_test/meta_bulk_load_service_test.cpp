@@ -24,29 +24,30 @@
  * THE SOFTWARE.
  */
 
-#include <gtest/gtest.h>
-#include <dsn/dist/fmt_logging.h>
-#include <dsn/utility/fail_point.h>
-
 #include "dist/replication/meta_server/meta_server_failure_detector.h"
 #include "dist/replication/meta_server/meta_service.h"
 #include "dist/replication/meta_server/meta_bulk_load_service.h"
 #include "meta_test_base.h"
+
+#include <dsn/dist/fmt_logging.h>
+#include <dsn/utility/fail_point.h>
+#include <gtest/gtest.h>
 
 namespace dsn {
 namespace replication {
 class bulk_load_service_test : public meta_test_base
 {
 public:
-    bulk_load_service_test() {}
 
-    /// initialize functions
+    /// Used for bulk_load_failover_test
+    /// mock bulk_load information on remote stroage
+
     void initialize_meta_server_with_mock_bulk_load(
-        std::unordered_set<int32_t> app_id_set,
-        std::unordered_map<app_id, app_bulk_load_info> app_bulk_load_info_map,
+        const std::unordered_set<int32_t> &app_id_set,
+        std::unordered_map<app_id, app_bulk_load_info> &app_bulk_load_info_map,
         std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
-            partition_bulk_load_info_map,
-        std::vector<app_info> app_list)
+            &partition_bulk_load_info_map,
+        std::vector<app_info> &app_list)
     {
         // initialize meta service
         auto meta_svc = new fake_receiver_meta_service();
@@ -66,8 +67,8 @@ public:
             app_id_set, app_bulk_load_info_map, partition_bulk_load_info_map);
 
         // mock app
-        for (auto iter = app_list.begin(); iter != app_list.end(); ++iter) {
-            mock_app_on_remote_stroage(*iter);
+        for (auto &info : app_list) {
+            mock_app_on_remote_stroage(info);
         }
         state->initialize_data_structure();
 
@@ -76,13 +77,11 @@ public:
         _ss = _ms->_state;
     }
 
-    /// mock structure functions
-
     void mock_bulk_load_on_remote_storage(
-        std::unordered_set<int32_t> app_id_set,
-        std::unordered_map<app_id, app_bulk_load_info> app_bulk_load_info_map,
+        const std::unordered_set<int32_t> &app_id_set,
+        std::unordered_map<app_id, app_bulk_load_info> &app_bulk_load_info_map,
         std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
-            partition_bulk_load_info_map)
+            &partition_bulk_load_info_map)
     {
         std::string path = bulk_svc()._bulk_load_root;
         blob value = blob();
@@ -91,17 +90,17 @@ public:
             std::move(path),
             std::move(value),
             [this, &app_id_set, &app_bulk_load_info_map, &partition_bulk_load_info_map]() {
-                for (auto iter = app_id_set.begin(); iter != app_id_set.end(); ++iter) {
-                    mock_app_bulk_load_info_on_remote_stroage(app_bulk_load_info_map[*iter],
-                                                              partition_bulk_load_info_map[*iter]);
+                for (const auto id : app_id_set) {
+                    mock_app_bulk_load_info_on_remote_stroage(app_bulk_load_info_map[id],
+                                                              partition_bulk_load_info_map[id]);
                 }
             });
         wait_all();
     }
 
     void mock_app_bulk_load_info_on_remote_stroage(
-        app_bulk_load_info ainfo,
-        std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map)
+        const app_bulk_load_info &ainfo,
+        const std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map)
     {
         std::string app_path = bulk_svc().get_app_bulk_load_path(ainfo.app_id);
         blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
@@ -109,7 +108,7 @@ public:
         _ms->get_meta_storage()->create_node(
             std::move(app_path),
             std::move(value),
-            [this, app_path, ainfo, &partition_bulk_load_info_map]() {
+            [this, app_path, &ainfo, &partition_bulk_load_info_map]() {
                 ddebug_f("create app({}) app_id={} bulk load dir({}), bulk_load_status={}",
                          ainfo.app_name,
                          ainfo.app_id,
@@ -124,20 +123,20 @@ public:
             });
     }
 
-    void mock_partition_bulk_load_info_on_remote_stroage(gpid pid, partition_bulk_load_info pinfo)
+    void mock_partition_bulk_load_info_on_remote_stroage(gpid &pid, const partition_bulk_load_info &pinfo)
     {
-        blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
         std::string partition_path = bulk_svc().get_partition_bulk_load_path(pid);
+        blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
         _ms->get_meta_storage()->create_node(
-            std::move(partition_path), std::move(value), [this, partition_path, pid, pinfo]() {
+            std::move(partition_path), std::move(value), [this, partition_path, pid, &pinfo]() {
                 ddebug_f("create partition[{}] bulk load dir({}), bulk_load_status={}",
-                         pid.to_string(),
+                         pid,
                          partition_path,
                          dsn::enum_to_string(pinfo.status));
             });
     }
 
-    void mock_app_on_remote_stroage(app_info &info)
+    void mock_app_on_remote_stroage(const app_info &info)
     {
         static const char *lock_state = "lock";
         static const char *unlock_state = "unlock";
@@ -153,7 +152,7 @@ public:
         _ms->get_meta_storage()->create_node(
             _app_root + "/" + boost::lexical_cast<std::string>(info.app_id),
             std::move(value),
-            [this, info]() {
+            [this, &info]() {
                 ddebug_f("create app({}) app_id={}, dir succeed", info.app_name, info.app_id);
                 for (int i = 0; i < info.partition_count; ++i) {
                     partition_configuration config;
@@ -179,35 +178,6 @@ public:
         _ms->get_meta_storage()->set_data(
             std::move(app_root), blob(unlock_state, 0, strlen(unlock_state)), []() {});
         wait_all();
-    }
-
-    void update_partition_config_on_remote_storage(partition_configuration &config,
-                                                   std::string &app_name)
-    {
-        gpid pid = config.pid;
-        blob v = dsn::json::json_forwarder<partition_configuration>::encode(config);
-        _ms->get_meta_storage()->set_data(
-            _app_root + "/" + boost::lexical_cast<std::string>(pid.get_app_id()) + "/" +
-                boost::lexical_cast<std::string>(pid.get_partition_index()),
-            std::move(v),
-            [app_name, pid, config, this]() {
-                std::shared_ptr<app_state> app = find_app(APP_NAME);
-                app->partitions[pid.get_partition_index()] = config;
-                ddebug_f("update app({}), partition({}) succeed", app_name, pid.to_string());
-            });
-    }
-
-    void mock_meta_bulk_load_context(int32_t app_id,
-                                     int32_t partition_count,
-                                     bulk_load_status::type status)
-    {
-        bulk_svc()._bulk_load_app_id.insert(app_id);
-        bulk_svc()._apps_in_progress_count[app_id] = partition_count;
-        bulk_svc()._app_bulk_load_info[app_id].status = status;
-        for (int i = 0; i < partition_count; ++i) {
-            gpid pid = gpid(app_id, i);
-            bulk_svc()._partition_bulk_load_info[pid].status = status;
-        }
     }
 
     /// bulk load functions
@@ -259,6 +229,19 @@ public:
         bulk_svc().on_control_bulk_load(rpc);
         wait_all();
         return rpc.response().err;
+    }
+
+    void mock_meta_bulk_load_context(int32_t app_id,
+                                     int32_t partition_count,
+                                     bulk_load_status::type status)
+    {
+        bulk_svc()._bulk_load_app_id.insert(app_id);
+        bulk_svc()._apps_in_progress_count[app_id] = partition_count;
+        bulk_svc()._app_bulk_load_info[app_id].status = status;
+        for (int i = 0; i < partition_count; ++i) {
+            gpid pid = gpid(app_id, i);
+            bulk_svc()._partition_bulk_load_info[pid].status = status;
+        }
     }
 
     void on_partition_bulk_load_reply(error_code err,
@@ -409,8 +392,6 @@ TEST_F(bulk_load_service_test, control_bulk_load_test)
 class bulk_load_process_test : public bulk_load_service_test
 {
 public:
-    bulk_load_process_test() {}
-
     void SetUp()
     {
         bulk_load_service_test::SetUp();
@@ -440,41 +421,44 @@ public:
         _req.ballot = BALLOT;
         _req.cluster_name = CLUSTER;
         _req.pid = gpid(_app_id, _pidx);
-        _req.primary_addr = _primary;
+        _req.primary_addr = PRIMARY;
         _req.meta_bulk_load_status = status;
     }
 
-    void create_basic_response(error_code err, bulk_load_status::type status, int32_t pidx = 0)
+    void create_basic_response(error_code err, bulk_load_status::type status)
     {
         _resp.app_name = APP_NAME;
-        _resp.pid = gpid(_app_id, pidx);
+        _resp.pid = gpid(_app_id, _pidx);
         _resp.err = err;
         _resp.primary_bulk_load_status = status;
     }
 
     void mock_response_progress(error_code progress_err, bool finish_download)
     {
-        create_basic_response(ERR_OK, bulk_load_status::BLS_DOWNLOADING, _pidx);
+        create_basic_response(ERR_OK, bulk_load_status::BLS_DOWNLOADING);
 
         partition_bulk_load_state state;
         state.__set_download_progress(100);
         state.__set_download_status(ERR_OK);
 
-        _resp.__isset.total_download_progress = true;
-        _resp.group_bulk_load_state[_primary] = state;
-        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
+        _resp.group_bulk_load_state[PRIMARY] = state;
+        _resp.group_bulk_load_state[SECONDARY1] = state;
+
+        if (progress_err != ERR_OK) {
+            state.__set_download_progress(0);
+            state.__set_download_status(progress_err);
+            _resp.group_bulk_load_state[SECONDARY2] = state;
+            _resp.__set_total_download_progress(66);
+            return;
+        }
+
         if (finish_download) {
-            _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+            _resp.group_bulk_load_state[SECONDARY2] = state;
             _resp.__set_total_download_progress(100);
         } else {
             state.__set_download_progress(0);
-            _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+            _resp.group_bulk_load_state[SECONDARY2] = state;
             _resp.__set_total_download_progress(66);
-        }
-
-        if (progress_err != ERR_OK) {
-            state.__set_download_status(progress_err);
-            _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
         }
     }
 
@@ -496,40 +480,40 @@ public:
 
     void mock_response_ingestion_status(ingestion_status::type secondary_istatus)
     {
-        create_basic_response(ERR_OK, bulk_load_status::BLS_INGESTING, _pidx);
+        create_basic_response(ERR_OK, bulk_load_status::BLS_INGESTING);
 
         partition_bulk_load_state state;
         state.__set_ingest_status(ingestion_status::IS_SUCCEED);
-        _resp.group_bulk_load_state[_primary] = state;
-        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
+        _resp.group_bulk_load_state[PRIMARY] = state;
+        _resp.group_bulk_load_state[SECONDARY1] = state;
         state.__set_ingest_status(secondary_istatus);
-        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+        _resp.group_bulk_load_state[SECONDARY2] = state;
         _resp.__set_is_group_ingestion_finished(secondary_istatus == ingestion_status::IS_SUCCEED);
     }
 
     void mock_response_cleanup_flag(bool finish_cleanup, bulk_load_status::type status)
     {
-        create_basic_response(ERR_OK, status, _pidx);
+        create_basic_response(ERR_OK, status);
 
         partition_bulk_load_state state;
         state.__set_is_cleanuped(true);
-        _resp.group_bulk_load_state[_primary] = state;
-        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
+        _resp.group_bulk_load_state[PRIMARY] = state;
+        _resp.group_bulk_load_state[SECONDARY1] = state;
         state.__set_is_cleanuped(finish_cleanup);
-        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+        _resp.group_bulk_load_state[SECONDARY2] = state;
         _resp.__set_is_group_bulk_load_context_cleaned(finish_cleanup);
     }
 
     void mock_response_paused(bool is_group_paused)
     {
-        create_basic_response(ERR_OK, bulk_load_status::BLS_PAUSED, _pidx);
+        create_basic_response(ERR_OK, bulk_load_status::BLS_PAUSED);
 
         partition_bulk_load_state state;
         state.__set_is_paused(true);
-        _resp.group_bulk_load_state[_primary] = state;
-        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10085)] = state;
+        _resp.group_bulk_load_state[PRIMARY] = state;
+        _resp.group_bulk_load_state[SECONDARY1] = state;
         state.__set_is_paused(is_group_paused);
-        _resp.group_bulk_load_state[rpc_address("127.0.0.1", 10087)] = state;
+        _resp.group_bulk_load_state[SECONDARY2] = state;
         _resp.__set_is_group_bulk_load_paused(is_group_paused);
     }
 
@@ -558,12 +542,16 @@ public:
         wait_all();
     }
 
-    int32_t _app_id = 3;
-    int32_t _pidx = 0;
-    int32_t _partition_count = 4;
+public:
+    const int32_t _pidx = 0;
+    const rpc_address PRIMARY = rpc_address("127.0.0.1", 10086);
+    const rpc_address SECONDARY1 = rpc_address("127.0.0.1", 10085);
+    const rpc_address SECONDARY2 = rpc_address("127.0.0.1", 10087);
+
+    int32_t _app_id;
+    int32_t _partition_count;
     bulk_load_request _req;
     bulk_load_response _resp;
-    rpc_address _primary = rpc_address("127.0.0.1", 10086);
     ingestion_response _ingest_resp;
 };
 
@@ -766,7 +754,7 @@ public:
                                  int32_t partition_count,
                                  std::string &app_name,
                                  bulk_load_status::type app_status,
-                                 std::unordered_map<int32_t, bulk_load_status::type> pstatus_map,
+                                 std::unordered_map<int32_t, bulk_load_status::type> &pstatus_map,
                                  bool is_bulk_loading)
     {
         _app_id_set.insert(app_id);
@@ -792,7 +780,7 @@ public:
 
     void
     mock_partition_bulk_load_info(int32_t app_id,
-                                  std::unordered_map<int32_t, bulk_load_status::type> pstatus_map)
+                                  std::unordered_map<int32_t, bulk_load_status::type> &pstatus_map)
     {
         if (pstatus_map.size() <= 0) {
             return;

@@ -2,11 +2,12 @@
 // This source code is licensed under the Apache License Version 2.0, which
 // can be found in the LICENSE file in the root directory of this source tree.
 
-#include <dsn/utility/fail_point.h>
-#include <fstream>
-#include <gtest/gtest.h>
-
 #include "replica_test_base.h"
+
+#include <fstream>
+
+#include <dsn/utility/fail_point.h>
+#include <gtest/gtest.h>
 
 namespace dsn {
 namespace replication {
@@ -45,10 +46,10 @@ public:
         return resp.err;
     }
 
-    dsn::error_code test_do_download(const std::string &remote_file_name, bool is_update_progress)
+    error_code test_do_download(const std::string &remote_file_name, bool is_update_progress)
     {
-        dsn::error_code err;
-        dsn::task_tracker tracker;
+        error_code err;
+        task_tracker tracker;
         _replica->do_download(
             PROVIDER, LOCAL_DIR, remote_file_name, _fs.get(), is_update_progress, err, tracker);
         return err;
@@ -64,7 +65,7 @@ public:
         return _replica->verify_sst_files(f_meta, LOCAL_DIR);
     }
 
-    dsn::error_code test_start_downloading()
+    error_code test_start_downloading()
     {
         return _replica->bulk_load_start_download(APP_NAME, CLUSTER, PROVIDER);
     }
@@ -109,13 +110,13 @@ public:
                                       bool is_bulk_load_ingestion,
                                       bulk_load_status::type req_status)
     {
-        mock_bulk_load_states(status, download_progress, istatus, is_bulk_load_ingestion);
+        mock_replica_bulk_load_varieties(status, download_progress, istatus, is_bulk_load_ingestion);
         _replica->handle_bulk_load_finish(req_status);
     }
 
     void test_pause_bulk_load(bulk_load_status::type status, int32_t progress)
     {
-        mock_bulk_load_states(status, progress, ingestion_status::IS_INVALID);
+        mock_replica_bulk_load_varieties(status, progress, ingestion_status::IS_INVALID);
         _replica->pause_bulk_load();
     }
 
@@ -322,7 +323,7 @@ public:
         _replica->_primary_states.membership = config;
     }
 
-    void mock_bulk_load_states(bulk_load_status::type status,
+    void mock_replica_bulk_load_varieties(bulk_load_status::type status,
                                int32_t download_progress,
                                ingestion_status::type istatus,
                                bool is_ingestion = false)
@@ -369,7 +370,7 @@ public:
         } else if (p_status == bulk_load_status::BLS_DOWNLOADED) {
             p_progress = 100;
         }
-        mock_bulk_load_states(p_status, p_progress, ingestion_status::IS_INVALID);
+        mock_replica_bulk_load_varieties(p_status, p_progress, ingestion_status::IS_INVALID);
         mock_secondary_progress(s1_progress, s2_progress);
     }
 
@@ -386,22 +387,23 @@ public:
                                      ingestion_status::type s2_status,
                                      bool is_ingestion_commit = true)
     {
-        mock_bulk_load_states(bulk_load_status::BLS_INGESTING, 100, ingestion_status::IS_SUCCEED);
+        mock_replica_bulk_load_varieties(bulk_load_status::BLS_INGESTING, 100, ingestion_status::IS_SUCCEED);
         mock_secondary_ingestion_states(s1_status, s2_status, is_ingestion_commit);
     }
 
     void mock_group_cleanup_flag(bulk_load_status::type primary_status,
-                                 bool secondary1_cleanup = true,
-                                 bool secondary2_cleanup = true)
+                                 bool s1_cleanup = true,
+                                 bool s2_cleanup = true)
     {
         int32_t primary_progress = primary_status == bulk_load_status::BLS_SUCCEED ? 100 : 0;
-        mock_bulk_load_states(primary_status, primary_progress, ingestion_status::IS_INVALID);
+        mock_replica_bulk_load_varieties(primary_status, primary_progress, ingestion_status::IS_INVALID);
+
         mock_secondary_ingestion_states(
             ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, true);
 
         partition_bulk_load_state state1, state2;
-        state1.__set_is_cleanuped(secondary1_cleanup);
-        state2.__set_is_cleanuped(secondary2_cleanup);
+        state1.__set_is_cleanuped(s1_cleanup);
+        state2.__set_is_cleanuped(s2_cleanup);
         _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state1;
         _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state2;
     }

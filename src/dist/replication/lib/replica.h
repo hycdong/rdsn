@@ -433,29 +433,29 @@ private:
                                   const group_bulk_load_request &req,
                                   const group_bulk_load_response &resp);
 
-    dsn::error_code do_bulk_load(const std::string &app_name,
-                                 bulk_load_status::type meta_status,
-                                 const std::string &cluster_name,
-                                 const std::string &provider_name);
+    error_code do_bulk_load(const std::string &app_name,
+                            bulk_load_status::type meta_status,
+                            const std::string &cluster_name,
+                            const std::string &provider_name);
 
     // compare meta bulk load status and local bulk load status
     // \return ERR_INVALID_STATE if local bulk load status is invalid
-    dsn::error_code validate_bulk_load_status(bulk_load_status::type meta_status,
-                                              bulk_load_status::type local_status);
+    error_code validate_bulk_load_status(bulk_load_status::type meta_status,
+                                         bulk_load_status::type local_status);
 
     // replica start or restart download sst files from remote provider
     // \return ERR_BUSY if node has already had enought replica executing downloading
     // \return download errors by function `download_sst_files`
-    dsn::error_code bulk_load_start_download(const std::string &app_name,
-                                             const std::string &cluster_name,
-                                             const std::string &provider_name);
+    error_code bulk_load_start_download(const std::string &app_name,
+                                        const std::string &cluster_name,
+                                        const std::string &provider_name);
 
     // \return ERR_FILE_OPERATION_FAILED: create local bulk load dir failed
     // \return download metadata file error, see function `do_download`
     // \return parse metadata file error, see function `parse_bulk_load_metadata`
-    dsn::error_code download_sst_files(const std::string &app_name,
-                                       const std::string &cluster_name,
-                                       const std::string &provider_name);
+    error_code download_sst_files(const std::string &app_name,
+                                  const std::string &cluster_name,
+                                  const std::string &provider_name);
 
     // download file from remote file system
     // err = ERR_FILE_OPERATION_FAILED: local file system errors
@@ -464,14 +464,14 @@ private:
     void do_download(const std::string &remote_dir,
                      const std::string &local_dir,
                      const std::string &file_name,
-                     dsn::dist::block_service::block_filesystem *fs,
+                     dist::block_service::block_filesystem *fs,
                      bool is_update_progress,
-                     dsn::error_code &err,
-                     dsn::task_tracker &tracker);
+                     error_code &err,
+                     task_tracker &tracker);
 
     // \return ERR_FILE_OPERATION_FAILED: file not exist, get size failed, open file failed
     // \return ERR_CORRUPTION: parse failed
-    dsn::error_code parse_bulk_load_metadata(const std::string &fname, bulk_load_metadata &meta);
+    error_code parse_bulk_load_metadata(const std::string &fname, bulk_load_metadata &meta);
     void update_download_progress(uint64_t file_size);
     bool verify_sst_files(const file_meta &f_meta, const std::string &local_dir);
 
@@ -481,7 +481,7 @@ private:
     void bulk_load_check_ingestion_finish();
     void handle_bulk_load_succeed();
     void handle_bulk_load_finish(bulk_load_status::type new_status);
-    dsn::error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
+    error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
     void clear_bulk_load_states();
 
     void pause_bulk_load();
