@@ -1109,21 +1109,18 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         zauto_read_lock l(app_lock());
         std::shared_ptr<app_state> app = _state->get_app(app_name);
 
-        if (app == nullptr) {
-            derror_f("app({}) is not existed", app_name);
-            response.err = ERR_OBJECT_NOT_FOUND;
-            return;
-        }
-
-        if (app->status != app_status::AS_AVAILABLE) {
-            derror_f("app({}) is not available", app_name);
-            response.err = ERR_APP_DROPPED;
+        if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
+            derror_f("app({}) is not existed or not available", request.app_name);
+            response.err = app == nullptr ? ERR_APP_NOT_EXIST : ERR_APP_DROPPED;
+            response.hint_msg = fmt::format(
+                "app {}", response.err == ERR_APP_NOT_EXIST ? "not existed" : "dropped");
             return;
         }
 
         if (!app->is_bulk_loading) {
             dwarn_f("app({}) is not during bulk load", app_name);
             response.err = ERR_INVALID_STATE;
+            response.hint_msg = fmt::format("app is not executing bulk load");
             return;
         }
 
@@ -1136,43 +1133,27 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         zauto_read_lock l(_lock);
         response.max_replica_count = max_replica_count;
         response.app_status = get_app_bulk_load_status_unlock(app_id);
-        response.partitions_status.resize(partition_count);
+
         ddebug_f("query app({}) bulk_load_status({}) succeed",
                  app_name,
                  dsn::enum_to_string(response.app_status));
 
-        // TODO(heyuchen): refactor it
-        if (response.app_status == bulk_load_status::BLS_DOWNLOADING ||
-            response.app_status == bulk_load_status::BLS_DOWNLOADED) {
-            response.__isset.download_progresses = true;
-            response.download_progresses.resize(partition_count);
-        }
-
-        if (response.app_status == bulk_load_status::BLS_SUCCEED ||
-            response.app_status == bulk_load_status::BLS_FAILED ||
-            response.app_status == bulk_load_status::BLS_CANCELED) {
-            response.__isset.cleanup_flags = true;
-            response.cleanup_flags.resize(partition_count);
-        }
-
+        response.partitions_status.resize(partition_count);
         for (auto iter = _partition_bulk_load_info.begin(); iter != _partition_bulk_load_info.end();
              iter++) {
-            int idx = iter->first.get_partition_index();
-            response.partitions_status[idx] = iter->second.status;
-            if (response.__isset.download_progresses) {
-                std::map<rpc_address, partition_download_progress> progress;
-                std::map<rpc_address, partition_bulk_load_state> t =
-                    _partitions_bulk_load_state[iter->first];
-                for (auto it = t.begin(); it != t.end(); ++it) {
-                    partition_download_progress p;
-                    p.progress = it->second.download_progress;
-                    p.status = it->second.download_status;
-                    progress[it->first] = p;
-                }
-                response.download_progresses[idx] = progress;
+            if (iter->first.get_app_id() == app_id) {
+                int idx = iter->first.get_partition_index();
+                response.partitions_status[idx] = iter->second.status;
             }
-            if (response.__isset.cleanup_flags) {
-                response.cleanup_flags[idx] = _partitions_cleaned_up[iter->first];
+        }
+
+        response.bulk_load_states.resize(partition_count);
+        for (auto iter = _partitions_bulk_load_state.begin();
+             iter != _partitions_bulk_load_state.end();
+             ++iter) {
+            if (iter->first.get_app_id() == app_id) {
+                int pidx = iter->first.get_partition_index();
+                response.bulk_load_states[pidx] = iter->second;
             }
         }
     }

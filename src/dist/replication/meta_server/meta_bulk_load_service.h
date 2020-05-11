@@ -373,7 +373,6 @@ private:
     // partition download progress while query bulk load status
     std::unordered_map<gpid, int32_t> _partitions_total_download_progress;
     std::unordered_map<gpid, bool> _partitions_cleaned_up;
-    // TODO(heyuchen): add 5.7
     std::unordered_map<gpid, std::map<rpc_address, partition_bulk_load_state>>
         _partitions_bulk_load_state;
 };

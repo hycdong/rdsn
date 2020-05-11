@@ -1001,15 +1001,17 @@ struct configuration_query_bulk_load_request
 
 struct configuration_query_bulk_load_response
 {
-    1:dsn.error_code                    err;
-    2:string                            app_name;
-    3:bulk_load_status                  app_status;
-    4:list<bulk_load_status>            partitions_status;
-    5:i32                               max_replica_count;
+    // Possible error:
+    // - ERR_APP_NOT_EXIST: app not exist
+    // - ERR_APP_DROPPED: app has been dropped
+    // - ERR_INVALID_STATE: app is not executing bulk load
+    1:dsn.error_code                                        err;
+    2:string                                                app_name;
+    3:bulk_load_status                                      app_status;
+    4:list<bulk_load_status>                                partitions_status;
+    5:i32                                                   max_replica_count;
     6:list<map<dsn.rpc_address, partition_bulk_load_state>> bulk_load_states;
-    // TODO(heyuchen): refactor to remove fields
-    7:optional list<map<dsn.rpc_address, partition_download_progress>> download_progresses;
-    8:optional list<bool>               cleanup_flags;
+    7:string                                                hint_msg;
 }
 
 enum bulk_load_control_type

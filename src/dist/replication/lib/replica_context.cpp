@@ -176,8 +176,9 @@ bool primary_context::check_exist(::dsn::rpc_address node, partition_status::typ
     }
 }
 
-void primary_context::reset_group_bulk_load_states(const rpc_address &node,
-                                                   bulk_load_status::type meta_status)
+// TODO(heyuchen): refactor this function
+void primary_context::reset_node_bulk_load_states(const rpc_address &node,
+                                                  bulk_load_status::type meta_status)
 {
     bool reset_progress = (meta_status == bulk_load_status::type::BLS_DOWNLOADING ||
                            meta_status == bulk_load_status::type::BLS_DOWNLOADED ||

@@ -6987,8 +6987,7 @@ typedef struct _configuration_query_bulk_load_response__isset
           partitions_status(false),
           max_replica_count(false),
           bulk_load_states(false),
-          download_progresses(false),
-          cleanup_flags(false)
+          hint_msg(false)
     {
     }
     bool err : 1;
@@ -6997,8 +6996,7 @@ typedef struct _configuration_query_bulk_load_response__isset
     bool partitions_status : 1;
     bool max_replica_count : 1;
     bool bulk_load_states : 1;
-    bool download_progresses : 1;
-    bool cleanup_flags : 1;
+    bool hint_msg : 1;
 } _configuration_query_bulk_load_response__isset;
 
 class configuration_query_bulk_load_response
@@ -7010,7 +7008,7 @@ public:
     operator=(const configuration_query_bulk_load_response &);
     configuration_query_bulk_load_response &operator=(configuration_query_bulk_load_response &&);
     configuration_query_bulk_load_response()
-        : app_name(), app_status((bulk_load_status::type)0), max_replica_count(0)
+        : app_name(), app_status((bulk_load_status::type)0), max_replica_count(0), hint_msg()
     {
     }
 
@@ -7021,8 +7019,7 @@ public:
     std::vector<bulk_load_status::type> partitions_status;
     int32_t max_replica_count;
     std::vector<std::map<::dsn::rpc_address, partition_bulk_load_state>> bulk_load_states;
-    std::vector<std::map<::dsn::rpc_address, partition_download_progress>> download_progresses;
-    std::vector<bool> cleanup_flags;
+    std::string hint_msg;
 
     _configuration_query_bulk_load_response__isset __isset;
 
@@ -7039,10 +7036,7 @@ public:
     void __set_bulk_load_states(
         const std::vector<std::map<::dsn::rpc_address, partition_bulk_load_state>> &val);
 
-    void __set_download_progresses(
-        const std::vector<std::map<::dsn::rpc_address, partition_download_progress>> &val);
-
-    void __set_cleanup_flags(const std::vector<bool> &val);
+    void __set_hint_msg(const std::string &val);
 
     bool operator==(const configuration_query_bulk_load_response &rhs) const
     {
@@ -7058,13 +7052,7 @@ public:
             return false;
         if (!(bulk_load_states == rhs.bulk_load_states))
             return false;
-        if (__isset.download_progresses != rhs.__isset.download_progresses)
-            return false;
-        else if (__isset.download_progresses && !(download_progresses == rhs.download_progresses))
-            return false;
-        if (__isset.cleanup_flags != rhs.__isset.cleanup_flags)
-            return false;
-        else if (__isset.cleanup_flags && !(cleanup_flags == rhs.cleanup_flags))
+        if (!(hint_msg == rhs.hint_msg))
             return false;
         return true;
     }

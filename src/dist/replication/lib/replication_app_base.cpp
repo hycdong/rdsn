@@ -523,7 +523,7 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
 
     if (perror != 0) {
         derror("%s: mutation %s: get internal error %d", _replica->name(), mu->name(), perror);
-        // TODO(heyuchen): update comment
+        // TODO(heyuchen): ingestion, update comment
         if (!has_ingestion_request) {
             return ERR_LOCAL_APP_FAILURE;
         }

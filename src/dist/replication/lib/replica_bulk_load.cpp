@@ -183,7 +183,7 @@ void replica::on_group_bulk_load_reply(error_code err,
         derror_replica("get group_bulk_load_reply from {} failed, error = {}",
                        req.target_address.to_string(),
                        err.to_string());
-        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
+        _primary_states.reset_node_bulk_load_states(req.target_address, req.meta_bulk_load_status);
         return;
     }
 
@@ -191,7 +191,7 @@ void replica::on_group_bulk_load_reply(error_code err,
         derror_replica("on_group_bulk_load from {} failed, error = {}",
                        req.target_address.to_string(),
                        resp.err.to_string());
-        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
+        _primary_states.reset_node_bulk_load_states(req.target_address, req.meta_bulk_load_status);
         return;
     }
 
@@ -201,7 +201,7 @@ void replica::on_group_bulk_load_reply(error_code err,
             req.target_address.to_string(),
             req.config.ballot,
             get_ballot());
-        _primary_states.reset_group_bulk_load_states(req.target_address, req.meta_bulk_load_status);
+        _primary_states.reset_node_bulk_load_states(req.target_address, req.meta_bulk_load_status);
     }
 
     _primary_states.secondary_bulk_load_states[req.target_address] = resp.bulk_load_state;
@@ -690,7 +690,7 @@ void replica::handle_bulk_load_succeed()
     // generate checkpoint
     init_checkpoint(true);
 
-    // TODO(heyuchen): consider when reset
+    // TODO(heyuchen): ingestion - consider when reset
     _app->set_ingestion_status(ingestion_status::IS_INVALID);
 
     set_bulk_load_status(bulk_load_status::BLS_SUCCEED);
@@ -706,7 +706,7 @@ void replica::handle_bulk_load_finish(bulk_load_status::type new_status)
 
     if (status() == partition_status::PS_PRIMARY) {
         for (const auto &target_address : _primary_states.membership.secondaries) {
-            _primary_states.reset_group_bulk_load_states(target_address, new_status);
+            _primary_states.reset_node_bulk_load_states(target_address, new_status);
         }
     }
 
