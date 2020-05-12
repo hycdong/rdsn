@@ -20,14 +20,13 @@ bulk_load_service::bulk_load_service(meta_service *meta_svc, const std::string &
 void bulk_load_service::initialize_bulk_load_service()
 {
     task_tracker tracker;
-    error_code err = ERR_OK;
+    _sync_bulk_load_storage.reset(
+        new mss::meta_storage(_meta_svc->get_remote_storage(), &tracker, LPC_META_CALLBACK));
 
-    create_bulk_load_root_dir(err, tracker);
+    create_bulk_load_root_dir();
     tracker.wait_outstanding_tasks();
 
-    if (err == ERR_OK) {
-        try_to_continue_bulk_load();
-    }
+    try_to_continue_bulk_load();
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
@@ -1160,107 +1159,58 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
-void bulk_load_service::create_bulk_load_root_dir(error_code &err, task_tracker &tracker)
+void bulk_load_service::create_bulk_load_root_dir()
 {
     blob value = blob();
-    _meta_svc->get_remote_storage()->create_node(
-        _bulk_load_root,
-        LPC_META_CALLBACK,
-        [this, &err, &tracker](error_code ec) {
-            if (ERR_OK == ec || ERR_NODE_ALREADY_EXIST == ec) {
-                ddebug_f("create bulk load root({}) succeed", _bulk_load_root);
-                sync_apps_bulk_load_from_remote_stroage(err, tracker);
-            } else if (ERR_TIMEOUT == ec) {
-                dwarn_f("create bulk load root({}) failed, retry later", _bulk_load_root);
-                tasking::enqueue(
-                    LPC_META_STATE_NORMAL,
-                    nullptr,
-                    std::bind(&bulk_load_service::create_bulk_load_root_dir, this, err, tracker),
-                    0,
-                    std::chrono::milliseconds(1000));
-            } else {
-                err = ec;
-                dfatal_f(
-                    "create bulk load root({}) failed, error={}", _bulk_load_root, ec.to_string());
-            }
-        },
-        value,
-        &tracker);
+    std::string path = _bulk_load_root;
+    get_sync_bulk_load_storage()->create_node(std::move(path), std::move(value), [this]() {
+        ddebug_f("create bulk load root({}) succeed", _bulk_load_root);
+        sync_apps_bulk_load_from_remote_stroage();
+    });
 }
 
 // ThreadPool: THREAD_POOL_META_SERVER
-void bulk_load_service::sync_apps_bulk_load_from_remote_stroage(error_code &err,
-                                                                task_tracker &tracker)
+void bulk_load_service::sync_apps_bulk_load_from_remote_stroage()
 {
     std::string path = _bulk_load_root;
-    _meta_svc->get_remote_storage()->get_children(
-        path,
-        LPC_META_CALLBACK,
-        [this, &err, &tracker](error_code ec, const std::vector<std::string> &children) {
-            if (ec != ERR_OK) {
-                derror_f("get path({}) children failed, err = {}", _bulk_load_root, ec.to_string());
-                err = ec;
-                return;
-            }
-            if (children.size() > 0) {
+    get_sync_bulk_load_storage()->get_children(
+        std::move(path), [this](bool flag, const std::vector<std::string> &children) {
+            if (flag && children.size() > 0) {
                 ddebug_f("There are {} apps need to sync bulk load status", children.size());
                 for (auto &elem : children) {
                     uint32_t app_id = boost::lexical_cast<uint32_t>(elem);
                     ddebug_f("start to sync app({}) bulk load status", app_id);
-                    do_sync_app_bulk_load(app_id, err, tracker);
+                    do_sync_app_bulk_load(app_id);
                 }
             }
-        },
-        &tracker);
+        });
 }
 
 // ThreadPool: THREAD_POOL_META_SERVER
-void bulk_load_service::do_sync_app_bulk_load(int32_t app_id,
-                                              error_code &err,
-                                              task_tracker &tracker)
+void bulk_load_service::do_sync_app_bulk_load(int32_t app_id)
 {
     std::string app_path = get_app_bulk_load_path(app_id);
-    _meta_svc->get_remote_storage()->get_data(
-        app_path,
-        LPC_META_CALLBACK,
-        [this, app_id, app_path, &err, &tracker](error_code ec, const blob &value) {
-            if (ec == ERR_OK) {
-                app_bulk_load_info ainfo;
-                dsn::json::json_forwarder<app_bulk_load_info>::decode(value, ainfo);
-                {
-                    zauto_write_lock l(_lock);
-                    _bulk_load_app_id.insert(app_id);
-                    _app_bulk_load_info[app_id] = ainfo;
-                }
-                sync_partitions_bulk_load_from_remote_stroage(
-                    ainfo.app_id, ainfo.app_name, err, tracker);
-            } else {
-                derror_f("get app bulk load info from remote stroage failed, path = {}, err = {}",
-                         app_path,
-                         ec.to_string());
-                err = ec;
+    get_sync_bulk_load_storage()->get_data(
+        std::move(app_path), [this, app_id, app_path](const blob &value) {
+            app_bulk_load_info ainfo;
+            dsn::json::json_forwarder<app_bulk_load_info>::decode(value, ainfo);
+            {
+                zauto_write_lock l(_lock);
+                _bulk_load_app_id.insert(app_id);
+                _app_bulk_load_info[app_id] = ainfo;
             }
-        },
-        &tracker);
+            sync_partitions_bulk_load_from_remote_stroage(ainfo.app_id, ainfo.app_name);
+        });
 }
 
 // ThreadPool: THREAD_POOL_META_SERVER
 void bulk_load_service::sync_partitions_bulk_load_from_remote_stroage(int32_t app_id,
-                                                                      const std::string &app_name,
-                                                                      error_code &err,
-                                                                      task_tracker &tracker)
+                                                                      const std::string &app_name)
 {
     std::string app_path = get_app_bulk_load_path(app_id);
-    _meta_svc->get_remote_storage()->get_children(
-        app_path,
-        LPC_META_CALLBACK,
-        [this, app_path, app_id, app_name, &err, &tracker](
-            error_code ec, const std::vector<std::string> &children) {
-            if (ec != ERR_OK) {
-                derror_f("get path({}) children failed, err = {}", app_path, ec.to_string());
-                err = ec;
-                return;
-            }
+    get_sync_bulk_load_storage()->get_children(
+        std::move(app_path),
+        [this, app_path, app_id, app_name](bool flag, const std::vector<std::string> &children) {
             ddebug_f("app(name={},app_id={}) has {} partition bulk load info to be synced",
                      app_name,
                      app_id,
@@ -1268,42 +1218,25 @@ void bulk_load_service::sync_partitions_bulk_load_from_remote_stroage(int32_t ap
             for (const auto &child_pidx : children) {
                 uint32_t pidx = boost::lexical_cast<uint32_t>(child_pidx);
                 std::string partition_path = get_partition_bulk_load_path(app_path, pidx);
-                do_sync_partition_bulk_load(
-                    gpid(app_id, pidx), app_name, partition_path, err, tracker);
+                do_sync_partition_bulk_load(gpid(app_id, pidx), app_name, partition_path);
             }
-        },
-        &tracker);
+        });
 }
 
 // ThreadPool: THREAD_POOL_META_SERVER
 void bulk_load_service::do_sync_partition_bulk_load(const gpid &pid,
                                                     const std::string &app_name,
-                                                    const std::string &partition_path,
-                                                    error_code &err,
-                                                    task_tracker &tracker)
+                                                    std::string &partition_path)
 {
-    _meta_svc->get_remote_storage()->get_data(
-        partition_path,
-        LPC_META_CALLBACK,
-        [this, pid, app_name, partition_path, &err](error_code ec, const blob &value) {
-            if (ec == ERR_OK) {
-                partition_bulk_load_info pinfo;
-                dsn::json::json_forwarder<partition_bulk_load_info>::decode(value, pinfo);
-                {
-                    zauto_write_lock l(_lock);
-                    _partition_bulk_load_info[pid] = pinfo;
-                }
-            } else {
-                derror_f("get app({}) partition({}) bulk load bulk from remote stroage failed, "
-                         "path={}, err={}",
-                         app_name,
-                         pid.to_string(),
-                         partition_path,
-                         ec.to_string());
-                err = ec;
+    get_sync_bulk_load_storage()->get_data(
+        std::move(partition_path), [this, pid, app_name, partition_path](const blob &value) {
+            partition_bulk_load_info pinfo;
+            dsn::json::json_forwarder<partition_bulk_load_info>::decode(value, pinfo);
+            {
+                zauto_write_lock l(_lock);
+                _partition_bulk_load_info[pid] = pinfo;
             }
-        },
-        &tracker);
+        });
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
