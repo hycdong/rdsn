@@ -1561,37 +1561,22 @@ replication_ddl_client::start_bulk_load(const std::string &app_name,
     return call_rpc_sync(start_bulk_load_rpc(std::move(req), RPC_CM_START_BULK_LOAD));
 }
 
-error_with<configuration_query_bulk_load_response>
+error_with<query_bulk_load_response>
 replication_ddl_client::query_bulk_load(const std::string &app_name)
 {
 
-    auto req = make_unique<configuration_query_bulk_load_request>();
+    auto req = make_unique<query_bulk_load_request>();
     req->app_name = app_name;
     return call_rpc_sync(query_bulk_load_rpc(std::move(req), RPC_CM_QUERY_BULK_LOAD_STATUS));
 }
 
-dsn::error_code replication_ddl_client::control_bulk_load(int32_t app_id,
-                                                          bulk_load_control_type::type control_type)
+error_with<control_bulk_load_response>
+replication_ddl_client::control_bulk_load(int32_t app_id, bulk_load_control_type::type control_type)
 {
-    std::shared_ptr<configuration_control_bulk_load_request> req(
-        new configuration_control_bulk_load_request());
+    auto req = make_unique<control_bulk_load_request>();
     req->app_id = app_id;
     req->type = control_type;
-
-    auto resp_task =
-        request_meta<configuration_control_bulk_load_request>(RPC_CM_CONTROL_BULK_LOAD, req);
-    resp_task->wait();
-    if (resp_task->error() != dsn::ERR_OK) {
-        return resp_task->error();
-    }
-
-    configuration_control_bulk_load_response resp;
-    dsn::unmarshall(resp_task->get_response(), resp);
-
-    if (resp.err != ERR_OK) {
-        std::cout << "err is " << resp.err.to_string() << ", because " << resp.msg << std::endl;
-    }
-    return dsn::ERR_OK;
+    return call_rpc_sync(control_bulk_load_rpc(std::move(req), RPC_CM_CONTROL_BULK_LOAD));
 }
 
 } // namespace replication

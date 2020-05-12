@@ -38,7 +38,6 @@ namespace replication {
 class bulk_load_service_test : public meta_test_base
 {
 public:
-
     /// Used for bulk_load_failover_test
     /// mock bulk_load information on remote stroage
 
@@ -123,7 +122,8 @@ public:
             });
     }
 
-    void mock_partition_bulk_load_info_on_remote_stroage(gpid &pid, const partition_bulk_load_info &pinfo)
+    void mock_partition_bulk_load_info_on_remote_stroage(gpid &pid,
+                                                         const partition_bulk_load_info &pinfo)
     {
         std::string partition_path = bulk_svc().get_partition_bulk_load_path(pid);
         blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
@@ -206,7 +206,7 @@ public:
 
     error_code query_bulk_load(const std::string &app_name)
     {
-        auto request = dsn::make_unique<configuration_query_bulk_load_request>();
+        auto request = dsn::make_unique<query_bulk_load_request>();
         request->app_name = app_name;
 
         query_bulk_load_rpc rpc(std::move(request), RPC_CM_QUERY_BULK_LOAD_STATUS);
@@ -221,7 +221,7 @@ public:
     {
         bulk_svc()._app_bulk_load_info[app_id].status = app_status;
 
-        auto request = dsn::make_unique<configuration_control_bulk_load_request>();
+        auto request = dsn::make_unique<control_bulk_load_request>();
         request->app_id = app_id;
         request->type = type;
 

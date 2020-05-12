@@ -344,9 +344,9 @@ private:
         }
     }
 
-    void set_control_response(bulk_load_status::type local_status,
-                              const std::string &app_name,
-                              configuration_control_bulk_load_response &resp);
+    inline void set_control_response(bulk_load_status::type local_status,
+                                     const std::string &app_name,
+                                     control_bulk_load_response &resp);
 
 private:
     friend class bulk_load_service_test;

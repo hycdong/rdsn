@@ -110,7 +110,8 @@ public:
                                       bool is_bulk_load_ingestion,
                                       bulk_load_status::type req_status)
     {
-        mock_replica_bulk_load_varieties(status, download_progress, istatus, is_bulk_load_ingestion);
+        mock_replica_bulk_load_varieties(
+            status, download_progress, istatus, is_bulk_load_ingestion);
         _replica->handle_bulk_load_finish(req_status);
     }
 
@@ -324,9 +325,9 @@ public:
     }
 
     void mock_replica_bulk_load_varieties(bulk_load_status::type status,
-                               int32_t download_progress,
-                               ingestion_status::type istatus,
-                               bool is_ingestion = false)
+                                          int32_t download_progress,
+                                          ingestion_status::type istatus,
+                                          bool is_ingestion = false)
     {
         _replica->_bulk_load_context._status = status;
         _replica->_bulk_load_context._download_progress = download_progress;
@@ -387,7 +388,8 @@ public:
                                      ingestion_status::type s2_status,
                                      bool is_ingestion_commit = true)
     {
-        mock_replica_bulk_load_varieties(bulk_load_status::BLS_INGESTING, 100, ingestion_status::IS_SUCCEED);
+        mock_replica_bulk_load_varieties(
+            bulk_load_status::BLS_INGESTING, 100, ingestion_status::IS_SUCCEED);
         mock_secondary_ingestion_states(s1_status, s2_status, is_ingestion_commit);
     }
 
@@ -396,7 +398,8 @@ public:
                                  bool s2_cleanup = true)
     {
         int32_t primary_progress = primary_status == bulk_load_status::BLS_SUCCEED ? 100 : 0;
-        mock_replica_bulk_load_varieties(primary_status, primary_progress, ingestion_status::IS_INVALID);
+        mock_replica_bulk_load_varieties(
+            primary_status, primary_progress, ingestion_status::IS_INVALID);
 
         mock_secondary_ingestion_states(
             ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, true);

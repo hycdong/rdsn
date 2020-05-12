@@ -16253,14 +16253,11 @@ void ingestion_response::printTo(std::ostream &out) const
     out << ")";
 }
 
-configuration_query_bulk_load_request::~configuration_query_bulk_load_request() throw() {}
+query_bulk_load_request::~query_bulk_load_request() throw() {}
 
-void configuration_query_bulk_load_request::__set_app_name(const std::string &val)
-{
-    this->app_name = val;
-}
+void query_bulk_load_request::__set_app_name(const std::string &val) { this->app_name = val; }
 
-uint32_t configuration_query_bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t query_bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -16299,12 +16296,11 @@ uint32_t configuration_query_bulk_load_request::read(::apache::thrift::protocol:
     return xfer;
 }
 
-uint32_t
-configuration_query_bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t query_bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("configuration_query_bulk_load_request");
+    xfer += oprot->writeStructBegin("query_bulk_load_request");
 
     xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
     xfer += oprot->writeString(this->app_name);
@@ -16315,87 +16311,74 @@ configuration_query_bulk_load_request::write(::apache::thrift::protocol::TProtoc
     return xfer;
 }
 
-void swap(configuration_query_bulk_load_request &a, configuration_query_bulk_load_request &b)
+void swap(query_bulk_load_request &a, query_bulk_load_request &b)
 {
     using ::std::swap;
     swap(a.app_name, b.app_name);
     swap(a.__isset, b.__isset);
 }
 
-configuration_query_bulk_load_request::configuration_query_bulk_load_request(
-    const configuration_query_bulk_load_request &other689)
+query_bulk_load_request::query_bulk_load_request(const query_bulk_load_request &other689)
 {
     app_name = other689.app_name;
     __isset = other689.__isset;
 }
-configuration_query_bulk_load_request::configuration_query_bulk_load_request(
-    configuration_query_bulk_load_request &&other690)
+query_bulk_load_request::query_bulk_load_request(query_bulk_load_request &&other690)
 {
     app_name = std::move(other690.app_name);
     __isset = std::move(other690.__isset);
 }
-configuration_query_bulk_load_request &configuration_query_bulk_load_request::
-operator=(const configuration_query_bulk_load_request &other691)
+query_bulk_load_request &query_bulk_load_request::operator=(const query_bulk_load_request &other691)
 {
     app_name = other691.app_name;
     __isset = other691.__isset;
     return *this;
 }
-configuration_query_bulk_load_request &configuration_query_bulk_load_request::
-operator=(configuration_query_bulk_load_request &&other692)
+query_bulk_load_request &query_bulk_load_request::operator=(query_bulk_load_request &&other692)
 {
     app_name = std::move(other692.app_name);
     __isset = std::move(other692.__isset);
     return *this;
 }
-void configuration_query_bulk_load_request::printTo(std::ostream &out) const
+void query_bulk_load_request::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "configuration_query_bulk_load_request(";
+    out << "query_bulk_load_request(";
     out << "app_name=" << to_string(app_name);
     out << ")";
 }
 
-configuration_query_bulk_load_response::~configuration_query_bulk_load_response() throw() {}
+query_bulk_load_response::~query_bulk_load_response() throw() {}
 
-void configuration_query_bulk_load_response::__set_err(const ::dsn::error_code &val)
-{
-    this->err = val;
-}
+void query_bulk_load_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
 
-void configuration_query_bulk_load_response::__set_app_name(const std::string &val)
-{
-    this->app_name = val;
-}
+void query_bulk_load_response::__set_app_name(const std::string &val) { this->app_name = val; }
 
-void configuration_query_bulk_load_response::__set_app_status(const bulk_load_status::type val)
+void query_bulk_load_response::__set_app_status(const bulk_load_status::type val)
 {
     this->app_status = val;
 }
 
-void configuration_query_bulk_load_response::__set_partitions_status(
+void query_bulk_load_response::__set_partitions_status(
     const std::vector<bulk_load_status::type> &val)
 {
     this->partitions_status = val;
 }
 
-void configuration_query_bulk_load_response::__set_max_replica_count(const int32_t val)
+void query_bulk_load_response::__set_max_replica_count(const int32_t val)
 {
     this->max_replica_count = val;
 }
 
-void configuration_query_bulk_load_response::__set_bulk_load_states(
+void query_bulk_load_response::__set_bulk_load_states(
     const std::vector<std::map<::dsn::rpc_address, partition_bulk_load_state>> &val)
 {
     this->bulk_load_states = val;
 }
 
-void configuration_query_bulk_load_response::__set_hint_msg(const std::string &val)
-{
-    this->hint_msg = val;
-}
+void query_bulk_load_response::__set_hint_msg(const std::string &val) { this->hint_msg = val; }
 
-uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t query_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -16523,12 +16506,11 @@ uint32_t configuration_query_bulk_load_response::read(::apache::thrift::protocol
     return xfer;
 }
 
-uint32_t
-configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t query_bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("configuration_query_bulk_load_response");
+    xfer += oprot->writeStructBegin("query_bulk_load_response");
 
     xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
     xfer += this->err.write(oprot);
@@ -16592,7 +16574,7 @@ configuration_query_bulk_load_response::write(::apache::thrift::protocol::TProto
     return xfer;
 }
 
-void swap(configuration_query_bulk_load_response &a, configuration_query_bulk_load_response &b)
+void swap(query_bulk_load_response &a, query_bulk_load_response &b)
 {
     using ::std::swap;
     swap(a.err, b.err);
@@ -16605,8 +16587,7 @@ void swap(configuration_query_bulk_load_response &a, configuration_query_bulk_lo
     swap(a.__isset, b.__isset);
 }
 
-configuration_query_bulk_load_response::configuration_query_bulk_load_response(
-    const configuration_query_bulk_load_response &other715)
+query_bulk_load_response::query_bulk_load_response(const query_bulk_load_response &other715)
 {
     err = other715.err;
     app_name = other715.app_name;
@@ -16617,8 +16598,7 @@ configuration_query_bulk_load_response::configuration_query_bulk_load_response(
     hint_msg = other715.hint_msg;
     __isset = other715.__isset;
 }
-configuration_query_bulk_load_response::configuration_query_bulk_load_response(
-    configuration_query_bulk_load_response &&other716)
+query_bulk_load_response::query_bulk_load_response(query_bulk_load_response &&other716)
 {
     err = std::move(other716.err);
     app_name = std::move(other716.app_name);
@@ -16629,8 +16609,8 @@ configuration_query_bulk_load_response::configuration_query_bulk_load_response(
     hint_msg = std::move(other716.hint_msg);
     __isset = std::move(other716.__isset);
 }
-configuration_query_bulk_load_response &configuration_query_bulk_load_response::
-operator=(const configuration_query_bulk_load_response &other717)
+query_bulk_load_response &query_bulk_load_response::
+operator=(const query_bulk_load_response &other717)
 {
     err = other717.err;
     app_name = other717.app_name;
@@ -16642,8 +16622,7 @@ operator=(const configuration_query_bulk_load_response &other717)
     __isset = other717.__isset;
     return *this;
 }
-configuration_query_bulk_load_response &configuration_query_bulk_load_response::
-operator=(configuration_query_bulk_load_response &&other718)
+query_bulk_load_response &query_bulk_load_response::operator=(query_bulk_load_response &&other718)
 {
     err = std::move(other718.err);
     app_name = std::move(other718.app_name);
@@ -16655,10 +16634,10 @@ operator=(configuration_query_bulk_load_response &&other718)
     __isset = std::move(other718.__isset);
     return *this;
 }
-void configuration_query_bulk_load_response::printTo(std::ostream &out) const
+void query_bulk_load_response::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "configuration_query_bulk_load_response(";
+    out << "query_bulk_load_response(";
     out << "err=" << to_string(err);
     out << ", "
         << "app_name=" << to_string(app_name);
@@ -16675,19 +16654,16 @@ void configuration_query_bulk_load_response::printTo(std::ostream &out) const
     out << ")";
 }
 
-configuration_control_bulk_load_request::~configuration_control_bulk_load_request() throw() {}
+control_bulk_load_request::~control_bulk_load_request() throw() {}
 
-void configuration_control_bulk_load_request::__set_app_id(const int32_t val)
-{
-    this->app_id = val;
-}
+void control_bulk_load_request::__set_app_id(const int32_t val) { this->app_id = val; }
 
-void configuration_control_bulk_load_request::__set_type(const bulk_load_control_type::type val)
+void control_bulk_load_request::__set_type(const bulk_load_control_type::type val)
 {
     this->type = val;
 }
 
-uint32_t configuration_control_bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t control_bulk_load_request::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -16736,12 +16712,11 @@ uint32_t configuration_control_bulk_load_request::read(::apache::thrift::protoco
     return xfer;
 }
 
-uint32_t
-configuration_control_bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t control_bulk_load_request::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("configuration_control_bulk_load_request");
+    xfer += oprot->writeStructBegin("control_bulk_load_request");
 
     xfer += oprot->writeFieldBegin("app_id", ::apache::thrift::protocol::T_I32, 1);
     xfer += oprot->writeI32(this->app_id);
@@ -16756,7 +16731,7 @@ configuration_control_bulk_load_request::write(::apache::thrift::protocol::TProt
     return xfer;
 }
 
-void swap(configuration_control_bulk_load_request &a, configuration_control_bulk_load_request &b)
+void swap(control_bulk_load_request &a, control_bulk_load_request &b)
 {
     using ::std::swap;
     swap(a.app_id, b.app_id);
@@ -16764,60 +16739,51 @@ void swap(configuration_control_bulk_load_request &a, configuration_control_bulk
     swap(a.__isset, b.__isset);
 }
 
-configuration_control_bulk_load_request::configuration_control_bulk_load_request(
-    const configuration_control_bulk_load_request &other720)
+control_bulk_load_request::control_bulk_load_request(const control_bulk_load_request &other720)
 {
     app_id = other720.app_id;
     type = other720.type;
     __isset = other720.__isset;
 }
-configuration_control_bulk_load_request::configuration_control_bulk_load_request(
-    configuration_control_bulk_load_request &&other721)
+control_bulk_load_request::control_bulk_load_request(control_bulk_load_request &&other721)
 {
     app_id = std::move(other721.app_id);
     type = std::move(other721.type);
     __isset = std::move(other721.__isset);
 }
-configuration_control_bulk_load_request &configuration_control_bulk_load_request::
-operator=(const configuration_control_bulk_load_request &other722)
+control_bulk_load_request &control_bulk_load_request::
+operator=(const control_bulk_load_request &other722)
 {
     app_id = other722.app_id;
     type = other722.type;
     __isset = other722.__isset;
     return *this;
 }
-configuration_control_bulk_load_request &configuration_control_bulk_load_request::
-operator=(configuration_control_bulk_load_request &&other723)
+control_bulk_load_request &control_bulk_load_request::
+operator=(control_bulk_load_request &&other723)
 {
     app_id = std::move(other723.app_id);
     type = std::move(other723.type);
     __isset = std::move(other723.__isset);
     return *this;
 }
-void configuration_control_bulk_load_request::printTo(std::ostream &out) const
+void control_bulk_load_request::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "configuration_control_bulk_load_request(";
+    out << "control_bulk_load_request(";
     out << "app_id=" << to_string(app_id);
     out << ", "
         << "type=" << to_string(type);
     out << ")";
 }
 
-configuration_control_bulk_load_response::~configuration_control_bulk_load_response() throw() {}
+control_bulk_load_response::~control_bulk_load_response() throw() {}
 
-void configuration_control_bulk_load_response::__set_err(const ::dsn::error_code &val)
-{
-    this->err = val;
-}
+void control_bulk_load_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
 
-void configuration_control_bulk_load_response::__set_msg(const std::string &val)
-{
-    this->msg = val;
-}
+void control_bulk_load_response::__set_hint_msg(const std::string &val) { this->hint_msg = val; }
 
-uint32_t
-configuration_control_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t control_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -16846,8 +16812,8 @@ configuration_control_bulk_load_response::read(::apache::thrift::protocol::TProt
             break;
         case 2:
             if (ftype == ::apache::thrift::protocol::T_STRING) {
-                xfer += iprot->readString(this->msg);
-                this->__isset.msg = true;
+                xfer += iprot->readString(this->hint_msg);
+                this->__isset.hint_msg = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -16864,19 +16830,18 @@ configuration_control_bulk_load_response::read(::apache::thrift::protocol::TProt
     return xfer;
 }
 
-uint32_t
-configuration_control_bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t control_bulk_load_response::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("configuration_control_bulk_load_response");
+    xfer += oprot->writeStructBegin("control_bulk_load_response");
 
     xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
     xfer += this->err.write(oprot);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("msg", ::apache::thrift::protocol::T_STRING, 2);
-    xfer += oprot->writeString(this->msg);
+    xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 2);
+    xfer += oprot->writeString(this->hint_msg);
     xfer += oprot->writeFieldEnd();
 
     xfer += oprot->writeFieldStop();
@@ -16884,51 +16849,49 @@ configuration_control_bulk_load_response::write(::apache::thrift::protocol::TPro
     return xfer;
 }
 
-void swap(configuration_control_bulk_load_response &a, configuration_control_bulk_load_response &b)
+void swap(control_bulk_load_response &a, control_bulk_load_response &b)
 {
     using ::std::swap;
     swap(a.err, b.err);
-    swap(a.msg, b.msg);
+    swap(a.hint_msg, b.hint_msg);
     swap(a.__isset, b.__isset);
 }
 
-configuration_control_bulk_load_response::configuration_control_bulk_load_response(
-    const configuration_control_bulk_load_response &other724)
+control_bulk_load_response::control_bulk_load_response(const control_bulk_load_response &other724)
 {
     err = other724.err;
-    msg = other724.msg;
+    hint_msg = other724.hint_msg;
     __isset = other724.__isset;
 }
-configuration_control_bulk_load_response::configuration_control_bulk_load_response(
-    configuration_control_bulk_load_response &&other725)
+control_bulk_load_response::control_bulk_load_response(control_bulk_load_response &&other725)
 {
     err = std::move(other725.err);
-    msg = std::move(other725.msg);
+    hint_msg = std::move(other725.hint_msg);
     __isset = std::move(other725.__isset);
 }
-configuration_control_bulk_load_response &configuration_control_bulk_load_response::
-operator=(const configuration_control_bulk_load_response &other726)
+control_bulk_load_response &control_bulk_load_response::
+operator=(const control_bulk_load_response &other726)
 {
     err = other726.err;
-    msg = other726.msg;
+    hint_msg = other726.hint_msg;
     __isset = other726.__isset;
     return *this;
 }
-configuration_control_bulk_load_response &configuration_control_bulk_load_response::
-operator=(configuration_control_bulk_load_response &&other727)
+control_bulk_load_response &control_bulk_load_response::
+operator=(control_bulk_load_response &&other727)
 {
     err = std::move(other727.err);
-    msg = std::move(other727.msg);
+    hint_msg = std::move(other727.hint_msg);
     __isset = std::move(other727.__isset);
     return *this;
 }
-void configuration_control_bulk_load_response::printTo(std::ostream &out) const
+void control_bulk_load_response::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "configuration_control_bulk_load_response(";
+    out << "control_bulk_load_response(";
     out << "err=" << to_string(err);
     out << ", "
-        << "msg=" << to_string(msg);
+        << "hint_msg=" << to_string(hint_msg);
     out << ")";
 }
 }

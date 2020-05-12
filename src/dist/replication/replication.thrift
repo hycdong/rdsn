@@ -994,12 +994,12 @@ struct ingestion_response
     2:i32               rocksdb_error;
 }
 
-struct configuration_query_bulk_load_request
+struct query_bulk_load_request
 {
     1:string   app_name;
 }
 
-struct configuration_query_bulk_load_response
+struct query_bulk_load_response
 {
     // Possible error:
     // - ERR_APP_NOT_EXIST: app not exist
@@ -1022,16 +1022,21 @@ enum bulk_load_control_type
     BLC_FORCE_CANCEL
 }
 
-struct configuration_control_bulk_load_request
+struct control_bulk_load_request
 {
     1:i32                       app_id;
     2:bulk_load_control_type    type;
 }
 
-struct configuration_control_bulk_load_response
+struct control_bulk_load_response
 {
+    // Possible error:
+    // - ERR_APP_NOT_EXIST: app not exist
+    // - ERR_APP_DROPPED: app has been dropped
+    // - ERR_INACTIVE_STATE: app is not executing bulk load
+    // - ERR_INVALID_STATE: current bulk load process can not be paused/restarted/canceled
     1:dsn.error_code    err;
-    2:string            msg;
+    2:string            hint_msg;
 }
 
 /*

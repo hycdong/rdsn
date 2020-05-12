@@ -37,11 +37,8 @@ typedef std::unordered_map<::dsn::rpc_address, partition_status::type> node_stat
 typedef std::unordered_map<::dsn::rpc_address, dsn::task_ptr> node_tasks;
 
 typedef rpc_holder<start_bulk_load_request, start_bulk_load_response> start_bulk_load_rpc;
-typedef rpc_holder<configuration_query_bulk_load_request, configuration_query_bulk_load_response>
-    query_bulk_load_rpc;
-typedef rpc_holder<configuration_control_bulk_load_request,
-                   configuration_control_bulk_load_response>
-    control_bulk_load_rpc;
+typedef rpc_holder<query_bulk_load_request, query_bulk_load_response> query_bulk_load_rpc;
+typedef rpc_holder<control_bulk_load_request, control_bulk_load_response> control_bulk_load_rpc;
 typedef rpc_holder<bulk_load_request, bulk_load_response> bulk_load_rpc;
 
 class replication_options

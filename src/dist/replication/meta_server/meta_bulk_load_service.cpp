@@ -1100,7 +1100,7 @@ void bulk_load_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
     const auto &request = rpc.request();
     const std::string &app_name = request.app_name;
 
-    configuration_query_bulk_load_response &response = rpc.response();
+    query_bulk_load_response &response = rpc.response();
     response.err = ERR_OK;
     response.app_name = app_name;
 
@@ -1702,13 +1702,14 @@ void bulk_load_service::on_control_bulk_load(control_bulk_load_rpc rpc)
         app = _state->get_app(request.app_id);
         if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
             response.err = app == nullptr ? ERR_APP_NOT_EXIST : ERR_APP_DROPPED;
-            response.msg = fmt::format("app({}) is not existed or not available", request.app_id);
+            response.hint_msg =
+                fmt::format("app({}) is not existed or not available", request.app_id);
             return;
         }
 
         if (!app->is_bulk_loading) {
             response.err = ERR_INACTIVE_STATE;
-            response.msg = fmt::format("app({}) is not executing bulk load", app->app_name);
+            response.hint_msg = fmt::format("app({}) is not executing bulk load", app->app_name);
             return;
         }
     }
@@ -1757,10 +1758,10 @@ void bulk_load_service::on_control_bulk_load(control_bulk_load_rpc rpc)
 
 void bulk_load_service::set_control_response(bulk_load_status::type local_status,
                                              const std::string &app_name,
-                                             configuration_control_bulk_load_response &resp)
+                                             control_bulk_load_response &resp)
 {
     resp.err = ERR_INVALID_STATE;
-    resp.msg = fmt::format("app({}) status={}", app_name, dsn::enum_to_string(local_status));
+    resp.hint_msg = fmt::format("app({}) status={}", app_name, dsn::enum_to_string(local_status));
 }
 
 } // namespace replication

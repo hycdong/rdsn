@@ -182,9 +182,10 @@ public:
                                                          const std::string &cluster_name,
                                                          const std::string &file_provider_type);
 
-    error_with<configuration_query_bulk_load_response> query_bulk_load(const std::string &app_name);
+    error_with<query_bulk_load_response> query_bulk_load(const std::string &app_name);
 
-    dsn::error_code control_bulk_load(int32_t app_id, bulk_load_control_type::type control_type);
+    error_with<control_bulk_load_response>
+    control_bulk_load(int32_t app_id, bulk_load_control_type::type control_type);
 
 private:
     bool static valid_app_char(int c);
