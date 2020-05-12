@@ -36,9 +36,12 @@
 #pragma once
 
 #include "dist/replication/common/replication_common.h"
-#include "mutation.h"
+#include "dist/replication/lib/mutation.h"
+#include "dist/replication/lib/log_block.h"
+
 #include <atomic>
 #include <dsn/tool-api/zlocks.h>
+#include <dsn/utility/errors.h>
 #include <dsn/perf_counter/perf_counter_wrapper.h>
 #include <dsn/dist/replication/replica_base.h>
 
@@ -71,16 +74,6 @@ struct replica_log_info
 
 typedef std::unordered_map<gpid, replica_log_info> replica_log_info_map;
 
-// each block in log file has a log_block_header
-struct log_block_header
-{
-    int32_t magic;    // 0xdeadbeef
-    int32_t length;   // block data length (not including log_block_header)
-    int32_t body_crc; // block data crc (not including log_block_header)
-    uint32_t
-        local_offset; // start offset of the block (including log_block_header) in this log file
-};
-
 // each log file has a log_file_header stored at the beginning of the first block's data content
 struct log_file_header
 {
@@ -88,32 +81,6 @@ struct log_file_header
     int32_t version; // current 0x1
     int64_t
         start_global_offset; // start offset in the global space, equals to the file name's postfix
-};
-
-// a memory structure holding data which belongs to one block.
-class log_block /* : public ::dsn::transient_object*/
-{
-    std::vector<blob> _data; // the first blob is log_block_header
-    size_t _size;            // total data size of all blobs
-public:
-    log_block() : _size(0) {}
-    log_block(blob &&init_blob) : _data({init_blob}), _size(init_blob.length()) {}
-    // get all blobs in the block
-    const std::vector<blob> &data() const { return _data; }
-    // get the first blob (which contains the log_block_header) from the block
-    blob &front()
-    {
-        dassert(!_data.empty(), "trying to get first blob out of an empty log block");
-        return _data.front();
-    }
-    // add a blob into the block
-    void add(const blob &bb)
-    {
-        _size += bb.length();
-        _data.push_back(bb);
-    }
-    // return total data size in the block
-    size_t size() const { return _size; }
 };
 
 //
@@ -126,9 +93,10 @@ class replica;
 class mutation_log : public ref_counter
 {
 public:
-    // return true when the mutation's offset is not less than
-    // the remembered (shared or private) valid_start_offset therefore valid for the replica
+    // DEPRECATED: The returned bool value will never be evaluated.
+    // Always return true in the callback.
     typedef std::function<bool(int log_length, mutation_ptr &)> replay_callback;
+
     typedef std::function<void(dsn::error_code err)> io_failure_callback;
 
 public:
@@ -197,6 +165,40 @@ public:
     static error_code replay(std::vector<std::string> &log_files,
                              replay_callback callback,
                              /*out*/ int64_t &end_offset);
+
+    // Reads a series of mutations from the log file (from `start_offset` of `log`),
+    // and iterates over the mutations, executing the provided `callback` for each
+    // mutation entry.
+    // Since the logs are packed into multiple blocks, this function retrieves
+    // only one log block at a time. The size of block depends on configuration
+    // `log_private_batch_buffer_kb` and `log_private_batch_buffer_count`.
+    //
+    // Parameters:
+    // - callback: the callback to execute for each mutation.
+    // - start_offset: file offset to start.
+    //
+    // Returns:
+    // - ERR_INVALID_DATA: if the loaded data is incorrect or invalid.
+    //
+    static error_s replay_block(log_file_ptr &log,
+                                replay_callback &callback,
+                                size_t start_offset,
+                                /*out*/ int64_t &end_offset);
+    static error_s replay_block(log_file_ptr &log,
+                                replay_callback &&callback,
+                                size_t start_offset,
+                                /*out*/ int64_t &end_offset)
+    {
+        return replay_block(log, callback, start_offset, end_offset);
+    }
+
+    // Resets private-log with log files under `dir`.
+    // The original plog will be removed after this call.
+    // NOTE: private-log should be opened before this method called.
+    virtual error_code reset_from(const std::string &dir, io_failure_callback)
+    {
+        return ERR_NOT_IMPLEMENTED;
+    }
 
     //
     // maintain max_decree & valid_start_offset
@@ -295,9 +297,18 @@ public:
     // thread safe
     decree max_commit_on_disk() const;
 
-    // maximum decree that is garbage collected
-    // thread safe
-    decree max_gced_decree(gpid gpid, int64_t valid_start_offset) const;
+    // Decree of the maximum garbage-collected mutation.
+    // For example, given mutations [20, 100], if [20, 50] is garbage-collected,
+    // the max_gced_decree=50.
+    // In production the mutations may not be ordered with the file-id. Given 3 log files:
+    //   #1:[20, 30], #2:[30, 50], #3:[10, 50]
+    // The third file is learned from primary of new epoch. Since it contains mutations smaller
+    // than the others, the max_gced_decree = 9.
+    // Returns `invalid_decree` when plog directory is empty.
+    //
+    // thread-safe & private log only
+    decree max_gced_decree(gpid gpid) const;
+    decree max_gced_decree_no_lock(gpid gpid) const;
 
     // thread-safe
     std::map<int, log_file_ptr> get_log_file_map() const;
@@ -311,6 +322,8 @@ public:
 
     void hint_switch_file() { _switch_file_hint = true; }
     void demand_switch_file() { _switch_file_demand = true; }
+
+    task_tracker *tracker() { return &_tracker; }
 
 protected:
     // thread-safe
@@ -417,7 +430,6 @@ public:
                         perf_counter_wrapper *write_size_counter = nullptr)
         : mutation_log(dir, max_log_file_mb, dsn::gpid(), nullptr),
           _is_writing(false),
-          _pending_write_start_offset(0),
           _force_flush(force_flush),
           _write_size_counter(write_size_counter)
     {
@@ -454,14 +466,9 @@ private:
 
 private:
     // bufferring - only one concurrent write is allowed
-    typedef std::vector<aio_task_ptr> callbacks;
-    typedef std::vector<mutation_ptr> mutations;
     mutable zlock _slock;
     std::atomic_bool _is_writing;
     std::shared_ptr<log_block> _pending_write;
-    std::shared_ptr<callbacks> _pending_write_callbacks;
-    std::shared_ptr<mutations> _pending_write_mutations;
-    int64_t _pending_write_start_offset;
 
     bool _force_flush;
     perf_counter_wrapper *_write_size_counter;
@@ -532,10 +539,11 @@ private:
     // bufferring - only one concurrent write is allowed
     typedef std::vector<mutation_ptr> mutations;
     std::atomic_bool _is_writing;
-    std::weak_ptr<mutations> _issued_write_mutations;
+    // Writes that are emitted to `commit_log_block` but are not completely written.
+    // The weak_ptr used here is a trick. Once the pointer freed, ie.
+    // `_issued_write.lock() == nullptr`, it means the emitted writes all finished.
+    std::weak_ptr<log_block> _issued_write;
     std::shared_ptr<log_block> _pending_write;
-    std::shared_ptr<mutations> _pending_write_mutations;
-    int64_t _pending_write_start_offset;
     uint64_t _pending_write_start_time_ms;
     decree _pending_write_max_commit;
     decree _pending_write_max_decree;
@@ -603,10 +611,6 @@ public:
     // write routines
     //
 
-    // prepare a log entry buffer, with block header reserved and inited
-    // always returns non-nullptr
-    static log_block *prepare_log_block();
-
     // async write log entry into the file
     // 'block' is the date to be written
     // 'offset' is start offset of the entry in the global space
@@ -627,8 +631,10 @@ public:
     //
     // others
     //
-    // reset file_streamer to point to the start of this log file.
-    void reset_stream();
+
+    // Reset file_streamer to point to `offset`.
+    // offset=0 means the start of this log file.
+    void reset_stream(size_t offset = 0);
     // end offset in the global space: end_offset = start_offset + file_size
     int64_t end_offset() const { return _end_offset.load(); }
     // start offset in the global space
@@ -657,6 +663,8 @@ public:
     void set_last_write_time(uint64_t last_write_time) { _last_write_time = last_write_time; }
     uint64_t last_write_time() const { return _last_write_time; }
 
+    const disk_file *file_handle() const { return _handle; }
+
 private:
     // make private, user should create log_file through open_read() or open_write()
     log_file(const char *path, disk_file *handle, int index, int64_t start_offset, bool is_read);
@@ -671,11 +679,13 @@ private:
     class file_streamer;
     std::unique_ptr<file_streamer> _stream;
     disk_file *_handle;        // file handle
-    bool _is_read;             // if opened for read or write
+    const bool _is_read;       // if opened for read or write
     std::string _path;         // file path
     int _index;                // file index
     log_file_header _header;   // file header
     uint64_t _last_write_time; // seconds from epoch time
+
+    mutable zlock _write_lock;
 
     // this data is used for garbage collection, and is part of file header.
     // for read, the value is read from file header.

@@ -35,6 +35,7 @@
 #include <fstream>
 #include <sstream>
 #include <memory>
+#include <dsn/utility/fail_point.h>
 
 namespace dsn {
 namespace replication {
@@ -309,16 +310,13 @@ replication_app_base *replication_app_base::new_storage_instance(const std::stri
         name.c_str(), PROVIDER_TYPE_MAIN, r);
 }
 
-replication_app_base::replication_app_base(replica *replica)
-    : replica_base(replica->get_gpid(), replica->name())
+replication_app_base::replication_app_base(replica *replica) : replica_base(replica)
 {
     _dir_data = utils::filesystem::path_combine(replica->dir(), "data");
     _dir_learn = utils::filesystem::path_combine(replica->dir(), "learn");
     _dir_backup = utils::filesystem::path_combine(replica->dir(), "backup");
     _last_committed_decree = 0;
     _replica = replica;
-
-    install_perf_counters();
 }
 
 bool replication_app_base::is_primary() const
@@ -326,15 +324,7 @@ bool replication_app_base::is_primary() const
     return _replica->status() == partition_status::PS_PRIMARY;
 }
 
-void replication_app_base::install_perf_counters()
-{
-    // TODO: add custom perfcounters for replication_app_base
-}
-
-void replication_app_base::reset_counters_after_learning()
-{
-    // TODO: add custom perfcounters for replication_app_base
-}
+bool replication_app_base::is_duplicating() const { return _replica->is_duplicating(); }
 
 error_code replication_app_base::open_internal(replica *r)
 {
@@ -467,6 +457,9 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
 
 ::dsn::error_code replication_app_base::apply_mutation(const mutation *mu)
 {
+    FAIL_POINT_INJECT_F("replication_app_base_apply_mutation",
+                        [](dsn::string_view) { return ERR_OK; });
+
     dassert(mu->data.header.decree == last_committed_decree() + 1,
             "invalid mutation decree, decree = %" PRId64 " VS %" PRId64 "",
             mu->data.header.decree,
@@ -482,7 +475,7 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
         (dsn::message_ex **)alloca(sizeof(dsn::message_ex *) * request_count);
     dsn::message_ex **faked_requests =
         (dsn::message_ex **)alloca(sizeof(dsn::message_ex *) * request_count);
-    int batched_count = 0;
+    int batched_count = 0; // write-empties are not included.
     int faked_count = 0;
     for (int i = 0; i < request_count; i++) {
         const mutation_update &update = mu->data.updates[i];
@@ -556,7 +549,7 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
                batched_count);
     }
 
-    _replica->update_commit_statistics(1);
+    _replica->update_commit_qps(batched_count);
 
     return ERR_OK;
 }
@@ -588,5 +581,5 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
                             _info.init_offset_in_private_log,
                             r->last_durable_decree());
 }
-}
-} // end namespace
+} // namespace replication
+} // namespace dsn

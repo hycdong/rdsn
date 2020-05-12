@@ -99,9 +99,9 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     membership.ballot = 0;
 
-    child_address.clear();
+    caught_up_children.clear();
 
-    is_sync_to_child = false;
+    sync_send_write_request = false;
 }
 
 bool primary_context::is_cleaned()
@@ -228,6 +228,7 @@ bool potential_secondary_context::cleanup(bool force)
         learn_app_concurrent_count_increased = false;
     }
     learning_start_prepare_decree = invalid_decree;
+    first_learn_start_decree = invalid_decree;
     learning_status = learner_status::LearningInvalid;
     return true;
 }
@@ -292,6 +293,7 @@ bool cold_backup_context::fail_check(const char *failure_reason)
     int checking = ColdBackupChecking;
     if (_status.compare_exchange_strong(checking, ColdBackupFailed)) {
         strncpy(_reason, failure_reason, sizeof(_reason) - 1);
+        _reason[sizeof(_reason) - 1] = '\0';
         if (_owner_replica != nullptr) {
             _owner_replica->get_replica_stub()->_counter_cold_backup_recent_fail_count->increment();
         }
@@ -330,6 +332,7 @@ bool cold_backup_context::fail_checkpoint(const char *failure_reason)
     int checkpointing = ColdBackupCheckpointing;
     if (_status.compare_exchange_strong(checkpointing, ColdBackupFailed)) {
         strncpy(_reason, failure_reason, sizeof(_reason) - 1);
+        _reason[sizeof(_reason) - 1] = '\0';
         if (_owner_replica != nullptr) {
             _owner_replica->get_replica_stub()->_counter_cold_backup_recent_fail_count->increment();
         }
@@ -370,6 +373,7 @@ bool cold_backup_context::fail_upload(const char *failure_reason)
     if (_status.compare_exchange_strong(uploading, ColdBackupFailed) ||
         _status.compare_exchange_strong(paused, ColdBackupFailed)) {
         strncpy(_reason, failure_reason, sizeof(_reason) - 1);
+        _reason[sizeof(_reason) - 1] = '\0';
         if (_owner_replica != nullptr) {
             _owner_replica->get_replica_stub()->_counter_cold_backup_recent_fail_count->increment();
         }
@@ -1311,6 +1315,7 @@ bool partition_split_context::cleanup(bool force)
     splitting_copy_file_count = 0;
     splitting_copy_file_size = 0;
     splitting_copy_mutation_count = 0;
+
     is_prepare_list_copied = false;
     is_caught_up = false;
     parent_gpid.set_app_id(0);
@@ -1319,9 +1324,10 @@ bool partition_split_context::cleanup(bool force)
     return true;
 }
 
-bool partition_split_context::is_cleaned()
+bool partition_split_context::is_cleaned() const
 {
     return check_state_task == nullptr && async_learn_task == nullptr;
 }
-}
-} // end namespace
+
+} // namespace replication
+} // namespace dsn

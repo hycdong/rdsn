@@ -36,6 +36,7 @@
 #include <dsn/tool-api/command_manager.h>
 #include <dsn/tool-api/task.h>
 #include <dsn/utility/string_view.h>
+#include <dsn/utility/time_utils.h>
 
 #include "perf_counter_atomic.h"
 #include "builtin_counters.h"
@@ -157,6 +158,16 @@ bool perf_counters::remove_counter(const char *full_name)
 
     dinfo("performance counter %s is removed, remaining reference (%d)", full_name, remain_ref);
     return true;
+}
+
+perf_counter_ptr perf_counters::get_counter(const std::string &full_name)
+{
+    utils::auto_read_lock l(_lock);
+    auto it = _counters.find(full_name);
+    if (it != _counters.end())
+        return it->second.counter;
+
+    return nullptr;
 }
 
 perf_counter *perf_counters::new_counter(const char *app,

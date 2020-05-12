@@ -23,6 +23,8 @@ struct http_request
 
     // http://ip:port/<service>/<method>
     std::pair<std::string, std::string> service_method;
+    // <args_name, args_val>
+    std::unordered_map<std::string, std::string> query_args;
     blob body;
     blob full_url;
     http_method method;
@@ -31,6 +33,7 @@ struct http_request
 enum class http_status_code
 {
     ok,                    // 200
+    temporary_redirect,    // 307
     bad_request,           // 400
     not_found,             // 404
     internal_server_error, // 500
@@ -43,6 +46,7 @@ struct http_response
     std::string body;
     http_status_code status_code{http_status_code::ok};
     std::string content_type = "text/plain";
+    std::string location;
 
     message_ptr to_message(message_ex *req) const;
 };
@@ -56,36 +60,68 @@ public:
 
     virtual std::string path() const = 0;
 
-    void register_handler(std::string path, http_callback cb)
+    void register_handler(std::string path, http_callback cb, std::string help)
     {
-        _cb_map.emplace(std::move(path), std::move(cb));
+        _cb_map.emplace(std::move(path), std::make_pair(std::move(cb), std::move(help)));
     }
 
     void call(const http_request &req, http_response &resp)
     {
         auto it = _cb_map.find(req.service_method.second);
         if (it != _cb_map.end()) {
-            it->second(req, resp);
+            it->second.first(req, resp);
         } else {
-            resp.status_code = http_status_code::bad_request;
+            resp.status_code = http_status_code::not_found;
             resp.body = std::string("method not found for \"") + req.service_method.second + "\"";
         }
     }
 
+    struct method_help_entry
+    {
+        std::string name;
+        std::string help;
+    };
+    std::vector<method_help_entry> get_help() const
+    {
+        std::vector<method_help_entry> ret;
+        ret.reserve(_cb_map.size());
+        for (const auto &method : _cb_map) {
+            ret.push_back({method.first, method.second.second});
+        }
+        return ret;
+    }
+
 private:
-    std::map<std::string, http_callback> _cb_map;
+    std::map<std::string, std::pair<http_callback, std::string>> _cb_map;
 };
 
 class http_server : public serverlet<http_server>
 {
 public:
-    http_server();
+    explicit http_server(bool start = true);
 
     ~http_server() override = default;
 
     void add_service(http_service *service);
 
     void serve(message_ex *msg);
+
+    struct service_method_help_entry
+    {
+        std::string name;
+        std::string method;
+        std::string help;
+    };
+    std::vector<service_method_help_entry> get_help() const
+    {
+        std::vector<service_method_help_entry> ret;
+        for (const auto &service : _service_map) {
+            for (const auto &method : service.second->get_help()) {
+                ret.push_back({service.first, method.name, method.help});
+            }
+        }
+        return ret;
+    }
 
 private:
     std::map<std::string, std::unique_ptr<http_service>> _service_map;

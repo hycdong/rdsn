@@ -24,21 +24,7 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     interface for apps to be replicated using rDSN
- *
- * Revision history:
- *     Mar., 2015, @imzhenyu (Zhenyu Guo), first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
-
 #pragma once
-
-//
-// replication_app_base is the base class for all app to be replicated using
-// this library
-//
 
 #include <dsn/cpp/serverlet.h>
 #include <dsn/cpp/json_helper.h>
@@ -92,6 +78,9 @@ public:
     error_code store(const char *file);
 };
 
+/// The store engine interface of Pegasus.
+/// Inherited by pegasus::pegasus_server_impl
+/// Inherited by dsn::apps::rrdb_service
 class replication_app_base : public replica_base
 {
 public:
@@ -113,6 +102,9 @@ public:
     virtual ~replication_app_base() {}
 
     bool is_primary() const;
+
+    // Whether this replica is duplicating.
+    bool is_duplicating() const;
 
     //
     // Open the app.
@@ -239,6 +231,13 @@ public:
     // query app envs.
     virtual void query_app_envs(/*out*/ std::map<std::string, std::string> &envs) = 0;
 
+    // `partition_version` is used to guarantee data consistency during partition split.
+    // In normal cases, partition_version = partition_count-1, when this replica rejects read
+    // and write request, partition_version = -1.
+    //
+    // Thread-safe.
+    virtual void set_partition_version(int32_t partition_version){};
+
 public:
     //
     // utility functions to be used by app
@@ -250,12 +249,12 @@ public:
     {
         return _last_committed_decree.load();
     }
-    void reset_counters_after_learning();
 
 private:
     // routines for replica internal usage
     friend class replica;
     friend class replica_stub;
+    friend class mock_replica;
 
     ::dsn::error_code open_internal(replica *r);
     ::dsn::error_code
@@ -267,7 +266,6 @@ private:
                                        int64_t private_log_offset,
                                        int64_t durable_decree);
     ::dsn::error_code update_init_info_ballot_and_decree(replica *r);
-    void install_perf_counters();
 
 protected:
     std::string _dir_data;   // ${replica_dir}/data
@@ -280,6 +278,5 @@ protected:
     explicit replication_app_base(::dsn::replication::replica *replica);
 };
 
-//------------------ inline implementation ---------------------
-}
-} // namespace
+} // namespace replication
+} // namespace dsn

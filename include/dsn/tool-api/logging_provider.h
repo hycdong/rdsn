@@ -60,6 +60,12 @@ public:
 
     virtual ~logging_provider(void) {}
 
+    // singleton
+    static logging_provider *instance();
+
+    // not thread-safe
+    static void set_logger(logging_provider *logger);
+
     virtual void dsn_logv(const char *file,
                           const char *function,
                           const int line,
@@ -67,9 +73,20 @@ public:
                           const char *fmt,
                           va_list args) = 0;
 
+    virtual void dsn_log(const char *file,
+                         const char *function,
+                         const int line,
+                         dsn_log_level_t log_level,
+                         const char *str) = 0;
+
     virtual void flush() = 0;
+
+private:
+    static std::unique_ptr<logging_provider> _logger;
+
+    static logging_provider *create_default_instance();
 };
 
 /*@}*/
 // ----------------------- inline implementation ---------------------------------------
-} // end namespace
+} // namespace dsn

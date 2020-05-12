@@ -48,8 +48,6 @@
 
 #include "meta_service.h"
 
-class meta_service_test_app;
-
 namespace dsn {
 namespace replication {
 
@@ -300,8 +298,11 @@ private:
 private:
     friend class replication_checker;
     friend class test::test_checker;
-    friend class ::meta_service_test_app;
+    friend class meta_service_test_app;
     friend class meta_test_base;
+    friend class meta_duplication_service_test;
+    friend class meta_load_balance_test;
+    friend class meta_duplication_service;
     friend class meta_split_service;
 
     dsn::task_tracker _tracker;
@@ -339,5 +340,6 @@ private:
     perf_counter_wrapper _recent_partition_change_unwritable_count;
     perf_counter_wrapper _recent_partition_change_writable_count;
 };
-}
-}
+
+} // namespace replication
+} // namespace dsn

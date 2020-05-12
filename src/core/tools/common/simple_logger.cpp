@@ -24,18 +24,10 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     What is this file about?
- *
- * Revision history:
- *     xxxx-xx-xx, author, first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
-
 #include "simple_logger.h"
 #include <sstream>
 #include <dsn/utility/filesystem.h>
+#include <dsn/utility/time_utils.h>
 
 namespace dsn {
 namespace tools {
@@ -83,6 +75,11 @@ static void print_header(FILE *fp, dsn_log_level_t log_level)
             fprintf(fp, "%6s.%7s.%05d: ", task::get_current_node_name(), "io-thrd", tid);
         }
     }
+}
+
+screen_logger::screen_logger(bool short_header) : logging_provider("./")
+{
+    _short_header = short_header;
 }
 
 screen_logger::screen_logger(const char *log_dir) : logging_provider(log_dir)
@@ -245,6 +242,36 @@ void simple_logger::dsn_logv(const char *file,
         }
         vprintf(fmt, args2);
         printf("\n");
+    }
+
+    if (++_lines >= 200000) {
+        create_log_file();
+    }
+}
+
+void simple_logger::dsn_log(const char *file,
+                            const char *function,
+                            const int line,
+                            dsn_log_level_t log_level,
+                            const char *str)
+{
+    utils::auto_lock<::dsn::utils::ex_lock> l(_lock);
+
+    print_header(_log, log_level);
+    if (!_short_header) {
+        fprintf(_log, "%s:%d:%s(): ", file, line, function);
+    }
+    fprintf(_log, "%s\n", str);
+    if (_fast_flush || log_level >= LOG_LEVEL_ERROR) {
+        ::fflush(_log);
+    }
+
+    if (log_level >= _stderr_start_level) {
+        print_header(stdout, log_level);
+        if (!_short_header) {
+            printf("%s:%d:%s(): ", file, line, function);
+        }
+        printf("%s\n", str);
     }
 
     if (++_lines >= 200000) {

@@ -20,6 +20,7 @@ struct mutation_update
     //the serialization type of data, this need to store in log and replicate to secondaries by primary
     2:i32            serialization_type;
     3:dsn.blob       data;
+    4:optional i64   start_time_ns;
 }
 
 struct mutation_data
@@ -36,7 +37,7 @@ enum partition_status
     PS_PRIMARY,
     PS_SECONDARY,
     PS_POTENTIAL_SECONDARY,
-    PS_PARTITION_SPLIT,
+    PS_PARTITION_SPLIT
 }
 
 struct replica_configuration
@@ -172,7 +173,7 @@ struct group_check_request
     // their WALs after this decree.
     5:optional i64          confirmed_decree;
 
-    // Used to deliver child gpid from primaries to secondaries
+    // Used to deliver child gpid during partition split
     6:optional dsn.gpid     child_gpid;
 }
 
@@ -442,6 +443,35 @@ struct query_replica_info_response
     2:list<replica_info>  replicas;
 }
 
+struct disk_info
+{
+    // TODO(jiashuo1): figure out what the "tag" means and decide if it's necessary
+    1:string tag;
+    2:string full_dir;
+    3:i64 disk_capacity_mb;
+    4:i64 disk_available_mb;
+    // map<i32,i32> means map<app_id, replica_counts>
+    5:map<i32,i32> holding_primary_replica_counts;
+    6:map<i32,i32> holding_secondary_replica_counts;
+}
+
+// This request is sent from client to replica_server.
+struct query_disk_info_request
+{
+    1:dsn.rpc_address node;
+    2:string          app_name;
+}
+
+// This response is recieved replica_server.
+struct query_disk_info_response
+{
+    // app not existed will return "ERR_OBJECT_NOT_FOUND", otherwise "ERR_OK"
+    1:dsn.error_code err;
+    2:i64 total_capacity_mb;
+    3:i64 total_available_mb;
+    4:list<disk_info> disk_infos;
+}
+
 struct query_app_info_request
 {
     1:dsn.rpc_address meta_server;
@@ -636,11 +666,27 @@ enum duplication_status
     DS_REMOVED,
 }
 
+// How duplication reacts on permanent failure.
+enum duplication_fail_mode
+{
+    // The default mode. If some permanent failure occurred that makes duplication
+    // blocked, it will retry forever until external interference.
+    FAIL_SLOW = 0,
+
+    // Skip the writes that failed to duplicate, which means minor data loss on the remote cluster.
+    // This will certainly achieve better stability of the system.
+    FAIL_SKIP,
+
+    // Stop immediately after it ensures itself unable to duplicate.
+    // WARN: this mode kills the server process, replicas on the server will all be effected.
+    FAIL_FAST
+}
+
 // This request is sent from client to meta.
 struct duplication_add_request
 {
     1:string  app_name;
-    2:string  remote_cluster_address;
+    2:string  remote_cluster_name;
 
     // True means to initialize the duplication in DS_PAUSE.
     3:bool    freezed;
@@ -654,17 +700,19 @@ struct duplication_add_response
     1:dsn.error_code   err;
     2:i32              appid;
     3:i32              dupid;
+    4:optional string  hint;
 }
 
 // This request is sent from client to meta.
-struct duplication_status_change_request
+struct duplication_modify_request
 {
     1:string                    app_name;
     2:i32                       dupid;
-    3:duplication_status        status;
+    3:optional duplication_status status;
+    4:optional duplication_fail_mode fail_mode;
 }
 
-struct duplication_status_change_response
+struct duplication_modify_response
 {
     // Possible errors:
     // - ERR_APP_NOT_EXIST: app is not found
@@ -679,11 +727,13 @@ struct duplication_entry
 {
     1:i32                  dupid;
     2:duplication_status   status;
-    3:string               remote_address;
+    3:string               remote;
     4:i64                  create_ts;
 
     // partition_index => confirmed decree
-    5:map<i32, i64>        progress;
+    5:optional map<i32, i64> progress;
+
+    7:optional duplication_fail_mode fail_mode;
 }
 
 // This request is sent from client to meta.
@@ -770,7 +820,7 @@ struct ddd_diagnose_response
 
 /////////////////// split-related structs ////////////////////
 
-// Request to split the table. It is sent from client to meta.
+// client to meta server to start partition split
 struct app_partition_split_request
 {
     1:string                 app_name;
@@ -816,13 +866,16 @@ struct app_partition_split_response
 {
     1:dsn.error_code         err;
     2:i32                    app_id;
+    // app current partition count
+    // if split succeed, partition_count = new partition_count
+    // if split failed, partition_count = original partition_count
     3:i32                    partition_count;
 }
 
-// child -> primary parent, notify itself has caught up parent
+// child to primary parent, notifying that itself has caught up with parent
 struct notify_catch_up_request
 {
-    1:dsn.gpid          primary_parent_gpid;
+    1:dsn.gpid          parent_gpid;
     2:dsn.gpid          child_gpid;
     3:i64               child_ballot;
     4:dsn.rpc_address   child_address;

@@ -1,13 +1,14 @@
 #include <gtest/gtest.h>
 #include <dsn/service_api_cpp.h>
+#include <dsn/utility/time_utils.h>
 
 #include "dist/replication/meta_server/meta_backup_service.h"
 #include "dist/replication/meta_server/meta_service.h"
 #include "meta_service_test_app.h"
 #include "../misc/misc.h"
 
-using namespace ::dsn::replication;
-using namespace dsn;
+namespace dsn {
+namespace replication {
 
 struct method_record
 {
@@ -24,6 +25,7 @@ class mock_base
 {
 public:
     void reset_records() { _records.clear(); }
+
 protected:
     std::map<std::string, method_record> _records;
 };
@@ -662,15 +664,15 @@ void meta_service_test_app::backup_service_test()
         ASSERT_TRUE(flag);
     }
 
-    // testing add_new_policy()
+    // testing add_backup_policy()
     {
-        std::cout << "add_new_policy()..." << std::endl;
+        std::cout << "add_backup_policy()..." << std::endl;
         // create a fake add_backup_policy_request
         configuration_add_backup_policy_request req;
         req.backup_provider_type = std::string("local_service");
         req.policy_name = test_policy_name;
         req.app_ids = {1, 2, 3};
-        req.backup_interval_seconds = 10;
+        req.backup_interval_seconds = 24 * 60 * 60;
 
         // case1: backup policy don't contain invalid app_id
         // result: backup policy will not be added, and return ERR_INVALID_PARAMETERS
@@ -679,13 +681,36 @@ void meta_service_test_app::backup_service_test()
             auto r = fake_rpc_call(RPC_CM_ADD_BACKUP_POLICY,
                                    LPC_DEFAULT_CALLBACK,
                                    backup_svc,
-                                   &backup_service::add_new_policy,
+                                   &backup_service::add_backup_policy,
                                    req);
             fake_wait_rpc(r, resp);
             ASSERT_TRUE(resp.err == ERR_INVALID_PARAMETERS);
         }
 
-        // case2: backup policy contains valid app_id
+        // case2: backup policy interval time < checkpoint reserve time
+        // result: backup policy will not be added, and return ERR_INVALID_PARAMETERS
+        {
+            int64_t old_backup_interval_seconds = req.backup_interval_seconds;
+            req.backup_interval_seconds = 10;
+            configuration_add_backup_policy_response resp;
+            server_state *state = meta_svc->get_server_state();
+            state->_all_apps.insert(std::make_pair(1, std::make_shared<app_state>(app_info())));
+            auto r = fake_rpc_call(RPC_CM_ADD_BACKUP_POLICY,
+                                   LPC_DEFAULT_CALLBACK,
+                                   backup_svc,
+                                   &backup_service::add_backup_policy,
+                                   req);
+            fake_wait_rpc(r, resp);
+
+            std::string hint_message = fmt::format(
+                "backup interval must be greater than cold_backup_checkpoint_reserve_minutes={}",
+                meta_svc->get_options().cold_backup_checkpoint_reserve_minutes);
+            ASSERT_TRUE(resp.err == ERR_INVALID_PARAMETERS);
+            ASSERT_TRUE(resp.hint_message == hint_message);
+            req.backup_interval_seconds = old_backup_interval_seconds;
+        }
+
+        // case3: backup policy contains valid app_id
         // result: add backup policy succeed
         {
             configuration_add_backup_policy_response resp;
@@ -694,7 +719,7 @@ void meta_service_test_app::backup_service_test()
             auto r = fake_rpc_call(RPC_CM_ADD_BACKUP_POLICY,
                                    LPC_DEFAULT_CALLBACK,
                                    backup_svc,
-                                   &backup_service::add_new_policy,
+                                   &backup_service::add_backup_policy,
                                    req);
             fake_wait_rpc(r, resp);
             ASSERT_TRUE(resp.err == ERR_OK);
@@ -718,7 +743,9 @@ void meta_service_test_app::backup_service_test()
         const policy &p = backup_svc->_policy_states.at(test_policy_name)->get_policy();
         ASSERT_TRUE(p.app_ids.size() == 1 && p.app_ids.count(1) == 1);
         ASSERT_TRUE(p.backup_provider_type == std::string("local_service"));
-        ASSERT_TRUE(p.backup_interval_seconds == 10);
+        ASSERT_TRUE(p.backup_interval_seconds == 24 * 60 * 60);
         ASSERT_TRUE(p.policy_name == test_policy_name);
     }
 }
+} // namespace replication
+} // namespace dsn

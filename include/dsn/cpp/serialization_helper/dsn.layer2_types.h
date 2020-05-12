@@ -290,6 +290,7 @@ typedef struct _app_info__isset
           expire_second(false),
           create_second(false),
           drop_second(false),
+          duplicating(false),
           init_partition_count(true)
     {
     }
@@ -304,6 +305,7 @@ typedef struct _app_info__isset
     bool expire_second : 1;
     bool create_second : 1;
     bool drop_second : 1;
+    bool duplicating : 1;
     bool init_partition_count : 1;
 } _app_info__isset;
 
@@ -325,6 +327,7 @@ public:
           expire_second(0),
           create_second(0),
           drop_second(0),
+          duplicating(0),
           init_partition_count(-1)
     {
         status = (app_status::type)0;
@@ -342,6 +345,7 @@ public:
     int64_t expire_second;
     int64_t create_second;
     int64_t drop_second;
+    bool duplicating;
     int32_t init_partition_count;
 
     _app_info__isset __isset;
@@ -368,6 +372,8 @@ public:
 
     void __set_drop_second(const int64_t val);
 
+    void __set_duplicating(const bool val);
+
     void __set_init_partition_count(const int32_t val);
 
     bool operator==(const app_info &rhs) const
@@ -393,6 +399,10 @@ public:
         if (!(create_second == rhs.create_second))
             return false;
         if (!(drop_second == rhs.drop_second))
+            return false;
+        if (__isset.duplicating != rhs.__isset.duplicating)
+            return false;
+        else if (__isset.duplicating && !(duplicating == rhs.duplicating))
             return false;
         if (!(init_partition_count == rhs.init_partition_count))
             return false;

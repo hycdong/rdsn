@@ -1,12 +1,43 @@
-#ifndef META_SERVICE_TEST_APP_H
-#define META_SERVICE_TEST_APP_H
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2015 Microsoft Corporation
+ *
+ * -=- Robust Distributed System Nucleus (rDSN) -=-
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+#pragma once
 
 #include <dsn/service_api_cpp.h>
 #include <dsn/tool-api/async_calls.h>
 #include <dsn/dist/replication/replication_types.h>
 #include <dsn/dist/replication/meta_service_app.h>
+
 #include "dist/replication/meta_server/server_state.h"
 #include "dist/replication/meta_server/meta_service.h"
+
+#include <gtest/gtest.h>
+
+namespace dsn {
+namespace replication {
 
 class spin_counter
 {
@@ -29,8 +60,13 @@ struct reply_context
     dsn::message_ex *response;
     spin_counter e;
 };
-dsn::message_ex *create_corresponding_receive(dsn::message_ex *req);
 
+inline dsn::message_ex *create_corresponding_receive(dsn::message_ex *request_msg)
+{
+    return request_msg->copy(true, true);
+}
+
+// fake_receiver_meta_service overrides `reply_message` of meta_service
 class fake_receiver_meta_service : public dsn::replication::meta_service
 {
 public:
@@ -59,13 +95,6 @@ inline void destroy_message(dsn::message_ex *msg)
     msg->release_ref();
 }
 
-#define fake_wait_rpc(context, response_data)                                                      \
-    do {                                                                                           \
-        context->e.wait();                                                                         \
-        unmarshall(context->response, response_data);                                              \
-        context->response->release_ref();                                                          \
-    } while (0)
-
 class meta_service_test_app : public dsn::service_app
 {
 public:
@@ -83,11 +112,6 @@ public:
     void cannot_run_balancer_test();
     void construct_apps_test();
 
-    void simple_lb_cure_test();
-    void simple_lb_balanced_cure();
-    void simple_lb_from_proposal_test();
-    void simple_lb_collect_replica();
-    void simple_lb_construct_replica();
     void json_compacity();
 
     void policy_context_test();
@@ -158,4 +182,23 @@ fake_rpc_call(dsn::task_code rpc_code,
     fake_rpc_call(                                                                                 \
         RPC_CM_DROP_APP, LPC_META_STATE_NORMAL, state, &server_state::drop_app, request_data)
 
-#endif // META_SERVICE_TEST_APP_H
+#define fake_recall_app(state, request_data)                                                       \
+    fake_rpc_call(                                                                                 \
+        RPC_CM_RECALL_APP, LPC_META_STATE_NORMAL, state, &server_state::recall_app, request_data)
+
+#define fake_create_policy(state, request_data)                                                    \
+    fake_rpc_call(RPC_CM_ADD_BACKUP_POLICY,                                                        \
+                  LPC_DEFAULT_CALLBACK,                                                            \
+                  state,                                                                           \
+                  &backup_service::add_backup_policy,                                              \
+                  request_data)
+
+#define fake_wait_rpc(context, response_data)                                                      \
+    do {                                                                                           \
+        context->e.wait();                                                                         \
+        ::dsn::unmarshall(context->response, response_data);                                       \
+        context->response->release_ref();                                                          \
+    } while (0)
+
+} // namespace replication
+} // namespace dsn

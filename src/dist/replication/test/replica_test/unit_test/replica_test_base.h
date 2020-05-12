@@ -41,10 +41,7 @@ namespace replication {
 
 struct replica_stub_test_base : ::testing::Test
 {
-    replica_stub_test_base()
-    {
-        stub = make_unique<mock_replica_stub>(); // mock mutation_duplicator
-    }
+    replica_stub_test_base() { stub = make_unique<mock_replica_stub>(); }
 
     ~replica_stub_test_base() { stub.reset(); }
 
@@ -58,7 +55,7 @@ struct replica_test_base : replica_stub_test_base
 
     replica_test_base() { _replica = create_mock_replica(stub.get(), 1, 1, _log_dir.c_str()); }
 
-    mutation_ptr create_test_mutation(int64_t decree, string_view data)
+    virtual mutation_ptr create_test_mutation(int64_t decree, string_view data)
     {
         mutation_ptr mu(new mutation());
         mu->data.header.ballot = 1;
@@ -80,6 +77,8 @@ struct replica_test_base : replica_stub_test_base
 
         return mu;
     }
+
+    gpid get_gpid() const { return _replica->get_gpid(); }
 };
 
 } // namespace replication

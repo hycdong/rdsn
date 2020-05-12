@@ -24,120 +24,29 @@
  * THE SOFTWARE.
  */
 
-#include <boost/lexical_cast.hpp>
-#include <fmt/format.h>
-
-#include <dsn/utility/error_code.h>
-#include <dsn/utility/output_utils.h>
-#include <dsn/tool-api/group_address.h>
 #include <dsn/dist/replication/replication_ddl_client.h>
-#include <dsn/dist/replication/replication_other_types.h>
-#include <dsn/dist/replication/duplication_common.h>
-#include <iostream>
+
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <sys/socket.h>
+
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 
-#include <sys/socket.h>
-#include <netdb.h>
-#include <arpa/inet.h>
+#include <boost/lexical_cast.hpp>
+#include <dsn/dist/replication/duplication_common.h>
+#include <dsn/dist/replication/replication_other_types.h>
+#include <dsn/tool-api/group_address.h>
+#include <dsn/utility/error_code.h>
+#include <dsn/utility/output_utils.h>
 #include <fmt/format.h>
+#include <dsn/utility/time_utils.h>
 
 namespace dsn {
 namespace replication {
 
 using tp_output_format = ::dsn::utils::table_printer::output_format;
-
-std::string replication_ddl_client::hostname_from_ip(uint32_t ip)
-{
-    struct sockaddr_in addr_in;
-    addr_in.sin_family = AF_INET;
-    addr_in.sin_port = 0;
-    addr_in.sin_addr.s_addr = ip;
-
-    char hostname[256];
-    int err = getnameinfo((struct sockaddr *)(&addr_in),
-                          sizeof(struct sockaddr),
-                          hostname,
-                          sizeof(hostname),
-                          nullptr,
-                          0,
-                          NI_NAMEREQD);
-    if (err != 0) {
-        struct in_addr net_addr;
-        net_addr.s_addr = ip;
-        char ip_str[256];
-        inet_ntop(AF_INET, &net_addr, ip_str, sizeof(ip_str));
-
-        if (err == EAI_SYSTEM) {
-            dwarn("got error %s when try to resolve %s", strerror(errno), ip_str);
-        } else {
-            dwarn("return error(%s) when try to resolve %s", gai_strerror(err), ip_str);
-        }
-        return std::string("UNRESOLVABLE");
-    } else {
-        return std::string(hostname);
-    }
-}
-
-std::string replication_ddl_client::hostname_from_ip(const char *ip)
-{
-    uint32_t ip_addr;
-    inet_pton(AF_INET, ip, &ip_addr);
-    return hostname_from_ip(ip_addr);
-}
-
-std::string replication_ddl_client::hostname_from_ip_port(const char *ip_port)
-{
-    dsn::rpc_address addr;
-    if (!addr.from_string_ipv4(ip_port)) {
-        dwarn("invalid ip_port(%s)", ip_port);
-        return std::string("UNRESOLVABLE");
-    }
-    return hostname(addr);
-}
-
-std::string replication_ddl_client::hostname(const rpc_address &address)
-{
-    if (address.type() != HOST_TYPE_IPV4) {
-        return std::string("invalid");
-    }
-    return hostname_from_ip(htonl(address.ip())) + ":" + std::to_string(address.port());
-}
-
-std::string replication_ddl_client::list_hostname_from_ip(const char *ip_list)
-{
-    std::vector<std::string> splitted_ip;
-    dsn::utils::split_args(ip_list, splitted_ip, ',');
-
-    if (splitted_ip.empty()) {
-        dwarn("invalid ip_list(%s)", ip_list);
-        return std::string("UNRESOLVABLE");
-    }
-
-    std::stringstream result;
-    result << hostname_from_ip(splitted_ip[0].c_str());
-    for (int i = 1; i < splitted_ip.size(); ++i) {
-        result << "," << hostname_from_ip(splitted_ip[i].c_str());
-    }
-    return result.str();
-}
-
-std::string replication_ddl_client::list_hostname_from_ip_port(const char *ip_port_list)
-{
-    std::vector<std::string> splitted_ip_port;
-    dsn::utils::split_args(ip_port_list, splitted_ip_port, ',');
-    if (splitted_ip_port.empty()) {
-        dwarn("invalid ip_port_list(%s)", ip_port_list);
-        return std::string("UNRESOLVABLE");
-    }
-
-    std::stringstream result;
-    result << hostname_from_ip_port(splitted_ip_port[0].c_str());
-    for (int i = 1; i < splitted_ip_port.size(); ++i) {
-        result << "," << hostname_from_ip_port(splitted_ip_port[i].c_str());
-    }
-    return result.str();
-}
 
 replication_ddl_client::replication_ddl_client(const std::vector<dsn::rpc_address> &meta_servers)
 {
@@ -536,7 +445,6 @@ dsn::error_code replication_ddl_client::list_nodes(
 {
     std::shared_ptr<configuration_list_nodes_request> req(new configuration_list_nodes_request());
     req->status = status;
-
     auto resp_task = request_meta<configuration_list_nodes_request>(RPC_CM_LIST_NODES, req);
     resp_task->wait();
     if (resp_task->error() != dsn::ERR_OK) {
@@ -568,12 +476,21 @@ struct list_nodes_helper
     }
 };
 
+std::string host_name_resolve(bool resolve_ip, std::string value)
+{
+    if (resolve_ip) {
+        std::string temp;
+        if (dsn::utils::hostname_from_ip_port(value.c_str(), &temp))
+            return temp;
+    }
+    return value;
+}
+
 dsn::error_code replication_ddl_client::list_nodes(const dsn::replication::node_status::type status,
                                                    bool detailed,
                                                    const std::string &file_name,
                                                    bool resolve_ip)
 {
-#define RESOLVE(value) (resolve_ip ? hostname_from_ip_port(value.c_str()) : value)
     std::map<dsn::rpc_address, dsn::replication::node_status::type> nodes;
     auto r = list_nodes(status, nodes);
     if (r != dsn::ERR_OK) {
@@ -587,7 +504,9 @@ dsn::error_code replication_ddl_client::list_nodes(const dsn::replication::node_
             alive_node_count++;
         std::string status_str = enum_to_string(kv.second);
         status_str = status_str.substr(status_str.find("NS_") + 3);
-        tmp_map.emplace(kv.first, list_nodes_helper(RESOLVE(kv.first.to_std_string()), status_str));
+        tmp_map.emplace(
+            kv.first,
+            list_nodes_helper(host_name_resolve(resolve_ip, kv.first.to_std_string()), status_str));
     }
 
     if (detailed) {
@@ -733,9 +652,9 @@ replication_ddl_client::cluster_info(const std::string &file_name, bool resolve_
     if (resolve_ip) {
         for (int i = 0; i < resp.keys.size(); ++i) {
             if (resp.keys[i] == "meta_servers") {
-                resp.values[i] = list_hostname_from_ip_port(resp.values[i].c_str());
+                dsn::utils::list_hostname_from_ip_port(resp.values[i].c_str(), &resp.values[i]);
             } else if (resp.keys[i] == "primary_meta_server") {
-                resp.values[i] = hostname_from_ip_port(resp.values[i].c_str());
+                dsn::utils::hostname_from_ip_port(resp.values[i].c_str(), &resp.values[i]);
             }
         }
     }
@@ -765,7 +684,6 @@ dsn::error_code replication_ddl_client::list_app(const std::string &app_name,
     tp_params.add_row_name_and_data("detailed", detailed);
     mtp.add(std::move(tp_params));
 
-#define RESOLVE(value) (resolve_ip ? hostname_from_ip_port(value.c_str()) : value)
     int32_t app_id = 0;
     int32_t partition_count = 0;
     int32_t max_replica_count = 0;
@@ -835,14 +753,15 @@ dsn::error_code replication_ddl_client::list_app(const std::string &app_name,
             oss << replica_count << "/" << p.max_replica_count;
             tp_details.append_data(oss.str());
             tp_details.append_data(
-                (p.primary.is_invalid() ? "-" : RESOLVE(p.primary.to_std_string())));
+                (p.primary.is_invalid() ? "-" : host_name_resolve(resolve_ip,
+                                                                  p.primary.to_std_string())));
             oss.str("");
             oss << "[";
             // TODO (yingchun) join
             for (int j = 0; j < p.secondaries.size(); j++) {
                 if (j != 0)
                     oss << ",";
-                oss << RESOLVE(p.secondaries[j].to_std_string());
+                oss << host_name_resolve(resolve_ip, p.secondaries[j].to_std_string());
                 node_stat[p.secondaries[j]].second++;
             }
             oss << "]";
@@ -857,7 +776,7 @@ dsn::error_code replication_ddl_client::list_app(const std::string &app_name,
         tp_nodes.add_column("secondary");
         tp_nodes.add_column("total");
         for (auto &kv : node_stat) {
-            tp_nodes.add_row(RESOLVE(kv.first.to_std_string()));
+            tp_nodes.add_row(host_name_resolve(resolve_ip, kv.first.to_std_string()));
             tp_nodes.append_data(kv.second.first);
             tp_nodes.append_data(kv.second.second);
             tp_nodes.append_data(kv.second.first + kv.second.second);
@@ -1427,24 +1346,37 @@ dsn::error_code replication_ddl_client::query_restore(int32_t restore_app_id, bo
 }
 
 error_with<duplication_add_response>
-replication_ddl_client::add_dup(std::string app_name, std::string remote_address, bool freezed)
+replication_ddl_client::add_dup(std::string app_name, std::string remote_cluster_name, bool freezed)
 {
     auto req = make_unique<duplication_add_request>();
     req->app_name = std::move(app_name);
-    req->remote_cluster_address = std::move(remote_address);
+    req->remote_cluster_name = std::move(remote_cluster_name);
     req->freezed = freezed;
     return call_rpc_sync(duplication_add_rpc(std::move(req), RPC_CM_ADD_DUPLICATION));
 }
 
-error_with<duplication_status_change_response> replication_ddl_client::change_dup_status(
+error_with<duplication_modify_response> replication_ddl_client::change_dup_status(
     std::string app_name, int dupid, duplication_status::type status)
 {
-    auto req = make_unique<duplication_status_change_request>();
+    auto req = make_unique<duplication_modify_request>();
     req->app_name = std::move(app_name);
     req->dupid = dupid;
-    req->status = status;
-    return call_rpc_sync(
-        duplication_status_change_rpc(std::move(req), RPC_CM_CHANGE_DUPLICATION_STATUS));
+    req->__set_status(status);
+    return call_rpc_sync(duplication_modify_rpc(std::move(req), RPC_CM_MODIFY_DUPLICATION));
+}
+
+error_with<duplication_modify_response> replication_ddl_client::update_dup_fail_mode(
+    std::string app_name, int dupid, duplication_fail_mode::type fmode)
+{
+    if (_duplication_fail_mode_VALUES_TO_NAMES.find(fmode) ==
+        _duplication_fail_mode_VALUES_TO_NAMES.end()) {
+        return FMT_ERR(ERR_INVALID_PARAMETERS, "unexpected duplication_fail_mode {}", fmode);
+    }
+    auto req = make_unique<duplication_modify_request>();
+    req->app_name = std::move(app_name);
+    req->dupid = dupid;
+    req->__set_fail_mode(fmode);
+    return call_rpc_sync(duplication_modify_rpc(std::move(req), RPC_CM_MODIFY_DUPLICATION));
 }
 
 error_with<duplication_query_response> replication_ddl_client::query_dup(std::string app_name)
@@ -1497,36 +1429,17 @@ dsn::error_code replication_ddl_client::get_app_envs(const std::string &app_name
     return dsn::ERR_OBJECT_NOT_FOUND;
 }
 
-::dsn::error_code replication_ddl_client::set_app_envs(const std::string &app_name,
-                                                       const std::vector<std::string> &keys,
-                                                       const std::vector<std::string> &values)
+error_with<configuration_update_app_env_response>
+replication_ddl_client::set_app_envs(const std::string &app_name,
+                                     const std::vector<std::string> &keys,
+                                     const std::vector<std::string> &values)
 {
-    std::shared_ptr<configuration_update_app_env_request> req =
-        std::make_shared<configuration_update_app_env_request>();
+    auto req = make_unique<configuration_update_app_env_request>();
     req->__set_app_name(app_name);
-    req->__set_op(app_env_operation::type::APP_ENV_OP_SET);
     req->__set_keys(keys);
     req->__set_values(values);
-
-    auto resp_task = request_meta<configuration_update_app_env_request>(RPC_CM_UPDATE_APP_ENV, req);
-    resp_task->wait();
-
-    if (resp_task->error() != ERR_OK) {
-        return resp_task->error();
-    }
-    configuration_update_app_env_response response;
-    dsn::unmarshall(resp_task->get_response(), response);
-    if (response.err != ERR_OK) {
-        return response.err;
-    } else {
-        std::cout << "set app envs succeed" << std::endl;
-        if (!response.hint_message.empty()) {
-            std::cout << "=============================" << std::endl;
-            std::cout << response.hint_message << std::endl;
-            std::cout << "=============================" << std::endl;
-        }
-    }
-    return ERR_OK;
+    req->__set_op(app_env_operation::type::APP_ENV_OP_SET);
+    return call_rpc_sync(update_app_env_rpc(std::move(req), RPC_CM_UPDATE_APP_ENV));
 }
 
 ::dsn::error_code replication_ddl_client::del_app_envs(const std::string &app_name,
@@ -1754,6 +1667,22 @@ dsn::error_code replication_ddl_client::clear_app_split_flags(const std::string 
     dsn::unmarshall(resp_task->get_response(), resp);
 
     return resp.err;
+}
+
+void replication_ddl_client::query_disk_info(
+    const std::vector<dsn::rpc_address> &targets,
+    const std::string &app_name,
+    /*out*/ std::map<dsn::rpc_address, error_with<query_disk_info_response>> &resps)
+{
+    std::map<dsn::rpc_address, query_disk_info_rpc> query_disk_info_rpcs;
+    for (const auto &target : targets) {
+        auto request = make_unique<query_disk_info_request>();
+        request->node = target;
+        request->app_name = app_name;
+        query_disk_info_rpcs.emplace(target,
+                                     query_disk_info_rpc(std::move(request), RPC_QUERY_DISK_INFO));
+    }
+    call_rpcs_async(query_disk_info_rpcs, resps);
 }
 
 } // namespace replication

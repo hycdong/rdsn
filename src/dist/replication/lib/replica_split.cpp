@@ -3,15 +3,18 @@
 // can be found in the LICENSE file in the root directory of this source tree.
 
 #include <dsn/dist/fmt_logging.h>
+#include <dsn/dist/replication/replication_app_base.h>
+#include <dsn/utility/defer.h>
+#include <dsn/utility/filesystem.h>
 #include <dsn/utility/fail_point.h>
 
 #include "replica.h"
 #include "replica_stub.h"
-#include <dsn/dist/replication/replication_app_base.h>
-#include <dsn/utility/filesystem.h>
 
 namespace dsn {
 namespace replication {
+
+typedef rpc_holder<notify_catch_up_request, notify_cacth_up_response> notify_catch_up_rpc;
 
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_add_child(const group_check_request &request) // on parent partition
@@ -72,17 +75,17 @@ void replica::on_add_child(const group_check_request &request) // on parent part
                      get_gpid().thread_hash());
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::child_init_replica(gpid parent_gpid,
                                  rpc_address primary_address,
-                                 ballot init_ballot) // on child
+                                 ballot init_ballot) // on child partition
 {
     FAIL_POINT_INJECT_F("replica_child_init_replica", [](dsn::string_view) {});
 
     if (status() != partition_status::PS_INACTIVE) {
         dwarn_replica("wrong status {}", enum_to_string(status()));
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, parent_gpid, [](replica_ptr r) {
-            r->_child_gpid.set_app_id(0);
-        });
+        _stub->split_replica_error_handler(
+            parent_gpid, std::bind(&replica::parent_cleanup_split_context, std::placeholders::_1));
         return;
     }
 
@@ -93,12 +96,13 @@ void replica::child_init_replica(gpid parent_gpid,
 
     // init split states
     _split_states.parent_gpid = parent_gpid;
-    _split_states.is_caught_up = false;
+
     _split_states.is_prepare_list_copied = false;
+    _split_states.is_caught_up = false;
+
     _split_states.splitting_start_ts_ns = dsn_now_ns();
     // TODO(hyc): pref-counter - delete
     ddebug_f("{}: splitting_start_ts_ns is {}", name(), _split_states.splitting_start_ts_ns);
-
     _stub->_counter_replicas_splitting_recent_start_count->increment();
     // TODO(hyc): delete
     ddebug_f("stub recent start split count is {}",
@@ -113,15 +117,13 @@ void replica::child_init_replica(gpid parent_gpid,
 
     ddebug_replica("init ballot is {}, parent gpid is ({})", init_ballot, parent_gpid);
 
-    _stub->on_exec(
+    dsn::error_code ec = _stub->split_replica_exec(
         LPC_PARTITION_SPLIT,
         _split_states.parent_gpid,
-        std::bind(&replica::parent_prepare_states, std::placeholders::_1, _app->learn_dir()),
-        LPC_PARTITION_SPLIT_ERROR,
-        get_gpid(),
-        std::bind(&replica::child_handle_split_error,
-                  std::placeholders::_1,
-                  "child_init_replica failed because invalid parent gpid"));
+        std::bind(&replica::parent_prepare_states, std::placeholders::_1, _app->learn_dir()));
+    if (ec != ERR_OK) {
+        child_handle_split_error("parent not exist when execute parent_prepare_states");
+    }
 }
 
 void replica::check_child_state() // on child
@@ -137,14 +139,13 @@ void replica::check_child_state() // on child
     ddebug_f("{} child partition state checked", name());
 
     // parent check its state
-    _stub->on_exec(LPC_PARTITION_SPLIT,
-                   _split_states.parent_gpid,
-                   std::bind(&replica::parent_check_states, std::placeholders::_1),
-                   LPC_PARTITION_SPLIT_ERROR,
-                   get_gpid(),
-                   std::bind(&replica::child_handle_split_error,
-                             std::placeholders::_1,
-                             "check_child_state coz invalid parent gpid"));
+    dsn::error_code ec =
+        _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                                  _split_states.parent_gpid,
+                                  std::bind(&replica::parent_check_states, std::placeholders::_1));
+    if (ec != ERR_OK) {
+        child_handle_split_error("check_child_state failed because parent gpid is invalid");
+    }
 
     // restart check_state_task
     // TODO(hyc): consider heartbeat interval
@@ -169,11 +170,11 @@ bool replica::parent_check_states() // on parent partition
                       _child_init_ballot,
                       get_ballot(),
                       _child_gpid);
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
-                       _child_gpid,
-                       std::bind(&replica::child_handle_split_error,
-                                 std::placeholders::_1,
-                                 "wrong parent states when execute parent_check_states"));
+        _stub->split_replica_error_handler(
+            _child_gpid,
+            std::bind(&replica::child_handle_split_error,
+                      std::placeholders::_1,
+                      "wrong parent states when execute parent_check_states"));
         parent_cleanup_split_context();
         return false;
     }
@@ -237,336 +238,283 @@ void replica::parent_prepare_states(const std::string &dir) // on parent partiti
                    total_file_size,
                    last_committed_decree());
 
-    _stub->on_exec(LPC_PARTITION_SPLIT,
-                   _child_gpid,
-                   std::bind(&replica::child_copy_states,
-                             std::placeholders::_1,
-                             parent_states,
-                             mutation_list,
-                             files,
-                             total_file_size,
-                             std::move(plist)),
-                   LPC_PARTITION_SPLIT_ERROR,
-                   get_gpid(),
-                   [](replica *r) { r->parent_cleanup_split_context(); });
+    ec = _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                                   _child_gpid,
+                                   std::bind(&replica::child_copy_prepare_list,
+                                             std::placeholders::_1,
+                                             parent_states,
+                                             mutation_list,
+                                             files,
+                                             total_file_size,
+                                             std::move(plist)));
+    if (ec != ERR_OK) {
+        parent_cleanup_split_context();
+    }
 }
 
-void replica::child_copy_states(learn_state lstate,
-                                std::vector<mutation_ptr> mutation_list,
-                                std::vector<std::string> files,
-                                uint64_t total_file_size,
-                                std::shared_ptr<prepare_list> plist) // on child
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::child_copy_prepare_list(learn_state lstate,
+                                      std::vector<mutation_ptr> mutation_list,
+                                      std::vector<std::string> plog_files,
+                                      uint64_t total_file_size,
+                                      std::shared_ptr<prepare_list> plist) // on child partition
 {
-    FAIL_POINT_INJECT_F("replica_child_copy_states",
-                        [](dsn::string_view) { ddebug_f("mock child_copy_states"); });
-
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} is copying parent state during partition split, but status is {}",
-                name(),
-                enum_to_string(status()));
+        dwarn_replica("wrong status, status is {}", enum_to_string(status()));
+        _stub->split_replica_error_handler(
+            _split_states.parent_gpid,
+            std::bind(&replica::parent_cleanup_split_context, std::placeholders::_1));
+        child_handle_split_error("wrong child status when execute child_copy_prepare_list");
         return;
     }
 
-    error_code ec = ERR_OK;
-    // copy prepare list
+    // learning parent states is time-consuming, should execute in THREAD_POOL_REPLICATION_LONG
     decree last_committed_decree = plist->last_committed_decree();
     // start async learn task
     _split_states.splitting_start_async_learn_ts_ns = dsn_now_ns();
-    _split_states.async_learn_task = tasking::enqueue(LPC_SPLIT_PARTITION_ASYNC_LEARN,
+    _split_states.async_learn_task = tasking::enqueue(LPC_PARTITION_SPLIT_ASYNC_LEARN,
                                                       tracker(),
-                                                      std::bind(&replica::apply_parent_state,
+                                                      std::bind(&replica::child_learn_states,
                                                                 this,
-                                                                ec,
                                                                 lstate,
                                                                 mutation_list,
-                                                                files,
+                                                                plog_files,
                                                                 total_file_size,
-                                                                last_committed_decree),
-                                                      get_gpid().thread_hash());
+                                                                last_committed_decree));
 
-    ddebug_f("{} copy parent prepare list, last_committed_decree is {}, min decree is {}, "
-             "max decree is {}",
-             name(),
-             last_committed_decree,
-             plist->min_decree(),
-             plist->max_decree());
+    ddebug_replica("start to copy parent prepare list, last_committed_decree={}, prepare list min "
+                   "decree={}, max decree={}",
+                   last_committed_decree,
+                   plist->min_decree(),
+                   plist->max_decree());
 
-    delete _prepare_list;
+    // copy parent prepare list
     plist->set_committer(std::bind(&replica::execute_mutation, this, std::placeholders::_1));
-    _prepare_list = new prepare_list(this, *(plist.get()));
-    //    _split_states.is_prepare_list_copied = true;
-
+    delete _prepare_list;
+    _prepare_list = new prepare_list(this, *plist);
     for (decree d = last_committed_decree + 1; d <= _prepare_list->max_decree(); ++d) {
-        auto mu = _prepare_list->get_mutation_by_decree(d);
-        dassert(mu != nullptr, "");
-
+        mutation_ptr mu = _prepare_list->get_mutation_by_decree(d);
+        dassert_replica(mu != nullptr, "can not find mutation, dercee={}", d);
         mu->data.header.pid = get_gpid();
         _stub->_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
         _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
-
         // set mutation has been logged in private log
         if (!mu->is_logged()) {
             mu->set_logged();
         }
     }
-
     _split_states.is_prepare_list_copied = true;
-
-    // TODO(hyc): 0115 - test fix init
-    // add cached mutations to prepare list
-    // TODO(hyc): 0219 - try to remove child_temp_mutation_list
-    //    for (mutation_ptr &mu : _split_states.child_temp_mutation_list) {
-    //        ddebug_f("{} will copy mutation {} cached when prepare list is not copied", name(),
-    //        mu->name());
-    //        _stub->split_replica_error_handler(
-    //                       get_gpid(),
-    //                       std::bind(&replica::on_copy_mutation,
-    //                                 std::placeholders::_1,
-    //                                 mu));
-    //    }
 }
 
-void replica::apply_parent_state(error_code ec,
-                                 learn_state lstate,
+// ThreadPool: THREAD_POOL_REPLICATION_LONG
+void replica::child_learn_states(learn_state lstate,
                                  std::vector<mutation_ptr> mutation_list,
-                                 std::vector<std::string> files,
+                                 std::vector<std::string> plog_files,
                                  uint64_t total_file_size,
-                                 decree last_committed_decree) // on child
+                                 decree last_committed_decree) // on child partition
 {
+    FAIL_POINT_INJECT_F("replica_child_learn_states", [](dsn::string_view) {});
+
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} is applying parent state during partition split, but state is {}",
-                name(),
-                enum_to_string(status()));
+        dwarn_replica("wrong status, status is {}", enum_to_string(status()));
+        child_handle_async_learn_error();
         return;
     }
 
-    ddebug_f("{} start to learn data and mutations asynchronously, last_committed_decree is {}, "
-             "private_log file "
-             "count is {}, mutation in memory count is {}",
-             name(),
-             last_committed_decree,
-             files.size(),
-             mutation_list.size());
+    ddebug_replica("start to learn states asynchronously, prepare_list last_committed_decree={}, "
+                   "checkpoint decree range=({},{}], private log files count={}, in-memory "
+                   "mutation count={}",
+                   last_committed_decree,
+                   lstate.from_decree_excluded,
+                   lstate.to_decree_included,
+                   plog_files.size(),
+                   mutation_list.size());
 
-    bool is_error = false;
-
-    // apply checkpoint
-    dsn::error_code error =
-        _app->apply_checkpoint(replication_app_base::chkpt_apply_mode::learn, lstate);
-    if (error != ERR_OK) {
-        is_error = true;
-        derror_f("{} failed to apply checkpoint, error is {}", name(), error.to_string());
-    }
-
-    // apply private log and mutations in memory
-    if (!is_error) {
-        error = async_learn_mutation_private_log(
-            mutation_list, files, total_file_size, last_committed_decree);
-        if (error != ERR_OK) {
-            is_error = true;
-            derror_f("{} failed to apply private log and mutations in memory, error is {}",
-                     name(),
-                     error.to_string());
+    error_code err;
+    auto cleanup = defer([this, &err]() {
+        if (err != ERR_OK) {
+            child_handle_async_learn_error();
         }
+    });
+
+    // apply parent checkpoint
+    err = _app->apply_checkpoint(replication_app_base::chkpt_apply_mode::learn, lstate);
+    if (err != ERR_OK) {
+        derror_replica("failed to apply checkpoint, error={}", err);
+        return;
     }
 
-    // generate a checkpoint sync
-    if (!is_error) {
-        error = _app->sync_checkpoint();
-        //        error = background_sync_checkpoint();
-        if (error != ERR_OK) {
-            is_error = true;
-            derror_f("{} failed to sync checkpoint, error is {}", name(), error.to_string());
-        }
+    // replay parent private log and learn in-memory mutations
+    err =
+        child_apply_private_logs(plog_files, mutation_list, total_file_size, last_committed_decree);
+    if (err != ERR_OK) {
+        derror_replica("failed to replay private log, error={}", err);
+        return;
     }
 
+    // generate a checkpoint synchronously
+    err = _app->sync_checkpoint();
+    if (err != ERR_OK) {
+        derror_replica("failed to generate checkpoint synchrounously, error={}", err);
+        return;
+    }
+
+    err = _app->update_init_info_ballot_and_decree(this);
+    if (err != ERR_OK) {
+        derror_replica("update_init_info_ballot_and_decree failed, error={}", err);
+        return;
+    }
+
+    ddebug_replica("learn parent states asynchronously succeed");
+
+    tasking::enqueue(LPC_PARTITION_SPLIT,
+                     tracker(),
+                     std::bind(&replica::child_catch_up_states, this),
+                     get_gpid().thread_hash());
     _split_states.async_learn_task = nullptr;
-    if (error != ERR_OK) {
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [](replica *r) {
-            r->_child_gpid.set_app_id(0);
-        });
-        child_handle_split_error("apply_parent_state coz sync checkpoint failed");
-    } else {
-        error = _app->update_init_info_ballot_and_decree(this);
-        if (error == ERR_OK) {
-            ddebug_f("{} update_init_info_ballot_and_decree succeed, current ballot is {}",
-                     name(),
-                     get_ballot());
-        } else {
-            dwarn_f("{} update_init_info_ballot_and decree failed, error is {}",
-                    name(),
-                    error.to_string());
-        }
-        tasking::enqueue(LPC_PARTITION_SPLIT,
-                         tracker(),
-                         std::bind(&replica::child_catch_up, this),
-                         get_gpid().thread_hash());
-    }
 }
 
-error_code replica::async_learn_mutation_private_log(std::vector<mutation_ptr> mutation_list,
-                                                     std::vector<std::string> files,
-                                                     uint64_t total_file_size,
-                                                     decree last_committed_decree) // on child
+// ThreadPool: THREAD_POOL_REPLICATION_LONG
+error_code replica::child_apply_private_logs(std::vector<std::string> plog_files,
+                                             std::vector<mutation_ptr> mutation_list,
+                                             uint64_t total_file_size,
+                                             decree last_committed_decree) // on child partition
 {
+    FAIL_POINT_INJECT_F("replica_child_apply_private_logs", [](dsn::string_view arg) {
+        return error_code::try_get(arg.data(), ERR_OK);
+    });
+
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} status is not PS_PARTITION_SPLIT during while async learn mutations, but {}",
-                name(),
-                enum_to_string(status()));
-        return ERR_INACTIVE_STATE;
+        dwarn_replica("wrong status={}", enum_to_string(status()));
+        return ERR_INVALID_STATE;
     }
 
     error_code ec;
     int64_t offset;
 
+    // temp prepare_list used for apply states
     prepare_list plist(this,
                        _app->last_committed_decree(),
                        _options->max_mutation_count_in_prepare_list,
-                       [this, &ec](mutation_ptr &mu) {
-                           // TODO(hyc): for debug - delete
-                           dinfo_f("{}, _app last_committed_decree is {}",
-                                   this->name(),
-                                   _app->last_committed_decree());
+                       [this](mutation_ptr &mu) {
                            if (mu->data.header.decree == _app->last_committed_decree() + 1) {
-                               // TODO(hyc): for debug - delete
-                               dinfo_f("{} will apply mu {}, _app last_committed_decree is {}",
-                                       this->name(),
-                                       mu->name(),
-                                       _app->last_committed_decree());
                                _app->apply_mutation(mu);
                            }
                        });
 
     // replay private log
-    ec = mutation_log::replay(
-        files,
-        [this, &plist](int log_length, mutation_ptr &mu) {
-            decree d = mu->data.header.decree;
-            if (d <= plist.last_committed_decree()) {
-                return false;
-            }
-
-            mutation_ptr origin_mu = plist.get_mutation_by_decree(d);
-            if (origin_mu != nullptr && origin_mu->data.header.ballot >= mu->data.header.ballot) {
-                dwarn_f("mu {} existed, ignore replay outdated mutation, origin ballot {} VS mu "
-                        "ballot {}",
-                        mu->name(),
-                        origin_mu->data.header.ballot,
-                        mu->data.header.ballot);
-                return false;
-            }
-
-            // TODO(hyc): consider - learn
-            if (origin_mu == nullptr && mu->data.header.ballot > this->get_ballot()) {
-                dwarn_f("ballot changed while replay mu {}, replica ballot {} VS mu ballot {}",
-                        mu->name(),
-                        this->get_ballot(),
-                        mu->data.header.ballot);
-                return false;
-            }
-
-            // TODO(hyc): for debug - delete
-            dinfo_f("{} will replay mu {}, plist last_committed_decree is {}",
-                    this->name(),
-                    mu->name(),
-                    plist.last_committed_decree());
-            plist.prepare(mu, partition_status::PS_SECONDARY);
-            return true;
-
-        },
-        offset);
-
-    _split_states.splitting_copy_file_count += files.size();
-    _split_states.splitting_copy_file_size += total_file_size;
-    _stub->_counter_replicas_splitting_recent_copy_file_count->add(files.size());
-    _stub->_counter_replicas_splitting_recent_copy_file_size->add(total_file_size);
-    ddebug_f(
-        "{} finish replay private_log files, file count is {}, app last_committed_decree is {}",
-        name(),
-        files.size(),
-        _app->last_committed_decree());
-
-    // apply mutations in memory
-    if (ec == ERR_OK) {
-        int count = 0;
-        for (mutation_ptr &mu : mutation_list) {
-            decree d = mu->data.header.decree;
-            if (d <= plist.last_committed_decree()) {
-                continue;
-            }
-
-            mutation_ptr origin_mu = plist.get_mutation_by_decree(d);
-            if (origin_mu != nullptr && origin_mu->data.header.ballot >= mu->data.header.ballot) {
-                continue;
-            }
-
-            if (!mu->is_logged()) {
-                mu->set_logged();
-            }
-
-            dinfo_f("{} will prepare mutation {}, current count is {}", name(), mu->name(), count);
-
-            plist.prepare(mu, partition_status::PS_SECONDARY);
-            ++count;
-        }
-
-        _split_states.splitting_copy_mutation_count += count;
-        _stub->_counter_replicas_splitting_recent_copy_mutation_count->add(count);
-        ddebug_f("{} apply mutations in memory, count is {}, app last_committed_decree is {}",
-                 name(),
-                 count,
-                 _app->last_committed_decree());
-
-        // TODO(hyc): move if replay log succeed
-        plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
-        ddebug_f("{} commit to decree {}", name(), last_committed_decree);
+    ec = mutation_log::replay(plog_files,
+                              [this, &plist](int log_length, mutation_ptr &mu) {
+                                  decree d = mu->data.header.decree;
+                                  if (d <= plist.last_committed_decree()) {
+                                      return false;
+                                  }
+                                  mutation_ptr origin_mu = plist.get_mutation_by_decree(d);
+                                  if (origin_mu != nullptr &&
+                                      origin_mu->data.header.ballot >= mu->data.header.ballot) {
+                                      return false;
+                                  }
+                                  plist.prepare(mu, partition_status::PS_SECONDARY);
+                                  return true;
+                              },
+                              offset);
+    if (ec != ERR_OK) {
+        dwarn_replica(
+            "replay private_log files failed, file count={}, app last_committed_decree={}",
+            plog_files.size(),
+            _app->last_committed_decree());
+        return ec;
     }
+
+    _split_states.splitting_copy_file_count += plog_files.size();
+    _split_states.splitting_copy_file_size += total_file_size;
+    _stub->_counter_replicas_splitting_recent_copy_file_count->add(plog_files.size());
+    _stub->_counter_replicas_splitting_recent_copy_file_size->add(total_file_size);
+
+    ddebug_replica("replay private_log files succeed, file count={}, app last_committed_decree={}",
+                   plog_files.size(),
+                   _app->last_committed_decree());
+
+    // apply in-memory mutations if replay private logs succeed
+    int count = 0;
+    for (mutation_ptr &mu : mutation_list) {
+        decree d = mu->data.header.decree;
+        if (d <= plist.last_committed_decree()) {
+            continue;
+        }
+        mutation_ptr origin_mu = plist.get_mutation_by_decree(d);
+        if (origin_mu != nullptr && origin_mu->data.header.ballot >= mu->data.header.ballot) {
+            continue;
+        }
+        if (!mu->is_logged()) {
+            mu->set_logged();
+        }
+        plist.prepare(mu, partition_status::PS_SECONDARY);
+        ++count;
+    }
+
+    _split_states.splitting_copy_mutation_count += count;
+    _stub->_counter_replicas_splitting_recent_copy_mutation_count->add(count);
+
+    plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
+    ddebug_replica(
+        "apply in-memory mutations succeed, mutation count={}, app last_committed_decree={}",
+        count,
+        _app->last_committed_decree());
 
     return ec;
 }
 
-void replica::child_catch_up() // on child
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::child_catch_up_states() // on child partition
 {
+    FAIL_POINT_INJECT_F("replica_child_catch_up_states", [](dsn::string_view) {});
+
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        derror_f("{} is catching up parent state during partition split, but status is {}",
-                 name(),
-                 status());
+        dwarn_replica("wrong status, status is {}", enum_to_string(status()));
         return;
     }
 
+    // parent will copy mutations to child during async-learn, as a result:
+    // - child prepare_list last_committed_decree = parent prepare_list last_committed_decree, also
+    // is catch_up goal_decree
+    // - local_decree is child local last_committed_decree which is the last decree in async-learn.
     decree goal_decree = _prepare_list->last_committed_decree();
     decree local_decree = _app->last_committed_decree();
 
-    // there are still some mutations child not learn
+    // there are mutations written to parent during async-learn
+    // child does not catch up parent, there are still some mutations child not learn
     if (local_decree < goal_decree) {
-        if (local_decree >=
-            _prepare_list->min_decree()) { // missing mutations are all in prepare_list
-            dwarn_f("{} still has mutations in memory to learn, app last_committed_decree is {}, "
-                    "goal decree is {}, prepare_list min_decree is {}",
-                    name(),
-                    local_decree,
-                    goal_decree,
-                    _prepare_list->min_decree());
+        if (local_decree >= _prepare_list->min_decree()) {
+            // all missing mutations are all in prepare list
+            dwarn_replica("there are some in-memory mutations should be learned, app "
+                          "last_committed_decree={}, "
+                          "goal decree={}, prepare_list min_decree={}",
+                          local_decree,
+                          goal_decree,
+                          _prepare_list->min_decree());
             for (decree d = local_decree + 1; d <= goal_decree; ++d) {
                 auto mu = _prepare_list->get_mutation_by_decree(d);
                 dassert(mu != nullptr, "");
                 error_code ec = _app->apply_mutation(mu);
                 if (ec != ERR_OK) {
-                    child_handle_split_error("child_catchup coz app apply mutation failed");
+                    child_handle_split_error("child_catchup failed because apply mutation failed");
                     return;
                 }
             }
-        } else { // some missing mutations are not in memory
-            dwarn_f("{} still has mutations in private log to learn,  app last_committed_decree is "
-                    "{}, prepare_list min_decree is {}, please wait",
-                    name(),
-                    local_decree,
-                    _prepare_list->min_decree());
+        } else {
+            // some missing mutations have already in private log
+            // should call `catch_up_with_private_logs` to catch up all missing mutations
+            dwarn_replica(
+                "there are some private logs should be learned, app last_committed_decree="
+                "{}, prepare_list min_decree={}, please wait",
+                local_decree,
+                _prepare_list->min_decree());
             _split_states.async_learn_task = tasking::enqueue(
                 LPC_CATCHUP_WITH_PRIVATE_LOGS,
                 tracker(),
                 [this]() {
-                    this->catch_up_with_private_logs(partition_status::PS_PARTITION_SPLIT);
+                    catch_up_with_private_logs(partition_status::PS_PARTITION_SPLIT);
                     _split_states.async_learn_task = nullptr;
                 },
                 get_gpid().thread_hash());
@@ -574,167 +522,142 @@ void replica::child_catch_up() // on child
         }
     }
 
-    // TODO(hyc): delete max decree
-    ddebug_f("{} catch up, will send notification to parent({}.{}), goal decree is {}, local "
-             "decree is {}, max decree is {}",
-             name(),
-             _split_states.parent_gpid.get_app_id(),
-             _split_states.parent_gpid.get_partition_index(),
-             _prepare_list->last_committed_decree(),
-             _app->last_committed_decree(),
-             _prepare_list->max_decree());
-
+    ddebug_replica("child catch up parent states, goal decree={}, local decree={}",
+                   _prepare_list->last_committed_decree(),
+                   _app->last_committed_decree());
     _split_states.is_caught_up = true;
 
-    notify_primary_split_catch_up();
+    child_notify_catch_up();
 }
 
-///
-/// prepare to register child replicas
-///
-
-void replica::notify_primary_split_catch_up() // on child
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::child_notify_catch_up() // on child partition
 {
-    std::shared_ptr<notify_catch_up_request> request(new notify_catch_up_request);
+    FAIL_POINT_INJECT_F("replica_child_notify_catch_up", [](dsn::string_view) {});
+
+    std::unique_ptr<notify_catch_up_request> request = make_unique<notify_catch_up_request>();
+    request->parent_gpid = _split_states.parent_gpid;
     request->child_gpid = get_gpid();
     request->child_ballot = get_ballot();
     request->child_address = _stub->_primary_address;
-    request->primary_parent_gpid = _split_states.parent_gpid;
 
-    auto on_notify_primary_split_catch_up_reply = [this](
-        error_code ec, std::shared_ptr<notify_cacth_up_response> response) {
-        if (ec == ERR_TIMEOUT) {
-            dwarn_f("{} failed to notify primary catch up coz timeout, please wait and retry",
-                    this->name());
-            tasking::enqueue(LPC_PARTITION_SPLIT,
-                             tracker(),
-                             std::bind(&replica::notify_primary_split_catch_up, this),
-                             get_gpid().thread_hash(),
-                             std::chrono::seconds(1));
-        } else if (ec != ERR_OK || response->err != ERR_OK) {
-            error_code err = (ec == ERR_OK) ? response->err : ec;
-            derror_f("{} failed to notify primary catch up, error is {}", name(), err.to_string());
-            _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
-                r->_child_gpid.set_app_id(0);
-            });
-            child_handle_split_error("notify_primary_split_catch_up");
-        } else {
-            ddebug_f("{} succeed to notify primary catch up", name());
-        }
-    };
+    ddebug_replica("send notification to primary: {}@{}, ballot={}",
+                   _split_states.parent_gpid,
+                   _config.primary.to_string(),
+                   get_ballot());
 
-    ddebug_f("{} send notification to primary: {}.{}@{}, ballot is {}",
-             name(),
-             _split_states.parent_gpid.get_app_id(),
-             _split_states.parent_gpid.get_partition_index(),
-             _config.primary.to_string(),
-             get_ballot());
-
-    rpc::call(_config.primary,
-              RPC_SPLIT_NOTIFY_CATCH_UP,
-              *request,
-              tracker(),
-              [=](error_code ec, notify_cacth_up_response &&response) {
-                  on_notify_primary_split_catch_up_reply(
-                      ec, std::make_shared<notify_cacth_up_response>(std::move(response)));
-              },
-              std::chrono::seconds(0),
-              _split_states.parent_gpid.thread_hash());
+    notify_catch_up_rpc rpc(std::move(request), RPC_SPLIT_NOTIFY_CATCH_UP);
+    rpc.call(_config.primary,
+             tracker(),
+             [this, rpc](error_code ec) mutable {
+                 auto response = rpc.response();
+                 if (ec == ERR_TIMEOUT) {
+                     dwarn_replica("notify primary catch up timeout, please wait and retry");
+                     tasking::enqueue(LPC_PARTITION_SPLIT,
+                                      tracker(),
+                                      std::bind(&replica::child_notify_catch_up, this),
+                                      get_gpid().thread_hash(),
+                                      std::chrono::seconds(1));
+                     return;
+                 }
+                 if (ec != ERR_OK || response.err != ERR_OK) {
+                     error_code err = (ec == ERR_OK) ? response.err : ec;
+                     dwarn_replica("failed to notify primary catch up, error={}", err.to_string());
+                     _stub->split_replica_error_handler(
+                         _split_states.parent_gpid,
+                         std::bind(&replica::parent_cleanup_split_context, std::placeholders::_1));
+                     child_handle_split_error("notify_primary_split_catch_up");
+                     return;
+                 }
+                 ddebug_replica("notify primary catch up succeed");
+             },
+             _split_states.parent_gpid.thread_hash());
 }
 
-void replica::on_notify_primary_split_catch_up(
-    notify_catch_up_request request, notify_cacth_up_response &response) // on primary parent
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::parent_handle_child_catch_up(const notify_catch_up_request &request,
+                                           notify_cacth_up_response &response) // on primary parent
 {
     if (status() != partition_status::PS_PRIMARY) {
-        dwarn_f("{} is not primary, status is {}", name(), enum_to_string(status()));
+        derror_replica("status is {}", enum_to_string(status()));
         response.err = ERR_INVALID_STATE;
         return;
     }
 
     if (request.child_ballot != get_ballot()) {
-        derror_f("{} receive out-date request, request ballot is {}, local ballot is {}",
-                 name(),
-                 request.child_ballot,
-                 get_ballot());
+        derror_replica("receive out-date request, request ballot = {}, local ballot = {}",
+                       request.child_ballot,
+                       get_ballot());
         response.err = ERR_INVALID_STATE;
         return;
     }
 
     if (request.child_gpid != _child_gpid) {
-        derror_f("{} receive wrong child request, request child_gpid is {}.{}, local child_gpid is "
-                 "{}.{}",
-                 name(),
-                 request.child_gpid.get_app_id(),
-                 request.child_gpid.get_partition_index(),
-                 _child_gpid.get_app_id(),
-                 _child_gpid.get_partition_index());
+        derror_replica(
+            "receive wrong child request, request child_gpid = {}, local child_gpid = {}",
+            request.child_gpid,
+            _child_gpid);
         response.err = ERR_INVALID_STATE;
         return;
     }
 
     response.err = ERR_OK;
-    ddebug_f("{}: on_notify_primary_split_catch_up. local status:{}, local ballot:{}"
-             ", request ballot:{} , from {}",
-             name(),
-             enum_to_string(status()),
-             get_ballot(),
-             request.child_ballot,
-             request.child_address.to_string());
+    ddebug_replica("receive catch_up request from {}@{}, current ballot={}",
+                   request.child_gpid,
+                   request.child_address.to_string(),
+                   request.child_ballot);
 
-    // cache child_address
-    _primary_states.child_address.insert(request.child_address);
+    _primary_states.caught_up_children.insert(request.child_address);
+    // _primary_states.statuses is a map structure: rpc address -> partition_status
+    // it stores replica's rpc address and partition_status of this replica group
     for (auto &iter : _primary_states.statuses) {
-        if (_primary_states.child_address.find(iter.first) ==
-            _primary_states.child_address.end()) { // not all child catch up
-            ddebug_f("{} there are still child(address is {}) not catch up, wait",
-                     name(),
-                     iter.first.to_string());
+        if (_primary_states.caught_up_children.find(iter.first) ==
+            _primary_states.caught_up_children.end()) {
+            // there are child partitions not caught up its parent
             return;
         }
     }
 
-    ddebug_f("{} all child catch up", name());
+    ddebug_replica("all child partitions catch up");
+    _primary_states.caught_up_children.clear();
+    _primary_states.sync_send_write_request = true;
 
-    _primary_states.child_address.clear();
-    _primary_states.is_sync_to_child = true;
-
+    // sync_point is the first decree after parent send write request to child synchronously
+    // when sync_point commit, parent consider child has all data it should have during async-learn
     decree sync_point = _prepare_list->max_decree() + 1;
-    // TODO(hyc): for debug
-    ddebug_f("{}: sync_point is {}", name(), sync_point);
-
     if (!_options->empty_write_disabled) {
+        // empty wirte here to commit sync_point
         mutation_ptr mu = new_mutation(invalid_decree);
         mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
         init_prepare(mu, false);
-        dassert(sync_point == mu->data.header.decree,
-                "%" PRId64 " vs %" PRId64,
-                sync_point,
-                mu->data.header.decree);
+        dassert_replica(sync_point == mu->data.header.decree,
+                        "sync_point should be equal to mutation's decree, {} vs {}",
+                        sync_point,
+                        mu->data.header.decree);
     };
 
+    // check if sync_point has been committed
     tasking::enqueue(LPC_PARTITION_SPLIT,
                      tracker(),
-                     std::bind(&replica::check_sync_point, this, sync_point),
+                     std::bind(&replica::parent_check_sync_point_commit, this, sync_point),
                      get_gpid().thread_hash(),
                      std::chrono::seconds(1));
 }
 
-void replica::check_sync_point(decree sync_point) // on primary parent
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::parent_check_sync_point_commit(decree sync_point) // on primary parent
 {
-    ddebug_f("{} check sync point, sync_point is {}, local last_committed_decree is {}",
-             name(),
-             sync_point,
-             _app->last_committed_decree());
-
-    // if valid -> update_group_partition_count, otherwise retry
+    FAIL_POINT_INJECT_F("replica_parent_check_sync_point_commit", [](dsn::string_view) {});
+    ddebug_replica("sync_point = {}, app last_committed_decree = {}",
+                   sync_point,
+                   _app->last_committed_decree());
     if (_app->last_committed_decree() >= sync_point) {
         update_group_partition_count(_app_info.partition_count * 2, true);
     } else {
-        dwarn_f("{} local last_committed_decree is not caught up sync_point, please wait and retry",
-                name());
+        dwarn_replica("sync_point has not been committed, please wait and retry");
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          tracker(),
-                         std::bind(&replica::check_sync_point, this, sync_point),
+                         std::bind(&replica::parent_check_sync_point_commit, this, sync_point),
                          get_gpid().thread_hash(),
                          std::chrono::seconds(1));
     }
@@ -751,11 +674,11 @@ void replica::update_group_partition_count(int new_partition_count,
                 _child_gpid.get_partition_index(),
                 _child_init_ballot,
                 get_ballot());
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
-                       _child_gpid,
-                       std::bind(&replica::child_handle_split_error,
-                                 std::placeholders::_1,
-                                 "update_group_partition_count coz out-dated request"));
+        _stub->split_replica_error_handler(
+            _child_gpid,
+            std::bind(&replica::child_handle_split_error,
+                      std::placeholders::_1,
+                      "update_group_partition_count coz out-dated request"));
         _child_gpid.set_app_id(0);
         return;
     }
@@ -823,9 +746,8 @@ void replica::on_update_group_partition_count(
                 request.config.ballot,
                 get_ballot());
 
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [](replica_ptr r) {
-            r->_child_gpid.set_app_id(0);
-        });
+        _stub->split_replica_error_handler(_split_states.parent_gpid,
+                                           [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
         child_handle_split_error("on_update_group_partition_count coz out-dated ballot");
 
         response.err = ERR_VERSION_OUTDATED;
@@ -933,7 +855,7 @@ void replica::on_update_group_partition_count_reply(
                 ddebug_f("{} finish update parent group partition count, is_update_child is {}",
                          name(),
                          is_update_child);
-                _primary_states.is_sync_to_child = false;
+                _primary_states.sync_send_write_request = false;
             }
         } else { // not all reply
             ddebug_f("{}, there are still {} replica not update partition count in group",
@@ -946,11 +868,10 @@ void replica::on_update_group_partition_count_reply(
             dwarn_f("{} failed to execute on_update_group_partition_count_reply, error is {}",
                     name(),
                     error.to_string());
-            _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
-                           _child_gpid,
-                           std::bind(&replica::child_handle_split_error,
-                                     std::placeholders::_1,
-                                     "on_update_group_partition_count_reply"));
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "on_update_group_partition_count_reply"));
             _child_gpid.set_app_id(0);
             return;
         }
@@ -1087,11 +1008,11 @@ void replica::on_register_child_on_meta_reply(
                 name(),
                 request->child_config.pid.get_app_id(),
                 request->child_config.pid.get_partition_index());
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
-                       _child_gpid,
-                       std::bind(&replica::child_handle_split_error,
-                                 std::placeholders::_1,
-                                 "register child failed coz split paused or canceled"));
+        _stub->split_replica_error_handler(
+            _child_gpid,
+            std::bind(&replica::child_handle_split_error,
+                      std::placeholders::_1,
+                      "register child failed coz split paused or canceled"));
         _child_gpid.set_app_id(0);
         return;
     }
@@ -1188,17 +1109,17 @@ void replica::on_register_child_on_meta_reply(
                 _app_info.partition_count,
                 response->app.partition_count);
         // make child replica become available
-        _stub->on_exec(LPC_PARTITION_SPLIT,
-                       response->child_config.pid,
-                       std::bind(&replica::child_partition_active,
-                                 std::placeholders::_1,
-                                 response->child_config));
+        _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                                  response->child_config.pid,
+                                  std::bind(&replica::child_partition_active,
+                                            std::placeholders::_1,
+                                            response->child_config));
         update_group_partition_count(response->app.partition_count, false);
     }
 
     _primary_states.register_child_task = nullptr;
     // TODO(hyc): when to change it into false, should there
-    _primary_states.is_sync_to_child = true;
+    _primary_states.sync_send_write_request = true;
     _child_gpid.set_app_id(0);
 
     if (response->parent_config.ballot >= get_ballot()) {
@@ -1227,7 +1148,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                 mu->data.header.ballot,
                 mu->name());
 
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [mu](replica_ptr r) {
+        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });
@@ -1254,7 +1175,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                 get_ballot(),
                 mu->data.header.ballot,
                 mu->name());
-        _stub->on_exec(LPC_PARTITION_SPLIT_ERROR, _split_states.parent_gpid, [mu](replica_ptr r) {
+        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
             r->_child_gpid.set_app_id(0);
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });
@@ -1327,6 +1248,16 @@ void replica::child_handle_split_error(const std::string &error_msg) // on child
         _stub->_counter_replicas_splitting_recent_split_fail_count->increment();
         update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
     }
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION_LONG
+void replica::child_handle_async_learn_error() // on child partition
+{
+    _stub->split_replica_error_handler(
+        _split_states.parent_gpid,
+        std::bind(&replica::parent_cleanup_split_context, std::placeholders::_1));
+    child_handle_split_error("meet error when execute child_learn_states");
+    _split_states.async_learn_task = nullptr;
 }
 
 } // namespace replication

@@ -51,8 +51,7 @@ public:
     bool verbose_commit_log_on_start;
     bool delay_for_fd_timeout_on_start;
     bool empty_write_disabled;
-    bool allow_non_idempotent_write;
-    bool duplication_disabled;
+    bool duplication_enabled;
 
     int32_t prepare_timeout_ms_for_secondaries;
     int32_t prepare_timeout_ms_for_potential_secondaries;
@@ -103,12 +102,17 @@ public:
     bool config_sync_disabled;
     int32_t config_sync_interval_ms;
 
+    bool mem_release_enabled;
+    int32_t mem_release_check_interval_ms;
+    int32_t mem_release_max_reserved_mem_percentage;
+
     int32_t lb_interval_ms;
 
     int32_t learn_app_max_concurrent_count;
 
     std::string cold_backup_root;
     int32_t max_concurrent_uploading_file_count;
+    int32_t cold_backup_checkpoint_reserve_minutes;
 
 public:
     replication_options();
@@ -143,13 +147,6 @@ public:
     static const std::string APP_ID;
     static const std::string BACKUP_ID;
     static const std::string SKIP_BAD_PARTITION;
-};
-
-class replica_envs
-{
-public:
-    static const std::string DENY_CLIENT_WRITE;
-    static const std::string WRITE_THROTTLING;
 };
 
 namespace cold_backup {

@@ -31,6 +31,9 @@
 #include <dsn/utility/process_utils.h>
 #include <dsn/tool-api/command_manager.h>
 #include <fstream>
+#ifdef DSN_ENABLE_GPERF
+#include <gperftools/malloc_extension.h>
+#endif
 
 #include "service_engine.h"
 #include "rpc_engine.h"
@@ -146,17 +149,6 @@ DSN_API void dsn_rpc_forward(dsn::message_ex *request, dsn::rpc_address addr)
 {
     ::dsn::task::get_current_rpc()->forward((::dsn::message_ex *)(request),
                                             ::dsn::rpc_address(addr));
-}
-
-//------------------------------------------------------------------------------
-//
-// env
-//
-//------------------------------------------------------------------------------
-DSN_API uint64_t dsn_now_ns()
-{
-    // return ::dsn::task::get_current_env()->now_ns();
-    return ::dsn::service_engine::instance().env()->now_ns();
 }
 
 //------------------------------------------------------------------------------
@@ -283,7 +275,7 @@ tool_app *get_current_tool() { return dsn_all.tool.get(); }
 } // namespace tools
 } // namespace dsn
 
-extern void dsn_log_init();
+extern void dsn_log_init(const std::string &logging_factory_name, const std::string &dir_log);
 extern void dsn_core_init();
 
 inline void dsn_global_init()
@@ -381,11 +373,21 @@ bool run(const char *config_file,
         "thread local transient memory buffer size (KB), default is 1024");
     ::dsn::tls_trans_mem_init(tls_trans_memory_KB * 1024);
 
-    // prepare minimum necessary
-    ::dsn::service_engine::instance().init_before_toollets(spec);
+#ifdef DSN_ENABLE_GPERF
+    double_t tcmalloc_release_rate =
+        (double_t)dsn_config_get_value_double("core",
+                                              "tcmalloc_release_rate",
+                                              1., // [0, 10]
+                                              "the memory releasing rate of tcmalloc, default is "
+                                              "1.0 in gperftools, value range is 0.0~10.0");
+    ::MallocExtension::instance()->SetMemoryReleaseRate(tcmalloc_release_rate);
+#endif
 
     // init logging
-    dsn_log_init();
+    dsn_log_init(spec.logging_factory_name, spec.dir_log);
+
+    // prepare minimum necessary
+    ::dsn::service_engine::instance().init_before_toollets(spec);
 
     ddebug("process(%ld) start: %" PRIu64 ", date: %s",
            getpid(),

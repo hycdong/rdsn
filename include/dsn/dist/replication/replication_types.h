@@ -163,6 +163,18 @@ struct duplication_status
 
 extern const std::map<int, const char *> _duplication_status_VALUES_TO_NAMES;
 
+struct duplication_fail_mode
+{
+    enum type
+    {
+        FAIL_SLOW = 0,
+        FAIL_SKIP = 1,
+        FAIL_FAST = 2
+    };
+};
+
+extern const std::map<int, const char *> _duplication_fail_mode_VALUES_TO_NAMES;
+
 class mutation_header;
 
 class mutation_update;
@@ -253,6 +265,12 @@ class query_replica_info_request;
 
 class query_replica_info_response;
 
+class disk_info;
+
+class query_disk_info_request;
+
+class query_disk_info_response;
+
 class query_app_info_request;
 
 class query_app_info_response;
@@ -301,9 +319,9 @@ class duplication_add_request;
 
 class duplication_add_response;
 
-class duplication_status_change_request;
+class duplication_modify_request;
 
-class duplication_status_change_response;
+class duplication_modify_response;
 
 class duplication_entry;
 
@@ -439,10 +457,14 @@ inline std::ostream &operator<<(std::ostream &out, const mutation_header &obj)
 
 typedef struct _mutation_update__isset
 {
-    _mutation_update__isset() : code(false), serialization_type(false), data(false) {}
+    _mutation_update__isset()
+        : code(false), serialization_type(false), data(false), start_time_ns(false)
+    {
+    }
     bool code : 1;
     bool serialization_type : 1;
     bool data : 1;
+    bool start_time_ns : 1;
 } _mutation_update__isset;
 
 class mutation_update
@@ -452,12 +474,13 @@ public:
     mutation_update(mutation_update &&);
     mutation_update &operator=(const mutation_update &);
     mutation_update &operator=(mutation_update &&);
-    mutation_update() : serialization_type(0) {}
+    mutation_update() : serialization_type(0), start_time_ns(0) {}
 
     virtual ~mutation_update() throw();
     ::dsn::task_code code;
     int32_t serialization_type;
     ::dsn::blob data;
+    int64_t start_time_ns;
 
     _mutation_update__isset __isset;
 
@@ -467,6 +490,8 @@ public:
 
     void __set_data(const ::dsn::blob &val);
 
+    void __set_start_time_ns(const int64_t val);
+
     bool operator==(const mutation_update &rhs) const
     {
         if (!(code == rhs.code))
@@ -474,6 +499,10 @@ public:
         if (!(serialization_type == rhs.serialization_type))
             return false;
         if (!(data == rhs.data))
+            return false;
+        if (__isset.start_time_ns != rhs.__isset.start_time_ns)
+            return false;
+        else if (__isset.start_time_ns && !(start_time_ns == rhs.start_time_ns))
             return false;
         return true;
     }
@@ -3164,6 +3193,209 @@ inline std::ostream &operator<<(std::ostream &out, const query_replica_info_resp
     return out;
 }
 
+typedef struct _disk_info__isset
+{
+    _disk_info__isset()
+        : tag(false),
+          full_dir(false),
+          disk_capacity_mb(false),
+          disk_available_mb(false),
+          holding_primary_replica_counts(false),
+          holding_secondary_replica_counts(false)
+    {
+    }
+    bool tag : 1;
+    bool full_dir : 1;
+    bool disk_capacity_mb : 1;
+    bool disk_available_mb : 1;
+    bool holding_primary_replica_counts : 1;
+    bool holding_secondary_replica_counts : 1;
+} _disk_info__isset;
+
+class disk_info
+{
+public:
+    disk_info(const disk_info &);
+    disk_info(disk_info &&);
+    disk_info &operator=(const disk_info &);
+    disk_info &operator=(disk_info &&);
+    disk_info() : tag(), full_dir(), disk_capacity_mb(0), disk_available_mb(0) {}
+
+    virtual ~disk_info() throw();
+    std::string tag;
+    std::string full_dir;
+    int64_t disk_capacity_mb;
+    int64_t disk_available_mb;
+    std::map<int32_t, int32_t> holding_primary_replica_counts;
+    std::map<int32_t, int32_t> holding_secondary_replica_counts;
+
+    _disk_info__isset __isset;
+
+    void __set_tag(const std::string &val);
+
+    void __set_full_dir(const std::string &val);
+
+    void __set_disk_capacity_mb(const int64_t val);
+
+    void __set_disk_available_mb(const int64_t val);
+
+    void __set_holding_primary_replica_counts(const std::map<int32_t, int32_t> &val);
+
+    void __set_holding_secondary_replica_counts(const std::map<int32_t, int32_t> &val);
+
+    bool operator==(const disk_info &rhs) const
+    {
+        if (!(tag == rhs.tag))
+            return false;
+        if (!(full_dir == rhs.full_dir))
+            return false;
+        if (!(disk_capacity_mb == rhs.disk_capacity_mb))
+            return false;
+        if (!(disk_available_mb == rhs.disk_available_mb))
+            return false;
+        if (!(holding_primary_replica_counts == rhs.holding_primary_replica_counts))
+            return false;
+        if (!(holding_secondary_replica_counts == rhs.holding_secondary_replica_counts))
+            return false;
+        return true;
+    }
+    bool operator!=(const disk_info &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const disk_info &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(disk_info &a, disk_info &b);
+
+inline std::ostream &operator<<(std::ostream &out, const disk_info &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _query_disk_info_request__isset
+{
+    _query_disk_info_request__isset() : node(false), app_name(false) {}
+    bool node : 1;
+    bool app_name : 1;
+} _query_disk_info_request__isset;
+
+class query_disk_info_request
+{
+public:
+    query_disk_info_request(const query_disk_info_request &);
+    query_disk_info_request(query_disk_info_request &&);
+    query_disk_info_request &operator=(const query_disk_info_request &);
+    query_disk_info_request &operator=(query_disk_info_request &&);
+    query_disk_info_request() : app_name() {}
+
+    virtual ~query_disk_info_request() throw();
+    ::dsn::rpc_address node;
+    std::string app_name;
+
+    _query_disk_info_request__isset __isset;
+
+    void __set_node(const ::dsn::rpc_address &val);
+
+    void __set_app_name(const std::string &val);
+
+    bool operator==(const query_disk_info_request &rhs) const
+    {
+        if (!(node == rhs.node))
+            return false;
+        if (!(app_name == rhs.app_name))
+            return false;
+        return true;
+    }
+    bool operator!=(const query_disk_info_request &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const query_disk_info_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(query_disk_info_request &a, query_disk_info_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const query_disk_info_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _query_disk_info_response__isset
+{
+    _query_disk_info_response__isset()
+        : err(false), total_capacity_mb(false), total_available_mb(false), disk_infos(false)
+    {
+    }
+    bool err : 1;
+    bool total_capacity_mb : 1;
+    bool total_available_mb : 1;
+    bool disk_infos : 1;
+} _query_disk_info_response__isset;
+
+class query_disk_info_response
+{
+public:
+    query_disk_info_response(const query_disk_info_response &);
+    query_disk_info_response(query_disk_info_response &&);
+    query_disk_info_response &operator=(const query_disk_info_response &);
+    query_disk_info_response &operator=(query_disk_info_response &&);
+    query_disk_info_response() : total_capacity_mb(0), total_available_mb(0) {}
+
+    virtual ~query_disk_info_response() throw();
+    ::dsn::error_code err;
+    int64_t total_capacity_mb;
+    int64_t total_available_mb;
+    std::vector<disk_info> disk_infos;
+
+    _query_disk_info_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_total_capacity_mb(const int64_t val);
+
+    void __set_total_available_mb(const int64_t val);
+
+    void __set_disk_infos(const std::vector<disk_info> &val);
+
+    bool operator==(const query_disk_info_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (!(total_capacity_mb == rhs.total_capacity_mb))
+            return false;
+        if (!(total_available_mb == rhs.total_available_mb))
+            return false;
+        if (!(disk_infos == rhs.disk_infos))
+            return false;
+        return true;
+    }
+    bool operator!=(const query_disk_info_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const query_disk_info_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(query_disk_info_response &a, query_disk_info_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const query_disk_info_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
 typedef struct _query_app_info_request__isset
 {
     _query_app_info_request__isset() : meta_server(false) {}
@@ -4707,12 +4939,11 @@ inline std::ostream &operator<<(std::ostream &out, const configuration_update_ap
 
 typedef struct _duplication_add_request__isset
 {
-    _duplication_add_request__isset()
-        : app_name(false), remote_cluster_address(false), freezed(false)
+    _duplication_add_request__isset() : app_name(false), remote_cluster_name(false), freezed(false)
     {
     }
     bool app_name : 1;
-    bool remote_cluster_address : 1;
+    bool remote_cluster_name : 1;
     bool freezed : 1;
 } _duplication_add_request__isset;
 
@@ -4723,18 +4954,18 @@ public:
     duplication_add_request(duplication_add_request &&);
     duplication_add_request &operator=(const duplication_add_request &);
     duplication_add_request &operator=(duplication_add_request &&);
-    duplication_add_request() : app_name(), remote_cluster_address(), freezed(0) {}
+    duplication_add_request() : app_name(), remote_cluster_name(), freezed(0) {}
 
     virtual ~duplication_add_request() throw();
     std::string app_name;
-    std::string remote_cluster_address;
+    std::string remote_cluster_name;
     bool freezed;
 
     _duplication_add_request__isset __isset;
 
     void __set_app_name(const std::string &val);
 
-    void __set_remote_cluster_address(const std::string &val);
+    void __set_remote_cluster_name(const std::string &val);
 
     void __set_freezed(const bool val);
 
@@ -4742,7 +4973,7 @@ public:
     {
         if (!(app_name == rhs.app_name))
             return false;
-        if (!(remote_cluster_address == rhs.remote_cluster_address))
+        if (!(remote_cluster_name == rhs.remote_cluster_name))
             return false;
         if (!(freezed == rhs.freezed))
             return false;
@@ -4768,10 +4999,11 @@ inline std::ostream &operator<<(std::ostream &out, const duplication_add_request
 
 typedef struct _duplication_add_response__isset
 {
-    _duplication_add_response__isset() : err(false), appid(false), dupid(false) {}
+    _duplication_add_response__isset() : err(false), appid(false), dupid(false), hint(false) {}
     bool err : 1;
     bool appid : 1;
     bool dupid : 1;
+    bool hint : 1;
 } _duplication_add_response__isset;
 
 class duplication_add_response
@@ -4781,12 +5013,13 @@ public:
     duplication_add_response(duplication_add_response &&);
     duplication_add_response &operator=(const duplication_add_response &);
     duplication_add_response &operator=(duplication_add_response &&);
-    duplication_add_response() : appid(0), dupid(0) {}
+    duplication_add_response() : appid(0), dupid(0), hint() {}
 
     virtual ~duplication_add_response() throw();
     ::dsn::error_code err;
     int32_t appid;
     int32_t dupid;
+    std::string hint;
 
     _duplication_add_response__isset __isset;
 
@@ -4796,6 +5029,8 @@ public:
 
     void __set_dupid(const int32_t val);
 
+    void __set_hint(const std::string &val);
+
     bool operator==(const duplication_add_response &rhs) const
     {
         if (!(err == rhs.err))
@@ -4803,6 +5038,10 @@ public:
         if (!(appid == rhs.appid))
             return false;
         if (!(dupid == rhs.dupid))
+            return false;
+        if (__isset.hint != rhs.__isset.hint)
+            return false;
+        else if (__isset.hint && !(hint == rhs.hint))
             return false;
         return true;
     }
@@ -4824,31 +5063,40 @@ inline std::ostream &operator<<(std::ostream &out, const duplication_add_respons
     return out;
 }
 
-typedef struct _duplication_status_change_request__isset
+typedef struct _duplication_modify_request__isset
 {
-    _duplication_status_change_request__isset() : app_name(false), dupid(false), status(false) {}
+    _duplication_modify_request__isset()
+        : app_name(false), dupid(false), status(false), fail_mode(false)
+    {
+    }
     bool app_name : 1;
     bool dupid : 1;
     bool status : 1;
-} _duplication_status_change_request__isset;
+    bool fail_mode : 1;
+} _duplication_modify_request__isset;
 
-class duplication_status_change_request
+class duplication_modify_request
 {
 public:
-    duplication_status_change_request(const duplication_status_change_request &);
-    duplication_status_change_request(duplication_status_change_request &&);
-    duplication_status_change_request &operator=(const duplication_status_change_request &);
-    duplication_status_change_request &operator=(duplication_status_change_request &&);
-    duplication_status_change_request() : app_name(), dupid(0), status((duplication_status::type)0)
+    duplication_modify_request(const duplication_modify_request &);
+    duplication_modify_request(duplication_modify_request &&);
+    duplication_modify_request &operator=(const duplication_modify_request &);
+    duplication_modify_request &operator=(duplication_modify_request &&);
+    duplication_modify_request()
+        : app_name(),
+          dupid(0),
+          status((duplication_status::type)0),
+          fail_mode((duplication_fail_mode::type)0)
     {
     }
 
-    virtual ~duplication_status_change_request() throw();
+    virtual ~duplication_modify_request() throw();
     std::string app_name;
     int32_t dupid;
     duplication_status::type status;
+    duplication_fail_mode::type fail_mode;
 
-    _duplication_status_change_request__isset __isset;
+    _duplication_modify_request__isset __isset;
 
     void __set_app_name(const std::string &val);
 
@@ -4856,19 +5104,27 @@ public:
 
     void __set_status(const duplication_status::type val);
 
-    bool operator==(const duplication_status_change_request &rhs) const
+    void __set_fail_mode(const duplication_fail_mode::type val);
+
+    bool operator==(const duplication_modify_request &rhs) const
     {
         if (!(app_name == rhs.app_name))
             return false;
         if (!(dupid == rhs.dupid))
             return false;
-        if (!(status == rhs.status))
+        if (__isset.status != rhs.__isset.status)
+            return false;
+        else if (__isset.status && !(status == rhs.status))
+            return false;
+        if (__isset.fail_mode != rhs.__isset.fail_mode)
+            return false;
+        else if (__isset.fail_mode && !(fail_mode == rhs.fail_mode))
             return false;
         return true;
     }
-    bool operator!=(const duplication_status_change_request &rhs) const { return !(*this == rhs); }
+    bool operator!=(const duplication_modify_request &rhs) const { return !(*this == rhs); }
 
-    bool operator<(const duplication_status_change_request &) const;
+    bool operator<(const duplication_modify_request &) const;
 
     uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
     uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
@@ -4876,41 +5132,41 @@ public:
     virtual void printTo(std::ostream &out) const;
 };
 
-void swap(duplication_status_change_request &a, duplication_status_change_request &b);
+void swap(duplication_modify_request &a, duplication_modify_request &b);
 
-inline std::ostream &operator<<(std::ostream &out, const duplication_status_change_request &obj)
+inline std::ostream &operator<<(std::ostream &out, const duplication_modify_request &obj)
 {
     obj.printTo(out);
     return out;
 }
 
-typedef struct _duplication_status_change_response__isset
+typedef struct _duplication_modify_response__isset
 {
-    _duplication_status_change_response__isset() : err(false), appid(false) {}
+    _duplication_modify_response__isset() : err(false), appid(false) {}
     bool err : 1;
     bool appid : 1;
-} _duplication_status_change_response__isset;
+} _duplication_modify_response__isset;
 
-class duplication_status_change_response
+class duplication_modify_response
 {
 public:
-    duplication_status_change_response(const duplication_status_change_response &);
-    duplication_status_change_response(duplication_status_change_response &&);
-    duplication_status_change_response &operator=(const duplication_status_change_response &);
-    duplication_status_change_response &operator=(duplication_status_change_response &&);
-    duplication_status_change_response() : appid(0) {}
+    duplication_modify_response(const duplication_modify_response &);
+    duplication_modify_response(duplication_modify_response &&);
+    duplication_modify_response &operator=(const duplication_modify_response &);
+    duplication_modify_response &operator=(duplication_modify_response &&);
+    duplication_modify_response() : appid(0) {}
 
-    virtual ~duplication_status_change_response() throw();
+    virtual ~duplication_modify_response() throw();
     ::dsn::error_code err;
     int32_t appid;
 
-    _duplication_status_change_response__isset __isset;
+    _duplication_modify_response__isset __isset;
 
     void __set_err(const ::dsn::error_code &val);
 
     void __set_appid(const int32_t val);
 
-    bool operator==(const duplication_status_change_response &rhs) const
+    bool operator==(const duplication_modify_response &rhs) const
     {
         if (!(err == rhs.err))
             return false;
@@ -4918,9 +5174,9 @@ public:
             return false;
         return true;
     }
-    bool operator!=(const duplication_status_change_response &rhs) const { return !(*this == rhs); }
+    bool operator!=(const duplication_modify_response &rhs) const { return !(*this == rhs); }
 
-    bool operator<(const duplication_status_change_response &) const;
+    bool operator<(const duplication_modify_response &) const;
 
     uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
     uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
@@ -4928,9 +5184,9 @@ public:
     virtual void printTo(std::ostream &out) const;
 };
 
-void swap(duplication_status_change_response &a, duplication_status_change_response &b);
+void swap(duplication_modify_response &a, duplication_modify_response &b);
 
-inline std::ostream &operator<<(std::ostream &out, const duplication_status_change_response &obj)
+inline std::ostream &operator<<(std::ostream &out, const duplication_modify_response &obj)
 {
     obj.printTo(out);
     return out;
@@ -4939,14 +5195,20 @@ inline std::ostream &operator<<(std::ostream &out, const duplication_status_chan
 typedef struct _duplication_entry__isset
 {
     _duplication_entry__isset()
-        : dupid(false), status(false), remote_address(false), create_ts(false), progress(false)
+        : dupid(false),
+          status(false),
+          remote(false),
+          create_ts(false),
+          progress(false),
+          fail_mode(false)
     {
     }
     bool dupid : 1;
     bool status : 1;
-    bool remote_address : 1;
+    bool remote : 1;
     bool create_ts : 1;
     bool progress : 1;
+    bool fail_mode : 1;
 } _duplication_entry__isset;
 
 class duplication_entry
@@ -4957,16 +5219,21 @@ public:
     duplication_entry &operator=(const duplication_entry &);
     duplication_entry &operator=(duplication_entry &&);
     duplication_entry()
-        : dupid(0), status((duplication_status::type)0), remote_address(), create_ts(0)
+        : dupid(0),
+          status((duplication_status::type)0),
+          remote(),
+          create_ts(0),
+          fail_mode((duplication_fail_mode::type)0)
     {
     }
 
     virtual ~duplication_entry() throw();
     int32_t dupid;
     duplication_status::type status;
-    std::string remote_address;
+    std::string remote;
     int64_t create_ts;
     std::map<int32_t, int64_t> progress;
+    duplication_fail_mode::type fail_mode;
 
     _duplication_entry__isset __isset;
 
@@ -4974,11 +5241,13 @@ public:
 
     void __set_status(const duplication_status::type val);
 
-    void __set_remote_address(const std::string &val);
+    void __set_remote(const std::string &val);
 
     void __set_create_ts(const int64_t val);
 
     void __set_progress(const std::map<int32_t, int64_t> &val);
+
+    void __set_fail_mode(const duplication_fail_mode::type val);
 
     bool operator==(const duplication_entry &rhs) const
     {
@@ -4986,11 +5255,17 @@ public:
             return false;
         if (!(status == rhs.status))
             return false;
-        if (!(remote_address == rhs.remote_address))
+        if (!(remote == rhs.remote))
             return false;
         if (!(create_ts == rhs.create_ts))
             return false;
-        if (!(progress == rhs.progress))
+        if (__isset.progress != rhs.__isset.progress)
+            return false;
+        else if (__isset.progress && !(progress == rhs.progress))
+            return false;
+        if (__isset.fail_mode != rhs.__isset.fail_mode)
+            return false;
+        else if (__isset.fail_mode && !(fail_mode == rhs.fail_mode))
             return false;
         return true;
     }
@@ -5814,10 +6089,10 @@ inline std::ostream &operator<<(std::ostream &out, const app_partition_split_res
 typedef struct _notify_catch_up_request__isset
 {
     _notify_catch_up_request__isset()
-        : primary_parent_gpid(false), child_gpid(false), child_ballot(false), child_address(false)
+        : parent_gpid(false), child_gpid(false), child_ballot(false), child_address(false)
     {
     }
-    bool primary_parent_gpid : 1;
+    bool parent_gpid : 1;
     bool child_gpid : 1;
     bool child_ballot : 1;
     bool child_address : 1;
@@ -5833,14 +6108,14 @@ public:
     notify_catch_up_request() : child_ballot(0) {}
 
     virtual ~notify_catch_up_request() throw();
-    ::dsn::gpid primary_parent_gpid;
+    ::dsn::gpid parent_gpid;
     ::dsn::gpid child_gpid;
     int64_t child_ballot;
     ::dsn::rpc_address child_address;
 
     _notify_catch_up_request__isset __isset;
 
-    void __set_primary_parent_gpid(const ::dsn::gpid &val);
+    void __set_parent_gpid(const ::dsn::gpid &val);
 
     void __set_child_gpid(const ::dsn::gpid &val);
 
@@ -5850,7 +6125,7 @@ public:
 
     bool operator==(const notify_catch_up_request &rhs) const
     {
-        if (!(primary_parent_gpid == rhs.primary_parent_gpid))
+        if (!(parent_gpid == rhs.parent_gpid))
             return false;
         if (!(child_gpid == rhs.child_gpid))
             return false;

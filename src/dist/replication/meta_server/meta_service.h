@@ -48,7 +48,6 @@
 #include "dist/replication/meta_server/meta_state_service_utils.h"
 #include "dist/replication/common/block_service_manager.h"
 
-class meta_service_test_app;
 namespace dsn {
 namespace replication {
 
@@ -56,6 +55,7 @@ class server_state;
 class meta_server_failure_detector;
 class server_load_balancer;
 class replication_checker;
+class meta_duplication_service;
 class meta_split_service;
 namespace test {
 class test_checker;
@@ -69,6 +69,8 @@ DEFINE_TASK_CODE(LPC_DEFAULT_CALLBACK, TASK_PRIORITY_COMMON, dsn::THREAD_POOL_DE
 typedef rpc_holder<configuration_update_app_env_request, configuration_update_app_env_response>
     app_env_rpc;
 typedef rpc_holder<ddd_diagnose_request, ddd_diagnose_response> ddd_diagnose_rpc;
+typedef rpc_holder<app_partition_split_request, app_partition_split_response>
+    app_partition_split_rpc;
 
 // TODO(hyc): move rpc_holder to another file
 typedef rpc_holder<app_partition_split_request, app_partition_split_response>
@@ -193,10 +195,19 @@ private:
     void on_start_recovery(dsn::message_ex *req);
     void on_start_restore(dsn::message_ex *req);
     void on_add_backup_policy(dsn::message_ex *req);
-    void on_query_backup_policy(dsn::message_ex *req);
+    void on_query_backup_policy(query_backup_policy_rpc policy_rpc);
     void on_modify_backup_policy(dsn::message_ex *req);
     void on_report_restore_status(dsn::message_ex *req);
     void on_query_restore_status(dsn::message_ex *req);
+
+    // duplication
+    void on_add_duplication(duplication_add_rpc rpc);
+    void on_modify_duplication(duplication_modify_rpc rpc);
+    void on_query_duplication_info(duplication_query_rpc rpc);
+    void on_duplication_sync(duplication_sync_rpc rpc);
+    void register_duplication_rpc_handlers();
+    void recover_duplication_from_meta_state();
+    void initialize_duplication_service();
 
     // common routines
     // ret:
@@ -211,8 +222,7 @@ private:
 private:
     friend class replication_checker;
     friend class test::test_checker;
-    friend class ::meta_service_test_app;
-    friend class meta_test_base;
+    friend class meta_service_test_app;
 
     replication_options _opts;
     meta_options _meta_opts;
@@ -227,6 +237,15 @@ private:
 
     std::shared_ptr<server_load_balancer> _balancer;
     std::shared_ptr<backup_service> _backup_handler;
+
+    friend class meta_test_base;
+    friend class meta_duplication_service;
+    friend class meta_http_service_test;
+    friend class meta_load_balance_test;
+    friend class meta_backup_test_base;
+    friend class meta_http_service;
+    std::unique_ptr<meta_duplication_service> _dup_svc;
+
     std::unique_ptr<meta_split_service> _split_svc;
 
     // handle all the block filesystems for current meta service
@@ -255,5 +274,6 @@ private:
 
     dsn::task_tracker _tracker;
 };
-}
-}
+
+} // namespace replication
+} // namespace dsn

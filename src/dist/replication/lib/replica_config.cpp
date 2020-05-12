@@ -42,6 +42,7 @@
 #include <dsn/dist/replication/replication_app_base.h>
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/utility/string_conv.h>
+#include <dsn/dist/replication/replica_envs.h>
 
 namespace dsn {
 namespace replication {
@@ -535,14 +536,12 @@ void replica::on_update_configuration_on_meta_server_reply(
     _primary_states.reconfiguration_task = nullptr;
 }
 
-bool replica::update_app_envs(const std::map<std::string, std::string> &envs)
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::update_app_envs(const std::map<std::string, std::string> &envs)
 {
     if (_app) {
         update_app_envs_internal(envs);
         _app->update_app_envs(envs);
-        return true;
-    } else {
-        return false;
     }
 }
 
@@ -563,42 +562,13 @@ void replica::update_app_envs_internal(const std::map<std::string, std::string> 
         _deny_client_write = deny_client_write;
     }
 
-    // WRITE_THROTTLING
-    bool throttling_changed = false;
-    std::string old_throttling;
-    std::string parse_error;
-    find = envs.find(replica_envs::WRITE_THROTTLING);
-    if (find != envs.end()) {
-        if (!_write_throttling_controller.parse_from_env(find->second,
-                                                         _app_info.partition_count,
-                                                         parse_error,
-                                                         throttling_changed,
-                                                         old_throttling)) {
-            dwarn_replica("parse env failed, key = \"{}\", value = \"{}\", error = \"{}\"",
-                          replica_envs::WRITE_THROTTLING,
-                          find->second,
-                          parse_error);
-            // reset if parse failed
-            _write_throttling_controller.reset(throttling_changed, old_throttling);
-        }
-    } else {
-        // reset if env not found
-        _write_throttling_controller.reset(throttling_changed, old_throttling);
-    }
-    if (throttling_changed) {
-        ddebug_replica("switch _write_throttling_controller from \"{}\" to \"{}\"",
-                       old_throttling,
-                       _write_throttling_controller.env_value());
-    }
+    update_throttle_envs(envs);
 }
 
-bool replica::query_app_envs(/*out*/ std::map<std::string, std::string> &envs)
+void replica::query_app_envs(/*out*/ std::map<std::string, std::string> &envs)
 {
     if (_app) {
         _app->query_app_envs(envs);
-        return true;
-    } else {
-        return false;
     }
 }
 
@@ -616,7 +586,7 @@ bool replica::update_configuration(const partition_configuration &config)
     if (rconfig.status == partition_status::PS_PRIMARY &&
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
-        _primary_states.child_address.clear();
+        _primary_states.caught_up_children.clear();
         _child_gpid.set_app_id(0);
         //        _partition_version = -1;
         query_child_state();
@@ -769,7 +739,7 @@ bool replica::update_local_configuration(const replica_configuration &config,
     _config = config;
     // we should durable the new ballot to prevent the inconsistent state
     if (_config.ballot > old_ballot) {
-        _primary_states.child_address.clear();
+        _primary_states.caught_up_children.clear();
         dsn::error_code result = _app->update_init_info_ballot_and_decree(this);
         if (result == dsn::ERR_OK) {
             ddebug("%s: update ballot to init file from %" PRId64 " to %" PRId64 " OK",
@@ -1049,15 +1019,16 @@ bool replica::update_local_configuration_with_no_ballot_change(partition_status:
     return update_local_configuration(config, true);
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_config_sync(const app_info &info, const partition_configuration &config)
 {
-    ddebug("%s: configuration sync", name());
-
+    dinfo_replica("configuration sync");
     // no outdated update
     if (config.ballot < get_ballot())
         return;
 
     update_app_envs(info.envs);
+    _duplicating = info.duplicating;
 
     if (nullptr != _primary_states.reconfiguration_task) {
         // already under reconfiguration, skip configuration sync
@@ -1145,11 +1116,10 @@ void replica::check_partition_state(int partition_count, const partition_configu
                 partition_count,
                 _child_gpid.get_app_id(),
                 _child_gpid.get_partition_index());
-            _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
-                           _child_gpid,
-                           std::bind(&replica::child_handle_split_error,
-                                     std::placeholders::_1,
-                                     "admin cancel partition split"));
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "admin cancel partition split"));
             _child_gpid.set_app_id(0);
         }
         return;
@@ -1167,11 +1137,10 @@ void replica::check_partition_state(int partition_count, const partition_configu
                  _child_gpid.get_app_id(),
                  _child_gpid.get_partition_index());
         if (_child_gpid.get_app_id() > 0) {
-            _stub->on_exec(LPC_PARTITION_SPLIT_ERROR,
-                           _child_gpid,
-                           std::bind(&replica::child_handle_split_error,
-                                     std::placeholders::_1,
-                                     "admin pause single partition split"));
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "admin pause single partition split"));
             _child_gpid.set_app_id(0);
         }
         return;
@@ -1394,7 +1363,7 @@ void replica::on_query_child_state_reply(error_code ec,
         // TODO(hyc): consider why original not have
         //        _primary_states.get_replica_config(status(), add_child_request.config);
         add_child_request.config.ballot = get_ballot();
-        _primary_states.is_sync_to_child = false;
+        _primary_states.sync_send_write_request = false;
 
         on_add_child(add_child_request); // parent create child replica
         broadcast_group_check();         // secondaries create child during group check
@@ -1409,9 +1378,10 @@ void replica::child_partition_active(const partition_configuration &config)
     ddebug_f("{} finish partition split and become active", name());
     _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
     // TODO(hyc): should set is false
-    _primary_states.is_sync_to_child = false;
+    _primary_states.sync_send_write_request = false;
     _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();
     update_configuration(config);
 }
-}
-} // namespace
+
+} // namespace replication
+} // namespace dsn

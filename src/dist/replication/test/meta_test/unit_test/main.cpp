@@ -9,11 +9,15 @@
 
 #include "meta_service_test_app.h"
 
+int gtest_flags = 0;
+int gtest_ret = 0;
+
+namespace dsn {
+namespace replication {
+
 DEFINE_THREAD_POOL_CODE(THREAD_POOL_META_TEST)
 DEFINE_TASK_CODE(TASK_META_TEST, TASK_PRIORITY_COMMON, THREAD_POOL_META_TEST)
 
-int gtest_flags = 0;
-int gtest_ret = 0;
 meta_service_test_app *g_app;
 
 // as it is not easy to clean test environment in some cases, we simply run these tests in several
@@ -43,16 +47,6 @@ TEST(meta, construct_apps_test) { g_app->construct_apps_test(); }
 
 TEST(meta, balance_config_file) { g_app->balance_config_file(); }
 
-TEST(meta, simple_lb_balanced_cure) { g_app->simple_lb_balanced_cure(); }
-
-TEST(meta, simple_lb_cure_test) { g_app->simple_lb_cure_test(); }
-
-TEST(meta, simple_lb_from_proposal_test) { g_app->simple_lb_from_proposal_test(); }
-
-TEST(meta, simple_lb_collect_replica) { g_app->simple_lb_collect_replica(); }
-
-TEST(meta, simple_lb_construct_replica) { g_app->simple_lb_construct_replica(); }
-
 TEST(meta, json_compacity) { g_app->json_compacity(); }
 
 TEST(meta, adjust_dropped_size) { g_app->adjust_dropped_size(); }
@@ -63,17 +57,17 @@ TEST(meta, backup_service_test) { g_app->backup_service_test(); }
 
 TEST(meta, app_envs_basic_test) { g_app->app_envs_basic_test(); }
 
-TEST(meta, register_child_test) { g_app->register_child_test(); }
+// TEST(meta, register_child_test) { g_app->register_child_test(); }
 
-TEST(meta, query_child_state_test) { g_app->on_query_child_state_test(); }
+// TEST(meta, query_child_state_test) { g_app->on_query_child_state_test(); }
 
-TEST(meta, pause_single_partition_split_test) { g_app->pause_single_partition_split_test(); }
+// TEST(meta, pause_single_partition_split_test) { g_app->pause_single_partition_split_test(); }
 
-TEST(meta, restart_single_partition_split_test) { g_app->restart_single_partition_split_test(); }
+// TEST(meta, restart_single_partition_split_test) { g_app->restart_single_partition_split_test(); }
 
-TEST(meta, cancel_app_partition_split_test) { g_app->cancel_app_partition_split_test(); }
+// TEST(meta, cancel_app_partition_split_test) { g_app->cancel_app_partition_split_test(); }
 
-TEST(meta, clear_partition_split_flag_test) { g_app->clear_split_flags_test(); }
+// TEST(meta, clear_partition_split_flag_test) { g_app->clear_split_flags_test(); }
 
 dsn::error_code meta_service_test_app::start(const std::vector<std::string> &args)
 {
@@ -97,9 +91,12 @@ dsn::error_code meta_service_test_app::start(const std::vector<std::string> &arg
     return dsn::ERR_OK;
 }
 
+} // namespace replication
+} // namespace dsn
+
 GTEST_API_ int main(int argc, char **argv)
 {
-    dsn::service_app::register_factory<meta_service_test_app>("test_meta");
+    dsn::service_app::register_factory<dsn::replication::meta_service_test_app>("test_meta");
     dsn::service::meta_service_app::register_all();
     if (argc < 2)
         dassert(dsn_run_config("config-test.ini", false), "");

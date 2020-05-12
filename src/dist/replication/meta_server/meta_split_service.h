@@ -23,7 +23,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 #include "dist/replication/meta_server/meta_service.h"
 #include "dist/replication/meta_server/server_state.h"
 
@@ -34,7 +33,6 @@ class meta_split_service
 {
 public:
     explicit meta_split_service(meta_service *meta);
-
     // client -> meta to start split
     void app_partition_split(app_partition_split_rpc rpc);
 
@@ -77,6 +75,5 @@ private:
 
     zrwlock_nr &app_lock() const { return _state->_lock; }
 };
-
 } // namespace replication
 } // namespace dsn

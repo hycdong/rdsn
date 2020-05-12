@@ -24,27 +24,17 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     two-phase commit in replication
- *
- * Revision history:
- *     Mar., 2015, @imzhenyu (Zhenyu Guo), first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
-
-#include <dsn/dist/fmt_logging.h>
-
 #include "replica.h"
 #include "mutation.h"
 #include "mutation_log.h"
 #include "replica_stub.h"
 #include <dsn/dist/replication/replication_app_base.h>
+#include <dsn/dist/fmt_logging.h>
 
 namespace dsn {
 namespace replication {
 
-void replica::on_client_write(task_code code, dsn::message_ex *request, bool ignore_throttling)
+void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
 {
     _checker.only_one_thread_access();
 
@@ -55,8 +45,23 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
         return;
     }
 
-    task_spec *spec = task_spec::get(code);
-    if (!_options->allow_non_idempotent_write && !spec->rpc_request_is_write_idempotent) {
+    if (dsn_unlikely(_stub->_max_allowed_write_size &&
+                     request->body_size() > _stub->_max_allowed_write_size)) {
+        dwarn_replica("client from {} write request body size exceed threshold, request_body_size "
+                      "= {}, max_allowed_write_size = {}, it will be rejected!",
+                      request->header->from_address.to_string(),
+                      request->body_size(),
+                      _stub->_max_allowed_write_size);
+        _stub->_counter_recent_write_size_exceed_threshold_count->increment();
+        response_client_write(request, ERR_INVALID_DATA);
+        return;
+    }
+
+    task_spec *spec = task_spec::get(request->rpc_code());
+    if (is_duplicating() && !spec->rpc_request_is_write_idempotent) {
+        // Ignore non-idempotent write, because duplication provides no guarantee of atomicity to
+        // make this write produce the same result on multiple clusters.
+        _counter_dup_disabled_non_idempotent_write_count->increment();
         response_client_write(request, ERR_OPERATION_DISABLED);
         return;
     }
@@ -89,39 +94,17 @@ void replica::on_client_write(task_code code, dsn::message_ex *request, bool ign
         return;
     }
 
-    if (_write_throttling_controller.enabled() && !ignore_throttling) {
-        int64_t delay_ms = 0;
-        auto type = _write_throttling_controller.control(request, delay_ms);
-        if (type != throttling_controller::PASS) {
-            if (type == throttling_controller::DELAY) {
-                tasking::enqueue(LPC_WRITE_THROTTLING_DELAY,
-                                 &_tracker,
-                                 [ this, code, req = message_ptr(request) ]() {
-                                     on_client_write(code, req, true);
-                                 },
-                                 get_gpid().thread_hash(),
-                                 std::chrono::milliseconds(delay_ms));
-                _counter_recent_write_throttling_delay_count->increment();
-            } else { // type == throttling_controller::REJECT
-                if (delay_ms > 0) {
-                    tasking::enqueue(LPC_WRITE_THROTTLING_DELAY,
-                                     &_tracker,
-                                     [ this, req = message_ptr(request) ]() {
-                                         response_client_write(req, ERR_BUSY);
-                                     },
-                                     get_gpid().thread_hash(),
-                                     std::chrono::milliseconds(delay_ms));
-                } else {
-                    response_client_write(request, ERR_BUSY);
-                }
-                _counter_recent_write_throttling_reject_count->increment();
-            }
+    if (!ignore_throttling) {
+        if (throttle_request(_write_qps_throttling_controller, request, 1)) {
+            return;
+        }
+        if (throttle_request(_write_size_throttling_controller, request, request->body_size())) {
             return;
         }
     }
 
     dinfo("%s: got write request from %s", name(), request->header->from_address.to_string());
-    auto mu = _primary_states.write_queue.add_work(code, request, this);
+    auto mu = _primary_states.write_queue.add_work(request->rpc_code(), request, this);
     if (mu) {
         init_prepare(mu, false);
     }
@@ -156,7 +139,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
          mu->tid());
 
     // check whether mutation should send to its child replica
-    if (_primary_states.is_sync_to_child) {
+    if (_primary_states.sync_send_write_request) {
         ddebug("%s: mutation %s should sync to child", name(), mu->name());
         mu->set_is_sync_to_child(true);
     }
@@ -271,7 +254,7 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
         RPC_PREPARE, timeout_milliseconds, get_gpid().thread_hash());
     replica_configuration rconfig;
     _primary_states.get_replica_config(status, rconfig, learn_signature);
-    if (status == partition_status::PS_SECONDARY && _primary_states.is_sync_to_child) {
+    if (status == partition_status::PS_SECONDARY && _primary_states.sync_send_write_request) {
         rconfig.split_sync_to_child = true;
     }
 
@@ -777,23 +760,23 @@ void replica::copy_mutation(mutation_ptr &mu)
     }
 
     mutation_ptr new_mu = mutation::copy_no_reply(mu);
-    // TODO(heyuchen): task code should be LPC_PARTITION_SPLIT, not LPC_PARTITION_SPLIT_ERROR
-    _stub->on_exec(LPC_PARTITION_SPLIT,
-                   _child_gpid,
-                   std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
+    // TODO(heyuchen): consider it
+    _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                              _child_gpid,
+                              std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
 }
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)
 {
     if (mu->is_sync_to_child()) {
-        // LPC_PARTITION_SPLIT, rename this function
-        _stub->on_exec(LPC_PARTITION_SPLIT,
-                       _split_states.parent_gpid,
-                       std::bind(&replica::on_copy_mutation_reply,
-                                 std::placeholders::_1,
-                                 ec,
-                                 mu->data.header.ballot,
-                                 mu->data.header.decree));
+        // TODO(heyuchen): consider it
+        _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                                  _split_states.parent_gpid,
+                                  std::bind(&replica::on_copy_mutation_reply,
+                                            std::placeholders::_1,
+                                            ec,
+                                            mu->data.header.ballot,
+                                            mu->data.header.decree));
     } else {
         derror_f("{} failed to ack parent, mutation is {}, sync_to_child is {}",
                  name(),
@@ -863,5 +846,6 @@ void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d)
         }
     }
 }
-}
-} // namespace
+
+} // namespace replication
+} // namespace dsn

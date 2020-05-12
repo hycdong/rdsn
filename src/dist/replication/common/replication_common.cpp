@@ -27,6 +27,7 @@
 #include "replication_common.h"
 #include <dsn/utility/filesystem.h>
 #include <fstream>
+#include <dsn/dist/replication/replica_envs.h>
 
 namespace dsn {
 namespace replication {
@@ -47,8 +48,7 @@ replication_options::replication_options()
     verbose_commit_log_on_start = false;
     delay_for_fd_timeout_on_start = false;
     empty_write_disabled = false;
-    allow_non_idempotent_write = false;
-    duplication_disabled = false;
+    duplication_enabled = true;
 
     prepare_timeout_ms_for_secondaries = 1000;
     prepare_timeout_ms_for_potential_secondaries = 3000;
@@ -99,11 +99,17 @@ replication_options::replication_options()
     config_sync_disabled = false;
     config_sync_interval_ms = 30000;
 
+    mem_release_enabled = true;
+    mem_release_check_interval_ms = 3600000;
+    mem_release_max_reserved_mem_percentage = 10;
+
     lb_interval_ms = 10000;
 
     learn_app_max_concurrent_count = 5;
 
     max_concurrent_uploading_file_count = 10;
+
+    cold_backup_checkpoint_reserve_minutes = 10;
 }
 
 replication_options::~replication_options() {}
@@ -260,17 +266,9 @@ void replication_options::initialize()
                                   "empty_write_disabled",
                                   empty_write_disabled,
                                   "whether to disable empty write, default is false");
-    allow_non_idempotent_write =
-        dsn_config_get_value_bool("replication",
-                                  "allow_non_idempotent_write",
-                                  allow_non_idempotent_write,
-                                  "whether to allow non-idempotent write, default is false");
 
-    duplication_disabled = dsn_config_get_value_bool(
-        "replication", "duplication_disabled", false, "is duplication disabled");
-    if (allow_non_idempotent_write && !duplication_disabled) {
-        dfatal("duplication and idempotent write cannot be enabled together");
-    }
+    duplication_enabled = dsn_config_get_value_bool(
+        "replication", "duplication_enabled", duplication_enabled, "is duplication enabled");
 
     prepare_timeout_ms_for_secondaries = (int)dsn_config_get_value_uint64(
         "replication",
@@ -471,6 +469,24 @@ void replication_options::initialize()
         config_sync_interval_ms,
         "every this period(ms) the replica syncs replica configuration with the meta server");
 
+    mem_release_enabled = dsn_config_get_value_bool("replication",
+                                                    "mem_release_enabled",
+                                                    mem_release_enabled,
+                                                    "whether to enable periodic memory release");
+
+    mem_release_check_interval_ms = (int)dsn_config_get_value_uint64(
+        "replication",
+        "mem_release_check_interval_ms",
+        mem_release_check_interval_ms,
+        "the replica check if should release memory to the system every this period of time(ms)");
+
+    mem_release_max_reserved_mem_percentage = (int)dsn_config_get_value_uint64(
+        "replication",
+        "mem_release_max_reserved_mem_percentage",
+        mem_release_max_reserved_mem_percentage,
+        "if tcmalloc reserved but not-used memory exceed this percentage of application allocated "
+        "memory, replica server will release the exceeding memory back to operating system");
+
     lb_interval_ms = (int)dsn_config_get_value_uint64(
         "replication",
         "lb_interval_ms",
@@ -491,6 +507,12 @@ void replication_options::initialize()
                                              "max_concurrent_uploading_file_count",
                                              max_concurrent_uploading_file_count,
                                              "concurrent uploading file count");
+
+    cold_backup_checkpoint_reserve_minutes =
+        (int)dsn_config_get_value_uint64("replication",
+                                         "cold_backup_checkpoint_reserve_minutes",
+                                         cold_backup_checkpoint_reserve_minutes,
+                                         "reserve minutes of cold backup checkpoint");
 
     replica_helper::load_meta_servers(meta_servers);
 
@@ -576,7 +598,37 @@ const std::string backup_restore_constant::BACKUP_ID("restore.backup_id");
 const std::string backup_restore_constant::SKIP_BAD_PARTITION("restore.skip_bad_partition");
 
 const std::string replica_envs::DENY_CLIENT_WRITE("replica.deny_client_write");
-const std::string replica_envs::WRITE_THROTTLING("replica.write_throttling");
+const std::string replica_envs::WRITE_QPS_THROTTLING("replica.write_throttling");
+const std::string replica_envs::WRITE_SIZE_THROTTLING("replica.write_throttling_by_size");
+const uint64_t replica_envs::MIN_SLOW_QUERY_THRESHOLD_MS = 20;
+const std::string replica_envs::SLOW_QUERY_THRESHOLD("replica.slow_query_threshold");
+const std::string replica_envs::ROCKSDB_USAGE_SCENARIO("rocksdb.usage_scenario");
+const std::string replica_envs::TABLE_LEVEL_DEFAULT_TTL("default_ttl");
+const std::string MANUAL_COMPACT_PREFIX("manual_compact.");
+const std::string replica_envs::MANUAL_COMPACT_DISABLED(MANUAL_COMPACT_PREFIX + "disabled");
+const std::string replica_envs::MANUAL_COMPACT_MAX_CONCURRENT_RUNNING_COUNT(
+    MANUAL_COMPACT_PREFIX + "max_concurrent_running_count");
+const std::string MANUAL_COMPACT_ONCE_PREFIX(MANUAL_COMPACT_PREFIX + "once.");
+const std::string replica_envs::MANUAL_COMPACT_ONCE_TRIGGER_TIME(MANUAL_COMPACT_ONCE_PREFIX +
+                                                                 "trigger_time");
+const std::string replica_envs::MANUAL_COMPACT_ONCE_TARGET_LEVEL(MANUAL_COMPACT_ONCE_PREFIX +
+                                                                 "target_level");
+const std::string replica_envs::MANUAL_COMPACT_ONCE_BOTTOMMOST_LEVEL_COMPACTION(
+    MANUAL_COMPACT_ONCE_PREFIX + "bottommost_level_compaction");
+const std::string MANUAL_COMPACT_PERIODIC_PREFIX(MANUAL_COMPACT_PREFIX + "periodic.");
+const std::string replica_envs::MANUAL_COMPACT_PERIODIC_TRIGGER_TIME(
+    MANUAL_COMPACT_PERIODIC_PREFIX + "trigger_time");
+const std::string replica_envs::MANUAL_COMPACT_PERIODIC_TARGET_LEVEL(
+    MANUAL_COMPACT_PERIODIC_PREFIX + "target_level");
+const std::string replica_envs::MANUAL_COMPACT_PERIODIC_BOTTOMMOST_LEVEL_COMPACTION(
+    MANUAL_COMPACT_PERIODIC_PREFIX + "bottommost_level_compaction");
+const std::string
+    replica_envs::ROCKSDB_CHECKPOINT_RESERVE_MIN_COUNT("rocksdb.checkpoint.reserve_min_count");
+const std::string replica_envs::ROCKSDB_CHECKPOINT_RESERVE_TIME_SECONDS(
+    "rocksdb.checkpoint.reserve_time_seconds");
+const std::string replica_envs::ROCKSDB_ITERATION_THRESHOLD_TIME_MS(
+    "replica.rocksdb_iteration_threshold_time_ms");
+const std::string replica_envs::BUSINESS_INFO("business.info");
 
 namespace cold_backup {
 std::string get_policy_path(const std::string &root, const std::string &policy_name)

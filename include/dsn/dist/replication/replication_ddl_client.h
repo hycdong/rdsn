@@ -34,14 +34,16 @@
 
 #pragma once
 
+#include <dsn/dist/replication.h>
+
 #include <cctype>
 #include <string>
 #include <map>
-#include <dsn/dist/replication.h>
+#include <vector>
+
 #include <dsn/tool-api/task_tracker.h>
 #include <dsn/tool-api/async_calls.h>
 #include <dsn/utility/errors.h>
-#include <vector>
 
 namespace dsn {
 namespace replication {
@@ -113,27 +115,13 @@ public:
 
     error_with<duplication_add_response>
     add_dup(std::string app_name, std::string remote_address, bool freezed);
-    error_with<duplication_status_change_response>
+
+    error_with<duplication_modify_response>
     change_dup_status(std::string app_name, int dupid, duplication_status::type status);
+    error_with<duplication_modify_response>
+    update_dup_fail_mode(std::string app_name, int dupid, duplication_fail_mode::type fmode);
+
     error_with<duplication_query_response> query_dup(std::string app_name);
-
-    // get host name from ip series
-    // if can't get a hostname from ip(maybe no hostname or other errors), return UNRESOLVABLE
-    // if multiple hostname got, return <host1,host2> ...
-    // we only support ipv4 currently
-
-    // ip_network_order -> hostname
-    static std::string hostname_from_ip(uint32_t ip);
-    // a.b.c.d -> hostname
-    static std::string hostname_from_ip(const char *ip);
-    // a.b.c.d:port1 -> hostname:port1
-    static std::string hostname_from_ip_port(const char *ip_port);
-    // ipv4_rpc_address -> hostname:port | non_ipv4 -> "invalid"
-    static std::string hostname(const dsn::rpc_address &address);
-    // a.b.c.d,e.f.g.h -> hostname1,hostname2
-    static std::string list_hostname_from_ip(const char *ip_list);
-    // a.b.c.d:port1,e.f.g.h:port2 -> hostname1:port2,hostname2:port2
-    static std::string list_hostname_from_ip_port(const char *ip_port_list);
 
     dsn::error_code do_restore(const std::string &backup_provider_name,
                                const std::string &cluster_name,
@@ -172,9 +160,10 @@ public:
 
     dsn::error_code get_app_envs(const std::string &app_name,
                                  std::map<std::string, std::string> &envs);
-    dsn::error_code set_app_envs(const std::string &app_name,
-                                 const std::vector<std::string> &keys,
-                                 const std::vector<std::string> &values);
+    error_with<configuration_update_app_env_response>
+    set_app_envs(const std::string &app_name,
+                 const std::vector<std::string> &keys,
+                 const std::vector<std::string> &values);
     dsn::error_code del_app_envs(const std::string &app_name, const std::vector<std::string> &keys);
     // precondition:
     //  -- if clear_all = true, just ignore prefix
@@ -193,6 +182,11 @@ public:
                                                int original_partition_count,
                                                bool is_force);
     dsn::error_code clear_app_split_flags(const std::string &app_name);
+
+    void query_disk_info(
+        const std::vector<dsn::rpc_address> &targets,
+        const std::string &app_name,
+        /*out*/ std::map<dsn::rpc_address, error_with<query_disk_info_response>> &resps);
 
 private:
     bool static valid_app_char(int c);
@@ -247,9 +241,45 @@ private:
         return error_with<TResponse>(std::move(rpc.response()));
     }
 
+    /// Send request to multi replica server synchronously.
+    template <typename TRpcHolder, typename TResponse = typename TRpcHolder::response_type>
+    void call_rpcs_async(std::map<dsn::rpc_address, TRpcHolder> &rpcs,
+                         std::map<dsn::rpc_address, error_with<TResponse>> &resps,
+                         int reply_thread_hash = 0,
+                         bool enable_retry = true)
+    {
+        dsn::task_tracker tracker;
+        error_code err = ERR_UNKNOWN;
+        for (auto &rpc : rpcs) {
+            rpc.second.call(
+                rpc.first, &tracker, [&err, &resps, &rpcs, &rpc](error_code code) mutable {
+                    err = code;
+                    if (err == dsn::ERR_OK) {
+                        resps.emplace(rpc.first, std::move(rpc.second.response()));
+                        rpcs.erase(rpc.first);
+                    } else {
+                        resps.emplace(
+                            rpc.first,
+                            std::move(error_s::make(err, "unable to send rpc to server")));
+                    }
+                });
+        }
+        tracker.wait_outstanding_tasks();
+
+        if (enable_retry && rpcs.size() > 0) {
+            std::map<dsn::rpc_address, dsn::error_with<TResponse>> retry_resps;
+            call_rpcs_async(rpcs, retry_resps, reply_thread_hash, false);
+            for (auto &resp : retry_resps) {
+                resps.emplace(resp.first, std::move(resp.second));
+            }
+        }
+    }
+
 private:
     dsn::rpc_address _meta_server;
     dsn::task_tracker _tracker;
+
+    typedef rpc_holder<query_disk_info_request, query_disk_info_response> query_disk_info_rpc;
 };
 } // namespace replication
 } // namespace dsn

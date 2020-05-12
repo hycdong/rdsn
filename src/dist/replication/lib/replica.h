@@ -64,6 +64,7 @@ namespace replication {
 class replication_app_base;
 class replica_stub;
 class replication_checker;
+class replica_duplicator_manager;
 namespace test {
 class test_checker;
 }
@@ -100,8 +101,23 @@ public:
     //
     //    requests from clients
     //
-    void on_client_write(task_code code, dsn::message_ex *request, bool ignore_throttling = false);
-    void on_client_read(task_code code, dsn::message_ex *request);
+    void on_client_write(message_ex *request, bool ignore_throttling = false);
+    void on_client_read(message_ex *request);
+
+    //
+    //    Throttling
+    //
+
+    /// throttle write requests
+    /// \return true if request is throttled.
+    /// \see replica::on_client_write
+    bool throttle_request(throttling_controller &c, message_ex *request, int32_t req_units);
+    /// update throttling controllers
+    /// \see replica::update_app_envs
+    void update_throttle_envs(const std::map<std::string, std::string> &envs);
+    void update_throttle_env_internal(const std::map<std::string, std::string> &envs,
+                                      const std::string &key,
+                                      throttling_controller &cntl);
 
     //
     //    messages and tools from/for meta server
@@ -156,12 +172,25 @@ public:
     bool verbose_commit_log() const;
     dsn::task_tracker *tracker() { return &_tracker; }
 
-    // void json_state(std::stringstream& out) const;
+    //
+    // Duplication
+    //
+    replica_duplicator_manager *get_duplication_manager() const { return _duplication_mgr.get(); }
+    bool is_duplicating() const { return _duplicating; }
+
     void update_last_checkpoint_generate_time();
-    void update_commit_statistics(int count);
+
+    //
+    // Statistics
+    //
+    void update_commit_qps(int count);
 
     // routine for get extra envs from replica
     const std::map<std::string, std::string> &get_replica_extra_envs() const { return _extra_envs; }
+
+protected:
+    // this method is marked protected to enable us to mock it in unit tests.
+    virtual decree max_gced_decree_no_lock() const;
 
 private:
     // common helpers
@@ -176,6 +205,7 @@ private:
     error_code initialize_on_new();
     error_code initialize_on_load();
     error_code init_app_and_prepare_list(bool create_new);
+    decree get_replay_start_decree();
 
     /////////////////////////////////////////////////////////////////
     // 2pc
@@ -210,6 +240,17 @@ private:
     void notify_learn_completion();
     error_code apply_learned_state_from_private_log(learn_state &state);
 
+    // Gets the position where this round of the learning process should begin.
+    // This method is called on primary-side.
+    // TODO(wutao1): mark it const
+    decree get_learn_start_decree(const learn_request &req);
+
+    // This method differs with `_private_log->max_gced_decree()` in that
+    // it also takes `learn/` dir into account, since the learned logs are
+    // a part of plog as well.
+    // This method is called on learner-side.
+    decree get_max_gced_decree_for_learn() const;
+
     /////////////////////////////////////////////////////////////////
     // failure handling
     void handle_local_failure(error_code error);
@@ -238,10 +279,10 @@ private:
     bool is_same_ballot_status_change_allowed(partition_status::type olds,
                                               partition_status::type news);
 
-    // return false when update fails or replica is going to be closed
-    bool update_app_envs(const std::map<std::string, std::string> &envs);
+    void update_app_envs(const std::map<std::string, std::string> &envs);
     void update_app_envs_internal(const std::map<std::string, std::string> &envs);
-    bool query_app_envs(/*out*/ std::map<std::string, std::string> &envs);
+    void query_app_envs(/*out*/ std::map<std::string, std::string> &envs);
+
     bool update_configuration(const partition_configuration &config);
     bool update_local_configuration(const replica_configuration &config, bool same_ballot = false);
 
@@ -272,6 +313,7 @@ private:
     /////////////////////////////////////////////////////////////////
     // cold backup
     void clear_backup_checkpoint(const std::string &policy_name);
+    void background_clear_backup_checkpoint(const std::string &policy_name);
     void generate_backup_checkpoint(cold_backup_context_ptr backup_context);
     void trigger_async_checkpoint_for_backup(cold_backup_context_ptr backup_context);
     void wait_async_checkpoint_for_backup(cold_backup_context_ptr backup_context);
@@ -310,10 +352,8 @@ private:
     std::string query_compact_state() const;
 
     /////////////////////////////////////////////////////////////////
-    //
-    //      partition split
-    //
-    // TODO(heyuchen): remove virtual
+    // partition split
+
     // parent partition create child
     void on_add_child(const group_check_request &request);
 
@@ -321,38 +361,6 @@ private:
     void child_init_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
 
     void parent_prepare_states(const std::string &dir);
-
-    // return true if parent status is valid
-    bool parent_check_states();
-
-    void child_copy_states(learn_state lstate,
-                           std::vector<mutation_ptr> mutation_list,
-                           std::vector<std::string> files,
-                           uint64_t total_file_size,
-                           std::shared_ptr<prepare_list> plist);
-
-    // child replica async learn parent states(data, private log, mutations in memory)
-    virtual void apply_parent_state(error_code ec,
-                                    learn_state lstate,
-                                    std::vector<mutation_ptr> mutation_list,
-                                    std::vector<std::string> files,
-                                    uint64_t total_file_size,
-                                    decree last_committed_decree);
-    // child replica async learn parent state(private log, mutations in memory)
-    virtual error_code async_learn_mutation_private_log(std::vector<mutation_ptr> mutation_list,
-                                                        std::vector<std::string> files,
-                                                        uint64_t total_file_size,
-                                                        decree last_committed_decree);
-    // child catch up mutations while executing async learn task
-    virtual void child_catch_up();
-    // child catch up and notify primary parent
-    virtual void notify_primary_split_catch_up();
-
-    // primary receive child catch up request
-    virtual void on_notify_primary_split_catch_up(notify_catch_up_request request,
-                                                  notify_cacth_up_response &response);
-    // primary validate sync point which should be smaller than local last_committed_decree
-    virtual void check_sync_point(decree sync_point);
 
     // primary send update partition count request to replicas in the group
     // if is_update_child is true meaning to update child group partition count
@@ -409,10 +417,56 @@ private:
     // child partitions have been registered on meta, could be active
     void child_partition_active(const partition_configuration &config);
 
+    // child copy parent prepare list and call child_learn_states
+    void child_copy_prepare_list(learn_state lstate,
+                                 std::vector<mutation_ptr> mutation_list,
+                                 std::vector<std::string> plog_files,
+                                 uint64_t total_file_size,
+                                 std::shared_ptr<prepare_list> plist);
+
+    // child learn states(including checkpoint, private logs, in-memory mutations)
+    void child_learn_states(learn_state lstate,
+                            std::vector<mutation_ptr> mutation_list,
+                            std::vector<std::string> plog_files,
+                            uint64_t total_file_size,
+                            decree last_committed_decree);
+
+    // TODO(heyuchen): total_file_size is used for split perf-counter in further pull request
+    // Applies mutation logs that were learned from the parent of this child.
+    // This stage follows after that child applies the checkpoint of parent, and begins to apply the
+    // mutations.
+    // \param last_committed_decree: parent's last_committed_decree when the checkpoint was
+    // generated.
+    error_code child_apply_private_logs(std::vector<std::string> plog_files,
+                                        std::vector<mutation_ptr> mutation_list,
+                                        uint64_t total_file_size,
+                                        decree last_committed_decree);
+
+    // child catch up parent states while executing async learn task
+    void child_catch_up_states();
+
+    // child send notification to primary parent when it finish async learn
+    void child_notify_catch_up();
+
+    // primary parent handle child catch_up request
+    void parent_handle_child_catch_up(const notify_catch_up_request &request,
+                                      notify_cacth_up_response &response);
+
+    // primary parent check if sync_point has been committed
+    // sync_point is the first decree after parent send write request to child synchronously
+    void parent_check_sync_point_commit(decree sync_point);
+
+    // return true if parent status is valid
+    bool parent_check_states();
+
     // parent reset child information when partition split failed
     void parent_cleanup_split_context();
     // child suicide when partition split failed
     void child_handle_split_error(const std::string &error_msg);
+    // child handle error while async learn parent states
+    void child_handle_async_learn_error();
+
+    void init_table_level_latency_counters();
 
 private:
     friend class ::dsn::replication::replication_checker;
@@ -420,7 +474,10 @@ private:
     friend class ::dsn::replication::mutation_queue;
     friend class ::dsn::replication::replica_stub;
     friend class mock_replica;
-    friend class ::replication_service_test_app;
+    friend class throttling_controller_test;
+    friend class replica_learn_test;
+    friend class replica_duplicator_manager;
+    friend class load_mutation;
     friend class replica_split_test;
 
     // replica configuration, updated by update_local_configuration ONLY
@@ -466,9 +523,9 @@ private:
     primary_context _primary_states;
     secondary_context _secondary_states;
     potential_secondary_context _potential_secondary_states;
-    partition_split_context _split_states;
     // policy_name --> cold_backup_context
     std::map<std::string, cold_backup_context_ptr> _cold_backup_contexts;
+    partition_split_context _split_states;
 
     // timer task that running in replication-thread
     dsn::task_ptr _collect_info_timer;
@@ -491,7 +548,12 @@ private:
     bool _inactive_is_transient; // upgrade to P/S is allowed only iff true
     bool _is_initializing;       // when initializing, switching to primary need to update ballot
     bool _deny_client_write;     // if deny all write requests
-    throttling_controller _write_throttling_controller;
+    throttling_controller _write_qps_throttling_controller;  // throttling by requests-per-second
+    throttling_controller _write_size_throttling_controller; // throttling by bytes-per-second
+
+    // duplication
+    std::unique_ptr<replica_duplicator_manager> _duplication_mgr;
+    bool _duplicating{false};
 
     // partition split
     // _child_gpid = gpid({app_id},{pidx}+{old_partition_count}) for parent partition
@@ -507,11 +569,14 @@ private:
     perf_counter_wrapper _counter_private_log_size;
     perf_counter_wrapper _counter_recent_write_throttling_delay_count;
     perf_counter_wrapper _counter_recent_write_throttling_reject_count;
+    std::vector<perf_counter *> _counters_table_level_latency;
+    perf_counter_wrapper _counter_dup_disabled_non_idempotent_write_count;
+    perf_counter_wrapper _counter_backup_request_qps;
 
     dsn::task_tracker _tracker;
     // the thread access checker
     dsn::thread_access_checker _checker;
 };
 typedef dsn::ref_ptr<replica> replica_ptr;
-}
-} // namespace
+} // namespace replication
+} // namespace dsn

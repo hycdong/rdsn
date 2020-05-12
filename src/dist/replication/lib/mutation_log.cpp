@@ -24,22 +24,14 @@
  * THE SOFTWARE.
  */
 
-/*
- * Description:
- *     What is this file about?
- *
- * Revision history:
- *     xxxx-xx-xx, author, first version
- *     xxxx-xx-xx, author, fix bug about xxx
- */
-
 #include "mutation_log.h"
-#ifdef _WIN32
-#include <io.h>
-#endif
 #include "replica.h"
+#include "mutation_log_utils.h"
+
 #include <dsn/utility/filesystem.h>
 #include <dsn/utility/crc.h>
+#include <dsn/utility/fail_point.h>
+#include <dsn/dist/fmt_logging.h>
 #include <dsn/tool-api/async_calls.h>
 #include <dsn/dist/fmt_logging.h>
 
@@ -63,23 +55,9 @@ namespace replication {
 
     // init pending buffer
     if (nullptr == _pending_write) {
-        _pending_write.reset(log_file::prepare_log_block());
-        _pending_write_callbacks.reset(new callbacks());
-        _pending_write_mutations.reset(new mutations());
-        _pending_write_start_offset = mark_new_offset(0, true).second;
+        _pending_write = make_unique<log_block>(mark_new_offset(0, true).second);
     }
-
-    // save mutations
-    _pending_write_mutations->push_back(mu);
-
-    // save cb for pinning buffer
-    if (cb) {
-        _pending_write_callbacks->push_back(cb);
-    }
-
-    // write mutation to pending buffer
-    mu->data.header.log_offset = _pending_write_start_offset + _pending_write->size();
-    mu->write_to([this](blob bb) { _pending_write->add(bb); });
+    _pending_write->append_mutation(mu, cb);
 
     // update meta
     update_max_decree(mu->data.header.pid, d);
@@ -134,19 +112,13 @@ void mutation_log_shared::write_pending_mutations(bool release_lock_required)
     dassert(_pending_write != nullptr, "");
     dassert(_pending_write->size() > 0, "pending write size = %d", (int)_pending_write->size());
     auto pr = mark_new_offset(_pending_write->size(), false);
-    dassert(pr.second == _pending_write_start_offset,
-            "%" PRId64 " VS %" PRId64 "",
-            pr.second,
-            _pending_write_start_offset);
+    dcheck_eq(pr.second, _pending_write->start_offset());
 
     _is_writing.store(true, std::memory_order_release);
 
     // move or reset pending variables
     std::shared_ptr<log_block> blk = std::move(_pending_write);
-    std::shared_ptr<callbacks> pwu = std::move(_pending_write_callbacks);
-    std::shared_ptr<mutations> pmu = std::move(_pending_write_mutations);
-    int64_t start_offset = _pending_write_start_offset;
-    _pending_write_start_offset = 0;
+    int64_t start_offset = blk->start_offset();
 
     // seperate commit_log_block from within the lock
     _slock.unlock();
@@ -156,13 +128,7 @@ void mutation_log_shared::write_pending_mutations(bool release_lock_required)
         start_offset,
         LPC_WRITE_REPLICATION_LOG_SHARED,
         &_tracker,
-        [
-          this,
-          lf = pr.first,
-          block = blk,
-          callbacks = std::move(pwu),
-          mutations = std::move(pmu)
-        ](error_code err, size_t sz) mutable {
+        [ this, lf = pr.first, block = blk ](error_code err, size_t sz) mutable {
             dassert(_is_writing.load(std::memory_order_relaxed), "");
 
             auto hdr = (log_block_header *)block->front().data();
@@ -201,7 +167,7 @@ void mutation_log_shared::write_pending_mutations(bool release_lock_required)
 
             // notify the callbacks
             // ATTENTION: callback may be called before this code block executed done.
-            for (auto &c : *callbacks) {
+            for (auto &c : block->callbacks()) {
                 c->enqueue(err, sz);
             }
 
@@ -250,18 +216,10 @@ mutation_log_private::mutation_log_private(const std::string &dir,
 
     // init pending buffer
     if (nullptr == _pending_write) {
-        _pending_write.reset(log_file::prepare_log_block());
-        _pending_write_mutations.reset(new mutations());
-        _pending_write_start_offset = mark_new_offset(0, true).second;
+        _pending_write = make_unique<log_block>(mark_new_offset(0, true).second);
         _pending_write_start_time_ms = dsn_now_ms();
     }
-
-    // save mu for pinning buffer
-    _pending_write_mutations->push_back(mu);
-
-    // write mutation to pending buffer
-    mu->data.header.log_offset = _pending_write_start_offset + _pending_write->size();
-    mu->write_to([this](blob bb) { _pending_write->add(bb); });
+    _pending_write->append_mutation(mu, nullptr);
 
     // update meta
     _pending_write_max_commit =
@@ -290,22 +248,22 @@ mutation_log_private::mutation_log_private(const std::string &dir,
 bool mutation_log_private::get_learn_state_in_memory(decree start_decree,
                                                      binary_writer &writer) const
 {
-    std::shared_ptr<mutations> issued_mutations;
+    std::shared_ptr<log_block> issued_block;
     mutations pending_mutations;
     {
         zauto_lock l(_plock);
 
-        issued_mutations = _issued_write_mutations.lock();
+        issued_block = _issued_write.lock();
 
-        if (_pending_write_mutations) {
-            pending_mutations = *_pending_write_mutations;
+        if (_pending_write) {
+            pending_mutations = _pending_write->mutations();
         }
     }
 
     int learned_count = 0;
 
-    if (issued_mutations) {
-        for (auto &mu : *issued_mutations) {
+    if (issued_block) {
+        for (auto &mu : issued_block->mutations()) {
             if (mu->get_decree() >= start_decree) {
                 mu->write_to(writer, nullptr);
                 learned_count++;
@@ -327,18 +285,18 @@ void mutation_log_private::get_in_memory_mutations(decree start_decree,
                                                    ballot start_ballot,
                                                    std::vector<mutation_ptr> &mutation_list) const
 {
-    std::shared_ptr<mutations> issued_mutations;
+    std::shared_ptr<log_block> issued_block;
     mutations pending_mutations;
     {
         zauto_lock l(_plock);
-        issued_mutations = _issued_write_mutations.lock();
-        if (_pending_write_mutations) {
-            pending_mutations = *_pending_write_mutations;
+        issued_block = _issued_write.lock();
+        if (_pending_write) {
+            pending_mutations = _pending_write->mutations();
         }
     }
 
-    if (issued_mutations) {
-        for (auto &mu : *issued_mutations) {
+    if (issued_block) {
+        for (auto &mu : issued_block->mutations()) {
             // if start_ballot is invalid or equal to mu.ballot, check decree
             // otherwise check ballot
             ballot current_ballot =
@@ -395,10 +353,8 @@ void mutation_log_private::init_states()
     mutation_log::init_states();
 
     _is_writing.store(false, std::memory_order_release);
-    _issued_write_mutations.reset();
+    _issued_write.reset();
     _pending_write = nullptr;
-    _pending_write_mutations = nullptr;
-    _pending_write_start_offset = 0;
     _pending_write_start_time_ms = 0;
     _pending_write_max_commit = 0;
     _pending_write_max_decree = 0;
@@ -411,10 +367,7 @@ void mutation_log_private::write_pending_mutations(bool release_lock_required)
     dassert(_pending_write != nullptr, "");
     dassert(_pending_write->size() > 0, "pending write size = %d", (int)_pending_write->size());
     auto pr = mark_new_offset(_pending_write->size(), false);
-    dassert(pr.second == _pending_write_start_offset,
-            "%" PRId64 " VS %" PRId64 "",
-            pr.second,
-            _pending_write_start_offset);
+    dcheck_eq_replica(pr.second, _pending_write->start_offset());
 
     _is_writing.store(true, std::memory_order_release);
 
@@ -422,16 +375,15 @@ void mutation_log_private::write_pending_mutations(bool release_lock_required)
 
     // move or reset pending variables
     std::shared_ptr<log_block> blk = std::move(_pending_write);
-    _issued_write_mutations = _pending_write_mutations;
-    std::shared_ptr<mutations> pwu = std::move(_pending_write_mutations);
-    int64_t start_offset = _pending_write_start_offset;
-    _pending_write_start_offset = 0;
+    _issued_write = blk;
+    int64_t start_offset = blk->start_offset();
     _pending_write_start_time_ms = 0;
     decree max_commit = _pending_write_max_commit;
     _pending_write_max_commit = 0;
     _pending_write_max_decree = 0;
 
-    // seperate commit_log_block from within the lock
+    // Free plog from lock during committing log block, in the meantime
+    // new mutations can still be appended.
     _plock.unlock();
 
     pr.first->commit_log_block(
@@ -439,8 +391,7 @@ void mutation_log_private::write_pending_mutations(bool release_lock_required)
         start_offset,
         LPC_WRITE_REPLICATION_LOG_PRIVATE,
         &_tracker,
-        [ this, lf = pr.first, block = blk, mutations = std::move(pwu), max_commit ](
-            error_code err, size_t sz) mutable {
+        [ this, lf = pr.first, block = blk, max_commit ](error_code err, size_t sz) mutable {
             dassert(_is_writing.load(std::memory_order_relaxed), "");
 
             auto hdr = (log_block_header *)block->front().data();
@@ -809,7 +760,7 @@ error_code mutation_log::create_new_log_file()
         header_len = logf->write_file_header(temp_writer, _shared_log_info_map);
     }
 
-    log_block *blk = logf->prepare_log_block();
+    log_block *blk = new log_block();
     blk->add(temp_writer.get_buffer());
     _global_end_offset += blk->size();
 
@@ -878,7 +829,10 @@ std::pair<log_file_ptr, int64_t> mutation_log::mark_new_offset(size_t size,
 
         if (create_file) {
             auto ec = create_new_log_file();
-            dassert(ec == ERR_OK, "create new log file failed");
+            dassert_f(ec == ERR_OK,
+                      "{} create new log file failed: {}",
+                      _is_private ? _private_gpid.to_string() : "",
+                      ec);
             _switch_file_hint = false;
             _switch_file_demand = false;
         }
@@ -890,166 +844,6 @@ std::pair<log_file_ptr, int64_t> mutation_log::mark_new_offset(size_t size,
     _global_end_offset += size;
 
     return std::make_pair(_current_log_file, write_start_offset);
-}
-
-/*static*/ error_code mutation_log::replay(log_file_ptr log,
-                                           replay_callback callback,
-                                           /*out*/ int64_t &end_offset)
-{
-    end_offset = log->start_offset();
-    ddebug("start to replay mutation log %s, offset = [%" PRId64 ", %" PRId64 "), size = %" PRId64,
-           log->path().c_str(),
-           log->start_offset(),
-           log->end_offset(),
-           log->end_offset() - log->start_offset());
-
-    ::dsn::blob bb;
-    log->reset_stream();
-    error_code err = log->read_next_log_block(bb);
-    if (err != ERR_OK) {
-        return err;
-    }
-
-    std::shared_ptr<binary_reader> reader(new binary_reader(std::move(bb)));
-    end_offset += sizeof(log_block_header);
-
-    // read file header
-    end_offset += log->read_file_header(*reader);
-    if (!log->is_right_header()) {
-        return ERR_INVALID_DATA;
-    }
-
-    while (true) {
-        while (!reader->is_eof()) {
-            auto old_size = reader->get_remaining_size();
-            mutation_ptr mu = mutation::read_from(*reader, nullptr);
-            dassert(nullptr != mu, "");
-            mu->set_logged();
-
-            if (mu->data.header.log_offset != end_offset) {
-                derror("offset mismatch in log entry and mutation %" PRId64 " vs %" PRId64,
-                       end_offset,
-                       mu->data.header.log_offset);
-                err = ERR_INVALID_DATA;
-                break;
-            }
-
-            int log_length = old_size - reader->get_remaining_size();
-
-            callback(log_length, mu);
-
-            end_offset += log_length;
-        }
-
-        err = log->read_next_log_block(bb);
-        if (err != ERR_OK) {
-            // if an error occurs in an log mutation block, then the replay log is stopped
-            break;
-        }
-
-        reader.reset(new binary_reader(std::move(bb)));
-        end_offset += sizeof(log_block_header);
-    }
-
-    ddebug("finish to replay mutation log %s, err = %s", log->path().c_str(), err.to_string());
-    return err;
-}
-
-/*static*/ error_code mutation_log::replay(std::vector<std::string> &log_files,
-                                           replay_callback callback,
-                                           /*out*/ int64_t &end_offset)
-{
-    std::map<int, log_file_ptr> logs;
-    for (auto &fpath : log_files) {
-        error_code err;
-        log_file_ptr log = log_file::open_read(fpath.c_str(), err);
-        if (log == nullptr) {
-            if (err == ERR_HANDLE_EOF || err == ERR_INCOMPLETE_DATA ||
-                err == ERR_INVALID_PARAMETERS) {
-                dinfo("skip file %s during log replay", fpath.c_str());
-                continue;
-            } else {
-                return err;
-            }
-        }
-
-        dassert(
-            logs.find(log->index()) == logs.end(), "invalid log_index, index = %d", log->index());
-        logs[log->index()] = log;
-    }
-
-    return replay(logs, callback, end_offset);
-}
-
-/*static*/ error_code mutation_log::replay(std::map<int, log_file_ptr> &logs,
-                                           replay_callback callback,
-                                           /*out*/ int64_t &end_offset)
-{
-    int64_t g_start_offset = 0;
-    int64_t g_end_offset = 0;
-    error_code err = ERR_OK;
-    log_file_ptr last;
-    int last_file_index = 0;
-
-    if (logs.size() > 0) {
-        g_start_offset = logs.begin()->second->start_offset();
-        g_end_offset = logs.rbegin()->second->end_offset();
-        last_file_index = logs.begin()->first - 1;
-    }
-
-    // check file index continuity
-    for (auto &kv : logs) {
-        if (++last_file_index != kv.first) {
-            derror("log file missing with index %u", last_file_index);
-            return ERR_OBJECT_NOT_FOUND;
-        }
-    }
-
-    end_offset = g_start_offset;
-
-    for (auto &kv : logs) {
-        log_file_ptr &log = kv.second;
-
-        if (log->start_offset() != end_offset) {
-            derror("offset mismatch in log file offset and global offset %" PRId64 " vs %" PRId64,
-                   log->start_offset(),
-                   end_offset);
-            return ERR_INVALID_DATA;
-        }
-
-        last = log;
-        err = mutation_log::replay(log, callback, end_offset);
-
-        log->close();
-
-        if (err == ERR_OK || err == ERR_HANDLE_EOF) {
-            // do nothing
-        } else if (err == ERR_INCOMPLETE_DATA) {
-            // If the file is not corrupted, it may also return the value of ERR_INCOMPLETE_DATA.
-            // In this case, the correctness is relying on the check of start_offset.
-            dwarn("delay handling error: %s", err.to_string());
-        } else {
-            // for other errors, we should break
-            break;
-        }
-    }
-
-    if (err == ERR_OK || err == ERR_HANDLE_EOF) {
-        // the log may still be written when used for learning
-        dassert(g_end_offset <= end_offset,
-                "make sure the global end offset is correct: %" PRId64 " vs %" PRId64,
-                g_end_offset,
-                end_offset);
-        err = ERR_OK;
-    } else if (err == ERR_INCOMPLETE_DATA) {
-        // ignore the last incomplate block
-        err = ERR_OK;
-    } else {
-        // bad error
-        derror("replay mutation log failed: %s", err.to_string());
-    }
-
-    return err;
 }
 
 decree mutation_log::max_decree(gpid gpid) const
@@ -1074,36 +868,28 @@ decree mutation_log::max_commit_on_disk() const
     return _private_max_commit_on_disk;
 }
 
-decree mutation_log::max_gced_decree(gpid gpid, int64_t valid_start_offset) const
+decree mutation_log::max_gced_decree(gpid gpid) const
 {
-    check_valid_start_offset(gpid, valid_start_offset);
-
     zauto_lock l(_lock);
+    return max_gced_decree_no_lock(gpid);
+}
 
-    if (_log_files.size() == 0) {
-        if (_is_private)
-            return _private_log_info.max_decree;
-        else {
-            auto it = _shared_log_info_map.find(gpid);
-            if (it != _shared_log_info_map.end())
-                return it->second.max_decree;
-            else
-                return 0;
-        }
-    } else {
-        for (auto &log : _log_files) {
-            // when invalid log exits, all new logs are preserved (not gced)
-            if (valid_start_offset > log.second->start_offset())
-                return 0;
+decree mutation_log::max_gced_decree_no_lock(gpid gpid) const
+{
+    dassert(_is_private, "");
 
-            auto it = log.second->previous_log_max_decrees().find(gpid);
-            if (it != log.second->previous_log_max_decrees().end()) {
-                return it->second.max_decree;
-            } else
-                return 0;
+    decree result = invalid_decree;
+    for (auto &log : _log_files) {
+        auto it = log.second->previous_log_max_decrees().find(gpid);
+        if (it != log.second->previous_log_max_decrees().end()) {
+            if (result == invalid_decree) {
+                result = it->second.max_decree;
+            } else {
+                result = std::min(result, it->second.max_decree);
+            }
         }
-        return 0;
     }
+    return result;
 }
 
 void mutation_log::check_valid_start_offset(gpid gpid, int64_t valid_start_offset) const
@@ -1206,7 +992,7 @@ void mutation_log::update_max_decree_no_lock(gpid gpid, decree d)
             dassert(false, "replica has not been registered in the log before");
         }
     } else {
-        dassert(gpid == _private_gpid, "replica gpid does not match");
+        dcheck_eq(gpid, _private_gpid);
         if (d > _private_log_info.max_decree) {
             _private_log_info.max_decree = d;
         }
@@ -1248,6 +1034,11 @@ bool mutation_log::get_learn_state(gpid gpid, decree start, /*out*/ learn_state 
 
         if (state.meta.length() == 0 && start > _private_log_info.max_decree) {
             // no memory data and no disk data
+            ddebug_f("gpid({}) get_learn_state returns false"
+                     "learn_start_decree={}, max_decree_in_private_log={}",
+                     gpid,
+                     start,
+                     _private_log_info.max_decree);
             return false;
         }
 
@@ -1910,14 +1701,18 @@ public:
         }
         fill_buffers();
     }
+
+    // TODO(wutao1): use string_view instead of using blob.
+    // WARNING: the resulted blob is not guaranteed to be reference counted.
     // possible error_code:
     //  ERR_OK                      result would always size as expected
     //  ERR_HANDLE_EOF              if there are not enough data in file. result would still be
-    //  filled with possible data
+    //                              filled with possible data
     //  ERR_FILE_OPERATION_FAILED   filesystem failure
     error_code read_next(size_t size, /*out*/ blob &result)
     {
         binary_writer writer(size);
+
 #define TRY(x)                                                                                     \
     do {                                                                                           \
         auto _x = (x);                                                                             \
@@ -1926,6 +1721,7 @@ public:
             return _x;                                                                             \
         }                                                                                          \
     } while (0)
+
         TRY(_current_buffer->wait_ongoing_task());
         if (size < _current_buffer->length()) {
             result.assign(_current_buffer->_buffer.get(), _current_buffer->_begin, size);
@@ -1981,7 +1777,8 @@ private:
     }
 
     // buffer size, in bytes
-    static const size_t block_size_bytes = 1024 * 1024;
+    // TODO(wutao1): call it BLOCK_BYTES_SIZE
+    static constexpr size_t block_size_bytes = 1024 * 1024; // 1MB
     struct buffer_t
     {
         std::unique_ptr<char[]> _buffer; // with block_size
@@ -2144,11 +1941,11 @@ log_file::~log_file() { close(); }
 
 log_file::log_file(
     const char *path, disk_file *handle, int index, int64_t start_offset, bool is_read)
+    : _is_read(is_read)
 {
     _start_offset = start_offset;
     _end_offset = start_offset;
     _handle = handle;
-    _is_read = is_read;
     _path = path;
     _index = index;
     _crc32 = 0;
@@ -2166,6 +1963,8 @@ log_file::log_file(
 
 void log_file::close()
 {
+    zauto_lock lock(_write_lock);
+
     //_stream implicitly refer to _handle so it needs to be cleaned up first.
     // TODO: We need better abstraction to avoid those manual stuffs..
     _stream.reset(nullptr);
@@ -2180,6 +1979,7 @@ void log_file::close()
 void log_file::flush() const
 {
     dassert(!_is_read, "log file must be of write mode");
+    zauto_lock lock(_write_lock);
 
     if (_handle) {
         error_code err = file::flush(_handle);
@@ -2237,19 +2037,6 @@ error_code log_file::read_next_log_block(/*out*/ ::dsn::blob &bb)
     return ERR_OK;
 }
 
-log_block *log_file::prepare_log_block()
-{
-    log_block_header hdr;
-    hdr.magic = 0xdeadbeef;
-    hdr.length = 0;
-    hdr.body_crc = 0;
-    hdr.local_offset = 0;
-
-    binary_writer temp_writer;
-    temp_writer.write_pod(hdr);
-    return new log_block(temp_writer.get_buffer());
-}
-
 aio_task_ptr log_file::commit_log_block(log_block &block,
                                         int64_t offset,
                                         dsn::task_code evt,
@@ -2259,6 +2046,11 @@ aio_task_ptr log_file::commit_log_block(log_block &block,
 {
     dassert(!_is_read, "log file must be of write mode");
     dassert(block.size() > 0, "log_block can not be empty");
+
+    zauto_lock lock(_write_lock);
+    if (!_handle) {
+        return nullptr;
+    }
 
     auto size = (long long)block.size();
     int64_t local_offset = offset - start_offset();
@@ -2311,14 +2103,16 @@ aio_task_ptr log_file::commit_log_block(log_block &block,
     return tsk;
 }
 
-void log_file::reset_stream()
+void log_file::reset_stream(size_t offset /*default = 0*/)
 {
     if (_stream == nullptr) {
-        _stream.reset(new file_streamer(_handle, 0));
+        _stream.reset(new file_streamer(_handle, offset));
     } else {
-        _stream->reset(0);
+        _stream->reset(offset);
     }
-    _crc32 = 0;
+    if (offset == 0) {
+        _crc32 = 0;
+    }
 }
 
 decree log_file::previous_log_max_decree(const dsn::gpid &pid)
