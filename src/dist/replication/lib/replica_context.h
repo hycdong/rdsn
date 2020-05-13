@@ -579,7 +579,7 @@ public:
     uint64_t get_max_download_size() { return _max_download_size.load(); }
 
 private:
-    friend class ::dsn::replication::replica;
+    friend class replica;
     friend class replica_bulk_load_test;
 
     bulk_load_status::type _status{bulk_load_status::BLS_INVALID};
@@ -588,9 +588,9 @@ private:
     std::atomic<uint64_t> _cur_downloaded_size{0};
     std::atomic<uint64_t> _max_download_size{0};
     std::atomic<int32_t> _download_progress{0};
-    dsn::error_code _download_status{ERR_OK};
+    error_code _download_status{ERR_OK};
     // file_name -> downloading task
-    std::map<std::string, dsn::task_ptr> _bulk_load_download_task;
+    std::map<std::string, task_ptr> _bulk_load_download_task;
     uint64_t _bulk_load_start_time_ns{0};
     uint64_t _bulk_load_ingestion_start_time_ns{0};
 };

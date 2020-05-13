@@ -81,7 +81,7 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
     if (_primary_states.group_bulk_load_pending_replies.size() > 0) {
         dwarn_replica("{} group bulk_load replies are still pending, cancel it firstly",
                       static_cast<int>(_primary_states.group_bulk_load_pending_replies.size()));
-        for (const auto &it = _primary_states.group_bulk_load_pending_replies.begin();
+        for (auto it = _primary_states.group_bulk_load_pending_replies.begin();
              it != _primary_states.group_bulk_load_pending_replies.end();
              ++it) {
             it->second->cancel(true);

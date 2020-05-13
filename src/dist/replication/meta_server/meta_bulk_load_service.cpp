@@ -282,7 +282,7 @@ void bulk_load_service::partition_bulk_load(const std::string &app_name, const g
     }
 
     zauto_read_lock l(_lock);
-    app_bulk_load_info ainfo = _app_bulk_load_info[pid.get_app_id()];
+    const app_bulk_load_info &ainfo = _app_bulk_load_info[pid.get_app_id()];
     auto req = make_unique<bulk_load_request>();
     req->pid = pid;
     req->app_name = app_name;
