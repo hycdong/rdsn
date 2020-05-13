@@ -126,15 +126,11 @@ public:
     bool sync_send_write_request{false};
 
     /// Used for bulk load
-    // calls broadcast_group_bulk_load()
-    // created in replica::on_bulk_load()
-    // cancelled in cleanup() when status changed from PRIMARY to others
     // group bulk_load response tasks of RPC_GROUP_BULK_LOAD for each secondary replica
     node_tasks group_bulk_load_pending_replies;
-
     // bulk_load_state of secondary replicas
     std::unordered_map<rpc_address, partition_bulk_load_state> secondary_bulk_load_states;
-
+    // TODO(heyuchen): add comment
     bool is_ingestion_commit;
 };
 

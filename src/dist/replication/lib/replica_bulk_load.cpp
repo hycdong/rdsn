@@ -18,6 +18,7 @@ namespace replication {
 
 typedef rpc_holder<group_bulk_load_request, group_bulk_load_response> group_bulk_load_rpc;
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response)
 {
     _checker.only_one_thread_access();
@@ -69,6 +70,7 @@ void replica::on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_r
     broadcast_group_bulk_load(request);
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
 {
     if (!_primary_states.learners.empty()) {
@@ -77,10 +79,9 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
     }
 
     if (_primary_states.group_bulk_load_pending_replies.size() > 0) {
-        dwarn_replica(
-            "{} group bulk_load replies are still pending when doing next round, cancel it first",
-            static_cast<int>(_primary_states.group_bulk_load_pending_replies.size()));
-        for (auto it = _primary_states.group_bulk_load_pending_replies.begin();
+        dwarn_replica("{} group bulk_load replies are still pending, cancel it firstly",
+                      static_cast<int>(_primary_states.group_bulk_load_pending_replies.size()));
+        for (const auto &it = _primary_states.group_bulk_load_pending_replies.begin();
              it != _primary_states.group_bulk_load_pending_replies.end();
              ++it) {
             it->second->cancel(true);
@@ -113,6 +114,7 @@ void replica::broadcast_group_bulk_load(const bulk_load_request &meta_req)
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_group_bulk_load(const group_bulk_load_request &request,
                                  /*out*/ group_bulk_load_response &response)
 {
@@ -123,7 +125,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
     if (request.config.ballot < get_ballot()) {
         response.err = ERR_VERSION_OUTDATED;
         dwarn_replica(
-            "receive outdated group_bulk_load request, request ballot = {} VS loca ballot = {}",
+            "receive outdated group_bulk_load request, request ballot({}) VS loca ballot({})",
             request.config.ballot,
             get_ballot());
         return;
@@ -131,7 +133,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
     if (request.config.ballot > get_ballot()) {
         response.err = ERR_INVALID_STATE;
         dwarn_replica("receive group_bulk_load request, local ballot is outdated, request "
-                      "ballot = {} VS loca ballot = {}",
+                      "ballot({}) VS loca ballot({})",
                       request.config.ballot,
                       get_ballot());
         return;
@@ -144,7 +146,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
         return;
     }
 
-    ddebug_replica("process group bulk load request, primary = {}, ballot = {}, "
+    ddebug_replica("receive group_bulk_load request, primary address = {}, ballot = {}, "
                    "meta_bulk_load_status = {}, local bulk_load_status = {}",
                    request.config.primary.to_string(),
                    request.config.ballot,
@@ -164,6 +166,7 @@ void replica::on_group_bulk_load(const group_bulk_load_request &request,
     report_bulk_load_states_to_primary(request.meta_bulk_load_status, response);
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_group_bulk_load_reply(error_code err,
                                        const group_bulk_load_request &req,
                                        const group_bulk_load_response &resp)
@@ -180,7 +183,7 @@ void replica::on_group_bulk_load_reply(error_code err,
     _primary_states.group_bulk_load_pending_replies.erase(req.target_address);
 
     if (err != ERR_OK) {
-        derror_replica("get group_bulk_load_reply from {} failed, error = {}",
+        derror_replica("failed to receive group_bulk_load_reply from {}, error = {}",
                        req.target_address.to_string(),
                        err.to_string());
         _primary_states.reset_node_bulk_load_states(req.target_address, req.meta_bulk_load_status);
@@ -188,7 +191,7 @@ void replica::on_group_bulk_load_reply(error_code err,
     }
 
     if (resp.err != ERR_OK) {
-        derror_replica("on_group_bulk_load from {} failed, error = {}",
+        derror_replica("receive group_bulk_load response from {} failed, error = {}",
                        req.target_address.to_string(),
                        resp.err.to_string());
         _primary_states.reset_node_bulk_load_states(req.target_address, req.meta_bulk_load_status);
@@ -196,11 +199,11 @@ void replica::on_group_bulk_load_reply(error_code err,
     }
 
     if (req.config.ballot != get_ballot()) {
-        derror_replica(
-            "recevied wrong on_group_bulk_load_reply from {}, request ballot={}, current ballot={}",
-            req.target_address.to_string(),
-            req.config.ballot,
-            get_ballot());
+        derror_replica("recevied wrong group_bulk_load response from {}, request ballot = {}, "
+                       "current ballot = {}",
+                       req.target_address.to_string(),
+                       req.config.ballot,
+                       get_ballot());
         _primary_states.reset_node_bulk_load_states(req.target_address, req.meta_bulk_load_status);
     }
 
@@ -765,6 +768,7 @@ void replica::clear_bulk_load_states()
     _bulk_load_context.cleanup();
 }
 
+// TODO(heyuchen): refactor it
 replica::bulk_load_report_flag replica::get_report_flag(bulk_load_status::type meta_status,
                                                         bulk_load_status::type local_status)
 {
@@ -841,8 +845,8 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
     }
 
     partition_bulk_load_state bulk_load_state;
-    bulk_load_status::type cur_bulk_load_status = get_bulk_load_status();
-    bulk_load_report_flag flag = get_report_flag(remote_status, cur_bulk_load_status);
+    auto local_status = get_bulk_load_status();
+    auto flag = get_report_flag(remote_status, local_status);
     switch (flag) {
     case ReportDownloadProgress: {
         bulk_load_state.__set_download_progress(_bulk_load_context._download_progress.load());
@@ -855,13 +859,12 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
         bulk_load_state.__set_is_cleanuped(_bulk_load_context.is_cleanup());
         break;
     case ReportIsPaused:
-        bulk_load_state.__set_is_paused(cur_bulk_load_status == bulk_load_status::BLS_PAUSED);
+        bulk_load_state.__set_is_paused(local_status == bulk_load_status::BLS_PAUSED);
     case ReportNothing:
-        break;
     default:
         break;
     }
-    response.status = cur_bulk_load_status;
+    response.status = local_status;
     response.bulk_load_state = bulk_load_state;
 }
 
