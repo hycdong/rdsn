@@ -317,8 +317,6 @@ error_code meta_service::start()
     initialize_duplication_service();
     recover_duplication_from_meta_state();
 
-    _split_svc = dsn::make_unique<meta_split_service>(this);
-
     _state->register_cli_commands();
 
     _split_svc = dsn::make_unique<meta_split_service>(this);

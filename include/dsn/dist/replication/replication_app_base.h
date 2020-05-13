@@ -199,9 +199,6 @@ public:
     virtual ::dsn::error_code copy_checkpoint_to_dir(const char *checkpoint_dir,
                                                      /*output*/ int64_t *last_decree) = 0;
 
-    // when a replica finish partition split, should set partition_version for filtering data
-    virtual void set_partition_version(uint32_t partition_version) {}
-
     //
     // Query methods.
     //
@@ -236,7 +233,7 @@ public:
     // and write request, partition_version = -1.
     //
     // Thread-safe.
-    virtual void set_partition_version(int32_t partition_version){};
+    virtual void set_partition_version(int32_t partition_version) {}
 
 public:
     //

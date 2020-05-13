@@ -111,10 +111,6 @@ error_code prepare_list::prepare(mutation_ptr &mu, partition_status::type status
     //    return err;
 
     case partition_status::PS_INACTIVE: // only possible during init
-        // TODO(hyc): delete when fix init bug
-        // ddebug_f("{}: max_decree={}, _last_committed_decree={}", mu->name(), max_decree(),
-        // _last_committed_decree);
-
         if (mu->data.header.last_committed_decree > max_decree()) {
             reset(mu->data.header.last_committed_decree);
         } else if (mu->data.header.last_committed_decree > _last_committed_decree) {
@@ -148,6 +144,7 @@ void prepare_list::commit(decree d, commit_type ct)
     case COMMIT_TO_DECREE_HARD: {
         for (decree d0 = last_committed_decree() + 1; d0 <= d; d0++) {
             mutation_ptr mu = get_mutation_by_decree(d0);
+
             dassert_replica(
                 mu != nullptr && mu->is_logged(), "mutation {} is missing in prepare list", d0);
             dcheck_ge_replica(mu->data.header.ballot, last_bt);

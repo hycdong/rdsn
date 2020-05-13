@@ -56,8 +56,6 @@
 #include "replica_context.h"
 #include "throttling_controller.h"
 
-class replication_service_test_app;
-
 namespace dsn {
 namespace replication {
 

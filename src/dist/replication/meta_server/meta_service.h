@@ -60,9 +60,6 @@ class meta_split_service;
 namespace test {
 class test_checker;
 }
-namespace mss {
-class meta_storage;
-} // namespace mss
 
 DEFINE_TASK_CODE(LPC_DEFAULT_CALLBACK, TASK_PRIORITY_COMMON, dsn::THREAD_POOL_DEFAULT)
 
