@@ -353,7 +353,6 @@ private:
 
     /////////////////////////////////////////////////////////////////
     // partition split
-
     // parent partition create child
     void on_add_child(const group_check_request &request);
 
@@ -559,11 +558,12 @@ private:
     // _child_gpid = gpid({app_id},{pidx}+{old_partition_count}) for parent partition
     // _child_gpid.app_id = 0 for parent partition not in partition split and child partition
     dsn::gpid _child_gpid{0, 0};
-    // ballot when starting partition split because split will stop if ballot changed
+    // ballot when starting partition split and split will stop if ballot changed
     // _child_init_ballot = 0 if partition not in partition split
     ballot _child_init_ballot{0};
-    // _partition_version = partition_count-1, _partition_version = -1 when reject read/write
-    std::atomic<int> _partition_version;
+    // in normal cases, _partition_version = partition_count-1
+    // when replica reject client read write request, partition_version = -1
+    std::atomic<int32_t> _partition_version;
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

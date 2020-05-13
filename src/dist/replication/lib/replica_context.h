@@ -546,6 +546,7 @@ class partition_split_context
 public:
     bool cleanup(bool force);
     bool is_cleaned() const;
+
     uint64_t total_ms() const
     {
         return splitting_start_ts_ns > 0 ? (dsn_now_ns() - splitting_start_ts_ns) / 1000000 : 0;

@@ -391,7 +391,6 @@ error_code replica::child_apply_private_logs(std::vector<std::string> plog_files
 
     error_code ec;
     int64_t offset;
-
     // temp prepare_list used for apply states
     prepare_list plist(this,
                        _app->last_committed_decree(),

@@ -182,14 +182,6 @@ private:
     // cluster info
     void on_query_cluster_info(dsn::message_ex *req);
 
-    // split
-    void on_app_partition_split(app_partition_split_rpc rpc);
-    void on_register_child_on_meta(register_child_rpc rpc);
-    void on_query_child_state(query_child_state_rpc rpc);
-    void on_control_single_partition_split(control_single_partition_split_rpc rpc);
-    void on_cancel_app_partition_split(cancel_app_partition_split_rpc rpc);
-    void on_clear_partition_split_flag(clear_partition_split_flag_rpc rpc);
-
     // meta control
     void on_control_meta_level(dsn::message_ex *req);
     void on_start_recovery(dsn::message_ex *req);
@@ -208,6 +200,14 @@ private:
     void register_duplication_rpc_handlers();
     void recover_duplication_from_meta_state();
     void initialize_duplication_service();
+
+    // split
+    void on_app_partition_split(app_partition_split_rpc rpc);
+    void on_register_child_on_meta(register_child_rpc rpc);
+    void on_query_child_state(query_child_state_rpc rpc);
+    void on_control_single_partition_split(control_single_partition_split_rpc rpc);
+    void on_cancel_app_partition_split(cancel_app_partition_split_rpc rpc);
+    void on_clear_partition_split_flag(clear_partition_split_flag_rpc rpc);
 
     // common routines
     // ret:
