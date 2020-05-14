@@ -80,7 +80,7 @@ replica_stub::replica_stub(replica_state_subscriber subscriber /*= nullptr*/,
       _max_concurrent_bulk_load_downloading_count(5),
       _learn_app_concurrent_count(0),
       _fs_manager(false),
-      _bulk_load_recent_downloading_replica_count(0)
+      _bulk_load_downloading_count(0)
 {
 #ifdef DSN_ENABLE_GPERF
     _release_tcmalloc_memory_command = nullptr;
@@ -1763,7 +1763,7 @@ void replica_stub::on_gc()
                 bulk_load_running_count++;
                 bulk_load_max_download_file_size =
                     std::max(bulk_load_max_download_file_size,
-                             rep->_bulk_load_context.get_max_download_size());
+                             rep->_bulk_load_context.max_download_file_size());
                 bulk_load_max_ingestion_time_ms =
                     std::max(bulk_load_max_ingestion_time_ms,
                              rep->_bulk_load_context.ingestion_duration_ms());

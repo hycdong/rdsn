@@ -46,13 +46,13 @@ public:
         return resp.err;
     }
 
-    error_code test_do_download(const std::string &remote_file_name, bool is_update_progress)
+    error_code test_do_download()
     {
-        error_code err;
-        task_tracker tracker;
+        error_code download_err = ERR_OK;
+        uint64_t download_size = 0;
         _replica->do_download(
-            PROVIDER, LOCAL_DIR, remote_file_name, _fs.get(), is_update_progress, err, tracker);
-        return err;
+            PROVIDER, LOCAL_DIR, FILE_NAME, _fs.get(), download_err, download_size);
+        return download_err;
     }
 
     error_code test_parse_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta)
@@ -98,7 +98,7 @@ public:
 
     void test_update_download_progress(uint64_t file_size)
     {
-        _replica->update_download_progress(file_size);
+        _replica->update_bulk_load_download_progress(file_size, "test_file_name");
         _replica->tracker()->wait_outstanding_tasks();
     }
 
@@ -194,6 +194,10 @@ public:
     {
         std::string whole_name = utils::filesystem::path_combine(LOCAL_DIR, file_name);
         utils::filesystem::create_file(whole_name);
+        std::ofstream test_file;
+        test_file.open(whole_name);
+        test_file << "write some data.\n";
+        test_file.close();
 
         _file_meta.name = whole_name;
         utils::filesystem::md5sum(whole_name, _file_meta.md5);
@@ -296,7 +300,7 @@ public:
                                    int32_t download_progress)
     {
         _replica->_bulk_load_context._status = bulk_load_status::type::BLS_DOWNLOADING;
-        _replica->_bulk_load_context._file_total_size = file_total_size;
+        _replica->_bulk_load_context._metadata.file_total_size = file_total_size;
         _replica->_bulk_load_context._cur_downloaded_size = cur_downloaded_size;
         _replica->_bulk_load_context._download_progress = download_progress;
     }
@@ -422,11 +426,7 @@ public:
         stub->set_bulk_load_recent_downloading_replica_count(count);
     }
 
-    /// getter functions
-    uint64_t get_cur_downloaded_size()
-    {
-        return _replica->_bulk_load_context._cur_downloaded_size.load();
-    }
+    /// helper functions
 
     int32_t get_download_progress()
     {
@@ -548,36 +548,34 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_test)
 // do_download unit tests
 TEST_F(replica_bulk_load_test, do_download_remote_file_not_exist)
 {
-    ASSERT_EQ(test_do_download(FILE_NAME, false), ERR_CORRUPTION);
+    ASSERT_EQ(test_do_download(), ERR_CORRUPTION);
 }
 
 TEST_F(replica_bulk_load_test, do_download_file_md5_not_match)
 {
+    // local file exists, but md5 not matched with remote file
+    // expected to remove old local file and redownload it
     create_local_file(FILE_NAME);
     create_remote_file(FILE_NAME, 2333, "md5_not_match");
-    ASSERT_EQ(test_do_download(FILE_NAME, false), ERR_OK);
+    ASSERT_EQ(test_do_download(), ERR_OK);
 }
 
 TEST_F(replica_bulk_load_test, do_download_file_exist)
 {
     create_local_file(FILE_NAME);
-    _file_meta.size = 100; // mock file_size, otherwise file_size = 0
     create_remote_file(FILE_NAME, _file_meta.size, _file_meta.md5);
-
-    mock_downloading_progress(_file_meta.size, 0, 0);
-    ASSERT_EQ(test_do_download(FILE_NAME, true), ERR_OK);
-    ASSERT_EQ(_file_meta.size, get_cur_downloaded_size());
-    ASSERT_EQ(100, get_download_progress());
+    ASSERT_EQ(test_do_download(), ERR_OK);
 }
 
 TEST_F(replica_bulk_load_test, do_download_succeed)
 {
     create_local_file(FILE_NAME);
-    // remove local file to mock file not existed
+    create_remote_file(FILE_NAME, _file_meta.size, _file_meta.md5);
+    // remove local file to mock condition that file not existed
     std::string file_name = utils::filesystem::path_combine(LOCAL_DIR, FILE_NAME);
     utils::filesystem::remove_path(file_name);
-    create_remote_file(FILE_NAME, _file_meta.size, _file_meta.md5);
-    ASSERT_EQ(test_do_download(FILE_NAME, true), ERR_OK);
+
+    ASSERT_EQ(test_do_download(), ERR_OK);
 }
 
 // parse_bulk_load_metadata unit tests
@@ -590,7 +588,7 @@ TEST_F(replica_bulk_load_test, bulk_load_metadata_not_exist)
 
 TEST_F(replica_bulk_load_test, bulk_load_metadata_corrupt)
 {
-    create_local_file(METADATA); // create an empty metadata file
+    create_local_file(METADATA);
     bulk_load_metadata metadata;
     std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
     error_code ec = test_parse_bulk_load_metadata(metadata_file_name, metadata);

@@ -562,21 +562,29 @@ class bulk_load_context
 {
 public:
     bool cleanup_download_task();
-    void cleanup_download_prgress();
     void cleanup();
     bool is_cleanup();
-    uint64_t duration_ms() const
+
+    inline uint64_t duration_ms() const
     {
-        return _bulk_load_start_time_ns > 0 ? (dsn_now_ns() - _bulk_load_start_time_ns) / 1000000
-                                            : 0;
+        return _bulk_load_start_time_ms > 0 ? (dsn_now_ms() - _bulk_load_start_time_ms) : 0;
     }
-    uint64_t ingestion_duration_ms() const
+
+    inline uint64_t ingestion_duration_ms() const
     {
-        return _bulk_load_ingestion_start_time_ns > 0
-                   ? (dsn_now_ns() - _bulk_load_ingestion_start_time_ns) / 1000000
+        return _bulk_load_ingestion_start_time_ms > 0
+                   ? (dsn_now_ms() - _bulk_load_ingestion_start_time_ms)
                    : 0;
     }
-    uint64_t get_max_download_size() { return _max_download_size.load(); }
+
+    inline uint64_t max_download_file_size() const { return _max_download_file_size.load(); }
+
+    inline void set_max_download_file_size(uint64_t f_size)
+    {
+        if (f_size > _max_download_file_size.load()) {
+            _max_download_file_size.store(f_size);
+        }
+    }
 
 private:
     friend class replica;
@@ -584,15 +592,18 @@ private:
 
     bulk_load_status::type _status{bulk_load_status::BLS_INVALID};
     bulk_load_metadata _metadata;
-    uint64_t _file_total_size{0};
+
     std::atomic<uint64_t> _cur_downloaded_size{0};
-    std::atomic<uint64_t> _max_download_size{0};
     std::atomic<int32_t> _download_progress{0};
-    error_code _download_status{ERR_OK};
+    std::atomic<error_code> _download_status{ERR_OK};
     // file_name -> downloading task
-    std::map<std::string, task_ptr> _bulk_load_download_task;
-    uint64_t _bulk_load_start_time_ns{0};
-    uint64_t _bulk_load_ingestion_start_time_ns{0};
+    std::map<std::string, task_ptr> _download_task;
+
+    // Used for perf-counter
+    uint64_t _bulk_load_start_time_ms{0};
+    uint64_t _bulk_load_ingestion_start_time_ms{0};
+    // current replica max download file size
+    std::atomic<uint64_t> _max_download_file_size{0};
 };
 
 //---------------inline impl----------------------------------------------------------------

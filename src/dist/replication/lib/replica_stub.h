@@ -366,7 +366,7 @@ private:
     uint64_t _max_allowed_write_size;
 
     // bulk load
-    int32_t _bulk_load_recent_downloading_replica_count;
+    std::atomic_int _bulk_load_downloading_count;
 
     // performance counters
     perf_counter_wrapper _counter_replicas_count;

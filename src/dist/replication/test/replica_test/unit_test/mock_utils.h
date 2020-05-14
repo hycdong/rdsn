@@ -212,11 +212,11 @@ public:
 
     int32_t get_bulk_load_recent_downloading_replica_count()
     {
-        return _bulk_load_recent_downloading_replica_count;
+        return _bulk_load_downloading_count.load();
     }
     void set_bulk_load_recent_downloading_replica_count(int32_t count)
     {
-        _bulk_load_recent_downloading_replica_count = count;
+        _bulk_load_downloading_count.store(count);
     }
 
     /// helper functions

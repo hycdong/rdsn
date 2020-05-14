@@ -458,22 +458,23 @@ private:
                                   const std::string &provider_name);
 
     // download file from remote file system
-    // err = ERR_FILE_OPERATION_FAILED: local file system errors
-    // err = ERR_FS_INTERNAL: remote file system error
-    // err = ERR_CORRUPTION: file not exist or damaged or not pass verify
+    // download_err = ERR_FILE_OPERATION_FAILED: local file system errors
+    // download_err = ERR_FS_INTERNAL: remote file system error
+    // download_err = ERR_CORRUPTION: file not exist or damaged or not pass verify
+    // if download file succeed, download_err = ERR_OK and set download_file_size
     void do_download(const std::string &remote_dir,
                      const std::string &local_dir,
                      const std::string &file_name,
                      dist::block_service::block_filesystem *fs,
-                     bool is_update_progress,
-                     error_code &err,
-                     task_tracker &tracker);
+                     /*out*/ error_code &download_err,
+                     /*out*/ uint64_t &download_file_size);
 
     // \return ERR_FILE_OPERATION_FAILED: file not exist, get size failed, open file failed
     // \return ERR_CORRUPTION: parse failed
-    error_code parse_bulk_load_metadata(const std::string &fname, bulk_load_metadata &meta);
-    void update_download_progress(uint64_t file_size);
+    error_code parse_bulk_load_metadata(const std::string &fname, /*out*/ bulk_load_metadata &meta);
+
     bool verify_sst_files(const file_meta &f_meta, const std::string &local_dir);
+    void update_bulk_load_download_progress(uint64_t file_size, const std::string &file_name);
 
     void try_decrease_bulk_load_download_count();
     void bulk_load_check_download_finish();
@@ -501,9 +502,10 @@ private:
     void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
                                             /*out*/ group_bulk_load_response &response);
 
-    std::string get_remote_bulk_load_dir(const std::string &app_name,
-                                         const std::string &cluster_name,
-                                         uint32_t pidx)
+    //
+    inline std::string get_remote_bulk_load_dir(const std::string &app_name,
+                                                const std::string &cluster_name,
+                                                uint32_t pidx) const
     {
         std::ostringstream oss;
         oss << _options->bulk_load_provider_root << "/" << cluster_name << "/" << app_name << "/"
@@ -514,12 +516,6 @@ private:
     void set_bulk_load_status(bulk_load_status::type status)
     {
         _bulk_load_context._status = status;
-    }
-    void try_set_bulk_load_max_download_size(uint64_t f_size)
-    {
-        if (f_size > _bulk_load_context.get_max_download_size()) {
-            _bulk_load_context._max_download_size.store(f_size);
-        }
     }
 
 private:
