@@ -909,12 +909,6 @@ struct start_bulk_load_response
     2:string            hint_msg;
 }
 
-struct partition_download_progress
-{
-    1:i32               progress;
-    2:dsn.error_code    status;
-}
-
 struct partition_bulk_load_state
 {
     1:optional i32              download_progress = 0;

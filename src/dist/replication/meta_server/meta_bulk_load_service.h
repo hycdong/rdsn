@@ -123,6 +123,19 @@ private:
                                       const bulk_load_request &request,
                                       const bulk_load_response &response);
 
+    // if app is still in bulk load, resend bulk_load_request to primary after interval seconds
+    void try_resend_bulk_load_request_unlock(const std::string &app_name,
+                                             const gpid &pid,
+                                             const int32_t interval);
+
+    void try_resend_bulk_load_request(const std::string &app_name,
+                                      const gpid &pid,
+                                      const int32_t interval)
+    {
+        zauto_read_lock l(_lock);
+        try_resend_bulk_load_request_unlock(app_name, pid, interval);
+    }
+
     void handle_app_downloading(const bulk_load_response &response,
                                 const rpc_address &primary_addr);
 
@@ -134,7 +147,7 @@ private:
     void handle_bulk_load_finish(const bulk_load_response &response,
                                  const rpc_address &primary_addr);
 
-    void try_rollback_to_downloading(int32_t app_id, const std::string &app_name);
+    void try_rollback_to_downloading(const std::string &app_name, const gpid &pid);
 
     void handle_bulk_load_failed(int32_t app_id);
 

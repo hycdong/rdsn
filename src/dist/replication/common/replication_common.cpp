@@ -112,7 +112,6 @@ replication_options::replication_options()
     cold_backup_checkpoint_reserve_minutes = 10;
 
     max_concurrent_bulk_load_downloading_count = 5;
-    partition_bulk_load_interval_ms = 10000;
 }
 
 replication_options::~replication_options() {}
@@ -528,12 +527,6 @@ void replication_options::initialize()
                                              max_concurrent_bulk_load_downloading_count,
                                              "concurrent bulk load downloading replica count");
 
-    partition_bulk_load_interval_ms = (int32_t)dsn_config_get_value_uint64(
-        "replication",
-        "partition_bulk_load_interval_ms",
-        partition_bulk_load_interval_ms,
-        "every this period(ms) meta server send bulk load request to replica server");
-
     replica_helper::load_meta_servers(meta_servers);
 
     sanity_check();
@@ -654,7 +647,8 @@ const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
 const std::string bulk_load_constant::BULK_LOAD_METADATA("bulk_load_metadata");
 const std::string bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR(".bulk_load");
 const int32_t bulk_load_constant::PROGRESS_FINISHED = 100;
-const int32_t bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL_MS = 5000;
+const int32_t bulk_load_constant::BULK_LOAD_REQUEST_INTERVAL = 10;
+const int32_t bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL = 5;
 
 namespace cold_backup {
 std::string get_policy_path(const std::string &root, const std::string &policy_name)

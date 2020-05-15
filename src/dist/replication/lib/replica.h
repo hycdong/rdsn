@@ -493,10 +493,10 @@ private:
     void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
                                          bool report_metadata,
                                          /*out*/ bulk_load_response &response);
-    void report_group_download_progress(bulk_load_response &response);
-    void report_group_ingestion_status(bulk_load_response &response);
-    void report_group_context_clean_flag(bulk_load_response &response);
-    void report_group_is_paused(bulk_load_response &response);
+    void report_group_download_progress(/*out*/ bulk_load_response &response);
+    void report_group_ingestion_status(/*out*/ bulk_load_response &response);
+    void report_group_context_clean_flag(/*out*/ bulk_load_response &response);
+    void report_group_is_paused(/*out*/ bulk_load_response &response);
 
     // only called by secondary
     void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,

@@ -402,8 +402,6 @@ class start_bulk_load_request;
 
 class start_bulk_load_response;
 
-class partition_download_progress;
-
 class partition_bulk_load_state;
 
 class bulk_load_request;
@@ -6284,58 +6282,6 @@ public:
 void swap(start_bulk_load_response &a, start_bulk_load_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const start_bulk_load_response &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
-typedef struct _partition_download_progress__isset
-{
-    _partition_download_progress__isset() : progress(false), status(false) {}
-    bool progress : 1;
-    bool status : 1;
-} _partition_download_progress__isset;
-
-class partition_download_progress
-{
-public:
-    partition_download_progress(const partition_download_progress &);
-    partition_download_progress(partition_download_progress &&);
-    partition_download_progress &operator=(const partition_download_progress &);
-    partition_download_progress &operator=(partition_download_progress &&);
-    partition_download_progress() : progress(0) {}
-
-    virtual ~partition_download_progress() throw();
-    int32_t progress;
-    ::dsn::error_code status;
-
-    _partition_download_progress__isset __isset;
-
-    void __set_progress(const int32_t val);
-
-    void __set_status(const ::dsn::error_code &val);
-
-    bool operator==(const partition_download_progress &rhs) const
-    {
-        if (!(progress == rhs.progress))
-            return false;
-        if (!(status == rhs.status))
-            return false;
-        return true;
-    }
-    bool operator!=(const partition_download_progress &rhs) const { return !(*this == rhs); }
-
-    bool operator<(const partition_download_progress &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(partition_download_progress &a, partition_download_progress &b);
-
-inline std::ostream &operator<<(std::ostream &out, const partition_download_progress &obj)
 {
     obj.printTo(out);
     return out;

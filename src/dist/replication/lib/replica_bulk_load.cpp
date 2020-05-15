@@ -223,7 +223,7 @@ error_code replica::do_bulk_load(const std::string &app_name,
     bulk_load_status::type local_status = get_bulk_load_status();
     error_code ec = validate_bulk_load_status(meta_status, local_status);
     if (ec != ERR_OK) {
-        derror_replica("invalid bulk load status, remote={}, local={}",
+        derror_replica("invalid bulk load status, remote = {}, local = {}",
                        enum_to_string(meta_status),
                        enum_to_string(local_status));
         return ec;
@@ -661,10 +661,12 @@ void replica::try_decrease_bulk_load_download_count()
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::bulk_load_check_download_finish()
 {
     if (_bulk_load_context._download_progress.load() == bulk_load_constant::PROGRESS_FINISHED &&
         get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
+        ddebug_replica("download all files succeed");
         set_bulk_load_status(bulk_load_status::BLS_DOWNLOADED);
         _bulk_load_context.cleanup_download_task();
         try_decrease_bulk_load_download_count();
@@ -873,10 +875,13 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
     response.bulk_load_state = bulk_load_state;
 }
 
-void replica::report_group_download_progress(bulk_load_response &response)
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::report_group_download_progress(/*out*/ bulk_load_response &response)
 {
     if (status() != partition_status::PS_PRIMARY) {
-        dwarn_replica("receive request with wrong status {}", enum_to_string(status()));
+        dwarn_replica("replica status={}, should be {}",
+                      enum_to_string(status()),
+                      enum_to_string(partition_status::PS_PRIMARY));
         response.err = ERR_INVALID_STATE;
         return;
     }
@@ -885,15 +890,14 @@ void replica::report_group_download_progress(bulk_load_response &response)
     p_state.__set_download_progress(_bulk_load_context._download_progress.load());
     p_state.__set_download_status(_bulk_load_context._download_status.load());
     response.group_bulk_load_state[_primary_states.membership.primary] = p_state;
-    ddebug_replica("primary = {}, download progress = {}%, status={}",
+    ddebug_replica("primary = {}, download progress = {}%, status = {}",
                    _primary_states.membership.primary.to_string(),
                    p_state.download_progress,
                    p_state.download_status.to_string());
 
     int32_t total_progress = p_state.download_progress;
     for (const auto &target_address : _primary_states.membership.secondaries) {
-        partition_bulk_load_state s_state =
-            _primary_states.secondary_bulk_load_states[target_address];
+        const auto &s_state = _primary_states.secondary_bulk_load_states[target_address];
         int32_t s_progress = s_state.__isset.download_progress ? s_state.download_progress : 0;
         error_code s_status = s_state.__isset.download_status ? s_state.download_status : ERR_OK;
         ddebug_replica("secondary = {}, download progress = {}%, status={}",
@@ -906,7 +910,6 @@ void replica::report_group_download_progress(bulk_load_response &response)
 
     total_progress /= _primary_states.membership.max_replica_count;
     ddebug_replica("total download progress = {}%", total_progress);
-
     response.__set_total_download_progress(total_progress);
 }
 

@@ -400,6 +400,7 @@ public:
         fail::setup();
         fail::cfg("meta_check_bulk_load_request_params", "return()");
         fail::cfg("meta_bulk_load_partition_bulk_load", "return()");
+        fail::cfg("meta_bulk_load_resend_request", "return()");
 
         auto resp = start_bulk_load(APP_NAME);
         ASSERT_EQ(resp.err, ERR_OK);
