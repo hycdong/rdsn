@@ -284,27 +284,28 @@ private:
         return oss.str();
     }
 
-    bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
+    inline bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
     {
         zauto_read_lock l(_lock);
         return get_app_bulk_load_status_unlock(app_id);
     }
 
-    bulk_load_status::type get_app_bulk_load_status_unlock(int32_t app_id)
+    inline bulk_load_status::type get_app_bulk_load_status_unlock(int32_t app_id) const
     {
-        if (_app_bulk_load_info.find(app_id) != _app_bulk_load_info.end()) {
-            return _app_bulk_load_info[app_id].status;
+        const auto &iter = _app_bulk_load_info.find(app_id);
+        if (iter != _app_bulk_load_info.end()) {
+            return iter->second.status;
         } else {
             return bulk_load_status::BLS_INVALID;
         }
     }
 
-    bool is_app_bulk_loading_unlock(int32_t app_id)
+    inline bool is_app_bulk_loading_unlock(int32_t app_id) const
     {
-        return (_bulk_load_app_id.find(app_id) == _bulk_load_app_id.end() ? false : true);
+        return (_bulk_load_app_id.find(app_id) != _bulk_load_app_id.end());
     }
 
-    bool is_partition_metadata_not_updated(gpid pid)
+    inline bool is_partition_metadata_not_updated(gpid pid)
     {
         zauto_read_lock l(_lock);
         return is_partition_metadata_not_updated_unlock(pid);

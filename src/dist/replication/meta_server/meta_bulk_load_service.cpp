@@ -319,17 +319,18 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
     int32_t interval_ms = _meta_svc->get_options().partition_bulk_load_interval_ms;
 
     if (err != ERR_OK) {
-        dwarn_f("app({}), partition({}) failed to recevie bulk load response, error = {}",
-                pid.get_app_id(),
-                pid,
-                err.to_string());
+        derror_f("app({}), partition({}) failed to recevie bulk load response, error = {}",
+                 pid.get_app_id(),
+                 pid,
+                 err.to_string());
         try_rollback_to_downloading(pid.get_app_id(), app_name);
     } else if (response.err == ERR_OBJECT_NOT_FOUND || response.err == ERR_INVALID_STATE) {
-        dwarn_f("app({}), partition({}) doesn't exist or has invalid state on node({}), error = {}",
-                app_name,
-                pid,
-                primary_addr.to_string(),
-                response.err.to_string());
+        derror_f(
+            "app({}), partition({}) doesn't exist or has invalid state on node({}), error = {}",
+            app_name,
+            pid,
+            primary_addr.to_string(),
+            response.err.to_string());
         try_rollback_to_downloading(pid.get_app_id(), app_name);
     } else if (response.err == ERR_BUSY) {
         dwarn_f("node({}) has enough replicas downloading, wait to next round to send bulk load "
@@ -345,7 +346,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
                  response.err.to_string(),
                  dsn::enum_to_string(response.primary_bulk_load_status));
         handle_bulk_load_failed(pid.get_app_id());
-    } else {
+    } else { // response.err = ERR_OK
         ballot current_ballot;
         {
             zauto_read_lock l(app_lock());
@@ -359,7 +360,6 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
             }
             current_ballot = app->partitions[pid.get_partition_index()].ballot;
         }
-
         if (request.ballot < current_ballot) {
             dwarn_f("receive out-date response, app({}), partition({}), request ballot = {}, "
                     "current ballot= {}",
@@ -370,31 +370,39 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
             try_rollback_to_downloading(pid.get_app_id(), app_name);
         }
 
-        // do bulk load
+        // handle bulk load states reported from primary replica
         bulk_load_status::type app_status = get_app_bulk_load_status(response.pid.get_app_id());
-        if (app_status == bulk_load_status::BLS_DOWNLOADING) {
+        switch (app_status) {
+        case bulk_load_status::BLS_DOWNLOADING:
             handle_app_downloading(response, primary_addr);
-        } else if (app_status == bulk_load_status::BLS_DOWNLOADED) {
+            break;
+        case bulk_load_status::BLS_DOWNLOADED:
+            handle_app_downloaded(response);
             // when app status or partition status is ingesting, send request frequently
             interval_ms = bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL_MS;
-            handle_app_downloaded(response);
-        } else if (app_status == bulk_load_status::BLS_INGESTING) {
-            interval_ms = bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL_MS;
+            break;
+        case bulk_load_status::BLS_INGESTING:
             handle_app_ingestion(response, primary_addr);
-        } else if (app_status == bulk_load_status::BLS_SUCCEED ||
-                   app_status == bulk_load_status::BLS_FAILED ||
-                   app_status == bulk_load_status::BLS_CANCELED) {
+            interval_ms = bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL_MS;
+            break;
+        case bulk_load_status::BLS_SUCCEED:
+        case bulk_load_status::BLS_FAILED:
+        case bulk_load_status::BLS_CANCELED:
             handle_bulk_load_finish(response, primary_addr);
-        } else if (app_status == bulk_load_status::BLS_PAUSING) {
+            break;
+        case bulk_load_status::BLS_PAUSING:
             handle_app_pausing(response, primary_addr);
-        } else if (app_status == bulk_load_status::BLS_PAUSED) {
+            break;
+        case bulk_load_status::BLS_PAUSED:
             // paused not send request to replica servers
             return;
-        } else {
+        default:
             // do nothing in other status
+            break;
         }
     }
 
+    // resend bulk_load_request to primary after interval_ms if app is still in bulk load
     zauto_read_lock l(_lock);
     if (is_app_bulk_loading_unlock(pid.get_app_id())) {
         tasking::enqueue(LPC_META_STATE_NORMAL,
@@ -409,8 +417,8 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
 void bulk_load_service::handle_app_downloading(const bulk_load_response &response,
                                                const rpc_address &primary_addr)
 {
-    std::string app_name = response.app_name;
-    gpid pid = response.pid;
+    const std::string &app_name = response.app_name;
+    const gpid &pid = response.pid;
 
     if (!response.__isset.total_download_progress) {
         dwarn_f(
@@ -423,10 +431,8 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
         return;
     }
 
-    for (auto iter = response.group_bulk_load_state.begin();
-         iter != response.group_bulk_load_state.end();
-         ++iter) {
-        partition_bulk_load_state states = iter->second;
+    for (const auto kv : response.group_bulk_load_state) {
+        partition_bulk_load_state states = kv.second;
         if (!states.__isset.download_progress || !states.__isset.download_status) {
             dwarn_f("recevie bulk load response from node({}) app({}), partition({}), "
                     "primary_status({}), "
@@ -435,19 +441,17 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
                     app_name,
                     pid,
                     dsn::enum_to_string(response.primary_bulk_load_status),
-                    iter->first.to_string());
+                    kv.first.to_string());
             return;
         }
-
         // check partition download status
         if (states.download_status != ERR_OK) {
-            dwarn_f(
-                "app({}) partition({}) meet error during downloading sst files, node address = {}, "
-                "error = {}",
-                app_name,
-                pid,
-                iter->first.to_string(),
-                states.download_status.to_string());
+            derror_f("app({}) partition({}) on node({}) meet error during downloading sst files, "
+                     "error = {}",
+                     app_name,
+                     pid,
+                     kv.first.to_string(),
+                     states.download_status.to_string());
             handle_bulk_load_failed(pid.get_app_id());
             return;
         }
@@ -464,7 +468,7 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
              "total_download_progress = {}",
              primary_addr.to_string(),
              app_name,
-             pid.to_string(),
+             pid,
              dsn::enum_to_string(response.primary_bulk_load_status),
              total_progress);
     {
@@ -475,9 +479,8 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
 
     // update partition status to `downloaded` if all replica downloaded
     if (total_progress >= bulk_load_constant::PROGRESS_FINISHED) {
-        ddebug_f("app({}) partirion({}) download files from remote provider succeed",
-                 app_name,
-                 pid.to_string());
+        ddebug_f(
+            "app({}) partirion({}) download all files from remote provider succeed", app_name, pid);
         update_partition_status_on_remote_stroage(app_name, pid, bulk_load_status::BLS_DOWNLOADED);
     }
 }
@@ -490,16 +493,17 @@ void bulk_load_service::update_partition_metadata_on_remote_stroage(
     partition_bulk_load_info pinfo = _partition_bulk_load_info[pid];
     pinfo.metadata = metadata;
     blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
-    std::string path = get_partition_bulk_load_path(pid);
+
     _meta_svc->get_meta_storage()->set_data(
-        std::move(path), std::move(value), [this, app_name, pid, pinfo]() {
+        get_partition_bulk_load_path(pid), std::move(value), [this, app_name, pid, pinfo]() {
             zauto_write_lock l(_lock);
             _partition_bulk_load_info[pid] = pinfo;
-            ddebug_f("app({}) update partition({}) bulk load metadata, file count={}, file size={}",
-                     app_name,
-                     pid.to_string(),
-                     pinfo.metadata.files.size(),
-                     pinfo.metadata.file_total_size);
+            ddebug_f(
+                "app({}) update partition({}) bulk load metadata, file count = {}, file size = {}",
+                app_name,
+                pid,
+                pinfo.metadata.files.size(),
+                pinfo.metadata.file_total_size);
         });
 }
 
