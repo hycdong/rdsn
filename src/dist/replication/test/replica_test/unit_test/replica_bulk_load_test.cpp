@@ -182,13 +182,6 @@ public:
         return _replica->validate_bulk_load_status(meta_status, local_status) == ERR_OK;
     }
 
-    bool test_get_report_flag(bulk_load_status::type meta_status,
-                              bulk_load_status::type local_status,
-                              replica::bulk_load_report_flag expected)
-    {
-        return (_replica->get_report_flag(meta_status, local_status) == expected);
-    }
-
     /// mock structure functions
     void create_local_file(const std::string &file_name)
     {
@@ -1032,45 +1025,6 @@ TEST_F(replica_bulk_load_test, validate_bulk_load_status_test)
 
     for (auto test : tests) {
         ASSERT_EQ(validate_status(test.meta_status, test.local_status), test.expected_flag);
-    }
-}
-
-// get_report_flag unit test
-TEST_F(replica_bulk_load_test, get_report_flag_test)
-{
-    struct test_struct
-    {
-        bulk_load_status::type meta_status;
-        bulk_load_status::type local_status;
-        replica::bulk_load_report_flag expected_flag;
-    } tests[] = {
-        {bulk_load_status::BLS_INVALID, bulk_load_status::BLS_INVALID, replica::ReportNothing},
-        {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INVALID, replica::ReportNothing},
-        {bulk_load_status::BLS_DOWNLOADING,
-         bulk_load_status::BLS_DOWNLOADING,
-         replica::ReportDownloadProgress},
-        {bulk_load_status::BLS_DOWNLOADING,
-         bulk_load_status::BLS_DOWNLOADED,
-         replica::ReportDownloadProgress},
-        {bulk_load_status::BLS_DOWNLOADED,
-         bulk_load_status::BLS_DOWNLOADING,
-         replica::ReportDownloadProgress},
-        {bulk_load_status::BLS_DOWNLOADED,
-         bulk_load_status::BLS_DOWNLOADED,
-         replica::ReportDownloadProgress},
-        {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_DOWNLOADED, replica::ReportNothing},
-        {bulk_load_status::BLS_INGESTING,
-         bulk_load_status::BLS_INGESTING,
-         replica::ReportIngestionStatus},
-        {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INGESTING, replica::ReportNothing},
-        {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_SUCCEED, replica::ReportCleanupFlag},
-        {bulk_load_status::BLS_SUCCEED, bulk_load_status::BLS_INVALID, replica::ReportCleanupFlag},
-        {bulk_load_status::BLS_FAILED, bulk_load_status::BLS_INVALID, replica::ReportCleanupFlag},
-        {bulk_load_status::BLS_CANCELED, bulk_load_status::BLS_INVALID, replica::ReportCleanupFlag},
-        {bulk_load_status::BLS_PAUSING, bulk_load_status::BLS_PAUSED, replica::ReportIsPaused}};
-
-    for (auto test : tests) {
-        ASSERT_TRUE(test_get_report_flag(test.meta_status, test.local_status, test.expected_flag));
     }
 }
 

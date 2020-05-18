@@ -192,15 +192,6 @@ protected:
     virtual decree max_gced_decree_no_lock() const;
 
 private:
-    enum bulk_load_report_flag
-    {
-        ReportNothing = 0,
-        ReportDownloadProgress,
-        ReportIngestionStatus,
-        ReportCleanupFlag,
-        ReportIsPaused
-    };
-
     // common helpers
     void init_state();
     void response_client_read(dsn::message_ex *request, error_code error);
@@ -487,8 +478,6 @@ private:
 
     void pause_bulk_load();
 
-    bulk_load_report_flag get_report_flag(bulk_load_status::type meta_status,
-                                          bulk_load_status::type local_status);
     // only called by primary
     void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
                                          bool report_metadata,
@@ -530,7 +519,6 @@ private:
     friend class load_mutation;
     friend class replica_split_test;
     friend class replica_bulk_load_test;
-    FRIEND_TEST(replica_bulk_load_test, get_report_flag_test);
 
     // replica configuration, updated by update_local_configuration ONLY
     replica_configuration _config;

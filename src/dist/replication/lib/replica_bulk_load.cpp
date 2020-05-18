@@ -789,38 +789,6 @@ void replica::clear_bulk_load_states()
     _bulk_load_context.cleanup();
 }
 
-// TODO(heyuchen): refactor it
-replica::bulk_load_report_flag replica::get_report_flag(bulk_load_status::type meta_status,
-                                                        bulk_load_status::type local_status)
-{
-    if (local_status == bulk_load_status::BLS_DOWNLOADING ||
-        (local_status == bulk_load_status::BLS_DOWNLOADED &&
-         meta_status != bulk_load_status::BLS_INGESTING)) {
-        return ReportDownloadProgress;
-    }
-
-    if (local_status == bulk_load_status::BLS_INGESTING &&
-        meta_status == bulk_load_status::BLS_INGESTING) {
-        return ReportIngestionStatus;
-    }
-
-    if (((local_status == bulk_load_status::BLS_SUCCEED ||
-          local_status == bulk_load_status::BLS_INVALID) &&
-         meta_status == bulk_load_status::BLS_SUCCEED) ||
-        meta_status == bulk_load_status::BLS_FAILED ||
-        meta_status == bulk_load_status::BLS_CANCELED) {
-        return ReportCleanupFlag;
-    }
-
-    if ((local_status == bulk_load_status::BLS_PAUSING ||
-         local_status == bulk_load_status::BLS_PAUSED) &&
-        meta_status == bulk_load_status::BLS_PAUSING) {
-        return ReportIsPaused;
-    }
-
-    return ReportNothing;
-}
-
 void replica::report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
                                               bool report_metadata,
                                               bulk_load_response &response)
@@ -834,21 +802,21 @@ void replica::report_bulk_load_states_to_meta(bulk_load_status::type remote_stat
         response.__set_metadata(_bulk_load_context._metadata);
     }
 
-    bulk_load_report_flag flag = get_report_flag(remote_status, get_bulk_load_status());
-    switch (flag) {
-    case ReportDownloadProgress:
+    switch (remote_status) {
+    case bulk_load_status::BLS_DOWNLOADING:
+    case bulk_load_status::BLS_DOWNLOADED:
         report_group_download_progress(response);
         break;
-    case ReportIngestionStatus:
+    case bulk_load_status::BLS_INGESTING:
         report_group_ingestion_status(response);
         break;
-    case ReportCleanupFlag:
+    case bulk_load_status::BLS_SUCCEED:
+    case bulk_load_status::BLS_FAILED:
+    case bulk_load_status::BLS_CANCELED:
         report_group_context_clean_flag(response);
         break;
-    case ReportIsPaused:
+    case bulk_load_status::BLS_PAUSING:
         report_group_is_paused(response);
-        break;
-    case ReportNothing:
         break;
     default:
         break;
@@ -867,24 +835,27 @@ void replica::report_bulk_load_states_to_primary(bulk_load_status::type remote_s
 
     partition_bulk_load_state bulk_load_state;
     auto local_status = get_bulk_load_status();
-    auto flag = get_report_flag(remote_status, local_status);
-    switch (flag) {
-    case ReportDownloadProgress: {
+    switch (remote_status) {
+    case bulk_load_status::BLS_DOWNLOADING:
+    case bulk_load_status::BLS_DOWNLOADED:
         bulk_load_state.__set_download_progress(_bulk_load_context._download_progress.load());
         bulk_load_state.__set_download_status(_bulk_load_context._download_status.load());
-    } break;
-    case ReportIngestionStatus:
+        break;
+    case bulk_load_status::BLS_INGESTING:
         bulk_load_state.__set_ingest_status(_app->get_ingestion_status());
         break;
-    case ReportCleanupFlag:
+    case bulk_load_status::BLS_SUCCEED:
+    case bulk_load_status::BLS_FAILED:
+    case bulk_load_status::BLS_CANCELED:
         bulk_load_state.__set_is_cleanuped(_bulk_load_context.is_cleanup());
         break;
-    case ReportIsPaused:
+    case bulk_load_status::BLS_PAUSING:
         bulk_load_state.__set_is_paused(local_status == bulk_load_status::BLS_PAUSED);
-    case ReportNothing:
+        break;
     default:
         break;
     }
+
     response.status = local_status;
     response.bulk_load_state = bulk_load_state;
 }
