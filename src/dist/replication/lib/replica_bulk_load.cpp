@@ -275,6 +275,13 @@ error_code replica::validate_bulk_load_status(bulk_load_status::type meta_status
 {
     error_code err = ERR_OK;
     switch (meta_status) {
+    case bulk_load_status::BLS_DOWNLOADING:
+        if (local_status == bulk_load_status::BLS_FAILED ||
+            local_status == bulk_load_status::BLS_PAUSING ||
+            local_status == bulk_load_status::BLS_CANCELED) {
+            err = ERR_INVALID_STATE;
+        }
+        break;
     case bulk_load_status::BLS_DOWNLOADED:
         if (local_status != bulk_load_status::BLS_DOWNLOADED) {
             err = ERR_INVALID_STATE;
@@ -301,6 +308,13 @@ error_code replica::validate_bulk_load_status(bulk_load_status::type meta_status
             local_status != bulk_load_status::BLS_PAUSED) {
             err = ERR_INVALID_STATE;
         }
+        break;
+    case bulk_load_status::BLS_PAUSED:
+        err = ERR_INVALID_STATE;
+        break;
+    case bulk_load_status::BLS_INVALID:
+    case bulk_load_status::BLS_CANCELED:
+    case bulk_load_status::BLS_FAILED:
         break;
     default:
         break;

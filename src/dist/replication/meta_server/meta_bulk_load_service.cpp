@@ -682,6 +682,7 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
 // ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::try_rollback_to_downloading(const std::string &app_name, const gpid &pid)
 {
+    // TODO(heyuchen): consider invalid, need to rollback to downloading ???
     zauto_read_lock l(_lock);
     const auto app_status = get_app_bulk_load_status_unlock(pid.get_app_id());
     if (app_status == bulk_load_status::BLS_DOWNLOADING ||

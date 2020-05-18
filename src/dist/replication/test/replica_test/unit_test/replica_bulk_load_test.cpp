@@ -1009,10 +1009,14 @@ TEST_F(replica_bulk_load_test, validate_bulk_load_status_test)
         bulk_load_status::type local_status;
         bool expected_flag;
     } tests[] = {{bulk_load_status::BLS_INVALID, bulk_load_status::BLS_INVALID, true},
-                 {bulk_load_status::BLS_PAUSED, bulk_load_status::BLS_PAUSED, true},
-                 {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INVALID, true},
+                 {bulk_load_status::BLS_PAUSED, bulk_load_status::BLS_PAUSED, false},
                  {bulk_load_status::BLS_FAILED, bulk_load_status::BLS_INGESTING, true},
                  {bulk_load_status::BLS_CANCELED, bulk_load_status::BLS_SUCCEED, true},
+                 {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INVALID, true},
+                 {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_INGESTING, true},
+                 {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_SUCCEED, true},
+                 {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_FAILED, false},
+                 {bulk_load_status::BLS_DOWNLOADING, bulk_load_status::BLS_CANCELED, false},
                  {bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_INVALID, false},
                  {bulk_load_status::BLS_DOWNLOADED, bulk_load_status::BLS_DOWNLOADED, true},
                  {bulk_load_status::BLS_INGESTING, bulk_load_status::BLS_DOWNLOADED, true},
