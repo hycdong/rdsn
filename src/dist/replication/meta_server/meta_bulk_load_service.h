@@ -143,7 +143,8 @@ private:
 
     void handle_app_ingestion(const bulk_load_response &response, const rpc_address &primary_addr);
 
-    // when app status is `succeed` or `failed`, meta and replica should cleanup bulk load states
+    // when app status is `succeed, `failed`, `canceled`, meta and replica should cleanup bulk load
+    // states
     void handle_bulk_load_finish(const bulk_load_response &response,
                                  const rpc_address &primary_addr);
 
