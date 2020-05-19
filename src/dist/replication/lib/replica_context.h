@@ -39,6 +39,7 @@ namespace replication {
 
 class replica;
 class replica_stub;
+class replica_bulk_load;
 
 struct remote_learner_state
 {
@@ -589,6 +590,7 @@ public:
 private:
     friend class replica;
     friend class replica_bulk_load_test;
+    friend class replica_bulk_load;
 
     bulk_load_status::type _status{bulk_load_status::BLS_INVALID};
     bulk_load_metadata _metadata;

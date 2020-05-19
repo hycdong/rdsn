@@ -38,6 +38,7 @@
 #include "mutation_log.h"
 #include "mutation.h"
 #include "duplication/duplication_sync_timer.h"
+#include "bulk_load/replica_bulk_load.h"
 #include <dsn/cpp/json_helper.h>
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/utility/filesystem.h>
@@ -1759,7 +1760,8 @@ void replica_stub::on_gc()
             cold_backup_max_upload_file_size = std::max(
                 cold_backup_max_upload_file_size, rep->_cold_backup_max_upload_file_size.load());
 
-            if (rep->get_bulk_load_status() != bulk_load_status::BLS_INVALID) {
+            if (rep->get_bulk_load_manager()->get_bulk_load_status() !=
+                bulk_load_status::BLS_INVALID) {
                 bulk_load_running_count++;
                 bulk_load_max_download_file_size =
                     std::max(bulk_load_max_download_file_size,
@@ -2732,7 +2734,8 @@ void replica_stub::on_bulk_load(const bulk_load_request &request, bulk_load_resp
     ddebug_f("[{}@{}]: receive bulk load request", request.pid.to_string(), _primary_address_str);
     replica_ptr rep = get_replica(request.pid);
     if (rep != nullptr) {
-        rep->on_bulk_load(request, response);
+        // rep->on_bulk_load(request, response);
+        rep->get_bulk_load_manager()->on_bulk_load(request, response);
     } else {
         derror_f("replica({}) is not existed", request.pid);
         response.err = ERR_OBJECT_NOT_FOUND;
@@ -2752,7 +2755,8 @@ void replica_stub::on_group_bulk_load(const group_bulk_load_request &request,
 
     replica_ptr rep = get_replica(request.config.pid);
     if (rep != nullptr) {
-        rep->on_group_bulk_load(request, response);
+        // rep->on_group_bulk_load(request, response);
+        rep->get_bulk_load_manager()->on_group_bulk_load(request, response);
     } else {
         derror_f("replica({}) is not existed", request.config.pid);
         response.err = ERR_OBJECT_NOT_FOUND;
