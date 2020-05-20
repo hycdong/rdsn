@@ -2,7 +2,6 @@
 // This source code is licensed under the Apache License Version 2.0, which
 // can be found in the LICENSE file in the root directory of this source tree.
 
-// #include "replica.h"
 #include "replica_bulk_load.h"
 
 #include <fstream>
@@ -86,14 +85,11 @@ void replica_bulk_load::broadcast_group_bulk_load(const bulk_load_request &meta_
         return;
     }
 
-    if (_replica->_primary_states.group_bulk_load_pending_replies.size() > 0) {
-        dwarn_replica(
-            "{} group bulk_load replies are still pending, cancel it firstly",
-            static_cast<int>(_replica->_primary_states.group_bulk_load_pending_replies.size()));
-        for (auto it = _replica->_primary_states.group_bulk_load_pending_replies.begin();
-             it != _replica->_primary_states.group_bulk_load_pending_replies.end();
-             ++it) {
-            it->second->cancel(true);
+    if (!_replica->_primary_states.group_bulk_load_pending_replies.empty()) {
+        dwarn_replica("{} group bulk_load replies are still pending, cancel it firstly",
+                      _replica->_primary_states.group_bulk_load_pending_replies.size());
+        for (auto &kv : _replica->_primary_states.group_bulk_load_pending_replies) {
+            CLEANUP_TASK_ALWAYS(kv.second);
         }
         _replica->_primary_states.group_bulk_load_pending_replies.clear();
     }

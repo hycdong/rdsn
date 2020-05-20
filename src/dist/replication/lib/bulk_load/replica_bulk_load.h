@@ -5,6 +5,7 @@
 #pragma once
 
 #include <dist/replication/lib/replica.h>
+#include <dist/replication/lib/replica_context.h>
 #include <dist/replication/lib/replica_stub.h>
 
 namespace dsn {
