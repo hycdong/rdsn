@@ -4,7 +4,6 @@
 
 #include "dist/replication/lib/bulk_load/replica_bulk_load.h"
 #include "dist/replication/test/replica_test/unit_test/replica_test_base.h"
-#include "dist/replication/test/replica_test/unit_test/block_service_mock.h"
 
 #include <fstream>
 
@@ -20,23 +19,18 @@ public:
     replica_bulk_load_test()
     {
         _replica = create_mock_replica(stub.get());
-        // _fs = stub->get_block_filesystem();
-        utils::filesystem::create_directory(LOCAL_DIR);
+        _bulk_load = make_unique<replica_bulk_load>(_replica.get());
         fail::setup();
     }
 
-    ~replica_bulk_load_test()
-    {
-        fail::teardown();
-        utils::filesystem::remove_path(LOCAL_DIR);
-    }
+    ~replica_bulk_load_test() { fail::teardown(); }
 
 public:
     /// test helper functions
     error_code test_on_bulk_load()
     {
         bulk_load_response resp;
-        _replica->get_replica_bulk_load_manager().on_bulk_load(_req, resp);
+        _bulk_load->on_bulk_load(_req, resp);
         return resp.err;
     }
 
@@ -44,33 +38,23 @@ public:
     {
         create_group_bulk_load_request(status, b);
         group_bulk_load_response resp;
-        _replica->get_replica_bulk_load_manager().on_group_bulk_load(_group_req, resp);
+        _bulk_load->on_group_bulk_load(_group_req, resp);
         return resp.err;
     }
 
-    //    error_code test_do_download()
-    //    {
-    //        error_code download_err = ERR_OK;
-    //        uint64_t download_size = 0;
-    //        _replica->get_replica_bulk_load_manager().do_download(
-    //            PROVIDER, LOCAL_DIR, FILE_NAME, _fs.get(), download_err, download_size);
-    //        return download_err;
-    //    }
-
     error_code test_parse_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta)
     {
-        return _replica->get_replica_bulk_load_manager().parse_bulk_load_metadata(file_path, meta);
+        return _bulk_load->parse_bulk_load_metadata(file_path, meta);
     }
 
     bool test_verify_sst_files(const file_meta &f_meta)
     {
-        return _replica->get_replica_bulk_load_manager().verify_sst_files(f_meta, LOCAL_DIR);
+        return _bulk_load->verify_sst_files(f_meta, LOCAL_DIR);
     }
 
     error_code test_start_downloading()
     {
-        return _replica->get_replica_bulk_load_manager().bulk_load_start_download(
-            APP_NAME, CLUSTER, PROVIDER);
+        return _bulk_load->bulk_load_start_download(APP_NAME, CLUSTER, PROVIDER);
     }
 
     void test_rollback_to_downloading(bulk_load_status::type cur_status)
@@ -101,15 +85,11 @@ public:
 
     void test_update_download_progress(uint64_t file_size)
     {
-        _replica->get_replica_bulk_load_manager().update_bulk_load_download_progress(
-            file_size, "test_file_name");
+        _bulk_load->update_bulk_load_download_progress(file_size, "test_file_name");
         _replica->tracker()->wait_outstanding_tasks();
     }
 
-    void test_start_ingestion()
-    {
-        _replica->get_replica_bulk_load_manager().bulk_load_start_ingestion();
-    }
+    void test_start_ingestion() { _bulk_load->bulk_load_start_ingestion(); }
 
     void test_handle_bulk_load_finish(bulk_load_status::type status,
                                       int32_t download_progress,
@@ -119,13 +99,13 @@ public:
     {
         mock_replica_bulk_load_varieties(
             status, download_progress, istatus, is_bulk_load_ingestion);
-        _replica->get_replica_bulk_load_manager().handle_bulk_load_finish(req_status);
+        _bulk_load->handle_bulk_load_finish(req_status);
     }
 
     void test_pause_bulk_load(bulk_load_status::type status, int32_t progress)
     {
         mock_replica_bulk_load_varieties(status, progress, ingestion_status::IS_INVALID);
-        _replica->get_replica_bulk_load_manager().pause_bulk_load();
+        _bulk_load->pause_bulk_load();
     }
 
     int32_t test_report_group_download_progress(bulk_load_status::type status,
@@ -135,7 +115,7 @@ public:
     {
         mock_group_progress(status, p_progress, s1_progress, s2_progress);
         bulk_load_response response;
-        _replica->get_replica_bulk_load_manager().report_group_download_progress(response);
+        _bulk_load->report_group_download_progress(response);
         return response.total_download_progress;
     }
 
@@ -150,14 +130,14 @@ public:
         _replica->_app->set_ingestion_status(primary);
         mock_secondary_ingestion_states(secondary1, secondary2, is_ingestion_commit);
         bulk_load_response response;
-        _replica->get_replica_bulk_load_manager().report_group_ingestion_status(response);
+        _bulk_load->report_group_ingestion_status(response);
         return response.is_group_ingestion_finished;
     }
 
     bool test_report_group_context_clean_flag()
     {
         bulk_load_response response;
-        _replica->get_replica_bulk_load_manager().report_group_context_clean_flag(response);
+        _bulk_load->report_group_context_clean_flag(response);
         return response.is_group_bulk_load_context_cleaned;
     }
 
@@ -169,7 +149,7 @@ public:
         _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state;
         _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state;
         bulk_load_response response;
-        _replica->get_replica_bulk_load_manager().report_group_is_paused(response);
+        _bulk_load->report_group_is_paused(response);
         return response.is_group_bulk_load_paused;
     }
 
@@ -181,14 +161,12 @@ public:
         create_group_bulk_load_request(req_status, req_ballot);
         group_bulk_load_response resp;
         resp.err = resp_error;
-        _replica->get_replica_bulk_load_manager().on_group_bulk_load_reply(
-            rpc_error, _group_req, resp);
+        _bulk_load->on_group_bulk_load_reply(rpc_error, _group_req, resp);
     }
 
     bool validate_status(bulk_load_status::type meta_status, bulk_load_status::type local_status)
     {
-        return _replica->get_replica_bulk_load_manager().validate_bulk_load_status(
-                   meta_status, local_status) == ERR_OK;
+        return _bulk_load->validate_bulk_load_status(meta_status, local_status) == ERR_OK;
     }
 
     /// mock structure functions
@@ -231,13 +209,6 @@ public:
 
         return ERR_OK;
     }
-
-    //    void create_remote_file(const std::string &file_name, int64_t size, const std::string
-    //    &md5)
-    //    {
-    //        std::string whole_file_name = utils::filesystem::path_combine(PROVIDER, file_name);
-    //        _fs->files[whole_file_name] = std::make_pair(size, md5);
-    //    }
 
     void
     construct_file_meta(file_meta &f, const std::string &name, int64_t size, const std::string &md5)
@@ -302,10 +273,10 @@ public:
                                    uint64_t cur_downloaded_size,
                                    int32_t download_progress)
     {
-        _replica->_bulk_load_context._status = bulk_load_status::type::BLS_DOWNLOADING;
-        _replica->_bulk_load_context._metadata.file_total_size = file_total_size;
-        _replica->_bulk_load_context._cur_downloaded_size = cur_downloaded_size;
-        _replica->_bulk_load_context._download_progress = download_progress;
+        _bulk_load->_status = bulk_load_status::type::BLS_DOWNLOADING;
+        _bulk_load->_metadata.file_total_size = file_total_size;
+        _bulk_load->_cur_downloaded_size = cur_downloaded_size;
+        _bulk_load->_download_progress = download_progress;
     }
 
     void mock_replica_config(partition_status::type status)
@@ -336,8 +307,8 @@ public:
                                           ingestion_status::type istatus,
                                           bool is_ingestion = false)
     {
-        _replica->_bulk_load_context._status = status;
-        _replica->_bulk_load_context._download_progress = download_progress;
+        _bulk_load->_status = status;
+        _bulk_load->_download_progress = download_progress;
         _replica->_app->set_ingestion_status(istatus);
         _replica->_is_bulk_load_ingestion = is_ingestion;
     }
@@ -431,12 +402,9 @@ public:
 
     /// helper functions
 
-    int32_t get_download_progress()
-    {
-        return _replica->_bulk_load_context._download_progress.load();
-    }
-    bool get_clean_up_flag() { return _replica->_bulk_load_context.is_cleanup(); }
-    bulk_load_status::type get_bulk_load_status() { return _replica->_bulk_load_context._status; }
+    int32_t get_download_progress() { return _bulk_load->_download_progress.load(); }
+    bool get_clean_up_flag() { return _bulk_load->is_cleanup(); }
+    bulk_load_status::type get_bulk_load_status() { return _bulk_load->_status; }
     int32_t get_stub_downloading_count()
     {
         return stub->get_bulk_load_recent_downloading_replica_count();
@@ -487,7 +455,7 @@ public:
 
 public:
     std::unique_ptr<mock_replica> _replica;
-    // std::unique_ptr<block_service_mock> _fs;
+    std::unique_ptr<replica_bulk_load> _bulk_load;
     file_meta _file_meta;
     bulk_load_metadata _metadata;
     bulk_load_request _req;
@@ -548,40 +516,6 @@ TEST_F(replica_bulk_load_test, on_group_bulk_load_test)
     }
 }
 
-// TODO(heyuchen): move it into replica unit test
-// do_download unit tests
-// TEST_F(replica_bulk_load_test, do_download_remote_file_not_exist)
-//{
-//    ASSERT_EQ(test_do_download(), ERR_CORRUPTION);
-//}
-
-// TEST_F(replica_bulk_load_test, do_download_file_md5_not_match)
-//{
-//    // local file exists, but md5 not matched with remote file
-//    // expected to remove old local file and redownload it
-//    create_local_file(FILE_NAME);
-//    create_remote_file(FILE_NAME, 2333, "md5_not_match");
-//    ASSERT_EQ(test_do_download(), ERR_OK);
-//}
-
-// TEST_F(replica_bulk_load_test, do_download_file_exist)
-//{
-//    create_local_file(FILE_NAME);
-//    create_remote_file(FILE_NAME, _file_meta.size, _file_meta.md5);
-//    ASSERT_EQ(test_do_download(), ERR_OK);
-//}
-
-// TEST_F(replica_bulk_load_test, do_download_succeed)
-//{
-//    create_local_file(FILE_NAME);
-//    create_remote_file(FILE_NAME, _file_meta.size, _file_meta.md5);
-//    // remove local file to mock condition that file not existed
-//    std::string file_name = utils::filesystem::path_combine(LOCAL_DIR, FILE_NAME);
-//    utils::filesystem::remove_path(file_name);
-
-//    ASSERT_EQ(test_do_download(), ERR_OK);
-//}
-
 // parse_bulk_load_metadata unit tests
 TEST_F(replica_bulk_load_test, bulk_load_metadata_not_exist)
 {
@@ -592,15 +526,18 @@ TEST_F(replica_bulk_load_test, bulk_load_metadata_not_exist)
 
 TEST_F(replica_bulk_load_test, bulk_load_metadata_corrupt)
 {
+    utils::filesystem::create_directory(LOCAL_DIR);
     create_local_file(METADATA);
     bulk_load_metadata metadata;
     std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
     error_code ec = test_parse_bulk_load_metadata(metadata_file_name, metadata);
     ASSERT_EQ(ec, ERR_CORRUPTION);
+    utils::filesystem::remove_path(LOCAL_DIR);
 }
 
 TEST_F(replica_bulk_load_test, bulk_load_metadata_parse_succeed)
 {
+    utils::filesystem::create_directory(LOCAL_DIR);
     error_code ec = create_local_metadata_file();
     ASSERT_EQ(ec, ERR_OK);
 
@@ -609,23 +546,28 @@ TEST_F(replica_bulk_load_test, bulk_load_metadata_parse_succeed)
     ec = test_parse_bulk_load_metadata(metadata_file_name, metadata);
     ASSERT_EQ(ec, ERR_OK);
     ASSERT_TRUE(validate_metadata(metadata));
+    utils::filesystem::remove_path(LOCAL_DIR);
 }
 
 // verify_sst_files unit tests
 TEST_F(replica_bulk_load_test, verify_file_failed)
 {
+    utils::filesystem::create_directory(LOCAL_DIR);
     create_local_file(FILE_NAME);
     file_meta target;
     construct_file_meta(target, FILE_NAME, _file_meta.size, "wrong_md5");
     ASSERT_FALSE(test_verify_sst_files(target));
+    utils::filesystem::remove_path(LOCAL_DIR);
 }
 
 TEST_F(replica_bulk_load_test, verify_file_succeed)
 {
+    utils::filesystem::create_directory(LOCAL_DIR);
     create_local_file(FILE_NAME);
     file_meta target;
     construct_file_meta(target, FILE_NAME, _file_meta.size, _file_meta.md5);
     ASSERT_TRUE(test_verify_sst_files(target));
+    utils::filesystem::remove_path(LOCAL_DIR);
 }
 
 // start_downloading unit tests

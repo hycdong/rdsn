@@ -18,7 +18,10 @@ namespace replication {
 
 typedef rpc_holder<group_bulk_load_request, group_bulk_load_response> group_bulk_load_rpc;
 
-replica_bulk_load::replica_bulk_load(replica *r) : replica_base(r), _replica(r) {}
+replica_bulk_load::replica_bulk_load(replica *r)
+    : replica_base(r), _replica(r), _stub(r->get_replica_stub())
+{
+}
 
 replica_bulk_load::~replica_bulk_load() {}
 
@@ -54,7 +57,7 @@ void replica_bulk_load::on_bulk_load(const bulk_load_request &request,
         request.cluster_name,
         request.app_name,
         enum_to_string(request.meta_bulk_load_status),
-        enum_to_string(get_bulk_load_status()));
+        enum_to_string(_status));
 
     error_code ec = do_bulk_load(request.app_name,
                                  request.meta_bulk_load_status,
@@ -62,7 +65,7 @@ void replica_bulk_load::on_bulk_load(const bulk_load_request &request,
                                  request.remote_provider_name);
     if (ec != ERR_OK) {
         response.err = ec;
-        response.primary_bulk_load_status = get_bulk_load_status();
+        response.primary_bulk_load_status = _status;
         return;
     }
 
@@ -98,7 +101,7 @@ void replica_bulk_load::broadcast_group_bulk_load(const bulk_load_request &meta_
     ddebug_replica("start to broadcast group bulk load");
 
     for (const auto &addr : _replica->_primary_states.membership.secondaries) {
-        if (addr == _replica->_stub->_primary_address)
+        if (addr == _stub->_primary_address)
             continue;
 
         auto request = make_unique<group_bulk_load_request>();
@@ -158,7 +161,7 @@ void replica_bulk_load::on_group_bulk_load(const group_bulk_load_request &reques
                    request.config.primary.to_string(),
                    request.config.ballot,
                    enum_to_string(request.meta_bulk_load_status),
-                   enum_to_string(get_bulk_load_status()));
+                   enum_to_string(_status));
 
     error_code ec = do_bulk_load(request.app_name,
                                  request.meta_bulk_load_status,
@@ -166,7 +169,7 @@ void replica_bulk_load::on_group_bulk_load(const group_bulk_load_request &reques
                                  request.provider_name);
     if (ec != ERR_OK) {
         response.err = ec;
-        response.status = get_bulk_load_status();
+        response.status = _status;
         return;
     }
 
@@ -230,7 +233,7 @@ error_code replica_bulk_load::do_bulk_load(const std::string &app_name,
         return ERR_INVALID_STATE;
     }
 
-    bulk_load_status::type local_status = get_bulk_load_status();
+    bulk_load_status::type local_status = _status;
     error_code ec = validate_bulk_load_status(meta_status, local_status);
     if (ec != ERR_OK) {
         derror_replica("invalid bulk load status, remote = {}, local = {}",
@@ -266,7 +269,7 @@ error_code replica_bulk_load::do_bulk_load(const std::string &app_name,
         break;
     case bulk_load_status::BLS_FAILED:
         handle_bulk_load_finish(bulk_load_status::BLS_FAILED);
-        _replica->_stub->_counter_bulk_load_failed_count->increment();
+        _stub->_counter_bulk_load_failed_count->increment();
         break;
     case bulk_load_status::BLS_PAUSING:
         pause_bulk_load();
@@ -337,11 +340,11 @@ error_code replica_bulk_load::bulk_load_start_download(const std::string &app_na
                                                        const std::string &cluster_name,
                                                        const std::string &provider_name)
 {
-    if (_replica->_stub->_bulk_load_downloading_count.load() >=
-        _replica->_stub->_max_concurrent_bulk_load_downloading_count) {
+    if (_stub->_bulk_load_downloading_count.load() >=
+        _stub->_max_concurrent_bulk_load_downloading_count) {
         dwarn_replica("node[{}] already has {} replica downloading, wait for next round",
-                      _replica->_stub->_primary_address_str,
-                      _replica->_stub->_bulk_load_downloading_count.load());
+                      _stub->_primary_address_str,
+                      _stub->_bulk_load_downloading_count.load());
         return ERR_BUSY;
     }
 
@@ -351,15 +354,16 @@ error_code replica_bulk_load::bulk_load_start_download(const std::string &app_na
     }
     clear_bulk_load_states();
 
-    set_bulk_load_status(bulk_load_status::BLS_DOWNLOADING);
-    _replica->_stub->_bulk_load_downloading_count.fetch_add(1);
+    _status = bulk_load_status::BLS_DOWNLOADING;
+    _stub->_bulk_load_downloading_count.fetch_add(1);
     // TODO(heyuchen): perf-counter
-    _replica->_stub->_counter_bulk_load_downloading_count->increment();
+    _bulk_load_start_time_ms = dsn_now_ms();
+    _stub->_counter_bulk_load_downloading_count->increment();
 
     // TODO(heyuchen): delete this debug log
     ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
-                   _replica->_stub->_primary_address_str,
-                   _replica->_stub->_bulk_load_downloading_count.load());
+                   _stub->_primary_address_str,
+                   _stub->_bulk_load_downloading_count.load());
 
     // start download
     ddebug_replica("start to download sst files");
@@ -394,12 +398,12 @@ error_code replica_bulk_load::download_sst_files(const std::string &app_name,
     const std::string remote_dir =
         get_remote_bulk_load_dir(app_name, cluster_name, get_gpid().get_partition_index());
     dist::block_service::block_filesystem *fs =
-        _replica->_stub->_block_service_manager.get_block_filesystem(provider_name);
+        _stub->_block_service_manager.get_block_filesystem(provider_name);
 
-    error_code err = ERR_OK;
     uint64_t file_size = 0;
     // download metadata file synchronously
-    do_download(remote_dir, local_dir, bulk_load_constant::BULK_LOAD_METADATA, fs, err, file_size);
+    error_code err = _replica->do_download(
+        remote_dir, local_dir, bulk_load_constant::BULK_LOAD_METADATA, fs, file_size);
     if (err != ERR_OK) {
         derror_replica("download bulk load metadata file failed, error = {}", err.to_string());
         return err;
@@ -408,176 +412,41 @@ error_code replica_bulk_load::download_sst_files(const std::string &app_name,
     // parse metadata
     const std::string &local_metadata_file_name =
         utils::filesystem::path_combine(local_dir, bulk_load_constant::BULK_LOAD_METADATA);
-    err =
-        parse_bulk_load_metadata(local_metadata_file_name, _replica->_bulk_load_context._metadata);
+    err = parse_bulk_load_metadata(local_metadata_file_name, _metadata);
     if (err != ERR_OK) {
         derror_replica("parse bulk load metadata failed, error = {}", err.to_string());
         return err;
     }
 
     // download sst files asynchronously
-    for (const auto &f_meta : _replica->_bulk_load_context._metadata.files) {
+    for (const auto &f_meta : _metadata.files) {
         auto bulk_load_download_task = tasking::enqueue(
             LPC_BACKGROUND_BULK_LOAD,
             &_replica->_tracker,
             [this, remote_dir, local_dir, f_meta, fs]() {
-                error_code ec = ERR_OK;
                 uint64_t f_size = 0;
-                do_download(remote_dir, local_dir, f_meta.name, fs, ec, f_size);
+                error_code ec =
+                    _replica->do_download(remote_dir, local_dir, f_meta.name, fs, f_size);
                 if (ec == ERR_OK && !verify_sst_files(f_meta, local_dir)) {
                     ec = ERR_CORRUPTION;
                 }
                 if (ec != ERR_OK) {
                     try_decrease_bulk_load_download_count();
-                    _replica->_bulk_load_context._download_status.store(ec);
+                    _download_status.store(ec);
                     derror_replica(
                         "failed to download file({}), error = {}", f_meta.name, ec.to_string());
-                    _replica->_stub->_counter_bulk_load_recent_download_file_fail_count
-                        ->increment();
+                    _stub->_counter_bulk_load_recent_download_file_fail_count->increment();
                     return;
                 }
                 // download file succeed, update progress
                 update_bulk_load_download_progress(f_size, f_meta.name);
-                _replica->_stub->_counter_bulk_load_recent_download_file_succ_count->increment();
-                _replica->_stub->_counter_bulk_load_recent_download_file_size->add(f_size);
-                _replica->_bulk_load_context.set_max_download_file_size(f_size);
+                _stub->_counter_bulk_load_recent_download_file_succ_count->increment();
+                _stub->_counter_bulk_load_recent_download_file_size->add(f_size);
+                set_max_download_file_size(f_size);
             });
-        _replica->_bulk_load_context._download_task[f_meta.name] = bulk_load_download_task;
+        _download_task[f_meta.name] = bulk_load_download_task;
     }
     return err;
-}
-
-// ThreadPool: THREAD_POOL_REPLICATION, THREAD_POOL_REPLICATION_LONG
-void replica_bulk_load::do_download(const std::string &remote_dir,
-                                    const std::string &local_dir,
-                                    const std::string &file_name,
-                                    dist::block_service::block_filesystem *fs,
-                                    /*out*/ error_code &download_err,
-                                    /*out*/ uint64_t &download_file_size)
-{
-    task_tracker tracker;
-
-    // ThreadPool: THREAD_POOL_FDS_SERVICE
-    auto download_file_callback_func = [this, &download_err, &download_file_size](
-        const dist::block_service::download_response &resp,
-        dist::block_service::block_file_ptr bf,
-        const std::string &local_file_name) {
-        if (resp.err != ERR_OK) {
-            if (resp.err == ERR_OBJECT_NOT_FOUND) {
-                derror_replica("download file({}) failed, file on remote file provider is damaged",
-                               local_file_name);
-                download_err = ERR_CORRUPTION;
-            } else {
-                download_err = resp.err;
-            }
-            return;
-        }
-
-        if (resp.downloaded_size != bf->get_size()) {
-            derror_replica(
-                "size not match while downloading file({}), file_size({}) vs downloaded_size({})",
-                bf->file_name(),
-                bf->get_size(),
-                resp.downloaded_size);
-            download_err = ERR_CORRUPTION;
-            return;
-        }
-
-        std::string current_md5;
-        error_code e = utils::filesystem::md5sum(local_file_name, current_md5);
-        if (e != ERR_OK) {
-            derror_replica("calculate file({}) md5 failed", local_file_name);
-            download_err = e;
-            _replica->_stub->_counter_bulk_load_recent_download_file_fail_count->increment();
-        } else if (current_md5 != bf->get_md5sum()) {
-            derror_replica("local file({}) is not same with remote file({}), download failed, md5: "
-                           "local({}) VS remote({})",
-                           local_file_name,
-                           bf->file_name(),
-                           current_md5,
-                           bf->get_md5sum());
-            download_err = ERR_CORRUPTION;
-        } else {
-            ddebug_replica("download file({}) succeed, file_size = {}",
-                           local_file_name.c_str(),
-                           resp.downloaded_size);
-            download_err = ERR_OK;
-            download_file_size = resp.downloaded_size;
-        }
-
-    };
-
-    // ThreadPool: THREAD_POOL_FDS_SERVICE
-    auto create_file_cb = [this,
-                           &local_dir,
-                           &download_err,
-                           &download_file_size,
-                           &download_file_callback_func,
-                           &tracker](const dist::block_service::create_file_response &resp,
-                                     const std::string &fname) {
-        if (resp.err != ERR_OK) {
-            derror_replica("create file({}) failed with error({})", fname, resp.err.to_string());
-            download_err = resp.err;
-            return;
-        }
-
-        dist::block_service::block_file *bf = resp.file_handle.get();
-        if (bf->get_md5sum().empty()) {
-            derror_replica("file({}) doesn't exist on remote file provider", bf->file_name());
-            download_err = ERR_CORRUPTION;
-            return;
-        }
-
-        const std::string &local_file_name = utils::filesystem::path_combine(local_dir, fname);
-
-        // local file exists
-        if (utils::filesystem::file_exists(local_file_name)) {
-            std::string current_md5;
-            error_code e = utils::filesystem::md5sum(local_file_name, current_md5);
-            if (e != ERR_OK) {
-                dwarn_replica("calculate file({}) md5 failed, should redownload it",
-                              local_file_name);
-                if (!utils::filesystem::remove_path(local_file_name)) {
-                    derror_replica("failed to remove file({})", local_file_name);
-                    download_err = e;
-                    return;
-                }
-            } else if (current_md5 != bf->get_md5sum()) {
-                dwarn_replica("local file({}) is not same with remote file({}), md5: local({}) VS "
-                              "remote({}), should redownload it",
-                              local_file_name.c_str(),
-                              bf->file_name().c_str(),
-                              current_md5.c_str(),
-                              bf->get_md5sum().c_str());
-                if (!utils::filesystem::remove_path(local_file_name)) {
-                    derror_replica("failed to remove file({})", local_file_name);
-                    download_err = e;
-                    return;
-                }
-            } else {
-                ddebug_replica("local file({}) has been downloaded", local_file_name);
-                download_err = ERR_OK;
-                download_file_size = bf->get_size();
-                return;
-            }
-        }
-
-        // download or redownload file
-        bf->download(dist::block_service::download_request{local_file_name, 0, -1},
-                     TASK_CODE_EXEC_INLINED,
-                     std::bind(download_file_callback_func,
-                               std::placeholders::_1,
-                               resp.file_handle,
-                               local_file_name),
-                     &tracker);
-    };
-
-    const std::string remote_file_name = utils::filesystem::path_combine(remote_dir, file_name);
-    fs->create_file(dist::block_service::create_file_request{remote_file_name, false},
-                    TASK_CODE_EXEC_INLINED,
-                    std::bind(create_file_cb, std::placeholders::_1, file_name),
-                    &tracker);
-    tracker.wait_outstanding_tasks();
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -629,19 +498,18 @@ error_code replica_bulk_load::parse_bulk_load_metadata(const std::string &fname,
 void replica_bulk_load::update_bulk_load_download_progress(uint64_t file_size,
                                                            const std::string &file_name)
 {
-    if (_replica->_bulk_load_context._metadata.file_total_size <= 0) {
+    if (_metadata.file_total_size <= 0) {
         derror_replica("bulk_load_metadata has invalid file_total_size({})",
-                       _replica->_bulk_load_context._metadata.file_total_size);
+                       _metadata.file_total_size);
         return;
     }
 
     ddebug_replica("update progress after downloading file({})", file_name);
-    _replica->_bulk_load_context._cur_downloaded_size.fetch_add(file_size);
-    auto total_size = static_cast<double>(_replica->_bulk_load_context._metadata.file_total_size);
-    auto cur_downloaded_size =
-        static_cast<double>(_replica->_bulk_load_context._cur_downloaded_size.load());
+    _cur_downloaded_size.fetch_add(file_size);
+    auto total_size = static_cast<double>(_metadata.file_total_size);
+    auto cur_downloaded_size = static_cast<double>(_cur_downloaded_size.load());
     auto cur_progress = static_cast<int32_t>((cur_downloaded_size / total_size) * 100);
-    _replica->_bulk_load_context._download_progress.store(cur_progress);
+    _download_progress.store(cur_progress);
     ddebug_replica("total_size = {}, cur_downloaded_size = {}, progress = {}",
                    total_size,
                    cur_downloaded_size,
@@ -683,32 +551,31 @@ bool replica_bulk_load::verify_sst_files(const file_meta &f_meta, const std::str
 // ThreadPool: THREAD_POOL_REPLICATION, THREAD_POOL_REPLICATION_LONG
 void replica_bulk_load::try_decrease_bulk_load_download_count()
 {
-    if (_replica->_stub->_bulk_load_downloading_count.load() > 0) {
-        _replica->_stub->_bulk_load_downloading_count.fetch_sub(1);
+    if (_stub->_bulk_load_downloading_count.load() > 0) {
+        _stub->_bulk_load_downloading_count.fetch_sub(1);
         // TODO(heyuchen): delete this debug log
         ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
-                       _replica->_stub->_primary_address_str,
-                       _replica->_stub->_bulk_load_downloading_count.load());
+                       _stub->_primary_address_str,
+                       _stub->_bulk_load_downloading_count.load());
     }
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_load::bulk_load_check_download_finish()
 {
-    if (_replica->_bulk_load_context._download_progress.load() ==
-            bulk_load_constant::PROGRESS_FINISHED &&
-        get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
+    if (_download_progress.load() == bulk_load_constant::PROGRESS_FINISHED &&
+        _status == bulk_load_status::BLS_DOWNLOADING) {
         ddebug_replica("download all files succeed");
-        set_bulk_load_status(bulk_load_status::BLS_DOWNLOADED);
-        _replica->_bulk_load_context.cleanup_download_task();
+        _status = bulk_load_status::BLS_DOWNLOADED;
+        cleanup_download_task();
         try_decrease_bulk_load_download_count();
     }
 }
 
 void replica_bulk_load::bulk_load_start_ingestion()
 {
-    set_bulk_load_status(bulk_load_status::BLS_INGESTING);
-    _replica->_stub->_counter_bulk_load_ingestion_count->increment();
+    _status = bulk_load_status::BLS_INGESTING;
+    _stub->_counter_bulk_load_ingestion_count->increment();
     if (status() == partition_status::PS_PRIMARY) {
         _replica->_primary_states.is_ingestion_commit = false;
     }
@@ -734,13 +601,13 @@ void replica_bulk_load::handle_bulk_load_succeed()
     // TODO(heyuchen): ingestion - consider when reset
     _replica->_app->set_ingestion_status(ingestion_status::IS_INVALID);
 
-    set_bulk_load_status(bulk_load_status::BLS_SUCCEED);
-    _replica->_stub->_counter_bulk_load_finish_count->increment();
+    _status = bulk_load_status::BLS_SUCCEED;
+    _stub->_counter_bulk_load_finish_count->increment();
 }
 
 void replica_bulk_load::handle_bulk_load_finish(bulk_load_status::type new_status)
 {
-    if (_replica->_bulk_load_context.is_cleanup()) {
+    if (is_cleanup()) {
         ddebug_replica("bulk load context has been cleaned up");
         return;
     }
@@ -752,7 +619,7 @@ void replica_bulk_load::handle_bulk_load_finish(bulk_load_status::type new_statu
     }
 
     ddebug_replica("bulk load finished, old_status={}, new_status={}",
-                   enum_to_string(get_bulk_load_status()),
+                   enum_to_string(_status),
                    enum_to_string(new_status));
 
     // remove local bulk load dir
@@ -784,7 +651,7 @@ error_code replica_bulk_load::remove_local_bulk_load_dir(const std::string &bulk
 
 void replica_bulk_load::pause_bulk_load()
 {
-    bulk_load_status::type cur_status = get_bulk_load_status();
+    bulk_load_status::type cur_status = _status;
     if (cur_status == bulk_load_status::BLS_PAUSED) {
         ddebug_replica("bulk load has been paused");
         return;
@@ -794,18 +661,55 @@ void replica_bulk_load::pause_bulk_load()
         try_decrease_bulk_load_download_count();
     }
 
-    set_bulk_load_status(bulk_load_status::BLS_PAUSED);
+    _status = bulk_load_status::BLS_PAUSED;
     ddebug_replica("paused bulk load");
+}
+
+void replica_bulk_load::cleanup_download_task()
+{
+    for (const auto &kv : _download_task) {
+        auto download_task = kv.second;
+        if (download_task != nullptr) {
+            download_task->cancel(true);
+        }
+    }
+    _download_task.clear();
+}
+
+void replica_bulk_load::cleanup()
+{
+    _status = bulk_load_status::BLS_INVALID;
+
+    cleanup_download_task();
+    _metadata.files.clear();
+    _metadata.file_total_size = 0;
+    _cur_downloaded_size.store(0);
+    _download_progress.store(0);
+    _download_status.store(ERR_OK);
+
+    _max_download_file_size.store(0);
+    _bulk_load_start_time_ms = 0;
+
+    _replica->_is_bulk_load_ingestion = false;
+    _replica->_bulk_load_ingestion_start_time_ms = 0;
 }
 
 void replica_bulk_load::clear_bulk_load_states()
 {
-    if (get_bulk_load_status() == bulk_load_status::BLS_DOWNLOADING) {
+    if (_status == bulk_load_status::BLS_DOWNLOADING) {
         try_decrease_bulk_load_download_count();
     }
     _replica->_is_bulk_load_ingestion = false;
     _replica->_app->set_ingestion_status(ingestion_status::IS_INVALID);
-    _replica->_bulk_load_context.cleanup();
+    cleanup();
+}
+
+bool replica_bulk_load::is_cleanup()
+{
+    return _status == bulk_load_status::type::BLS_INVALID && _cur_downloaded_size.load() == 0 &&
+           _download_progress.load() == 0 && _download_status.load() == ERR_OK &&
+           _download_task.size() == 0 && _metadata.files.size() == 0 &&
+           _metadata.file_total_size == 0;
 }
 
 void replica_bulk_load::report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
@@ -817,8 +721,8 @@ void replica_bulk_load::report_bulk_load_states_to_meta(bulk_load_status::type r
         return;
     }
 
-    if (report_metadata && _replica->_bulk_load_context._metadata.files.size() > 0) {
-        response.__set_metadata(_replica->_bulk_load_context._metadata);
+    if (report_metadata && _metadata.files.size() > 0) {
+        response.__set_metadata(_metadata);
     }
 
     switch (remote_status) {
@@ -841,7 +745,7 @@ void replica_bulk_load::report_bulk_load_states_to_meta(bulk_load_status::type r
         break;
     }
 
-    response.primary_bulk_load_status = get_bulk_load_status();
+    response.primary_bulk_load_status = _status;
 }
 
 void replica_bulk_load::report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
@@ -853,13 +757,12 @@ void replica_bulk_load::report_bulk_load_states_to_primary(bulk_load_status::typ
     }
 
     partition_bulk_load_state bulk_load_state;
-    auto local_status = get_bulk_load_status();
+    auto local_status = _status;
     switch (remote_status) {
     case bulk_load_status::BLS_DOWNLOADING:
     case bulk_load_status::BLS_DOWNLOADED:
-        bulk_load_state.__set_download_progress(
-            _replica->_bulk_load_context._download_progress.load());
-        bulk_load_state.__set_download_status(_replica->_bulk_load_context._download_status.load());
+        bulk_load_state.__set_download_progress(_download_progress.load());
+        bulk_load_state.__set_download_status(_download_status.load());
         break;
     case bulk_load_status::BLS_INGESTING:
         bulk_load_state.__set_ingest_status(_replica->_app->get_ingestion_status());
@@ -867,7 +770,7 @@ void replica_bulk_load::report_bulk_load_states_to_primary(bulk_load_status::typ
     case bulk_load_status::BLS_SUCCEED:
     case bulk_load_status::BLS_FAILED:
     case bulk_load_status::BLS_CANCELED:
-        bulk_load_state.__set_is_cleanuped(_replica->_bulk_load_context.is_cleanup());
+        bulk_load_state.__set_is_cleanuped(is_cleanup());
         break;
     case bulk_load_status::BLS_PAUSING:
         bulk_load_state.__set_is_paused(local_status == bulk_load_status::BLS_PAUSED);
@@ -892,8 +795,8 @@ void replica_bulk_load::report_group_download_progress(/*out*/ bulk_load_respons
     }
 
     partition_bulk_load_state p_state;
-    p_state.__set_download_progress(_replica->_bulk_load_context._download_progress.load());
-    p_state.__set_download_status(_replica->_bulk_load_context._download_status.load());
+    p_state.__set_download_progress(_download_progress.load());
+    p_state.__set_download_status(_download_status.load());
     response.group_bulk_load_state[_replica->_primary_states.membership.primary] = p_state;
     ddebug_replica("primary = {}, download progress = {}%, status = {}",
                    _replica->_primary_states.membership.primary.to_string(),
@@ -956,7 +859,7 @@ void replica_bulk_load::report_group_ingestion_status(bulk_load_response &respon
         // group ingestion finish will recover wirte
         ddebug_replica("finish ingestion, recover write");
         _replica->_is_bulk_load_ingestion = false;
-        _replica->_bulk_load_context._bulk_load_ingestion_start_time_ms = 0;
+        _replica->_bulk_load_ingestion_start_time_ms = 0;
     }
 }
 
@@ -969,7 +872,7 @@ void replica_bulk_load::report_group_context_clean_flag(bulk_load_response &resp
     }
 
     partition_bulk_load_state p_state;
-    p_state.__set_is_cleanuped(_replica->_bulk_load_context.is_cleanup());
+    p_state.__set_is_cleanuped(is_cleanup());
     response.group_bulk_load_state[_replica->_primary_states.membership.primary] = p_state;
     ddebug_replica("primary = {}, bulk_load_context cleanup = {}",
                    _replica->_primary_states.membership.primary.to_string(),
@@ -1000,7 +903,7 @@ void replica_bulk_load::report_group_is_paused(bulk_load_response &response)
     }
 
     partition_bulk_load_state p_state;
-    p_state.__set_is_paused(get_bulk_load_status() == bulk_load_status::BLS_PAUSED);
+    p_state.__set_is_paused(_status == bulk_load_status::BLS_PAUSED);
     response.group_bulk_load_state[_replica->_primary_states.membership.primary] = p_state;
     ddebug_replica("primary = {}, bulk_load is_paused = {}",
                    _replica->_primary_states.membership.primary.to_string(),

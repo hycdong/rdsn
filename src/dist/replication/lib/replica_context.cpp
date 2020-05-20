@@ -1362,41 +1362,5 @@ bool partition_split_context::cleanup(bool force)
 
 bool partition_split_context::is_cleaned() const { return async_learn_task == nullptr; }
 
-bool bulk_load_context::cleanup_download_task()
-{
-    for (const auto &kv : _download_task) {
-        auto download_task = kv.second;
-        if (download_task != nullptr) {
-            CLEANUP_TASK(download_task, true);
-        }
-    }
-    _download_task.clear();
-    return true;
-}
-
-void bulk_load_context::cleanup()
-{
-    _status = bulk_load_status::BLS_INVALID;
-
-    cleanup_download_task();
-    _metadata.files.clear();
-    _metadata.file_total_size = 0;
-    _cur_downloaded_size.store(0);
-    _download_progress.store(0);
-    _download_status.store(ERR_OK);
-
-    _max_download_file_size.store(0);
-    _bulk_load_start_time_ms = 0;
-    _bulk_load_ingestion_start_time_ms = 0;
-}
-
-bool bulk_load_context::is_cleanup()
-{
-    return _status == bulk_load_status::type::BLS_INVALID && _cur_downloaded_size.load() == 0 &&
-           _download_progress.load() == 0 && _download_status.load() == ERR_OK &&
-           _download_task.size() == 0 && _metadata.files.size() == 0 &&
-           _metadata.file_total_size == 0;
-}
-
 } // namespace replication
 } // namespace dsn

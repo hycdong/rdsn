@@ -1760,17 +1760,15 @@ void replica_stub::on_gc()
             cold_backup_max_upload_file_size = std::max(
                 cold_backup_max_upload_file_size, rep->_cold_backup_max_upload_file_size.load());
 
-            if (rep->get_bulk_load_manager()->get_bulk_load_status() !=
-                bulk_load_status::BLS_INVALID) {
+            if (rep->get_bulk_load()->get_bulk_load_status() != bulk_load_status::BLS_INVALID) {
                 bulk_load_running_count++;
                 bulk_load_max_download_file_size =
                     std::max(bulk_load_max_download_file_size,
-                             rep->_bulk_load_context.max_download_file_size());
+                             rep->get_bulk_load()->max_download_file_size());
                 bulk_load_max_ingestion_time_ms =
-                    std::max(bulk_load_max_ingestion_time_ms,
-                             rep->_bulk_load_context.ingestion_duration_ms());
+                    std::max(bulk_load_max_ingestion_time_ms, rep->ingestion_duration_ms());
                 bulk_load_max_duration_time_ms =
-                    std::max(bulk_load_max_duration_time_ms, rep->_bulk_load_context.duration_ms());
+                    std::max(bulk_load_max_duration_time_ms, rep->get_bulk_load()->duration_ms());
             }
         }
     }
@@ -2734,8 +2732,7 @@ void replica_stub::on_bulk_load(const bulk_load_request &request, bulk_load_resp
     ddebug_f("[{}@{}]: receive bulk load request", request.pid.to_string(), _primary_address_str);
     replica_ptr rep = get_replica(request.pid);
     if (rep != nullptr) {
-        // rep->on_bulk_load(request, response);
-        rep->get_bulk_load_manager()->on_bulk_load(request, response);
+        rep->get_bulk_load()->on_bulk_load(request, response);
     } else {
         derror_f("replica({}) is not existed", request.pid);
         response.err = ERR_OBJECT_NOT_FOUND;
@@ -2755,8 +2752,7 @@ void replica_stub::on_group_bulk_load(const group_bulk_load_request &request,
 
     replica_ptr rep = get_replica(request.config.pid);
     if (rep != nullptr) {
-        // rep->on_group_bulk_load(request, response);
-        rep->get_bulk_load_manager()->on_group_bulk_load(request, response);
+        rep->get_bulk_load()->on_group_bulk_load(request, response);
     } else {
         derror_f("replica({}) is not existed", request.config.pid);
         response.err = ERR_OBJECT_NOT_FOUND;

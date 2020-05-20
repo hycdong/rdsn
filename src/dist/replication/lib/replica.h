@@ -181,8 +181,25 @@ public:
     //
     // Bulk load
     //
-    replica_bulk_load *get_bulk_load_manager() const { return _bulk_load_mgr.get(); }
-    // TODO(heyuchen):
+    replica_bulk_load *get_bulk_load() const { return _bulk_load.get(); }
+    inline uint64_t ingestion_duration_ms() const
+    {
+        return _bulk_load_ingestion_start_time_ms > 0
+                   ? (dsn_now_ms() - _bulk_load_ingestion_start_time_ms)
+                   : 0;
+    }
+
+    // TODO: move remote file provider functions to a single class
+    // download file from remote file system
+    // \return ERR_FILE_OPERATION_FAILED: local file system errors
+    // \return ERR_FS_INTERNAL: remote file system error
+    // \return ERR_CORRUPTION: file not exist or damaged or not pass verify
+    // if download file succeed, return ERR_OK and set download_file_size
+    error_code do_download(const std::string &remote_dir,
+                           const std::string &local_dir,
+                           const std::string &file_name,
+                           dist::block_service::block_filesystem *fs,
+                           /*out*/ uint64_t &download_file_size);
 
     void update_last_checkpoint_generate_time();
 
@@ -483,8 +500,6 @@ private:
 
     partition_split_context _split_states;
 
-    bulk_load_context _bulk_load_context;
-
     // timer task that running in replication-thread
     dsn::task_ptr _collect_info_timer;
     std::atomic<uint64_t> _cold_backup_running_count;
@@ -525,9 +540,10 @@ private:
     std::atomic<int32_t> _partition_version;
 
     // bulk load
-    std::unique_ptr<replica_bulk_load> _bulk_load_mgr;
-    // if replica in bulk load ingestion, reject write request
+    std::unique_ptr<replica_bulk_load> _bulk_load;
+    // if replica in bulk load ingestion 2pc, reject write request
     bool _is_bulk_load_ingestion{false};
+    uint64_t _bulk_load_ingestion_start_time_ms{0};
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

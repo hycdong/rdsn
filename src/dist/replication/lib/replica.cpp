@@ -57,8 +57,7 @@ replica::replica(
       _restore_progress(0),
       _restore_status(ERR_OK),
       _duplication_mgr(new replica_duplicator_manager(this)),
-      _duplicating(app.duplicating),
-      _bulk_load_mgr(new replica_bulk_load(this))
+      _duplicating(app.duplicating)
 {
     dassert(_app_info.app_type != "", "");
     dassert(stub != nullptr, "");
@@ -68,6 +67,7 @@ replica::replica(
     init_state();
     _config.pid = gpid;
     _partition_version = app.partition_count - 1;
+    _bulk_load = make_unique<replica_bulk_load>(this);
 
     std::string counter_str = fmt::format("private.log.size(MB)@{}", gpid);
     _counter_private_log_size.init_app_counter(
@@ -410,8 +410,8 @@ void replica::close()
     // release it before release replica.
     _duplication_mgr.reset();
 
-    // TODO(heyuchen):
-    _bulk_load_mgr.reset();
+    // TODO(heyuchen): consider here
+    _bulk_load.reset();
 
     ddebug("%s: replica closed, time_used = %" PRIu64 "ms", name(), dsn_now_ms() - start_time);
 }

@@ -52,18 +52,6 @@ private:
                                   const std::string &cluster_name,
                                   const std::string &provider_name);
 
-    // download file from remote file system
-    // download_err = ERR_FILE_OPERATION_FAILED: local file system errors
-    // download_err = ERR_FS_INTERNAL: remote file system error
-    // download_err = ERR_CORRUPTION: file not exist or damaged or not pass verify
-    // if download file succeed, download_err = ERR_OK and set download_file_size
-    void do_download(const std::string &remote_dir,
-                     const std::string &local_dir,
-                     const std::string &file_name,
-                     dist::block_service::block_filesystem *fs,
-                     /*out*/ error_code &download_err,
-                     /*out*/ uint64_t &download_file_size);
-
     // \return ERR_FILE_OPERATION_FAILED: file not exist, get size failed, open file failed
     // \return ERR_CORRUPTION: parse failed
     error_code parse_bulk_load_metadata(const std::string &fname, /*out*/ bulk_load_metadata &meta);
@@ -95,6 +83,10 @@ private:
     void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
                                             /*out*/ group_bulk_load_response &response);
 
+    bool is_cleanup();
+    void cleanup();
+    void cleanup_download_task();
+
     //
     // bulk load helper functions
     //
@@ -107,10 +99,28 @@ private:
             << "/" << pidx;
         return oss.str();
     }
-    bulk_load_status::type get_bulk_load_status() { return _replica->_bulk_load_context._status; }
-    void set_bulk_load_status(bulk_load_status::type status)
+    bulk_load_status::type get_bulk_load_status() { return _status; }
+    void set_bulk_load_status(bulk_load_status::type status) { _status = status; }
+
+    inline uint64_t max_download_file_size() const { return _max_download_file_size.load(); }
+
+    inline void set_max_download_file_size(uint64_t f_size)
     {
-        _replica->_bulk_load_context._status = status;
+        if (f_size > _max_download_file_size.load()) {
+            _max_download_file_size.store(f_size);
+        }
+    }
+
+    inline uint64_t duration_ms() const
+    {
+        return _bulk_load_start_time_ms > 0 ? (dsn_now_ms() - _bulk_load_start_time_ms) : 0;
+    }
+
+    inline uint64_t ingestion_duration_ms() const
+    {
+        return _replica->_bulk_load_ingestion_start_time_ms > 0
+                   ? (dsn_now_ms() - _replica->_bulk_load_ingestion_start_time_ms)
+                   : 0;
     }
 
     //
@@ -122,10 +132,27 @@ private:
 
 private:
     replica *_replica;
+    replica_stub *_stub;
 
     friend class replica;
     friend class replica_stub;
     friend class replica_bulk_load_test;
+
+    // replica bulk load status
+    // only will be read/write in replication thread pool
+    bulk_load_status::type _status{bulk_load_status::BLS_INVALID};
+
+    bulk_load_metadata _metadata;
+    std::atomic<uint64_t> _cur_downloaded_size{0};
+    std::atomic<int32_t> _download_progress{0};
+    std::atomic<error_code> _download_status{ERR_OK};
+    // file_name -> downloading task
+    std::map<std::string, task_ptr> _download_task;
+
+    // Used for perf-counter
+    uint64_t _bulk_load_start_time_ms{0};
+    // current replica max download file size
+    std::atomic<uint64_t> _max_download_file_size{0};
 };
 
 } // namespace replication

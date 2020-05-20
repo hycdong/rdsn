@@ -125,8 +125,6 @@ public:
 
     replica_duplicator_manager &get_replica_duplicator_manager() { return *_duplication_mgr; }
 
-    replica_bulk_load &get_replica_bulk_load_manager() { return *_bulk_load_mgr; }
-
     void as_primary() { _config.status = partition_status::PS_PRIMARY; }
 
     void as_secondary() { _config.status = partition_status::PS_SECONDARY; }

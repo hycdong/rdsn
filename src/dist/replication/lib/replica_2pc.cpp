@@ -88,7 +88,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
             return;
         }
         _is_bulk_load_ingestion = true;
-        _bulk_load_context._bulk_load_ingestion_start_time_ms = dsn_now_ms();
+        _bulk_load_ingestion_start_time_ms = dsn_now_ms();
     }
 
     if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
