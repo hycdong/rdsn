@@ -2275,18 +2275,20 @@ void replica_stub::open_service()
                 if (args.empty()) {
                     result = "max_concurrent_bulk_load_downloading_count=" +
                              std::to_string(_max_concurrent_bulk_load_downloading_count);
+                    return result;
+                }
+
+                if (args[0] == "DEFAULT") {
+                    _max_concurrent_bulk_load_downloading_count =
+                        _options.max_concurrent_bulk_load_downloading_count;
+                    return result;
+                }
+
+                int32_t count = 0;
+                if (!dsn::buf2int32(args[0], count) || count <= 0) {
+                    result = std::string("ERR: invalid arguments");
                 } else {
-                    if (args[0] == "DEFAULT") {
-                        _max_concurrent_bulk_load_downloading_count =
-                            _options.max_concurrent_bulk_load_downloading_count;
-                    } else {
-                        int32_t count = 0;
-                        if (!dsn::buf2int32(args[0], count) || count <= 0) {
-                            result = std::string("ERR: invalid arguments");
-                        } else {
-                            _max_concurrent_bulk_load_downloading_count = count;
-                        }
-                    }
+                    _max_concurrent_bulk_load_downloading_count = count;
                 }
                 return result;
             });
@@ -2433,8 +2435,8 @@ void replica_stub::close()
 #ifdef DSN_ENABLE_GPERF
     _release_tcmalloc_memory_command = nullptr;
     _max_reserved_memory_percentage_command = nullptr;
-    _max_concurrent_bulk_load_downloading_count_command = nullptr;
 #endif
+    _max_concurrent_bulk_load_downloading_count_command = nullptr;
 
     if (_config_sync_timer_task != nullptr) {
         _config_sync_timer_task->cancel(true);
