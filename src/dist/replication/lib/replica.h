@@ -64,7 +64,7 @@ class replication_app_base;
 class replica_stub;
 class replication_checker;
 class replica_duplicator_manager;
-class replica_bulk_load;
+class replica_bulk_loader;
 namespace test {
 class test_checker;
 }
@@ -181,7 +181,7 @@ public:
     //
     // Bulk load
     //
-    replica_bulk_load *get_bulk_load() const { return _bulk_load.get(); }
+    replica_bulk_loader *get_bulk_loader() const { return _bulk_loader.get(); }
     inline uint64_t ingestion_duration_ms() const
     {
         return _bulk_load_ingestion_start_time_ms > 0
@@ -449,8 +449,9 @@ private:
     friend class replica_duplicator_manager;
     friend class load_mutation;
     friend class replica_split_test;
-    friend class replica_bulk_load;
-    friend class replica_bulk_load_test;
+    friend class replica_bulk_loader;
+    // TODO(heyuchen): remove this friend class
+    friend class replica_bulk_loader_test;
 
     // replica configuration, updated by update_local_configuration ONLY
     replica_configuration _config;
@@ -540,7 +541,7 @@ private:
     std::atomic<int32_t> _partition_version;
 
     // bulk load
-    std::unique_ptr<replica_bulk_load> _bulk_load;
+    std::unique_ptr<replica_bulk_loader> _bulk_loader;
     // if replica in bulk load ingestion 2pc, reject write request
     bool _is_bulk_load_ingestion{false};
     uint64_t _bulk_load_ingestion_start_time_ms{0};

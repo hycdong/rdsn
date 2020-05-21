@@ -11,11 +11,11 @@
 namespace dsn {
 namespace replication {
 
-class replica_bulk_load : replica_base
+class replica_bulk_loader : replica_base
 {
 public:
-    explicit replica_bulk_load(replica *r);
-    ~replica_bulk_load();
+    explicit replica_bulk_loader(replica *r);
+    ~replica_bulk_loader();
 
 private:
     //
@@ -137,7 +137,7 @@ private:
 
     friend class replica;
     friend class replica_stub;
-    friend class replica_bulk_load_test;
+    friend class replica_bulk_loader_test;
 
     // replica bulk load status
     // only will be read/write in replication thread pool
