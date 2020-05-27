@@ -189,18 +189,6 @@ public:
                    : 0;
     }
 
-    // TODO: move remote file provider functions to a single class
-    // download file from remote file system
-    // \return ERR_FILE_OPERATION_FAILED: local file system errors
-    // \return ERR_FS_INTERNAL: remote file system error
-    // \return ERR_CORRUPTION: file not exist or damaged or not pass verify
-    // if download file succeed, return ERR_OK and set download_file_size
-    error_code do_download(const std::string &remote_dir,
-                           const std::string &local_dir,
-                           const std::string &file_name,
-                           dist::block_service::block_filesystem *fs,
-                           /*out*/ uint64_t &download_file_size);
-
     void update_last_checkpoint_generate_time();
 
     //

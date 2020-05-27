@@ -398,7 +398,7 @@ error_code replica_bulk_loader::download_sst_files(const std::string &app_name,
 
     uint64_t file_size = 0;
     // download metadata file synchronously
-    error_code err = _replica->do_download(
+    error_code err = _stub->_block_service_manager.do_download(
         remote_dir, local_dir, bulk_load_constant::BULK_LOAD_METADATA, fs, file_size);
     if (err != ERR_OK) {
         derror_replica("download bulk load metadata file failed, error = {}", err.to_string());
@@ -421,8 +421,8 @@ error_code replica_bulk_loader::download_sst_files(const std::string &app_name,
             &_replica->_tracker,
             [this, remote_dir, local_dir, f_meta, fs]() {
                 uint64_t f_size = 0;
-                error_code ec =
-                    _replica->do_download(remote_dir, local_dir, f_meta.name, fs, f_size);
+                error_code ec = _stub->_block_service_manager.do_download(
+                    remote_dir, local_dir, f_meta.name, fs, f_size);
                 if (ec == ERR_OK && !verify_sst_files(f_meta, local_dir)) {
                     ec = ERR_CORRUPTION;
                 }

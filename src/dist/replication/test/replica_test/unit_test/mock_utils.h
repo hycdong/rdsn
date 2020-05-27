@@ -33,7 +33,6 @@
 
 #include "dist/replication/lib/replica.h"
 #include "dist/replication/lib/replica_stub.h"
-#include "block_service_mock.h"
 
 namespace dsn {
 namespace replication {
@@ -207,12 +206,6 @@ public:
     rpc_address get_meta_server_address() const override { return rpc_address("127.0.0.2", 12321); }
 
     std::map<gpid, mock_replica *> mock_replicas;
-
-    std::unique_ptr<block_service_mock> get_block_filesystem()
-    {
-        std::unique_ptr<block_service_mock> block_service = make_unique<block_service_mock>();
-        return block_service;
-    }
 
     int32_t get_bulk_load_recent_downloading_replica_count()
     {

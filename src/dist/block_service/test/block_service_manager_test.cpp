@@ -2,32 +2,35 @@
 // This source code is licensed under the Apache License Version 2.0, which
 // can be found in the LICENSE file in the root directory of this source tree.
 
-#include "replica_test_base.h"
+#include "block_service_mock.h"
+#include "dist/block_service/block_service_manager.h"
 
 #include <fstream>
 
+#include <dsn/utility/filesystem.h>
 #include <gtest/gtest.h>
 
 namespace dsn {
-namespace replication {
+namespace dist {
+namespace block_service {
 
-class replica_file_provider_test : public replica_test_base
+class block_service_manager_test : public ::testing::Test
 {
 public:
-    replica_file_provider_test()
+    block_service_manager_test()
     {
-        _replica = create_mock_replica(stub.get());
-        _fs = stub->get_block_filesystem();
+        _fs = make_unique<block_service_mock>();
         utils::filesystem::create_directory(LOCAL_DIR);
     }
 
-    ~replica_file_provider_test() { utils::filesystem::remove_path(LOCAL_DIR); }
+    ~block_service_manager_test() { utils::filesystem::remove_path(LOCAL_DIR); }
 
 public:
     error_code test_do_download()
     {
         uint64_t download_size = 0;
-        return _replica->do_download(PROVIDER, LOCAL_DIR, FILE_NAME, _fs.get(), download_size);
+        return _block_service_manager.do_download(
+            PROVIDER, LOCAL_DIR, FILE_NAME, _fs.get(), download_size);
     }
 
     void create_local_file(const std::string &file_name)
@@ -39,9 +42,9 @@ public:
         test_file << "write some data.\n";
         test_file.close();
 
-        _file_meta.name = whole_name;
-        utils::filesystem::md5sum(whole_name, _file_meta.md5);
-        utils::filesystem::file_size(whole_name, _file_meta.size);
+        // _file_meta.name = whole_name;
+        utils::filesystem::md5sum(whole_name, _md5);
+        utils::filesystem::file_size(whole_name, _fsize);
     }
 
     void create_remote_file(const std::string &file_name, int64_t size, const std::string &md5)
@@ -51,22 +54,24 @@ public:
     }
 
 public:
-    std::unique_ptr<mock_replica> _replica;
+    // std::unique_ptr<mock_replica> _replica;
+    block_service_manager _block_service_manager;
     std::unique_ptr<block_service_mock> _fs;
 
-    file_meta _file_meta;
     std::string PROVIDER = "local_service";
     std::string LOCAL_DIR = "test_dir";
     std::string FILE_NAME = "test_file";
+    int64_t _fsize;
+    std::string _md5;
 };
 
 // do_download unit tests
-TEST_F(replica_file_provider_test, do_download_remote_file_not_exist)
+TEST_F(block_service_manager_test, do_download_remote_file_not_exist)
 {
     ASSERT_EQ(test_do_download(), ERR_CORRUPTION);
 }
 
-TEST_F(replica_file_provider_test, do_download_file_md5_not_match)
+TEST_F(block_service_manager_test, do_download_redownload_file)
 {
     // local file exists, but md5 not matched with remote file
     // expected to remove old local file and redownload it
@@ -75,23 +80,23 @@ TEST_F(replica_file_provider_test, do_download_file_md5_not_match)
     ASSERT_EQ(test_do_download(), ERR_OK);
 }
 
-TEST_F(replica_file_provider_test, do_download_file_exist)
+TEST_F(block_service_manager_test, do_download_file_exist)
 {
     create_local_file(FILE_NAME);
-    create_remote_file(FILE_NAME, _file_meta.size, _file_meta.md5);
+    create_remote_file(FILE_NAME, _fsize, _md5);
     ASSERT_EQ(test_do_download(), ERR_OK);
 }
 
-TEST_F(replica_file_provider_test, do_download_succeed)
+TEST_F(block_service_manager_test, do_download_succeed)
 {
     create_local_file(FILE_NAME);
-    create_remote_file(FILE_NAME, _file_meta.size, _file_meta.md5);
+    create_remote_file(FILE_NAME, _fsize, _md5);
     // remove local file to mock condition that file not existed
     std::string file_name = utils::filesystem::path_combine(LOCAL_DIR, FILE_NAME);
     utils::filesystem::remove_path(file_name);
-
     ASSERT_EQ(test_do_download(), ERR_OK);
 }
 
-} // namespace replication
+} // namespace block_service
+} // namespace dist
 } // namespace dsn
