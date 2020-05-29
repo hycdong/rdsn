@@ -349,7 +349,7 @@ error_code replica_bulk_loader::bulk_load_start_download(const std::string &app_
     clear_bulk_load_states();
 
     _status = bulk_load_status::BLS_DOWNLOADING;
-    _stub->_bulk_load_downloading_count.fetch_add(1);
+    ++_stub->_bulk_load_downloading_count;
     // TODO(heyuchen): perf-counter
     _bulk_load_start_time_ms = dsn_now_ms();
     _stub->_counter_bulk_load_downloading_count->increment();
@@ -446,47 +446,6 @@ error_code replica_bulk_loader::download_sst_files(const std::string &app_name,
 // ThreadPool: THREAD_POOL_REPLICATION
 error_code replica_bulk_loader::parse_bulk_load_metadata(const std::string &fname)
 {
-    //    if (!utils::filesystem::file_exists(fname)) {
-    //        derror_replica("file({}) doesn't exist", fname);
-    //        return ERR_FILE_OPERATION_FAILED;
-    //    }
-
-    //    int64_t file_sz = 0;
-    //    if (!utils::filesystem::file_size(fname, file_sz)) {
-    //        derror_replica("get file({}) size failed", fname);
-    //        return ERR_FILE_OPERATION_FAILED;
-    //    }
-
-    //    std::shared_ptr<char> buf = utils::make_shared_array<char>(file_sz + 1);
-    //    std::ifstream fin(fname, std::ifstream::in);
-    //    if (!fin.is_open()) {
-    //        derror_replica("open file({}) failed", fname);
-    //        return ERR_FILE_OPERATION_FAILED;
-    //    }
-    //    fin.read(buf.get(), file_sz);
-    //    dassert_replica(file_sz == fin.gcount(),
-    //                    "read file({}) failed, file_size = {} but read size = {}",
-    //                    fname,
-    //                    file_sz,
-    //                    fin.gcount());
-    //    fin.close();
-    //    buf.get()[fin.gcount()] = '\0';
-
-    //    blob bb;
-    //    bb.assign(std::move(buf), 0, file_sz);
-    //    if (!json::json_forwarder<bulk_load_metadata>::decode(bb, meta)) {
-    //        derror_replica("file({}) is damaged", fname);
-    //        return ERR_CORRUPTION;
-    //    }
-
-    //    if (meta.file_total_size <= 0) {
-    //        derror_replica("bulk_load_metadata has invalid file_total_size({})",
-    //        meta.file_total_size);
-    //        return ERR_CORRUPTION;
-    //    }
-
-    //    return ERR_OK;
-
     std::string buf;
     error_code ec = utils::filesystem::read_file(fname, buf);
     if (ec != ERR_OK) {
@@ -566,13 +525,10 @@ bool replica_bulk_loader::verify_file(const file_meta &f_meta, const std::string
 // ThreadPool: THREAD_POOL_REPLICATION, THREAD_POOL_REPLICATION_LONG
 void replica_bulk_loader::try_decrease_bulk_load_download_count()
 {
-    if (_stub->_bulk_load_downloading_count.load() > 0) {
-        _stub->_bulk_load_downloading_count.fetch_sub(1);
-        // TODO(heyuchen): delete this debug log
-        ddebug_replica("concurrent: node[{}] recent_bulk_load_downloading_replica_count={}",
-                       _stub->_primary_address_str,
-                       _stub->_bulk_load_downloading_count.load());
-    }
+    --_stub->_bulk_load_downloading_count;
+    ddebug_replica("node[{}] has {} replica executing downloading",
+                   _stub->_primary_address_str,
+                   _stub->_bulk_load_downloading_count.load());
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
