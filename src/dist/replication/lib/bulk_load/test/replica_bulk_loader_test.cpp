@@ -42,14 +42,14 @@ public:
         return resp.err;
     }
 
-    error_code test_parse_bulk_load_metadata(const std::string &file_path, bulk_load_metadata &meta)
+    error_code test_parse_bulk_load_metadata(const std::string &file_path)
     {
-        return _bulk_loader->parse_bulk_load_metadata(file_path, meta);
+        return _bulk_loader->parse_bulk_load_metadata(file_path);
     }
 
-    bool test_verify_sst_files(const file_meta &f_meta)
+    bool test_verify_file(const file_meta &f_meta)
     {
-        return _bulk_loader->verify_sst_files(f_meta, LOCAL_DIR);
+        return _bulk_loader->verify_file(f_meta, LOCAL_DIR);
     }
 
     error_code test_start_downloading()
@@ -218,8 +218,9 @@ public:
         f.md5 = md5;
     }
 
-    bool validate_metadata(const bulk_load_metadata &target)
+    bool validate_metadata()
     {
+        auto target = _bulk_loader->_metadata;
         if (target.file_total_size != _metadata.file_total_size) {
             return false;
         }
@@ -519,8 +520,7 @@ TEST_F(replica_bulk_loader_test, on_group_bulk_load_test)
 // parse_bulk_load_metadata unit tests
 TEST_F(replica_bulk_loader_test, bulk_load_metadata_not_exist)
 {
-    bulk_load_metadata metadata;
-    error_code ec = test_parse_bulk_load_metadata("path_not_exist", metadata);
+    error_code ec = test_parse_bulk_load_metadata("path_not_exist");
     ASSERT_EQ(ec, ERR_FILE_OPERATION_FAILED);
 }
 
@@ -528,9 +528,8 @@ TEST_F(replica_bulk_loader_test, bulk_load_metadata_corrupt)
 {
     utils::filesystem::create_directory(LOCAL_DIR);
     create_local_file(METADATA);
-    bulk_load_metadata metadata;
     std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
-    error_code ec = test_parse_bulk_load_metadata(metadata_file_name, metadata);
+    error_code ec = test_parse_bulk_load_metadata(metadata_file_name);
     ASSERT_EQ(ec, ERR_CORRUPTION);
     utils::filesystem::remove_path(LOCAL_DIR);
 }
@@ -541,11 +540,10 @@ TEST_F(replica_bulk_loader_test, bulk_load_metadata_parse_succeed)
     error_code ec = create_local_metadata_file();
     ASSERT_EQ(ec, ERR_OK);
 
-    bulk_load_metadata metadata;
     std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
-    ec = test_parse_bulk_load_metadata(metadata_file_name, metadata);
+    ec = test_parse_bulk_load_metadata(metadata_file_name);
     ASSERT_EQ(ec, ERR_OK);
-    ASSERT_TRUE(validate_metadata(metadata));
+    ASSERT_TRUE(validate_metadata());
     utils::filesystem::remove_path(LOCAL_DIR);
 }
 
@@ -556,7 +554,7 @@ TEST_F(replica_bulk_loader_test, verify_file_failed)
     create_local_file(FILE_NAME);
     file_meta target;
     construct_file_meta(target, FILE_NAME, _file_meta.size, "wrong_md5");
-    ASSERT_FALSE(test_verify_sst_files(target));
+    ASSERT_FALSE(test_verify_file(target));
     utils::filesystem::remove_path(LOCAL_DIR);
 }
 
@@ -566,7 +564,7 @@ TEST_F(replica_bulk_loader_test, verify_file_succeed)
     create_local_file(FILE_NAME);
     file_meta target;
     construct_file_meta(target, FILE_NAME, _file_meta.size, _file_meta.md5);
-    ASSERT_TRUE(test_verify_sst_files(target));
+    ASSERT_TRUE(test_verify_file(target));
     utils::filesystem::remove_path(LOCAL_DIR);
 }
 

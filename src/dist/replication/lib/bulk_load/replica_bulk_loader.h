@@ -55,13 +55,13 @@ private:
 
     // \return ERR_FILE_OPERATION_FAILED: file not exist, get size failed, open file failed
     // \return ERR_CORRUPTION: parse failed
-    error_code parse_bulk_load_metadata(const std::string &fname, /*out*/ bulk_load_metadata &meta);
+    error_code parse_bulk_load_metadata(const std::string &fname);
 
-    bool verify_sst_files(const file_meta &f_meta, const std::string &local_dir);
+    bool verify_file(const file_meta &f_meta, const std::string &local_dir);
     void update_bulk_load_download_progress(uint64_t file_size, const std::string &file_name);
 
     void try_decrease_bulk_load_download_count();
-    void bulk_load_check_download_finish();
+    void check_download_finish();
     void bulk_load_start_ingestion();
     void bulk_load_check_ingestion_finish();
     void handle_bulk_load_succeed();
