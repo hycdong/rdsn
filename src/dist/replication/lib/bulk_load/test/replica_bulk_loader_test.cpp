@@ -322,22 +322,8 @@ public:
         state1.__set_download_progress(secondary_progress1);
         state2.__set_download_status(ERR_OK);
         state2.__set_download_progress(secondary_progress2);
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state1;
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state2;
-    }
-
-    void mock_secondary_ingestion_states(ingestion_status::type status1,
-                                         ingestion_status::type status2,
-                                         bool is_ingestion_commit = true)
-    {
-        mock_secondary_progress(100, 100);
-        _replica->_primary_states.is_ingestion_commit = is_ingestion_commit;
-
-        partition_bulk_load_state state1, state2;
-        state1.__set_ingest_status(status1);
-        state2.__set_ingest_status(status2);
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state1;
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state2;
+        _replica->set_secondary_bulk_load_state(SECONDARY, state1);
+        _replica->set_secondary_bulk_load_state(SECONDARY2, state2);
     }
 
     void mock_group_progress(bulk_load_status::type p_status,
@@ -363,6 +349,20 @@ public:
         }
     }
 
+    void mock_secondary_ingestion_states(ingestion_status::type status1,
+                                         ingestion_status::type status2,
+                                         bool is_ingestion_commit = true)
+    {
+        mock_secondary_progress(100, 100);
+        _replica->_primary_states.is_ingestion_commit = is_ingestion_commit;
+
+        partition_bulk_load_state state1, state2;
+        state1.__set_ingest_status(status1);
+        state2.__set_ingest_status(status2);
+        _replica->set_secondary_bulk_load_state(SECONDARY, state1);
+        _replica->set_secondary_bulk_load_state(SECONDARY2, state2);
+    }
+
     void mock_group_ingestion_states(ingestion_status::type s1_status,
                                      ingestion_status::type s2_status,
                                      bool is_ingestion_commit = true)
@@ -386,8 +386,8 @@ public:
         partition_bulk_load_state state1, state2;
         state1.__set_is_cleanuped(s1_cleanup);
         state2.__set_is_cleanuped(s2_cleanup);
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state1;
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state2;
+        _replica->set_secondary_bulk_load_state(SECONDARY, state1);
+        _replica->set_secondary_bulk_load_state(SECONDARY2, state2);
     }
 
     void mock_primary_state_unhealthy()

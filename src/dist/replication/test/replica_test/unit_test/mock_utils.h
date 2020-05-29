@@ -153,6 +153,11 @@ public:
     {
         _primary_states.membership = pconfig;
     }
+    void set_secondary_bulk_load_state(const rpc_address &node,
+                                       const partition_bulk_load_state &state)
+    {
+        _primary_states.secondary_bulk_load_states[node] = state;
+    }
 
 private:
     decree _max_gced_decree{invalid_decree - 1};
