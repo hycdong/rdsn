@@ -782,7 +782,7 @@ void bulk_load_service::update_partition_status_on_remote_stroage(const std::str
     zauto_read_lock l(_lock);
     partition_bulk_load_info pinfo = _partition_bulk_load_info[pid];
 
-    if (pinfo.status == new_status && new_status != bulk_load_status::BLS_DOWNLOADING) {
+    if (pinfo.status == new_status) {
         dinfo_f("app({}) partition({}) old status:{} VS new status:{}, ignore it",
                 app_name,
                 pid.to_string(),
@@ -1014,7 +1014,7 @@ void bulk_load_service::partition_ingestion(const std::string &app_name, const g
 
 // ThreadPool: THREAD_POOL_DEFAULT
 void bulk_load_service::on_partition_ingestion_reply(error_code err,
-                                                     ingestion_response &&resp,
+                                                     const ingestion_response &&resp,
                                                      const std::string &app_name,
                                                      const gpid &pid)
 {

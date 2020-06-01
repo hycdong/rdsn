@@ -62,8 +62,8 @@ private:
 
     void try_decrease_bulk_load_download_count();
     void check_download_finish();
-    void bulk_load_start_ingestion();
-    void bulk_load_check_ingestion_finish();
+    void start_ingestion();
+    void check_ingestion_finish();
     void handle_bulk_load_succeed();
     void handle_bulk_load_finish(bulk_load_status::type new_status);
     error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);

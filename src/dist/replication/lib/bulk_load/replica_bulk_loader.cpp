@@ -248,10 +248,10 @@ error_code replica_bulk_loader::do_bulk_load(const std::string &app_name,
         break;
     case bulk_load_status::BLS_INGESTING:
         if (local_status == bulk_load_status::BLS_DOWNLOADED) {
-            bulk_load_start_ingestion();
+            start_ingestion();
         } else if (local_status == bulk_load_status::BLS_INGESTING &&
                    status() == partition_status::PS_PRIMARY) {
-            bulk_load_check_ingestion_finish();
+            check_ingestion_finish();
         }
         break;
     case bulk_load_status::BLS_SUCCEED:
@@ -543,7 +543,7 @@ void replica_bulk_loader::check_download_finish()
     }
 }
 
-void replica_bulk_loader::bulk_load_start_ingestion()
+void replica_bulk_loader::start_ingestion()
 {
     _status = bulk_load_status::BLS_INGESTING;
     _stub->_counter_bulk_load_ingestion_count->increment();
@@ -552,7 +552,7 @@ void replica_bulk_loader::bulk_load_start_ingestion()
     }
 }
 
-void replica_bulk_loader::bulk_load_check_ingestion_finish()
+void replica_bulk_loader::check_ingestion_finish()
 {
     if (_replica->_app->get_ingestion_status() == ingestion_status::IS_SUCCEED &&
         !_replica->_primary_states.is_ingestion_commit) {

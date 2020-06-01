@@ -162,7 +162,7 @@ private:
     void partition_ingestion(const std::string &app_name, const gpid &pid);
 
     void on_partition_ingestion_reply(error_code err,
-                                      ingestion_response &&resp,
+                                      const ingestion_response &&resp,
                                       const std::string &app_name,
                                       const gpid &pid);
 

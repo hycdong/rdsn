@@ -89,7 +89,7 @@ public:
         _bulk_loader->tracker()->wait_outstanding_tasks();
     }
 
-    void test_start_ingestion() { _bulk_loader->bulk_load_start_ingestion(); }
+    void test_start_ingestion() { _bulk_loader->start_ingestion(); }
 
     void test_handle_bulk_load_finish(bulk_load_status::type status,
                                       int32_t download_progress,
