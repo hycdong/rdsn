@@ -220,11 +220,14 @@ private:
 
     /////////////////////////////////////////////////////////////////
     // 2pc
-    void init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_list = false);
+    // TODO(heyuchen): add comments
+    void
+    init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_all_committed_mutations = false);
     void send_prepare_message(::dsn::rpc_address addr,
                               partition_status::type status,
                               const mutation_ptr &mu,
                               int timeout_milliseconds,
+                              bool pop_all_committed_mutations = false,
                               int64_t learn_signature = invalid_signature);
     void on_append_log_completed(mutation_ptr &mu, error_code err, size_t size);
     void on_prepare_reply(std::pair<mutation_ptr, partition_status::type> pr,

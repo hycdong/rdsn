@@ -63,11 +63,12 @@ public:
     //
     // for two-phase commit
     //
-    // if pop_all = true, pop all committed mutations, will only used during bulk load ingestion
+    // if pop_all_committed_mutations = true, pop all committed mutations, will only used during
+    // bulk load ingestion
     error_code prepare(mutation_ptr &mu,
                        partition_status::type status,
-                       bool pop_all = false);   // unordered prepare
-    void commit(decree decree, commit_type ct); // ordered commit
+                       bool pop_all_committed_mutations = false); // unordered prepare
+    void commit(decree decree, commit_type ct);                   // ordered commit
 
 private:
     decree _last_committed_decree;
