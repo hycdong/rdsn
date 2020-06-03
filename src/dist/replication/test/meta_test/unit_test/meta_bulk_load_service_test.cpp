@@ -258,7 +258,7 @@ public:
 
     bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
     {
-        return bulk_svc().get_app_bulk_load_status_unlock(app_id);
+        return bulk_svc().get_app_bulk_load_status_unlocked(app_id);
     }
 
     int32_t get_app_id_set_size() { return bulk_svc()._bulk_load_app_id.size(); }
@@ -362,7 +362,7 @@ TEST_F(bulk_load_service_test, control_bulk_load_test)
     mock_meta_bulk_load_context(app->app_id, app->partition_count, bulk_load_status::BLS_INVALID);
 
     fail::setup();
-    fail::cfg("meta_update_app_status_on_remote_storage_unlock", "return()");
+    fail::cfg("meta_update_app_status_on_remote_storage_unlocked", "return()");
 
     struct control_test
     {
