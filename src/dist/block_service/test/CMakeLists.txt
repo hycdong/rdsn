@@ -17,7 +17,8 @@ set(MY_PROJ_LIBS
     )
 
 set(MY_BINPLACES
-    "${CMAKE_CURRENT_SOURCE_DIR}/run.sh"
+    config-test.ini
+    run.sh
 )
 
 dsn_add_test()
