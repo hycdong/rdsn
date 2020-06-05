@@ -421,7 +421,10 @@ error_code replica_bulk_loader::download_sst_files(const std::string &app_name,
                 uint64_t f_size = 0;
                 error_code ec = _stub->_block_service_manager.do_download(
                     remote_dir, local_dir, f_meta.name, fs, f_size);
-                if (ec == ERR_OK && !verify_file(f_meta, local_dir)) {
+                const std::string &file_name =
+                    utils::filesystem::path_combine(local_dir, f_meta.name);
+                if (ec == ERR_OK &&
+                    !utils::filesystem::verify_file(file_name, f_meta.md5, f_meta.size)) {
                     ec = ERR_CORRUPTION;
                 }
                 if (ec != ERR_OK) {
@@ -493,33 +496,6 @@ void replica_bulk_loader::update_bulk_load_download_progress(uint64_t file_size,
                      &_replica->_tracker,
                      std::bind(&replica_bulk_loader::check_download_finish, this),
                      get_gpid().thread_hash());
-}
-
-// ThreadPool: THREAD_POOL_REPLICATION_LONG
-bool replica_bulk_loader::verify_file(const file_meta &f_meta, const std::string &local_dir)
-{
-    std::string local_file = utils::filesystem::path_combine(local_dir, f_meta.name);
-    int64_t f_size = 0;
-    std::string md5;
-    if (!utils::filesystem::file_size(local_file, f_size)) {
-        derror_replica("verify file({}) failed, becaused failed to get file size", local_file);
-        return false;
-    }
-    if (utils::filesystem::md5sum(local_file, md5) != ERR_OK) {
-        derror_replica("verify file({}) failed, becaused failed to get file md5", local_file);
-        return false;
-    }
-    if (f_size != f_meta.size || md5 != f_meta.md5) {
-        derror_replica(
-            "verify file({}) failed, because file damaged, size: {} VS {}, md5: {} VS {}",
-            local_file,
-            f_size,
-            f_meta.size,
-            md5,
-            f_meta.md5);
-        return false;
-    }
-    return true;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION, THREAD_POOL_REPLICATION_LONG

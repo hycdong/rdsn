@@ -47,11 +47,6 @@ public:
         return _bulk_loader->parse_bulk_load_metadata(file_path);
     }
 
-    bool test_verify_file(const file_meta &f_meta)
-    {
-        return _bulk_loader->verify_file(f_meta, LOCAL_DIR);
-    }
-
     error_code test_start_downloading()
     {
         return _bulk_loader->bulk_load_start_download(APP_NAME, CLUSTER, PROVIDER);
@@ -544,27 +539,6 @@ TEST_F(replica_bulk_loader_test, bulk_load_metadata_parse_succeed)
     ec = test_parse_bulk_load_metadata(metadata_file_name);
     ASSERT_EQ(ec, ERR_OK);
     ASSERT_TRUE(validate_metadata());
-    utils::filesystem::remove_path(LOCAL_DIR);
-}
-
-// verify_sst_files unit tests
-TEST_F(replica_bulk_loader_test, verify_file_failed)
-{
-    utils::filesystem::create_directory(LOCAL_DIR);
-    create_local_file(FILE_NAME);
-    file_meta target;
-    construct_file_meta(target, FILE_NAME, _file_meta.size, "wrong_md5");
-    ASSERT_FALSE(test_verify_file(target));
-    utils::filesystem::remove_path(LOCAL_DIR);
-}
-
-TEST_F(replica_bulk_loader_test, verify_file_succeed)
-{
-    utils::filesystem::create_directory(LOCAL_DIR);
-    create_local_file(FILE_NAME);
-    file_meta target;
-    construct_file_meta(target, FILE_NAME, _file_meta.size, _file_meta.md5);
-    ASSERT_TRUE(test_verify_file(target));
     utils::filesystem::remove_path(LOCAL_DIR);
 }
 

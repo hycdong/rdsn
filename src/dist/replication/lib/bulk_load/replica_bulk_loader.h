@@ -57,7 +57,6 @@ private:
     // \return ERR_CORRUPTION: parse failed
     error_code parse_bulk_load_metadata(const std::string &fname);
 
-    bool verify_file(const file_meta &f_meta, const std::string &local_dir);
     void update_bulk_load_download_progress(uint64_t file_size, const std::string &file_name);
 
     void try_decrease_bulk_load_download_count();
