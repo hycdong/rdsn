@@ -392,7 +392,8 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
         handle_app_downloading(response, primary_addr);
         break;
     case bulk_load_status::BLS_DOWNLOADED:
-        handle_app_downloaded(response);
+        update_partition_status_on_remote_storage(
+            response.app_name, response.pid, bulk_load_status::BLS_INGESTING);
         // when app status is downloaded or ingesting, send request frequently
         interval = bulk_load_constant::BULK_LOAD_REQUEST_SHORT_INTERVAL;
         break;
@@ -526,14 +527,6 @@ void bulk_load_service::update_partition_metadata_on_remote_stroage(
                 pinfo.metadata.files.size(),
                 pinfo.metadata.file_total_size);
         });
-}
-
-// ThreadPool: THREAD_POOL_META_STATE
-void bulk_load_service::handle_app_downloaded(const bulk_load_response &response)
-{
-    // update partition status to `ingesting` directly if app status is downloaded
-    update_partition_status_on_remote_storage(
-        response.app_name, response.pid, bulk_load_status::BLS_INGESTING);
 }
 
 // ThreadPool: THREAD_POOL_META_STATE
@@ -929,7 +922,6 @@ void bulk_load_service::update_app_status_on_remote_storage_reply(const app_bulk
 
     if (new_status == bulk_load_status::BLS_INGESTING) {
         for (int i = 0; i < partition_count; ++i) {
-            // send ingestion request to primary
             tasking::enqueue(LPC_BULK_LOAD_INGESTION,
                              _meta_svc->tracker(),
                              std::bind(&bulk_load_service::partition_ingestion,
@@ -959,7 +951,6 @@ void bulk_load_service::partition_ingestion(const std::string &app_name, const g
     {
         zauto_read_lock l(app_lock());
         std::shared_ptr<app_state> app = _state->get_app(pid.get_app_id());
-        // app not existed or not available now
         if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
             dwarn_f("app(name={}, id={}) is not existed, set bulk load failed",
                     app_name,
@@ -970,7 +961,6 @@ void bulk_load_service::partition_ingestion(const std::string &app_name, const g
         primary_addr = app->partitions[pid.get_partition_index()].primary;
     }
 
-    // pid primary is invalid
     if (primary_addr.is_invalid()) {
         dwarn_f(
             "app({}) partition({}) primary is invalid, try it later", app_name, pid.to_string());
@@ -983,7 +973,9 @@ void bulk_load_service::partition_ingestion(const std::string &app_name, const g
     }
 
     if (is_partition_metadata_not_updated(pid)) {
-        derror_f("app({}) doesn't have bulk load metadata, set bulk load failed", app_name);
+        derror_f("app({}) partition({}) doesn't have bulk load metadata, set bulk load failed",
+                 app_name,
+                 pid);
         handle_bulk_load_failed(pid.get_app_id());
         return;
     }
@@ -994,8 +986,14 @@ void bulk_load_service::partition_ingestion(const std::string &app_name, const g
         zauto_read_lock l(_lock);
         req.metadata = _partition_bulk_load_info[pid].metadata;
     }
-    message_ex *msg =
-        dsn::message_ex::create_client_request(dsn::apps::RPC_RRDB_RRDB_BULK_LOAD, pid);
+
+    // create a client request, whose gpid field in header should be pid
+    message_ex *msg = message_ex::create_request(dsn::apps::RPC_RRDB_RRDB_BULK_LOAD,
+                                                 0,
+                                                 pid.thread_hash(),
+                                                 static_cast<uint64_t>(pid.get_partition_index()));
+    auto &hdr = *msg->header;
+    hdr.gpid = pid;
     dsn::marshall(msg, req);
     dsn::rpc_response_task_ptr rpc_callback = rpc::create_rpc_response_task(
         msg,
@@ -1003,10 +1001,10 @@ void bulk_load_service::partition_ingestion(const std::string &app_name, const g
         [this, app_name, pid](error_code err, ingestion_response &&resp) {
             on_partition_ingestion_reply(err, std::move(resp), app_name, pid);
         });
-    ddebug_f("send ingest request to replica server({}), app({}) partition({})",
+    ddebug_f("send ingest_request to node({}), app({}) partition({})",
              primary_addr.to_string(),
              app_name,
-             pid.to_string());
+             pid);
     _meta_svc->send_request(msg, primary_addr, rpc_callback);
 }
 

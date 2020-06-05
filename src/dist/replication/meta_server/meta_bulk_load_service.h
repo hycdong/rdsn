@@ -139,8 +139,6 @@ private:
     void handle_app_downloading(const bulk_load_response &response,
                                 const rpc_address &primary_addr);
 
-    void handle_app_downloaded(const bulk_load_response &response);
-
     void handle_app_ingestion(const bulk_load_response &response, const rpc_address &primary_addr);
 
     // when app status is `succeed, `failed`, `canceled`, meta and replica should cleanup bulk load
@@ -157,8 +155,8 @@ private:
     // app not existed or not available during bulk load
     void handle_app_unavailable(int32_t app_id, const std::string &app_name);
 
-    // Called when app status update to ingesting
-    // create ingestion request and send it to primary
+    // Called when app bulk load status update to ingesting
+    // create ingestion_request and send it to primary
     void partition_ingestion(const std::string &app_name, const gpid &pid);
 
     void on_partition_ingestion_reply(error_code err,

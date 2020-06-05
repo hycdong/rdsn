@@ -175,9 +175,6 @@ public:
                                                        int thread_hash = 0,
                                                        uint64_t partition_hash = 0);
 
-    DSN_API static message_ex *
-    create_client_request(dsn::task_code rpc_code, dsn::gpid pid, int timeout_milliseconds = 0);
-
     /// This method is only used for receiving request.
     /// The returned message:
     ///   - msg->buffers[0] = message_header

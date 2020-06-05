@@ -602,7 +602,7 @@ TEST_F(bulk_load_process_test, downloaded_succeed)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADED);
 }
 
-TEST_F(bulk_load_process_test, normal_ingesting)
+TEST_F(bulk_load_process_test, start_ingesting)
 {
     fail::cfg("meta_bulk_load_partition_ingestion", "return()");
     mock_response_progress(ERR_OK, true);
