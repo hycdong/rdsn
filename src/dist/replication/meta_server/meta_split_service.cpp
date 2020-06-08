@@ -104,6 +104,7 @@ void meta_split_service::do_app_partition_split(std::shared_ptr<app_state> app,
                  app->partition_count * 2);
 
         zauto_write_lock l(app_lock());
+        app->helpers->split_states.splitting_count = app->partition_count;
         app->partition_count *= 2;
         app->helpers->contexts.resize(app->partition_count);
         app->partitions.resize(app->partition_count);
@@ -113,6 +114,9 @@ void meta_split_service::do_app_partition_split(std::shared_ptr<app_state> app,
             if (i >= app->partition_count / 2) {
                 app->partitions[i].ballot = invalid_ballot;
                 app->partitions[i].pid = gpid(app->app_id, i);
+            }else{
+                // TODO(heyuchen): pause add
+                app->helpers->split_states.status[i] = split_status::splitting;
             }
         }
 
@@ -159,8 +163,18 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     partition_configuration child_config = app->partitions[child_gpid.get_partition_index()];
     config_context &parent_context = app->helpers->contexts[parent_gpid.get_partition_index()];
 
+    // TODO(heyuchen): pause remove
     if ((parent_config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped) {
         dwarn_f("gpid({}.{}) register child failed, coz split is paused",
+                parent_gpid.get_app_id(),
+                parent_gpid.get_partition_index());
+        response.err = ERR_CHILD_DROPPED;
+        return;
+    }
+
+    // TODO(heyuchen): pause add
+    if(app->helpers->split_states.status[parent_gpid.get_partition_index()] == split_status::paused){
+        dwarn_f("gpid({}.{}) register child failed, because split is paused",
                 parent_gpid.get_app_id(),
                 parent_gpid.get_partition_index());
         response.err = ERR_CHILD_DROPPED;
@@ -301,6 +315,9 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
             response.parent_config = app->partitions[parent_gpid.get_partition_index()];
             response.child_config = app->partitions[child_gpid.get_partition_index()];
             parent_context.msg = nullptr;
+            // TODO(heyuchen): pause add
+            app->helpers->split_states.status.erase(parent_gpid.get_partition_index());
+            app->helpers->split_states.splitting_count--;
         }
     } else {
         dassert(false, "we can't handle this right now, err = %s", ec.to_string());

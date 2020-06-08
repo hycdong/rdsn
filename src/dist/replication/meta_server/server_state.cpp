@@ -607,6 +607,9 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                         app->partitions[partition_id].ballot = invalid_ballot;
                         app->partitions[partition_id].pid = gpid(app->app_id, partition_id);
                         process_one_partition(app);
+                        // TODO(heyuchen): pause add
+                        app->helpers->split_states.status[partition_id] = split_status::splitting;
+                        app->helpers->split_states.splitting_count++;
                     }
                 } else {
                     derror("get partition node failed, reason(%s)", ec.to_string());

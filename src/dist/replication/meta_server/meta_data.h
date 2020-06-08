@@ -278,6 +278,20 @@ struct restore_state
     restore_state() : restore_status(dsn::ERR_OK), progress(0), reason() {}
 };
 
+enum class split_status
+{
+    not_split,
+    splitting,
+    paused
+};
+
+struct split_state
+{
+    int32_t splitting_count;
+    std::map<int32_t, split_status> status;
+    split_state() : splitting_count(0) {}
+};
+
 class app_state;
 class app_state_helper
 {
@@ -287,6 +301,7 @@ public:
     std::vector<config_context> contexts;
     dsn::message_ex *pending_response;
     std::vector<restore_state> restore_states;
+    split_state split_states;
 
 public:
     app_state_helper() : owner(nullptr), partitions_in_progress(0)
