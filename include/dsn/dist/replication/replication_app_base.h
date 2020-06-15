@@ -235,9 +235,9 @@ public:
     // Thread-safe.
     virtual void set_partition_version(int32_t partition_version){};
 
-    virtual void set_ingestion_status(dsn::replication::ingestion_status::type status) {}
+    virtual void set_ingestion_status(ingestion_status::type status) {}
 
-    virtual dsn::replication::ingestion_status::type get_ingestion_status() const = 0;
+    virtual ingestion_status::type get_ingestion_status() { return ingestion_status::IS_INVALID; }
 
 public:
     //
@@ -273,7 +273,7 @@ protected:
     std::string _dir_data;      // ${replica_dir}/data
     std::string _dir_learn;     // ${replica_dir}/learn
     std::string _dir_backup;    // ${replica_dir}/backup
-    std::string _dir_bulk_load; // ${replica_dir}/.bulk_load
+    std::string _dir_bulk_load; // ${replica_dir}/bulk_load
     replica *_replica;
     std::atomic<int64_t> _last_committed_decree;
     replica_init_info _info;

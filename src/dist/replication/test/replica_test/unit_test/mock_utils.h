@@ -76,7 +76,7 @@ public:
     {
         _ingestion_status = status;
     }
-    dsn::replication::ingestion_status::type get_ingestion_status() const override
+    dsn::replication::ingestion_status::type get_ingestion_status() override
     {
         return _ingestion_status;
     }

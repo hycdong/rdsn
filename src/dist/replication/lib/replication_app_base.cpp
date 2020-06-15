@@ -523,7 +523,15 @@ int replication_app_base::on_batched_write_requests(int64_t decree,
 
     if (perror != 0) {
         derror("%s: mutation %s: get internal error %d", _replica->name(), mu->name(), perror);
-        // TODO(heyuchen): ingestion, update comment
+        // for normal write requests, if got rocksdb error, this replica will be set error and evoke
+        // learn for ingestion requests, should not do as normal write requests, there are two
+        // reasons:
+        // 1. all ingestion errors should be handled by meta server in function
+        // `on_partition_ingestion_reply`, rocksdb error will be returned to meta server in
+        // structure `ingestion_response`, not in this function
+        // 2. if replica apply ingestion mutation during learn, it may got error from rocksdb,
+        // because the external sst files may not exist, in this case, we won't consider it as an
+        // error
         if (!has_ingestion_request) {
             return ERR_LOCAL_APP_FAILURE;
         }

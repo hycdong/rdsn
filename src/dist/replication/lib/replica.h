@@ -532,7 +532,7 @@ private:
 
     // bulk load
     std::unique_ptr<replica_bulk_loader> _bulk_loader;
-    // if replica in bulk load ingestion 2pc, reject write request
+    // if replica in bulk load ingestion 2pc, will reject other write requests
     bool _is_bulk_load_ingestion{false};
     uint64_t _bulk_load_ingestion_start_time_ms{0};
 

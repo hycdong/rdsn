@@ -73,8 +73,9 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
     }
 
     if (_is_bulk_load_ingestion) {
-        // reject write request
-        response_client_write(request, ERR_BUSY);
+        // reject write requests during ingestion
+        // TODO(heyuchen): add perf-counter here
+        response_client_write(request, ERR_OPERATION_DISABLED);
         return;
     }
 
@@ -121,8 +122,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_all_c
 
     error_code err = ERR_OK;
     uint8_t count = 0;
-    int request_count = static_cast<int>(mu->client_requests.size());
-    int i = 0;
+    const auto request_count = mu->client_requests.size();
     mu->data.header.last_committed_decree = last_committed_decree();
 
     dsn_log_level_t level = LOG_LEVEL_INFORMATION;
@@ -150,16 +150,14 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_all_c
     }
 
     // stop prepare bulk load ingestion if there are secondaries unalive
-    for (i = 0; i < request_count; ++i) {
+    for (auto i = 0; i < request_count; ++i) {
         const mutation_update &update = mu->data.updates[i];
-
-        if (update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
-            ddebug_replica("bulk load init prepare mutation({})", mu->name());
+        if (update.code != dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
+            break;
         }
-
-        if (update.code == dsn::apps::RPC_RRDB_RRDB_BULK_LOAD &&
-            static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
-                _primary_states.membership.max_replica_count) {
+        ddebug_replica("try to prepare bulk load mutation({})", mu->name());
+        if (static_cast<int>(_primary_states.membership.secondaries.size()) + 1 <
+            _primary_states.membership.max_replica_count) {
             err = ERR_NOT_ENOUGH_MEMBER;
             break;
         }
