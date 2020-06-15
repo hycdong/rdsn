@@ -196,7 +196,7 @@ void primary_context::cleanup_bulk_load_states()
 {
     secondary_bulk_load_states.erase(secondary_bulk_load_states.begin(),
                                      secondary_bulk_load_states.end());
-    is_ingestion_commit = false;
+    ingestion_is_empty_prepare_sent = false;
 }
 
 bool secondary_context::cleanup(bool force)

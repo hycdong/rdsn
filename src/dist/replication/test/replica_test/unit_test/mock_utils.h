@@ -72,14 +72,8 @@ public:
     // TODO(heyuchen): implement this function in further pull request
     void set_partition_version(int32_t partition_version) override {}
 
-    void set_ingestion_status(dsn::replication::ingestion_status::type status)
-    {
-        _ingestion_status = status;
-    }
-    dsn::replication::ingestion_status::type get_ingestion_status() override
-    {
-        return _ingestion_status;
-    }
+    void set_ingestion_status(ingestion_status::type status) { _ingestion_status = status; }
+    ingestion_status::type get_ingestion_status() override { return _ingestion_status; }
 
 private:
     std::map<std::string, std::string> _envs;
@@ -158,6 +152,13 @@ public:
     {
         _primary_states.secondary_bulk_load_states[node] = state;
     }
+    void set_is_empty_prepare_sent(bool flag)
+    {
+        _primary_states.ingestion_is_empty_prepare_sent = flag;
+    }
+    bool is_ingestion() { return _is_bulk_load_ingestion; }
+    void set_is_ingestion(bool flag) { _is_bulk_load_ingestion = flag; }
+    void set_ingestion_status(ingestion_status::type status) { _app->set_ingestion_status(status); }
 
 private:
     decree _max_gced_decree{invalid_decree - 1};
@@ -264,6 +265,12 @@ public:
     }
 
     void set_log(mutation_log_ptr log) { _log = log; }
+
+    int32_t get_bulk_load_downloading_count() const { return _bulk_load_downloading_count.load(); }
+    void set_bulk_load_downloading_count(int32_t count)
+    {
+        _bulk_load_downloading_count.store(count);
+    }
 };
 
 class mock_log_file : public log_file

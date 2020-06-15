@@ -49,7 +49,7 @@ public:
 
     error_code test_start_downloading()
     {
-        return _bulk_loader->bulk_load_start_download(APP_NAME, CLUSTER, PROVIDER);
+        return _bulk_loader->start_download(APP_NAME, CLUSTER, PROVIDER);
     }
 
     void test_rollback_to_downloading(bulk_load_status::type cur_status)
@@ -117,13 +117,12 @@ public:
     bool test_report_group_ingestion_status(ingestion_status::type primary,
                                             ingestion_status::type secondary1,
                                             ingestion_status::type secondary2,
-                                            bool is_ingestion_commit,
-                                            bool is_bulk_load_ingestion)
+                                            bool is_empty_prepare_sent,
+                                            bool replica_is_ingestion)
     {
-
-        _replica->_is_bulk_load_ingestion = is_bulk_load_ingestion;
-        _replica->_app->set_ingestion_status(primary);
-        mock_secondary_ingestion_states(secondary1, secondary2, is_ingestion_commit);
+        _replica->set_is_ingestion(replica_is_ingestion);
+        _replica->set_ingestion_status(primary);
+        mock_secondary_ingestion_states(secondary1, secondary2, is_empty_prepare_sent);
         bulk_load_response response;
         _bulk_loader->report_group_ingestion_status(response);
         return response.is_group_ingestion_finished;
@@ -305,8 +304,8 @@ public:
     {
         _bulk_loader->_status = status;
         _bulk_loader->_download_progress = download_progress;
-        _replica->_app->set_ingestion_status(istatus);
-        _replica->_is_bulk_load_ingestion = is_ingestion;
+        _replica->set_is_ingestion(is_ingestion);
+        _replica->set_ingestion_status(istatus);
     }
 
     void mock_secondary_progress(int32_t secondary_progress1, int32_t secondary_progress2)
@@ -346,10 +345,10 @@ public:
 
     void mock_secondary_ingestion_states(ingestion_status::type status1,
                                          ingestion_status::type status2,
-                                         bool is_ingestion_commit = true)
+                                         bool is_empty_prepare_sent = true)
     {
         mock_secondary_progress(100, 100);
-        _replica->_primary_states.is_ingestion_commit = is_ingestion_commit;
+        _replica->set_is_empty_prepare_sent(is_empty_prepare_sent);
 
         partition_bulk_load_state state1, state2;
         state1.__set_ingest_status(status1);
@@ -389,11 +388,6 @@ public:
     {
         mock_primary_states();
         _replica->_primary_states.membership.secondaries.clear();
-    }
-
-    void mock_stub_downloading_count(int32_t count)
-    {
-        stub->set_bulk_load_recent_downloading_replica_count(count);
     }
 
     /// helper functions
@@ -445,7 +439,7 @@ public:
             return false;
         }
         auto pstates = _replica->_primary_states;
-        return (pstates.is_ingestion_commit == false &&
+        return (pstates.ingestion_is_empty_prepare_sent == false &&
                 pstates.secondary_bulk_load_states.size() == 0);
     }
 
@@ -605,7 +599,7 @@ TEST_F(replica_bulk_loader_test, rollback_to_downloading_test)
 TEST_F(replica_bulk_loader_test, finish_download_test)
 {
     mock_downloading_progress(100, 50, 50);
-    mock_stub_downloading_count(3);
+    stub->set_bulk_load_downloading_count(3);
 
     test_update_download_progress(50);
     ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
@@ -756,8 +750,8 @@ TEST_F(replica_bulk_loader_test, report_group_ingestion_status_test)
         ingestion_status::type primary;
         ingestion_status::type secondary1;
         ingestion_status::type secondary2;
-        bool is_ingestion_commit;
-        bool mock_is_ingestion;
+        bool is_empty_prepare_sent;
+        bool replica_is_ingestion;
         bool is_group_ingestion_finished;
     } tests[] = {
         {ingestion_status::IS_INVALID,
@@ -814,10 +808,10 @@ TEST_F(replica_bulk_loader_test, report_group_ingestion_status_test)
         ASSERT_EQ(test_report_group_ingestion_status(test.primary,
                                                      test.secondary1,
                                                      test.secondary2,
-                                                     test.is_ingestion_commit,
-                                                     test.mock_is_ingestion),
+                                                     test.is_empty_prepare_sent,
+                                                     test.replica_is_ingestion),
                   test.is_group_ingestion_finished);
-        ASSERT_FALSE(is_ingestion());
+        ASSERT_FALSE(_replica->is_ingestion());
     }
 }
 

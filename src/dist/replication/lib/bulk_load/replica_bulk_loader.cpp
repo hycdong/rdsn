@@ -243,7 +243,7 @@ error_code replica_bulk_loader::do_bulk_load(const std::string &app_name,
             local_status == bulk_load_status::BLS_INGESTING ||
             local_status == bulk_load_status::BLS_SUCCEED ||
             local_status == bulk_load_status::BLS_PAUSED) {
-            ec = bulk_load_start_download(app_name, cluster_name, provider_name);
+            ec = start_download(app_name, cluster_name, provider_name);
         }
         break;
     case bulk_load_status::BLS_INGESTING:
@@ -330,9 +330,9 @@ error_code replica_bulk_loader::validate_bulk_load_status(bulk_load_status::type
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-error_code replica_bulk_loader::bulk_load_start_download(const std::string &app_name,
-                                                         const std::string &cluster_name,
-                                                         const std::string &provider_name)
+error_code replica_bulk_loader::start_download(const std::string &app_name,
+                                               const std::string &cluster_name,
+                                               const std::string &provider_name)
 {
     if (_stub->_bulk_load_downloading_count.load() >=
         _stub->_max_concurrent_bulk_load_downloading_count) {
@@ -519,24 +519,32 @@ void replica_bulk_loader::check_download_finish()
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_loader::start_ingestion()
 {
     _status = bulk_load_status::BLS_INGESTING;
     _stub->_counter_bulk_load_ingestion_count->increment();
     if (status() == partition_status::PS_PRIMARY) {
-        _replica->_primary_states.is_ingestion_commit = false;
+        _replica->_primary_states.ingestion_is_empty_prepare_sent = false;
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_loader::check_ingestion_finish()
 {
     if (_replica->_app->get_ingestion_status() == ingestion_status::IS_SUCCEED &&
-        !_replica->_primary_states.is_ingestion_commit) {
-        // gurantee secondary commit ingestion request
+        !_replica->_primary_states.ingestion_is_empty_prepare_sent) {
+        // send an empty prepare to gurantee secondary commit ingestion request, and set
+        // `pop_all_committed_mutations` as true
+        // ingestion is a special write request, replay this mutation can not learn data from
+        // external files, so when ingestion succeed, we should create a checkpoint
+        // if learn is evoked after ingestion, we should gurantee that learner should learn from
+        // checkpoint, to gurantee the condition above, we should pop all committed mutations in
+        // prepare list to gurantee learn type is LT_APP
         mutation_ptr mu = _replica->new_mutation(invalid_decree);
         mu->add_client_request(RPC_REPLICATION_WRITE_EMPTY, nullptr);
         _replica->init_prepare(mu, false, true);
-        _replica->_primary_states.is_ingestion_commit = true;
+        _replica->_primary_states.ingestion_is_empty_prepare_sent = true;
     }
 }
 
@@ -774,42 +782,44 @@ void replica_bulk_loader::report_group_download_progress(/*out*/ bulk_load_respo
     response.__set_total_download_progress(total_progress);
 }
 
-void replica_bulk_loader::report_group_ingestion_status(bulk_load_response &response)
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_bulk_loader::report_group_ingestion_status(/*out*/ bulk_load_response &response)
 {
     if (status() != partition_status::PS_PRIMARY) {
-        dwarn_replica("receive request with wrong status {}", enum_to_string(status()));
+        dwarn_replica("replica status={}, should be {}",
+                      enum_to_string(status()),
+                      enum_to_string(partition_status::PS_PRIMARY));
         response.err = ERR_INVALID_STATE;
         return;
     }
 
-    partition_bulk_load_state p_state;
-    p_state.__set_ingest_status(_replica->_app->get_ingestion_status());
-    response.group_bulk_load_state[_replica->_primary_states.membership.primary] = p_state;
+    partition_bulk_load_state primary_state;
+    primary_state.__set_ingest_status(_replica->_app->get_ingestion_status());
+    response.group_bulk_load_state[_replica->_primary_states.membership.primary] = primary_state;
     ddebug_replica("primary = {}, ingestion status = {}",
                    _replica->_primary_states.membership.primary.to_string(),
-                   p_state.ingest_status);
+                   enum_to_string(primary_state.ingest_status));
 
-    bool is_group_ingestion_finish = p_state.ingest_status == ingestion_status::IS_SUCCEED;
-    // TODO(heyuchen): remove this log
-    ddebug_replica("hyc: is_group_ingestion_finish = {}", is_group_ingestion_finish);
+    bool is_group_ingestion_finish = primary_state.ingest_status == ingestion_status::IS_SUCCEED;
     for (const auto &target_address : _replica->_primary_states.membership.secondaries) {
-        partition_bulk_load_state s_state =
+        const auto &secondary_state =
             _replica->_primary_states.secondary_bulk_load_states[target_address];
-        ingestion_status::type i_status =
-            s_state.__isset.ingest_status ? s_state.ingest_status : ingestion_status::IS_INVALID;
-        ddebug_replica("secondary = {}, ingestion status={}", target_address.to_string(), i_status);
-        response.group_bulk_load_state[target_address] = s_state;
+        ingestion_status::type ingest_status = secondary_state.__isset.ingest_status
+                                                   ? secondary_state.ingest_status
+                                                   : ingestion_status::IS_INVALID;
+        ddebug_replica("secondary = {}, ingestion status={}",
+                       target_address.to_string(),
+                       enum_to_string(ingest_status));
+        response.group_bulk_load_state[target_address] = secondary_state;
         is_group_ingestion_finish =
-            is_group_ingestion_finish && (i_status == ingestion_status::IS_SUCCEED);
-        // TODO(heyuchen): remove this log
-        ddebug_replica("hyc: is_group_ingestion_finish = {}", is_group_ingestion_finish);
+            is_group_ingestion_finish && (ingest_status == ingestion_status::IS_SUCCEED);
     }
     response.__set_is_group_ingestion_finished(
         is_group_ingestion_finish && (_replica->_primary_states.membership.secondaries.size() + 1 ==
                                       _replica->_primary_states.membership.max_replica_count));
 
+    // if group ingestion finish, recover wirte immediately
     if (is_group_ingestion_finish) {
-        // group ingestion finish will recover wirte
         ddebug_replica("finish ingestion, recover write");
         _replica->_is_bulk_load_ingestion = false;
         _replica->_bulk_load_ingestion_start_time_ms = 0;

@@ -220,7 +220,8 @@ private:
 
     /////////////////////////////////////////////////////////////////
     // 2pc
-    // TODO(heyuchen): add comments
+    // `pop_all_committed_mutations = true` will be used for ingestion empty write
+    // See more about it in `replica_bulk_loader.cpp`
     void
     init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_all_committed_mutations = false);
     void send_prepare_message(::dsn::rpc_address addr,

@@ -81,8 +81,7 @@ public:
         : next_learning_version(0),
           write_queue(gpid, max_concurrent_2pc_count, batch_write_disabled),
           last_prepare_decree_on_new_primary(0),
-          last_prepare_ts_ms(dsn_now_ms()),
-          is_ingestion_commit(false)
+          last_prepare_ts_ms(dsn_now_ms())
     {
     }
 
@@ -154,8 +153,9 @@ public:
     node_tasks group_bulk_load_pending_replies;
     // bulk_load_state of secondary replicas
     std::unordered_map<rpc_address, partition_bulk_load_state> secondary_bulk_load_states;
-    // TODO(heyuchen): add comment
-    bool is_ingestion_commit;
+    // if primary send an empty prepare after ingestion succeed to gurantee secondary commit its
+    // ingestion request
+    bool ingestion_is_empty_prepare_sent{false};
 };
 
 class secondary_context

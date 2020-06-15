@@ -35,16 +35,18 @@ private:
                             const std::string &provider_name);
 
     // compare meta bulk load status and local bulk load status
-    // \return ERR_INVALID_STATE if local bulk load status is invalid
+    // \return ERR_INVALID_STATE if local status is invalid
+    // for example, if meta status is ingestion, replica local status can only be downloaded or
+    // ingestion, if local status is other status, will return ERR_INVALID_STATE
     error_code validate_bulk_load_status(bulk_load_status::type meta_status,
                                          bulk_load_status::type local_status);
 
     // replica start or restart download sst files from remote provider
     // \return ERR_BUSY if node has already had enought replica executing downloading
     // \return download errors by function `download_sst_files`
-    error_code bulk_load_start_download(const std::string &app_name,
-                                        const std::string &cluster_name,
-                                        const std::string &provider_name);
+    error_code start_download(const std::string &app_name,
+                              const std::string &cluster_name,
+                              const std::string &provider_name);
 
     // \return ERR_FILE_OPERATION_FAILED: create local bulk load dir failed
     // \return download metadata file error, see function `do_download`
