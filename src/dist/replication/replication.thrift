@@ -990,7 +990,10 @@ struct ingestion_request
 
 struct ingestion_response
 {
+    // Possible errors:
+    // - ERR_TRY_AGAIN: retry ingestion
     1:dsn.error_code    err;
+    // rocksdb ingestion error code
     2:i32               rocksdb_error;
 }
 

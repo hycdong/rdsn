@@ -1016,10 +1016,7 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
 {
     // if meet 2pc error, ingesting will rollback to downloading, no need to retry here
     if (err != ERR_OK) {
-        derror_f("app({}) partition({}) ingestion files failed, error = {}",
-                 app_name,
-                 pid.to_string(),
-                 err.to_string());
+        derror_f("app({}) partition({}) ingestion files failed, error = {}", app_name, pid, err);
         tasking::enqueue(
             LPC_META_STATE_NORMAL,
             _meta_svc->tracker(),
@@ -1031,7 +1028,7 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         derror_f("app({}) partition({}) ingestion files failed while empty write, rocksdb error = "
                  "{}, retry it later",
                  app_name,
-                 pid.to_string(),
+                 pid,
                  resp.rocksdb_error);
         tasking::enqueue(LPC_BULK_LOAD_INGESTION,
                          _meta_svc->tracker(),
@@ -1041,11 +1038,13 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         return;
     }
 
+    // some unexpected errors happened, such as write empty write failed but rocksdb_error is ok
+    // stop bulk load process with failed
     if (resp.err != ERR_OK || resp.rocksdb_error != 0) {
         derror_f("app({}) partition({}) failed to ingestion files, error = {}, rocksdb error = {}",
                  app_name,
-                 pid.to_string(),
-                 resp.err.to_string(),
+                 pid,
+                 resp.err,
                  resp.rocksdb_error);
         tasking::enqueue(
             LPC_META_STATE_NORMAL,
@@ -1054,7 +1053,7 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         return;
     }
 
-    ddebug_f("app({}) partition({}) receive ingestion reply succeed", app_name, pid.to_string());
+    ddebug_f("app({}) partition({}) receive ingestion reply succeed", app_name, pid);
 }
 
 // ThreadPool: THREAD_POOL_META_STATE

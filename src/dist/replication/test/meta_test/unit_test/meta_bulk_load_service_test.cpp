@@ -251,6 +251,14 @@ public:
         bulk_svc().on_partition_bulk_load_reply(err, request, response);
     }
 
+    void test_on_partition_ingestion_reply(ingestion_response &resp,
+                                           const gpid &pid,
+                                           error_code rpc_err = ERR_OK)
+    {
+        bulk_svc().on_partition_ingestion_reply(rpc_err, std::move(resp), APP_NAME, pid);
+        wait_all();
+    }
+
     void reset_local_bulk_load_states(int32_t app_id, const std::string &app_name)
     {
         bulk_svc().reset_local_bulk_load_states(app_id, app_name);
@@ -290,11 +298,6 @@ public:
     bool need_update_metadata(gpid pid)
     {
         return bulk_svc().is_partition_metadata_not_updated(pid);
-    }
-
-    void on_partition_ingestion_reply(error_code err, ingestion_response &resp, const gpid &pid)
-    {
-        return bulk_svc().on_partition_ingestion_reply(err, std::move(resp), APP_NAME, pid);
     }
 
 public:
@@ -533,14 +536,8 @@ public:
     void mock_ingestion_context(error_code err, int32_t rocksdb_err, int32_t in_progress_count)
     {
         mock_meta_bulk_load_context(_app_id, in_progress_count, bulk_load_status::BLS_INGESTING);
-        _ingest_resp.err = err;
-        _ingest_resp.rocksdb_error = rocksdb_err;
-    }
-
-    void test_on_partition_ingestion_reply(error_code rpc_err = ERR_OK)
-    {
-        on_partition_ingestion_reply(rpc_err, _ingest_resp, gpid(_app_id, _pidx));
-        wait_all();
+        _ingestion_resp.err = err;
+        _ingestion_resp.rocksdb_error = rocksdb_err;
     }
 
 public:
@@ -553,7 +550,7 @@ public:
     int32_t _partition_count;
     bulk_load_request _req;
     bulk_load_response _resp;
-    ingestion_response _ingest_resp;
+    ingestion_response _ingestion_resp;
 };
 
 /// on_partition_bulk_load_reply unit tests
@@ -690,7 +687,7 @@ TEST_F(bulk_load_process_test, response_object_not_found)
 TEST_F(bulk_load_process_test, ingest_rpc_error)
 {
     mock_ingestion_context(ERR_OK, 1, _partition_count);
-    test_on_partition_ingestion_reply(ERR_TIMEOUT);
+    test_on_partition_ingestion_reply(_ingestion_resp, gpid(_app_id, _pidx), ERR_TIMEOUT);
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
 }
 
@@ -698,14 +695,14 @@ TEST_F(bulk_load_process_test, ingest_empty_write_error)
 {
     fail::cfg("meta_bulk_load_partition_ingestion", "return()");
     mock_ingestion_context(ERR_TRY_AGAIN, 11, _partition_count);
-    test_on_partition_ingestion_reply();
+    test_on_partition_ingestion_reply(_ingestion_resp, gpid(_app_id, _pidx));
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_INGESTING);
 }
 
 TEST_F(bulk_load_process_test, ingest_wrong)
 {
     mock_ingestion_context(ERR_OK, 1, _partition_count);
-    on_partition_ingestion_reply(ERR_OK, _ingest_resp, gpid(_app_id, _pidx));
+    test_on_partition_ingestion_reply(_ingestion_resp, gpid(_app_id, _pidx));
     wait_all();
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
 }
@@ -713,7 +710,7 @@ TEST_F(bulk_load_process_test, ingest_wrong)
 TEST_F(bulk_load_process_test, ingest_succeed)
 {
     mock_ingestion_context(ERR_OK, 0, 1);
-    test_on_partition_ingestion_reply();
+    test_on_partition_ingestion_reply(_ingestion_resp, gpid(_app_id, _pidx));
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_INGESTING);
 }
 
