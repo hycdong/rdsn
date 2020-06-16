@@ -66,10 +66,12 @@ private:
     void start_ingestion();
     void check_ingestion_finish();
     void handle_bulk_load_succeed();
+    // called when bulk load succeed or failed or canceled
     void handle_bulk_load_finish(bulk_load_status::type new_status);
     error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
+    void cleanup_download_task();
     void clear_bulk_load_states();
-
+    bool is_cleanuped();
     void pause_bulk_load();
 
     // only called by primary
@@ -84,10 +86,6 @@ private:
     // only called by secondary
     void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
                                             /*out*/ group_bulk_load_response &response);
-
-    bool is_cleanup();
-    void cleanup();
-    void cleanup_download_task();
 
     //
     // bulk load helper functions

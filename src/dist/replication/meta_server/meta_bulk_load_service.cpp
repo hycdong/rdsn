@@ -593,29 +593,30 @@ void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
 void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &response,
                                                 const rpc_address &primary_addr)
 {
-    gpid pid = response.pid;
+    const std::string &app_name = response.app_name;
+    const gpid &pid = response.pid;
+
     if (!response.__isset.is_group_bulk_load_context_cleaned) {
-        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), "
-                "primary_status({}), but not checking cleanup",
-                primary_addr.to_string(),
-                response.app_name,
-                pid,
-                dsn::enum_to_string(response.primary_bulk_load_status));
+        dwarn_f(
+            "recevie bulk load response from node({}) app({}), partition({}), primary_status({}), "
+            "but is_group_bulk_load_context_cleaned is not set",
+            primary_addr.to_string(),
+            app_name,
+            pid,
+            dsn::enum_to_string(response.primary_bulk_load_status));
+        return;
         return;
     }
 
-    for (auto iter = response.group_bulk_load_state.begin();
-         iter != response.group_bulk_load_state.end();
-         ++iter) {
-        partition_bulk_load_state states = iter->second;
-        if (!states.__isset.is_cleanuped) {
-            dwarn_f("recevie bulk load response from node({}) app({}) partition({}), "
-                    "primary_status({}), but node({}) not set cleanup flag",
+    for (const auto &kv : response.group_bulk_load_state) {
+        if (!kv.second.__isset.is_cleanuped) {
+            dwarn_f("recevie bulk load response from node({}) app({}), partition({}), "
+                    "primary_status({}), but node({}) is_cleanuped is not set",
                     primary_addr.to_string(),
-                    response.app_name,
+                    app_name,
                     pid,
                     dsn::enum_to_string(response.primary_bulk_load_status),
-                    iter->first.to_string());
+                    kv.first.to_string());
             return;
         }
     }
@@ -627,18 +628,18 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
                 "recevie bulk load response from node({}) app({}) partition({}), current partition "
                 "has already be cleaned up",
                 primary_addr.to_string(),
-                response.app_name,
-                pid.to_string());
+                app_name,
+                pid);
             return;
         }
     }
 
     bool all_clean_up = response.is_group_bulk_load_context_cleaned;
     ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
-             "group_bulk_load_context_cleaned = {}",
+             "is_group_bulk_load_context_cleaned = {}",
              primary_addr.to_string(),
-             response.app_name,
-             pid.to_string(),
+             app_name,
+             pid,
              dsn::enum_to_string(response.primary_bulk_load_status),
              all_clean_up);
     {
@@ -648,25 +649,25 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
     }
 
     if (all_clean_up) {
-        int count;
-        std::shared_ptr<app_state> app;
+        int32_t count;
         {
             zauto_write_lock l(_lock);
             count = --_apps_in_progress_count[pid.get_app_id()];
         }
         if (count == 0) {
+            std::shared_ptr<app_state> app;
             {
                 zauto_read_lock l(app_lock());
                 app = _state->get_app(pid.get_app_id());
                 if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
                     dwarn_f("app(name={}, id={}) is not existed, set bulk load failed",
-                            response.app_name,
+                            app_name,
                             pid.get_app_id());
-                    remove_bulk_load_dir(pid.get_app_id(), response.app_name);
+                    remove_bulk_load_dir(pid.get_app_id(), app_name);
                     return;
                 }
             }
-            ddebug_f("app({}) all partitions cleanup bulk load context", response.app_name);
+            ddebug_f("app({}) all partitions cleanup bulk load context", app_name);
             remove_bulk_load_dir(std::move(app), true);
         }
     }

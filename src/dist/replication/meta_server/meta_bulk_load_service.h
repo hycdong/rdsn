@@ -43,6 +43,16 @@ struct bulk_load_info
     DEFINE_JSON_SERIALIZATION(app_id, app_name, partition_count)
 };
 
+template <typename T>
+inline void erase_map_elem_by_id(int32_t app_id, std::unordered_map<gpid, T> &mymap)
+{
+    for (auto iter = mymap.begin(); iter != mymap.end();) {
+        if (iter->first.get_app_id() == app_id) {
+            mymap.erase(iter++);
+        }
+    }
+}
+
 class bulk_load_service
 {
 public:
@@ -340,16 +350,6 @@ private:
             return iter->second.status;
         } else {
             return bulk_load_status::BLS_INVALID;
-        }
-    }
-
-    template <typename T>
-    inline void erase_map_elem_by_id(int32_t app_id, std::unordered_map<gpid, T> &mymap)
-    {
-        for (auto iter = mymap.begin(); iter != mymap.end();) {
-            if (iter->first.get_app_id() == app_id) {
-                mymap.erase(iter++);
-            }
         }
     }
 

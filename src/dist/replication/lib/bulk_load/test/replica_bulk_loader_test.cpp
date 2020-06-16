@@ -373,7 +373,6 @@ public:
         int32_t primary_progress = primary_status == bulk_load_status::BLS_SUCCEED ? 100 : 0;
         mock_replica_bulk_load_varieties(
             primary_status, primary_progress, ingestion_status::IS_INVALID);
-
         mock_secondary_ingestion_states(
             ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, true);
 
@@ -384,16 +383,10 @@ public:
         _replica->set_secondary_bulk_load_state(SECONDARY2, state2);
     }
 
-    void mock_primary_state_unhealthy()
-    {
-        mock_primary_states();
-        _replica->_primary_states.membership.secondaries.clear();
-    }
-
     /// helper functions
 
     int32_t get_download_progress() { return _bulk_loader->_download_progress.load(); }
-    bool get_clean_up_flag() { return _bulk_loader->is_cleanup(); }
+    bool get_clean_up_flag() { return _bulk_loader->is_cleanuped(); }
     bulk_load_status::type get_bulk_load_status() { return _bulk_loader->_status; }
     int32_t get_stub_downloading_count()
     {
@@ -818,7 +811,8 @@ TEST_F(replica_bulk_loader_test, report_group_ingestion_status_test)
 // report_group_context_clean_flag unit tests
 TEST_F(replica_bulk_loader_test, report_group_context_clean_flag_in_unhealthy_state)
 {
-    mock_primary_state_unhealthy();
+    // _primary_states.membership.secondaries is empty
+    mock_replica_config(partition_status::PS_PRIMARY);
     ASSERT_FALSE(test_report_group_context_clean_flag());
 }
 

@@ -548,6 +548,7 @@ void replica_bulk_loader::check_ingestion_finish()
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_loader::handle_bulk_load_succeed()
 {
     // generate checkpoint
@@ -560,10 +561,11 @@ void replica_bulk_loader::handle_bulk_load_succeed()
     _stub->_counter_bulk_load_finish_count->increment();
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_loader::handle_bulk_load_finish(bulk_load_status::type new_status)
 {
-    if (is_cleanup()) {
-        ddebug_replica("bulk load context has been cleaned up");
+    if (is_cleanuped()) {
+        ddebug_replica("bulk load states have been cleaned up");
         return;
     }
 
@@ -589,10 +591,10 @@ void replica_bulk_loader::handle_bulk_load_finish(bulk_load_status::type new_sta
             get_gpid().thread_hash());
     }
 
-    // clean up bulk load states
     clear_bulk_load_states();
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 error_code replica_bulk_loader::remove_local_bulk_load_dir(const std::string &bulk_load_dir)
 {
     if (!utils::filesystem::directory_exists(bulk_load_dir) ||
@@ -632,9 +634,12 @@ void replica_bulk_loader::cleanup_download_task()
     _download_task.clear();
 }
 
-void replica_bulk_loader::cleanup()
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_bulk_loader::clear_bulk_load_states()
 {
-    _status = bulk_load_status::BLS_INVALID;
+    if (_status == bulk_load_status::BLS_DOWNLOADING) {
+        try_decrease_bulk_load_download_count();
+    }
 
     cleanup_download_task();
     _metadata.files.clear();
@@ -643,29 +648,24 @@ void replica_bulk_loader::cleanup()
     _download_progress.store(0);
     _download_status.store(ERR_OK);
 
-    _max_download_file_size.store(0);
-    _bulk_load_start_time_ms = 0;
-
-    _replica->_is_bulk_load_ingestion = false;
-    _replica->_bulk_load_ingestion_start_time_ms = 0;
-}
-
-void replica_bulk_loader::clear_bulk_load_states()
-{
-    if (_status == bulk_load_status::BLS_DOWNLOADING) {
-        try_decrease_bulk_load_download_count();
-    }
     _replica->_is_bulk_load_ingestion = false;
     _replica->_app->set_ingestion_status(ingestion_status::IS_INVALID);
-    cleanup();
+
+    _max_download_file_size.store(0);
+    _bulk_load_start_time_ms = 0;
+    _replica->_bulk_load_ingestion_start_time_ms = 0;
+
+    _status = bulk_load_status::BLS_INVALID;
 }
 
-bool replica_bulk_loader::is_cleanup()
+// ThreadPool: THREAD_POOL_REPLICATION
+bool replica_bulk_loader::is_cleanuped()
 {
     return _status == bulk_load_status::type::BLS_INVALID && _cur_downloaded_size.load() == 0 &&
            _download_progress.load() == 0 && _download_status.load() == ERR_OK &&
            _download_task.size() == 0 && _metadata.files.size() == 0 &&
-           _metadata.file_total_size == 0;
+           _metadata.file_total_size == 0 && !_replica->_is_bulk_load_ingestion &&
+           _replica->_app->get_ingestion_status() == ingestion_status::IS_INVALID;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -728,7 +728,7 @@ void replica_bulk_loader::report_bulk_load_states_to_primary(bulk_load_status::t
     case bulk_load_status::BLS_SUCCEED:
     case bulk_load_status::BLS_FAILED:
     case bulk_load_status::BLS_CANCELED:
-        bulk_load_state.__set_is_cleanuped(is_cleanup());
+        bulk_load_state.__set_is_cleanuped(is_cleanuped());
         break;
     case bulk_load_status::BLS_PAUSING:
         bulk_load_state.__set_is_paused(local_status == bulk_load_status::BLS_PAUSED);
@@ -814,9 +814,10 @@ void replica_bulk_loader::report_group_ingestion_status(/*out*/ bulk_load_respon
         is_group_ingestion_finish =
             is_group_ingestion_finish && (ingest_status == ingestion_status::IS_SUCCEED);
     }
-    response.__set_is_group_ingestion_finished(
+    is_group_ingestion_finish =
         is_group_ingestion_finish && (_replica->_primary_states.membership.secondaries.size() + 1 ==
-                                      _replica->_primary_states.membership.max_replica_count));
+                                      _replica->_primary_states.membership.max_replica_count);
+    response.__set_is_group_ingestion_finished(is_group_ingestion_finish);
 
     // if group ingestion finish, recover wirte immediately
     if (is_group_ingestion_finish) {
@@ -826,35 +827,40 @@ void replica_bulk_loader::report_group_ingestion_status(/*out*/ bulk_load_respon
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_loader::report_group_context_clean_flag(bulk_load_response &response)
 {
     if (status() != partition_status::PS_PRIMARY) {
-        dwarn_replica("receive request with wrong status {}", enum_to_string(status()));
+        dwarn_replica("replica status={}, should be {}",
+                      enum_to_string(status()),
+                      enum_to_string(partition_status::PS_PRIMARY));
         response.err = ERR_INVALID_STATE;
         return;
     }
 
-    partition_bulk_load_state p_state;
-    p_state.__set_is_cleanuped(is_cleanup());
-    response.group_bulk_load_state[_replica->_primary_states.membership.primary] = p_state;
-    ddebug_replica("primary = {}, bulk_load_context cleanup = {}",
+    partition_bulk_load_state primary_state;
+    primary_state.__set_is_cleanuped(is_cleanuped());
+    response.group_bulk_load_state[_replica->_primary_states.membership.primary] = primary_state;
+    ddebug_replica("primary = {}, bulk load states cleanuped = {}",
                    _replica->_primary_states.membership.primary.to_string(),
-                   p_state.is_cleanuped);
+                   primary_state.is_cleanuped);
 
-    bool group_flag = p_state.is_cleanuped;
+    bool group_flag = (primary_state.is_cleanuped) &&
+                      (_replica->_primary_states.membership.secondaries.size() + 1 ==
+                       _replica->_primary_states.membership.max_replica_count);
     for (const auto &target_address : _replica->_primary_states.membership.secondaries) {
-        partition_bulk_load_state s_state =
+        const auto &secondary_state =
             _replica->_primary_states.secondary_bulk_load_states[target_address];
-        bool is_cleanup = s_state.__isset.is_cleanuped ? s_state.is_cleanuped : false;
-        ddebug_replica("secondary = {}, bulk_load_context cleanup = {}",
+        bool is_cleanup =
+            secondary_state.__isset.is_cleanuped ? secondary_state.is_cleanuped : false;
+        ddebug_replica("secondary = {}, bulk load states cleanuped = {}",
                        target_address.to_string(),
                        is_cleanup);
-        response.group_bulk_load_state[target_address] = s_state;
+        response.group_bulk_load_state[target_address] = secondary_state;
         group_flag = group_flag && is_cleanup;
     }
-    response.__set_is_group_bulk_load_context_cleaned(
-        group_flag && (_replica->_primary_states.membership.secondaries.size() + 1 ==
-                       _replica->_primary_states.membership.max_replica_count));
+    ddebug_replica("group bulk load states cleanuped = {}", group_flag);
+    response.__set_is_group_bulk_load_context_cleaned(group_flag);
 }
 
 void replica_bulk_loader::report_group_is_paused(bulk_load_response &response)
