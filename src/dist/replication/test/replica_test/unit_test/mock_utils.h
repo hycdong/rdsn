@@ -152,6 +152,10 @@ public:
     {
         _primary_states.secondary_bulk_load_states[node] = state;
     }
+    partition_bulk_load_state get_secondary_bulk_load_state(const rpc_address &node)
+    {
+        return _primary_states.secondary_bulk_load_states[node];
+    }
     void set_is_empty_prepare_sent(bool flag)
     {
         _primary_states.ingestion_is_empty_prepare_sent = flag;

@@ -397,33 +397,18 @@ public:
 
     int32_t is_ingestion() { return _replica->_is_bulk_load_ingestion; }
 
-    bool is_download_progress_reset()
+    bool is_secondary_bulk_load_state_reset()
     {
-        partition_bulk_load_state s =
-            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
-        return (s.__isset.download_progress && s.__isset.download_status &&
-                s.download_progress == 0 && s.download_status == ERR_OK);
-    }
-
-    bool is_ingestion_status_reset()
-    {
-        partition_bulk_load_state s =
-            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
-        return (s.__isset.ingest_status && s.ingest_status == ingestion_status::IS_INVALID);
-    }
-
-    bool is_cleanup_flag_reset()
-    {
-        partition_bulk_load_state s =
-            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
-        return (s.__isset.is_cleanuped && !s.is_cleanuped);
-    }
-
-    bool is_paused_flag_reset()
-    {
-        partition_bulk_load_state s =
-            _replica->_primary_states.secondary_bulk_load_states[SECONDARY];
-        return (s.__isset.is_paused && !s.is_paused);
+        const partition_bulk_load_state &state = _replica->get_secondary_bulk_load_state(SECONDARY);
+        bool is_download_state_reset =
+            (state.__isset.download_progress && state.__isset.download_status &&
+             state.download_progress == 0 && state.download_status == ERR_OK);
+        bool is_ingestion_status_reset =
+            (state.__isset.ingest_status && state.ingest_status == ingestion_status::IS_INVALID);
+        bool is_cleanup_flag_reset = (state.__isset.is_cleanuped && !state.is_cleanuped);
+        bool is_paused_flag_reset = (state.__isset.is_paused && !state.is_paused);
+        return is_download_state_reset && is_ingestion_status_reset && is_cleanup_flag_reset &&
+               is_paused_flag_reset;
     }
 
     bool primary_is_bulk_load_states_cleaned()
@@ -847,14 +832,14 @@ TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_downloading_error)
 {
     mock_group_progress(bulk_load_status::BLS_DOWNLOADING, 30, 30, 60);
     test_on_group_bulk_load_reply(bulk_load_status::BLS_DOWNLOADING, BALLOT, ERR_BUSY);
-    ASSERT_TRUE(is_download_progress_reset());
+    ASSERT_TRUE(is_secondary_bulk_load_state_reset());
 }
 
 TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_downloaded_error)
 {
     mock_group_progress(bulk_load_status::BLS_DOWNLOADED);
     test_on_group_bulk_load_reply(bulk_load_status::BLS_DOWNLOADED, BALLOT, ERR_INVALID_STATE);
-    ASSERT_TRUE(is_download_progress_reset());
+    ASSERT_TRUE(is_secondary_bulk_load_state_reset());
 }
 
 TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_ingestion_error)
@@ -862,8 +847,7 @@ TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_ingestion_error)
     mock_group_ingestion_states(ingestion_status::IS_RUNNING, ingestion_status::IS_SUCCEED);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_INGESTING, BALLOT - 1, ERR_OK, ERR_INVALID_STATE);
-    ASSERT_TRUE(is_download_progress_reset());
-    ASSERT_TRUE(is_ingestion_status_reset());
+    ASSERT_TRUE(is_secondary_bulk_load_state_reset());
 }
 
 TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_succeed_error)
@@ -871,20 +855,14 @@ TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_succeed_error)
     mock_group_cleanup_flag(bulk_load_status::BLS_SUCCEED);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_SUCCEED, BALLOT - 1, ERR_OK, ERR_INVALID_STATE);
-    ASSERT_TRUE(is_download_progress_reset());
-    ASSERT_TRUE(is_ingestion_status_reset());
-    ASSERT_TRUE(is_cleanup_flag_reset());
-    ASSERT_TRUE(is_paused_flag_reset());
+    ASSERT_TRUE(is_secondary_bulk_load_state_reset());
 }
 
 TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_failed_error)
 {
     mock_group_ingestion_states(ingestion_status::IS_RUNNING, ingestion_status::IS_SUCCEED);
     test_on_group_bulk_load_reply(bulk_load_status::BLS_FAILED, BALLOT, ERR_OK, ERR_TIMEOUT);
-    ASSERT_TRUE(is_download_progress_reset());
-    ASSERT_TRUE(is_ingestion_status_reset());
-    ASSERT_TRUE(is_cleanup_flag_reset());
-    ASSERT_TRUE(is_paused_flag_reset());
+    ASSERT_TRUE(is_secondary_bulk_load_state_reset());
 }
 
 TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_pausing_error)
@@ -892,18 +870,14 @@ TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_pausing_error)
     mock_group_progress(bulk_load_status::BLS_PAUSED, 100, 50, 10);
     test_on_group_bulk_load_reply(
         bulk_load_status::BLS_PAUSING, BALLOT, ERR_OK, ERR_NETWORK_FAILURE);
-    ASSERT_FALSE(is_download_progress_reset());
-    ASSERT_TRUE(is_paused_flag_reset());
+    ASSERT_TRUE(is_secondary_bulk_load_state_reset());
 }
 
 TEST_F(replica_bulk_loader_test, on_group_bulk_load_reply_rpc_error)
 {
     mock_group_cleanup_flag(bulk_load_status::BLS_INVALID, true, false);
     test_on_group_bulk_load_reply(bulk_load_status::BLS_CANCELED, BALLOT, ERR_OBJECT_NOT_FOUND);
-    ASSERT_TRUE(is_download_progress_reset());
-    ASSERT_TRUE(is_ingestion_status_reset());
-    ASSERT_TRUE(is_cleanup_flag_reset());
-    ASSERT_TRUE(is_paused_flag_reset());
+    ASSERT_TRUE(is_secondary_bulk_load_state_reset());
 }
 
 // validate_bulk_load_status unit test

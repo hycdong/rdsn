@@ -190,8 +190,7 @@ void replica_bulk_loader::on_group_bulk_load_reply(error_code err,
         derror_replica("failed to receive group_bulk_load_reply from {}, error = {}",
                        req.target_address.to_string(),
                        err.to_string());
-        _replica->_primary_states.reset_node_bulk_load_states(req.target_address,
-                                                              req.meta_bulk_load_status);
+        _replica->_primary_states.reset_node_bulk_load_states(req.target_address);
         return;
     }
 
@@ -199,8 +198,7 @@ void replica_bulk_loader::on_group_bulk_load_reply(error_code err,
         derror_replica("receive group_bulk_load response from {} failed, error = {}",
                        req.target_address.to_string(),
                        resp.err.to_string());
-        _replica->_primary_states.reset_node_bulk_load_states(req.target_address,
-                                                              req.meta_bulk_load_status);
+        _replica->_primary_states.reset_node_bulk_load_states(req.target_address);
         return;
     }
 
@@ -210,8 +208,8 @@ void replica_bulk_loader::on_group_bulk_load_reply(error_code err,
                        req.target_address.to_string(),
                        req.config.ballot,
                        get_ballot());
-        _replica->_primary_states.reset_node_bulk_load_states(req.target_address,
-                                                              req.meta_bulk_load_status);
+        _replica->_primary_states.reset_node_bulk_load_states(req.target_address);
+        return;
     }
 
     _replica->_primary_states.secondary_bulk_load_states[req.target_address] = resp.bulk_load_state;
@@ -571,7 +569,7 @@ void replica_bulk_loader::handle_bulk_load_finish(bulk_load_status::type new_sta
 
     if (status() == partition_status::PS_PRIMARY) {
         for (const auto &target_address : _replica->_primary_states.membership.secondaries) {
-            _replica->_primary_states.reset_node_bulk_load_states(target_address, new_status);
+            _replica->_primary_states.reset_node_bulk_load_states(target_address);
         }
     }
 

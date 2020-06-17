@@ -152,44 +152,14 @@ bool primary_context::check_exist(::dsn::rpc_address node, partition_status::typ
     }
 }
 
-// TODO(heyuchen): refactor this function
-void primary_context::reset_node_bulk_load_states(const rpc_address &node,
-                                                  bulk_load_status::type meta_status)
+// TODO(heyuchen): test for this function
+void primary_context::reset_node_bulk_load_states(const rpc_address &node)
 {
-    bool reset_progress = (meta_status == bulk_load_status::type::BLS_DOWNLOADING ||
-                           meta_status == bulk_load_status::type::BLS_DOWNLOADED ||
-                           meta_status == bulk_load_status::type::BLS_INGESTING ||
-                           meta_status == bulk_load_status::type::BLS_SUCCEED ||
-                           meta_status == bulk_load_status::BLS_FAILED ||
-                           meta_status == bulk_load_status::BLS_CANCELED);
-
-    bool reset_ingestion = (meta_status == bulk_load_status::BLS_INGESTING ||
-                            meta_status == bulk_load_status::type::BLS_SUCCEED ||
-                            meta_status == bulk_load_status::BLS_FAILED ||
-                            meta_status == bulk_load_status::BLS_CANCELED);
-
-    bool reset_cleanup_flag = (meta_status == bulk_load_status::type::BLS_SUCCEED ||
-                               meta_status == bulk_load_status::type::BLS_FAILED ||
-                               meta_status == bulk_load_status::BLS_CANCELED);
-
-    bool reset_pause_flag = (meta_status == bulk_load_status::type::BLS_PAUSING ||
-                             meta_status == bulk_load_status::type::BLS_PAUSED ||
-                             meta_status == bulk_load_status::type::BLS_SUCCEED ||
-                             meta_status == bulk_load_status::type::BLS_FAILED ||
-                             meta_status == bulk_load_status::BLS_CANCELED);
-    if (reset_progress) {
-        secondary_bulk_load_states[node].__set_download_progress(0);
-        secondary_bulk_load_states[node].__set_download_status(ERR_OK);
-    }
-    if (reset_ingestion) {
-        secondary_bulk_load_states[node].__set_ingest_status(ingestion_status::IS_INVALID);
-    }
-    if (reset_cleanup_flag) {
-        secondary_bulk_load_states[node].__set_is_cleanuped(false);
-    }
-    if (reset_pause_flag) {
-        secondary_bulk_load_states[node].__set_is_paused(false);
-    }
+    secondary_bulk_load_states[node].__set_download_progress(0);
+    secondary_bulk_load_states[node].__set_download_status(ERR_OK);
+    secondary_bulk_load_states[node].__set_ingest_status(ingestion_status::IS_INVALID);
+    secondary_bulk_load_states[node].__set_is_cleanuped(false);
+    secondary_bulk_load_states[node].__set_is_paused(false);
 }
 
 void primary_context::cleanup_bulk_load_states()
