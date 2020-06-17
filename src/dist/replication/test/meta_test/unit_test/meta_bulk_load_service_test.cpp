@@ -486,12 +486,13 @@ public:
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_INGESTING);
 
-        partition_bulk_load_state state;
+        partition_bulk_load_state state, state2;
         state.__set_ingest_status(ingestion_status::IS_SUCCEED);
+        state2.__set_ingest_status(secondary_istatus);
+
         _resp.group_bulk_load_state[PRIMARY] = state;
         _resp.group_bulk_load_state[SECONDARY1] = state;
-        state.__set_ingest_status(secondary_istatus);
-        _resp.group_bulk_load_state[SECONDARY2] = state;
+        _resp.group_bulk_load_state[SECONDARY2] = state2;
         _resp.__set_is_group_ingestion_finished(secondary_istatus == ingestion_status::IS_SUCCEED);
     }
 

@@ -319,7 +319,7 @@ void bulk_load_service::on_partition_bulk_load_reply(error_code err,
     int32_t interval = bulk_load_constant::BULK_LOAD_REQUEST_INTERVAL;
 
     if (err != ERR_OK) {
-        derror_f("app({}), partition({}) failed to recevie bulk load response, error = {}",
+        derror_f("app({}), partition({}) failed to receive bulk load response, error = {}",
                  app_name,
                  pid,
                  err.to_string());
@@ -444,7 +444,7 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
 
     if (!response.__isset.total_download_progress) {
         dwarn_f(
-            "recevie bulk load response from node({}) app({}), partition({}), primary_status({}), "
+            "receive bulk load response from node({}) app({}), partition({}), primary_status({}), "
             "but total_download_progress is not set",
             primary_addr.to_string(),
             app_name,
@@ -457,7 +457,7 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
         const auto &bulk_load_states = kv.second;
         if (!bulk_load_states.__isset.download_progress ||
             !bulk_load_states.__isset.download_status) {
-            dwarn_f("recevie bulk load response from node({}) app({}), partition({}), "
+            dwarn_f("receive bulk load response from node({}) app({}), partition({}), "
                     "primary_status({}), but node({}) progress or status is not set",
                     primary_addr.to_string(),
                     app_name,
@@ -486,7 +486,7 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
 
     // update download progress
     int32_t total_progress = response.total_download_progress;
-    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary_status({}), "
+    ddebug_f("receive bulk load response from node({}) app({}) partition({}), primary_status({}), "
              "total_download_progress = {}",
              primary_addr.to_string(),
              app_name,
@@ -537,45 +537,43 @@ void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
     gpid pid = response.pid;
 
     if (!response.__isset.is_group_ingestion_finished) {
-        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), "
-                "primary_status({}), but not set is_group_ingestion_finished",
+        dwarn_f("receive bulk load response from node({}) app({}) partition({}), "
+                "primary_status({}), but is_group_ingestion_finished is not set",
                 primary_addr.to_string(),
-                response.app_name,
+                app_name,
                 pid,
                 dsn::enum_to_string(response.primary_bulk_load_status));
         return;
     }
 
-    for (auto iter = response.group_bulk_load_state.begin();
-         iter != response.group_bulk_load_state.end();
-         ++iter) {
-        partition_bulk_load_state states = iter->second;
-        if (!states.__isset.ingest_status) {
-            dwarn_f("recevie bulk load response from node({}) app({}) partition({}), "
-                    "primary_status({}), but node({}) not set ingestion_status",
+    for (const auto &kv : response.group_bulk_load_state) {
+        const auto &bulk_load_states = kv.second;
+        if (!bulk_load_states.__isset.ingest_status) {
+            dwarn_f("receive bulk load response from node({}) app({}) partition({}), "
+                    "primary_status({}), but node({}) ingestion_status is not set",
                     primary_addr.to_string(),
-                    response.app_name,
+                    app_name,
                     pid,
                     dsn::enum_to_string(response.primary_bulk_load_status),
-                    iter->first.to_string());
+                    kv.first.to_string());
             return;
         }
 
-        if (states.ingest_status == ingestion_status::IS_FAILED) {
-            derror_f("app({}) partition({}) node({}) ingestion failed",
+        if (bulk_load_states.ingest_status == ingestion_status::IS_FAILED) {
+            derror_f("app({}) partition({}) on node({}) ingestion failed",
                      app_name,
                      pid,
-                     iter->first.to_string());
+                     kv.first.to_string());
             handle_bulk_load_failed(pid.get_app_id());
             return;
         }
     }
 
-    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary_status({}), "
+    ddebug_f("receive bulk load response from node({}) app({}) partition({}), primary_status({}), "
              "is_group_ingestion_finished = {}",
              primary_addr.to_string(),
              app_name,
-             pid.to_string(),
+             pid,
              dsn::enum_to_string(response.primary_bulk_load_status),
              response.is_group_ingestion_finished);
     {
@@ -584,7 +582,7 @@ void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
     }
 
     if (response.is_group_ingestion_finished) {
-        ddebug_f("app({}) partition({}) ingestion files succeed", app_name, pid.to_string());
+        ddebug_f("app({}) partition({}) ingestion files succeed", app_name, pid);
         update_partition_status_on_remote_storage(app_name, pid, bulk_load_status::BLS_SUCCEED);
     }
 }
@@ -598,19 +596,18 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
 
     if (!response.__isset.is_group_bulk_load_context_cleaned) {
         dwarn_f(
-            "recevie bulk load response from node({}) app({}), partition({}), primary_status({}), "
+            "receive bulk load response from node({}) app({}), partition({}), primary_status({}), "
             "but is_group_bulk_load_context_cleaned is not set",
             primary_addr.to_string(),
             app_name,
             pid,
             dsn::enum_to_string(response.primary_bulk_load_status));
         return;
-        return;
     }
 
     for (const auto &kv : response.group_bulk_load_state) {
         if (!kv.second.__isset.is_cleanuped) {
-            dwarn_f("recevie bulk load response from node({}) app({}), partition({}), "
+            dwarn_f("receive bulk load response from node({}) app({}), partition({}), "
                     "primary_status({}), but node({}) is_cleanuped is not set",
                     primary_addr.to_string(),
                     app_name,
@@ -625,7 +622,7 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
         zauto_read_lock l(_lock);
         if (_partitions_cleaned_up[pid]) {
             dwarn_f(
-                "recevie bulk load response from node({}) app({}) partition({}), current partition "
+                "receive bulk load response from node({}) app({}) partition({}), current partition "
                 "has already be cleaned up",
                 primary_addr.to_string(),
                 app_name,
@@ -635,7 +632,7 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
     }
 
     bool all_clean_up = response.is_group_bulk_load_context_cleaned;
-    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
+    ddebug_f("receive bulk load response from node({}) app({}) partition({}), primary status = {}, "
              "is_group_bulk_load_context_cleaned = {}",
              primary_addr.to_string(),
              app_name,
@@ -710,7 +707,7 @@ void bulk_load_service::handle_app_pausing(const bulk_load_response &response,
 {
     gpid pid = response.pid;
     if (!response.__isset.is_group_bulk_load_paused) {
-        dwarn_f("recevie bulk load response from node({}) app({}) partition({}), primary "
+        dwarn_f("receive bulk load response from node({}) app({}) partition({}), primary "
                 "status({}), but not checking group is_paused",
                 primary_addr.to_string(),
                 response.app_name,
@@ -724,7 +721,7 @@ void bulk_load_service::handle_app_pausing(const bulk_load_response &response,
          ++iter) {
         partition_bulk_load_state states = iter->second;
         if (!states.__isset.is_paused) {
-            dwarn_f("recevie bulk load response from node({}) app({}) partition({}), "
+            dwarn_f("receive bulk load response from node({}) app({}) partition({}), "
                     "primary_status({}), but node({}) not set paused flag",
                     primary_addr.to_string(),
                     response.app_name,
@@ -736,7 +733,7 @@ void bulk_load_service::handle_app_pausing(const bulk_load_response &response,
     }
 
     bool is_group_paused = response.is_group_bulk_load_paused;
-    ddebug_f("recevie bulk load response from node({}) app({}) partition({}), primary status = {}, "
+    ddebug_f("receive bulk load response from node({}) app({}) partition({}), primary status = {}, "
              "group_bulk_load_paused = {}",
              primary_addr.to_string(),
              response.app_name,
