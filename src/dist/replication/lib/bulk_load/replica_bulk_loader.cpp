@@ -658,11 +658,21 @@ void replica_bulk_loader::clear_bulk_load_states()
 // ThreadPool: THREAD_POOL_REPLICATION
 bool replica_bulk_loader::is_cleaned_up()
 {
-    return _status == bulk_load_status::type::BLS_INVALID && _cur_downloaded_size.load() == 0 &&
-           _download_progress.load() == 0 && _download_status.load() == ERR_OK &&
-           _download_task.size() == 0 && _metadata.files.size() == 0 &&
-           _metadata.file_total_size == 0 && !_replica->_is_bulk_load_ingestion &&
-           _replica->_app->get_ingestion_status() == ingestion_status::IS_INVALID;
+    if (_status != bulk_load_status::BLS_INVALID) {
+        return false;
+    }
+    // download context not cleaned up
+    if (_cur_downloaded_size.load() != 0 || _download_progress.load() != 0 ||
+        _download_status.load() != ERR_OK || _download_task.size() != 0 ||
+        _metadata.files.size() != 0 || _metadata.file_total_size != 0) {
+        return false;
+    }
+    // ingestion context not cleaned up
+    if (_replica->_is_bulk_load_ingestion ||
+        _replica->_app->get_ingestion_status() != ingestion_status::IS_INVALID) {
+        return false;
+    }
+    return true;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -853,7 +863,7 @@ void replica_bulk_loader::report_group_cleaned_up(bulk_load_response &response)
                        target_address.to_string(),
                        is_cleaned_up);
         response.group_bulk_load_state[target_address] = secondary_state;
-        group_flag = group_flag && is_cleaned_up;
+        group_flag &= is_cleaned_up;
     }
     ddebug_replica("group bulk load states cleaned_up = {}", group_flag);
     response.__set_is_group_bulk_load_context_cleaned_up(group_flag);

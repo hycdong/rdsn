@@ -96,7 +96,6 @@ public:
             status, download_progress, istatus, is_bulk_load_ingestion);
         _bulk_loader->handle_bulk_load_finish(req_status);
     }
-
     void test_pause_bulk_load(bulk_load_status::type status, int32_t progress)
     {
         mock_replica_bulk_load_varieties(status, progress, ingestion_status::IS_INVALID);
@@ -367,8 +366,8 @@ public:
     }
 
     void mock_group_cleanup_flag(bulk_load_status::type primary_status,
-                                 bool s1_cleanup = true,
-                                 bool s2_cleanup = true)
+                                 bool s1_cleaned_up = true,
+                                 bool s2_cleaned_up = true)
     {
         int32_t primary_progress = primary_status == bulk_load_status::BLS_SUCCEED ? 100 : 0;
         mock_replica_bulk_load_varieties(
@@ -377,8 +376,8 @@ public:
             ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, true);
 
         partition_bulk_load_state state1, state2;
-        state1.__set_is_cleaned_up(s1_cleanup);
-        state2.__set_is_cleaned_up(s2_cleanup);
+        state1.__set_is_cleaned_up(s1_cleaned_up);
+        state2.__set_is_cleaned_up(s2_cleaned_up);
         _replica->set_secondary_bulk_load_state(SECONDARY, state1);
         _replica->set_secondary_bulk_load_state(SECONDARY2, state2);
     }
@@ -386,7 +385,7 @@ public:
     /// helper functions
 
     int32_t get_download_progress() { return _bulk_loader->_download_progress.load(); }
-    bool get_clean_up_flag() { return _bulk_loader->is_cleaned_up(); }
+    bool is_cleaned_up() { return _bulk_loader->is_cleaned_up(); }
     bulk_load_status::type get_bulk_load_status() { return _bulk_loader->_status; }
     int32_t get_stub_downloading_count()
     {
@@ -662,9 +661,9 @@ TEST_F(replica_bulk_loader_test, bulk_load_finish_test)
         }
         test_handle_bulk_load_finish(
             test.local_status, test.progress, test.istatus, test.is_ingestion, test.request_status);
-        ASSERT_EQ(get_ingestion_status(), ingestion_status::IS_INVALID);
-        ASSERT_FALSE(is_ingestion());
-        ASSERT_TRUE(get_clean_up_flag());
+        ASSERT_EQ(_replica->get_ingestion_status(), ingestion_status::IS_INVALID);
+        ASSERT_FALSE(_replica->is_ingestion());
+        ASSERT_TRUE(is_cleaned_up());
         ASSERT_FALSE(utils::filesystem::directory_exists(LOCAL_DIR));
     }
 }
