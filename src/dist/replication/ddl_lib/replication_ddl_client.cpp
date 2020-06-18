@@ -43,6 +43,8 @@
 #include <fmt/format.h>
 #include <dsn/utility/time_utils.h>
 
+#include "dist/replication/common/replication_common.h"
+
 namespace dsn {
 namespace replication {
 
@@ -1563,45 +1565,6 @@ error_code replication_ddl_client::app_partition_split(const std::string &app_na
     return resp.err;
 }
 
-dsn::error_code replication_ddl_client::control_single_partition_split(const std::string &app_name,
-                                                                       int parent_partition_index,
-                                                                       bool is_pause_split)
-{
-    if (app_name.empty() ||
-        !std::all_of(app_name.cbegin(),
-                     app_name.cend(),
-                     (bool (*)(int))replication_ddl_client::valid_app_char)) {
-        fmt::print("Failed to pause partition split, app_name {} is invalid\n", app_name);
-        return ERR_INVALID_PARAMETERS;
-    }
-
-    auto req = std::make_shared<control_single_partition_split_request>();
-    req->app_name = app_name;
-    req->parent_partition_index = parent_partition_index;
-    req->is_pause = is_pause_split;
-
-    auto resp_task =
-        request_meta<control_single_partition_split_request>(RPC_CM_CONTROL_SINGLE_SPLIT, req);
-    resp_task->wait();
-    if (resp_task->error() != dsn::ERR_OK) {
-        return resp_task->error();
-    }
-
-    app_partition_split_response resp;
-    dsn::unmarshall(resp_task->get_response(), resp);
-
-    if (resp.err == ERR_INVALID_PARAMETERS) {
-        fmt::print("wrong partition index {}, parent index should belong to[0,{})\n",
-                   parent_partition_index,
-                   resp.partition_count / 2);
-    } else if (resp.err == ERR_CHILD_REGISTERED) {
-        fmt::print("failed to pause partition[{}] split coz split has been finished\n",
-                   parent_partition_index);
-    }
-
-    return resp.err;
-}
-
 dsn::error_code replication_ddl_client::cancel_app_partition_split(const std::string &app_name,
                                                                    int original_partition_count,
                                                                    bool is_force)
@@ -1683,6 +1646,28 @@ void replication_ddl_client::query_disk_info(
                                      query_disk_info_rpc(std::move(request), RPC_QUERY_DISK_INFO));
     }
     call_rpcs_async(query_disk_info_rpcs, resps);
+}
+
+error_with<control_split_response>
+replication_ddl_client::control_partition_split(const std::string &app_name,
+                                                const int32_t partition_count_before_split,
+                                                const int32_t parent_pidx,
+                                                split_control_type::type control_type)
+{
+    auto req = make_unique<control_split_request>();
+    req->__set_app_name(app_name);
+    req->__set_partition_count_before_split(partition_count_before_split);
+    req->__set_parent_pidx(parent_pidx);
+    req->__set_control_type(control_type);
+    return call_rpc_sync(control_split_rpc(std::move(req), RPC_CM_CONTROL_PARTITION_SPLIT));
+}
+
+error_with<query_split_response>
+replication_ddl_client::query_partition_split(const std::string &app_name)
+{
+    auto req = make_unique<query_split_request>();
+    req->__set_app_name(app_name);
+    return call_rpc_sync(query_split_rpc(std::move(req), RPC_CM_QUERY_PARTITION_SPLIT));
 }
 
 } // namespace replication

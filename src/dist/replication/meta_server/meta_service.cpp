@@ -378,15 +378,18 @@ void meta_service::register_rpc_handlers()
                                          &meta_service::on_register_child_on_meta);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_QUERY_CHILD_STATE, "query_child_state", &meta_service::on_query_child_state);
-    register_rpc_handler_with_rpc_holder(RPC_CM_CONTROL_SINGLE_SPLIT,
-                                         "control_single_split",
-                                         &meta_service::on_control_single_partition_split);
     register_rpc_handler_with_rpc_holder(RPC_CM_CANCEL_APP_PARTITION_SPLIT,
                                          "cancel_app_partition_split",
                                          &meta_service::on_cancel_app_partition_split);
     register_rpc_handler_with_rpc_holder(RPC_CM_CLEAR_PARTITION_SPLIT_FLAG,
                                          "clear_partition_split_flag",
                                          &meta_service::on_clear_partition_split_flag);
+    register_rpc_handler_with_rpc_holder(RPC_CM_QUERY_PARTITION_SPLIT,
+                                         "query_partition_split",
+                                         &meta_service::on_query_partition_split);
+    register_rpc_handler_with_rpc_holder(RPC_CM_CONTROL_PARTITION_SPLIT,
+                                         "control_partition_split",
+                                         &meta_service::on_control_partition_split);
 }
 
 int meta_service::check_leader(dsn::message_ex *req, dsn::rpc_address *forward_address)
@@ -963,19 +966,6 @@ void meta_service::on_query_child_state(query_child_state_rpc rpc)
                      server_state::sStateHash);
 }
 
-void meta_service::on_control_single_partition_split(control_single_partition_split_rpc rpc)
-{
-    RPC_CHECK_STATUS(rpc.dsn_request(), rpc.response());
-
-    tasking::enqueue(LPC_META_STATE_NORMAL,
-                     tracker(),
-                     [this, rpc]() {
-                         dassert(_split_svc, "meta_split_service is uninitialized");
-                         _split_svc->control_single_partition_split(std::move(rpc));
-                     },
-                     server_state::sStateHash);
-}
-
 void meta_service::on_cancel_app_partition_split(cancel_app_partition_split_rpc rpc)
 {
     RPC_CHECK_STATUS(rpc.dsn_request(), rpc.response());
@@ -999,6 +989,38 @@ void meta_service::on_clear_partition_split_flag(clear_partition_split_flag_rpc 
                          dassert(_split_svc, "meta_split_service is uninitialized");
                          _split_svc->clear_partition_split_flag(std::move(rpc));
                      },
+                     server_state::sStateHash);
+}
+
+void meta_service::on_control_partition_split(control_split_rpc rpc)
+{
+    auto &response = rpc.response();
+    RPC_CHECK_STATUS(rpc.dsn_request(), response);
+
+    if (!_split_svc) {
+        derror("meta doesn't support partition_split service");
+        response.err = ERR_SERVICE_NOT_ACTIVE;
+        return;
+    }
+    tasking::enqueue(LPC_META_STATE_NORMAL,
+                     tracker(),
+                     [this, rpc]() { _split_svc->control_partition_split(std::move(rpc)); },
+                     server_state::sStateHash);
+}
+
+void meta_service::on_query_partition_split(query_split_rpc rpc)
+{
+    auto &response = rpc.response();
+    RPC_CHECK_STATUS(rpc.dsn_request(), response);
+
+    if (!_split_svc) {
+        derror("meta doesn't support partition_split service");
+        response.err = ERR_SERVICE_NOT_ACTIVE;
+        return;
+    }
+    tasking::enqueue(LPC_META_STATE_NORMAL,
+                     tracker(),
+                     [this, rpc]() { _split_svc->query_partition_split(std::move(rpc)); },
                      server_state::sStateHash);
 }
 

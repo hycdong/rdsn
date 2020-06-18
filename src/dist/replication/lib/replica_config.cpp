@@ -1019,7 +1019,9 @@ bool replica::update_local_configuration_with_no_ballot_change(partition_status:
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica::on_config_sync(const app_info &info, const partition_configuration &config)
+void replica::on_config_sync(const app_info &info,
+                             const partition_configuration &config,
+                             bool is_splitting)
 {
     dinfo_replica("configuration sync");
     // no outdated update
@@ -1032,12 +1034,13 @@ void replica::on_config_sync(const app_info &info, const partition_configuration
     if (nullptr != _primary_states.reconfiguration_task) {
         // already under reconfiguration, skip configuration sync
     } else if (status() == partition_status::PS_PRIMARY) {
-        check_partition_state(info.partition_count, config);
+        check_partition_state(info.partition_count, config, is_splitting);
     } else {
         if (_is_initializing) {
             // TODO(hyc): consider
             check_partition_state(info.partition_count,
-                                  config); // update local partition count if necessary
+                                  config,
+                                  is_splitting); // update local partition count if necessary
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&
@@ -1103,47 +1106,63 @@ void replica::replay_prepare_list()
 }
 
 // TODO(hyc): add comments
-void replica::check_partition_state(int partition_count, const partition_configuration &config)
+void replica::check_partition_state(int partition_count,
+                                    const partition_configuration &config,
+                                    bool is_splitting)
 {
     if (partition_count == _app_info.partition_count) {
-        if (_child_gpid.get_app_id() > 0) {
-            ddebug_f(
-                "{} app {}(partition count={}) might execute partition split and admin cancel it, "
-                "so clear child_gpid({}.{})",
-                name(),
-                _app_info.app_name,
-                partition_count,
-                _child_gpid.get_app_id(),
-                _child_gpid.get_partition_index());
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "admin cancel partition split"));
-            _child_gpid.set_app_id(0);
-        }
+        // not splitting
         return;
     }
 
-    if (partition_count == _app_info.partition_count * 2 &&
-        ((config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped)) {
-        ddebug_f("{} app {}(local partition count={}, remote partition count={}) might execute "
-                 "partition split and admin pause current partition split, so clear "
-                 "child_gpid({}.{})",
-                 name(),
-                 _app_info.app_name,
-                 _app_info.partition_count,
-                 partition_count,
-                 _child_gpid.get_app_id(),
-                 _child_gpid.get_partition_index());
-        if (_child_gpid.get_app_id() > 0) {
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "admin pause single partition split"));
-            _child_gpid.set_app_id(0);
-        }
+    // TODO(heyuchen): update comment
+    if (!is_splitting) {
+        dwarn_replica("hyc: not splitting");
         return;
     }
+
+    //    if (partition_count == _app_info.partition_count) {
+    //        if (_child_gpid.get_app_id() > 0) {
+    //            ddebug_f(
+    //                "{} app {}(partition count={}) might execute partition split and admin cancel
+    //                it, "
+    //                "so clear child_gpid({}.{})",
+    //                name(),
+    //                _app_info.app_name,
+    //                partition_count,
+    //                _child_gpid.get_app_id(),
+    //                _child_gpid.get_partition_index());
+    //            _stub->split_replica_error_handler(_child_gpid,
+    //                                               std::bind(&replica::child_handle_split_error,
+    //                                                         std::placeholders::_1,
+    //                                                         "admin cancel partition split"));
+    //            _child_gpid.set_app_id(0);
+    //        }
+    //        return;
+    //    }
+
+    //    if (partition_count == _app_info.partition_count * 2 &&
+    //        ((config.partition_flags & pc_flags::child_dropped) == pc_flags::child_dropped)) {
+    //        ddebug_f("{} app {}(local partition count={}, remote partition count={}) might execute
+    //        "
+    //                 "partition split and admin pause current partition split, so clear "
+    //                 "child_gpid({}.{})",
+    //                 name(),
+    //                 _app_info.app_name,
+    //                 _app_info.partition_count,
+    //                 partition_count,
+    //                 _child_gpid.get_app_id(),
+    //                 _child_gpid.get_partition_index());
+    //        if (_child_gpid.get_app_id() > 0) {
+    //            _stub->split_replica_error_handler(_child_gpid,
+    //                                               std::bind(&replica::child_handle_split_error,
+    //                                                         std::placeholders::_1,
+    //                                                         "admin pause single partition
+    //                                                         split"));
+    //            _child_gpid.set_app_id(0);
+    //        }
+    //        return;
+    //    }
 
     if (partition_count * 2 == _app_info.partition_count) {
         if (get_gpid().get_partition_index() >= partition_count) {

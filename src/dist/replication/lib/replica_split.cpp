@@ -1259,5 +1259,55 @@ void replica::child_handle_async_learn_error() // on child partition
     _split_states.async_learn_task = nullptr;
 }
 
+void replica::on_stop_split(const stop_split_request &req, stop_split_response &resp)
+{
+    _checker.only_one_thread_access();
+
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_replica("receive control split request with wrong status {}",
+                      enum_to_string(status()));
+        resp.err = ERR_INVALID_STATE;
+        return;
+    }
+
+    if (req.type == split_control_type::PSC_PAUSE) {
+        if (req.partition_count != _app_info.partition_count * 2) {
+            // TODO(heyuchen): update this log
+            dwarn_replica("receive pause split request with wrong partition_count");
+            resp.err = ERR_NO_NEED_OPERATE;
+            return;
+        }
+
+        resp.err = ERR_OK;
+        ddebug_replica("start to pause partition split");
+        if (_child_gpid.get_app_id() > 0) {
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "pause partition split"));
+            parent_cleanup_split_context();
+        }
+    }
+
+    if (req.type == split_control_type::PSC_CANCEL) {
+        if (req.partition_count != _app_info.partition_count) {
+            // TODO(heyuchen): update this log
+            dwarn_replica("receive cancel split request with wrong partition_count");
+            resp.err = ERR_NO_NEED_OPERATE;
+            return;
+        }
+
+        resp.err = ERR_OK;
+        ddebug_replica("start to cancel partition split");
+        if (_child_gpid.get_app_id() > 0) {
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "cancel partition split"));
+            parent_cleanup_split_context();
+        }
+    }
+}
+
 } // namespace replication
 } // namespace dsn

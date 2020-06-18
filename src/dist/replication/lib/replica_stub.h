@@ -101,6 +101,7 @@ public:
     void on_query_app_info(const query_app_info_request &req,
                            /*out*/ query_app_info_response &resp);
     void on_cold_backup(const backup_request &request, /*out*/ backup_response &response);
+    void on_stop_split(stop_split_rpc rpc);
 
     //
     //    messages from peers (primary or secondary)
@@ -223,7 +224,8 @@ private:
     void on_meta_server_disconnected_scatter(replica_stub_ptr this_, gpid id);
     void on_node_query_reply(error_code err, dsn::message_ex *request, dsn::message_ex *response);
     void on_node_query_reply_scatter(replica_stub_ptr this_,
-                                     const configuration_update_request &config);
+                                     const configuration_update_request &config,
+                                     bool is_replica_splitting = false);
     void on_node_query_reply_scatter2(replica_stub_ptr this_, gpid id);
     void remove_replica_on_meta_server(const app_info &info, const partition_configuration &config);
     ::dsn::task_ptr begin_open_replica(const app_info &app,

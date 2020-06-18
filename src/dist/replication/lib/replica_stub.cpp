@@ -1332,10 +1332,12 @@ void replica_stub::on_node_query_reply(error_code err,
             return;
         }
 
+        const int32_t splitting_count = resp.splitting_replicas.size();
         ddebug("process query node partitions response for resp.err = ERR_OK, "
-               "partitions_count(%d), gc_replicas_count(%d)",
+               "partitions_count(%d), gc_replicas_count(%d), splitting_replicas_count(%d)",
                (int)resp.partitions.size(),
-               (int)resp.gc_replicas.size());
+               (int)resp.gc_replicas.size(),
+               splitting_count);
 
         replicas rs;
         {
@@ -1344,11 +1346,16 @@ void replica_stub::on_node_query_reply(error_code err,
         }
 
         for (auto it = resp.partitions.begin(); it != resp.partitions.end(); ++it) {
-            rs.erase(it->config.pid);
-            tasking::enqueue(LPC_QUERY_NODE_CONFIGURATION_SCATTER,
-                             &_tracker,
-                             std::bind(&replica_stub::on_node_query_reply_scatter, this, this, *it),
-                             it->config.pid.thread_hash());
+            const gpid pid = it->config.pid;
+            bool is_splitting = splitting_count > 0 &&
+                                resp.splitting_replicas.find(pid) != resp.splitting_replicas.end();
+            rs.erase(pid);
+            tasking::enqueue(
+                LPC_QUERY_NODE_CONFIGURATION_SCATTER,
+                &_tracker,
+                std::bind(
+                    &replica_stub::on_node_query_reply_scatter, this, this, *it, is_splitting),
+                it->config.pid.thread_hash());
         }
 
         // for rps not exist on meta_servers
@@ -1383,10 +1390,11 @@ void replica_stub::set_meta_server_connected_for_test(
     _state = NS_Connected;
 
     for (auto it = resp.partitions.begin(); it != resp.partitions.end(); ++it) {
-        tasking::enqueue(LPC_QUERY_NODE_CONFIGURATION_SCATTER,
-                         &_tracker,
-                         std::bind(&replica_stub::on_node_query_reply_scatter, this, this, *it),
-                         it->config.pid.thread_hash());
+        tasking::enqueue(
+            LPC_QUERY_NODE_CONFIGURATION_SCATTER,
+            &_tracker,
+            std::bind(&replica_stub::on_node_query_reply_scatter, this, this, *it, false),
+            it->config.pid.thread_hash());
     }
 }
 
@@ -1401,11 +1409,12 @@ void replica_stub::set_replica_state_subscriber_for_test(replica_state_subscribe
 // replica_stub::close
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_stub::on_node_query_reply_scatter(replica_stub_ptr this_,
-                                               const configuration_update_request &req)
+                                               const configuration_update_request &req,
+                                               bool is_replica_splitting)
 {
     replica_ptr replica = get_replica(req.config.pid);
     if (replica != nullptr) {
-        replica->on_config_sync(req.info, req.config);
+        replica->on_config_sync(req.info, req.config, is_replica_splitting);
     } else {
         if (req.config.primary == _primary_address) {
             ddebug("%s@%s: replica not exists on replica server, which is primary, remove it "
@@ -2126,6 +2135,8 @@ void replica_stub::open_service()
     register_rpc_handler(RPC_SPLIT_UPDATE_PARTITION_COUNT,
                          "SplitUpdatePartitionCount",
                          &replica_stub::on_update_group_partition_count);
+    register_rpc_handler_with_rpc_holder(
+        RPC_STOP_SPLIT, "control_partition_split", &replica_stub::on_stop_split);
 
     _kill_partition_command = ::dsn::command_manager::instance().register_app_command(
         {"kill_partition"},
@@ -2720,6 +2731,24 @@ void replica_stub::update_disk_holding_replicas()
                 }
             }
         }
+    }
+}
+
+void replica_stub::on_stop_split(stop_split_rpc rpc)
+{
+    const stop_split_request &request = rpc.request();
+    stop_split_response &response = rpc.response();
+
+    ddebug_f("[{}@{}]: receive control partition split request, type = {}",
+             request.pid,
+             _primary_address_str,
+             request.type);
+    replica_ptr rep = get_replica(request.pid);
+    if (rep != nullptr) {
+        rep->on_stop_split(request, response);
+    } else {
+        derror_f("replica({}) is not existed", request.pid);
+        response.err = ERR_OBJECT_NOT_FOUND;
     }
 }
 

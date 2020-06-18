@@ -175,13 +175,19 @@ public:
 
     // partition split
     dsn::error_code app_partition_split(const std::string &app_name, int partition_count);
-    dsn::error_code control_single_partition_split(const std::string &app_name,
-                                                   int parent_partition_index,
-                                                   bool is_pause_split);
+
     dsn::error_code cancel_app_partition_split(const std::string &app_name,
                                                int original_partition_count,
                                                bool is_force);
     dsn::error_code clear_app_split_flags(const std::string &app_name);
+
+    error_with<query_split_response> query_partition_split(const std::string &app_name);
+
+    error_with<control_split_response>
+    control_partition_split(const std::string &app_name,
+                            const int32_t partition_count_before_split,
+                            const int32_t parent_pidx,
+                            split_control_type::type control_type);
 
     void query_disk_info(
         const std::vector<dsn::rpc_address> &targets,

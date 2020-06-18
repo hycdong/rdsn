@@ -278,17 +278,10 @@ struct restore_state
     restore_state() : restore_status(dsn::ERR_OK), progress(0), reason() {}
 };
 
-enum class split_status
-{
-    not_split,
-    splitting,
-    paused
-};
-
 struct split_state
 {
     int32_t splitting_count;
-    std::map<int32_t, split_status> status;
+    std::map<int32_t, split_status::type> status;
     split_state() : splitting_count(0) {}
 };
 

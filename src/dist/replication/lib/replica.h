@@ -121,7 +121,8 @@ public:
     //    messages and tools from/for meta server
     //
     void on_config_proposal(configuration_update_request &proposal);
-    void on_config_sync(const app_info &info, const partition_configuration &config);
+    void
+    on_config_sync(const app_info &info, const partition_configuration &config, bool is_splitting);
     void on_cold_backup(const backup_request &request, /*out*/ backup_response &response);
 
     //
@@ -386,7 +387,9 @@ private:
     // meta <=> replica configuration sync through on_config_sync
     // called by primary replica to check if partition count changed and partition flag changed to
     // control partition split
-    virtual void check_partition_state(int partition_count, const partition_configuration &config);
+    virtual void check_partition_state(int partition_count,
+                                       const partition_configuration &config,
+                                       bool is_splitting);
 
     // primary -> meta query child partition configuration
     virtual void query_child_state();
@@ -462,6 +465,8 @@ private:
     void child_handle_split_error(const std::string &error_msg);
     // child handle error while async learn parent states
     void child_handle_async_learn_error();
+
+    void on_stop_split(const stop_split_request &req, /*out*/ stop_split_response &resp);
 
     void init_table_level_latency_counters();
 

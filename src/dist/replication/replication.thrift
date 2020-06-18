@@ -261,6 +261,8 @@ struct configuration_query_by_node_response
     1:dsn.error_code err;
     2:list<configuration_update_request> partitions;
     3:optional list<replica_info> gc_replicas;
+    // TODO(heyuchen):
+    4:optional set<dsn.gpid> splitting_replicas;
 }
 
 struct create_app_options
@@ -827,14 +829,66 @@ struct app_partition_split_request
     2:i32                    new_partition_count;
 }
 
-// control single partition split, from client to meta server
-struct control_single_partition_split_request
+enum split_control_type
 {
-    1:string            app_name;
-    2:i32               parent_partition_index;
-    3:bool              is_pause;
+    PSC_INVALID,
+    PSC_PAUSE,
+    PSC_RESTART,
+    PSC_CANCEL
 }
 
+// client->meta server to control partition split
+// support three control type: pause, restart, cancel
+struct control_split_request
+{
+    1:string                app_name;
+    2:i32                   partition_count_before_split;
+    3:split_control_type    control_type
+    4:i32                   parent_pidx;
+}
+
+struct control_split_response
+{
+    1:dsn.error_code    err;
+    2:string            hint_msg;
+}
+
+// meta -> replica to pause or cancel split
+struct stop_split_request
+{
+    1:dsn.gpid              pid;
+    // for pause split, partition_count = new_partition_count
+    2:i32                   partition_count;
+    3:split_control_type    type;
+}
+
+struct stop_split_response
+{
+    1:dsn.error_code    err;
+}
+
+enum split_status
+{
+    not_split,
+    splitting,
+    paused,
+    canceling
+}
+
+struct query_split_request
+{
+    1:string    app_name;
+}
+
+struct query_split_response
+{
+    1:dsn.error_code    err;
+    2:string            hint_msg;
+    3:i32               new_partition_count;
+    4:map<i32,split_status> status;
+}
+
+// TODO(heyuchen): remove
 struct cancel_app_partition_split_request
 {
     1:string            app_name;
