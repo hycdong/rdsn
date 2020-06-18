@@ -353,10 +353,6 @@ private:
         }
     }
 
-    inline void set_control_response(bulk_load_status::type local_status,
-                                     const std::string &app_name,
-                                     control_bulk_load_response &resp);
-
     mss::meta_storage *get_sync_bulk_load_storage() const { return _sync_bulk_load_storage.get(); }
 
 private:

@@ -1571,10 +1571,11 @@ replication_ddl_client::query_bulk_load(const std::string &app_name)
 }
 
 error_with<control_bulk_load_response>
-replication_ddl_client::control_bulk_load(int32_t app_id, bulk_load_control_type::type control_type)
+replication_ddl_client::control_bulk_load(const std::string &app_name,
+                                          bulk_load_control_type::type control_type)
 {
     auto req = make_unique<control_bulk_load_request>();
-    req->app_id = app_id;
+    req->app_name = app_name;
     req->type = control_type;
     return call_rpc_sync(control_bulk_load_rpc(std::move(req), RPC_CM_CONTROL_BULK_LOAD));
 }

@@ -128,11 +128,11 @@ public:
         return response.is_group_ingestion_finished;
     }
 
-    bool test_report_group_context_clean_flag()
+    bool test_report_group_cleaned_up()
     {
         bulk_load_response response;
-        _bulk_loader->report_group_context_clean_flag(response);
-        return response.is_group_bulk_load_context_cleaned;
+        _bulk_loader->report_group_cleaned_up(response);
+        return response.is_group_bulk_load_context_cleaned_up;
     }
 
     bool test_report_group_is_paused(bulk_load_status::type status)
@@ -377,8 +377,8 @@ public:
             ingestion_status::IS_INVALID, ingestion_status::IS_INVALID, true);
 
         partition_bulk_load_state state1, state2;
-        state1.__set_is_cleanuped(s1_cleanup);
-        state2.__set_is_cleanuped(s2_cleanup);
+        state1.__set_is_cleaned_up(s1_cleanup);
+        state2.__set_is_cleaned_up(s2_cleanup);
         _replica->set_secondary_bulk_load_state(SECONDARY, state1);
         _replica->set_secondary_bulk_load_state(SECONDARY2, state2);
     }
@@ -386,7 +386,7 @@ public:
     /// helper functions
 
     int32_t get_download_progress() { return _bulk_loader->_download_progress.load(); }
-    bool get_clean_up_flag() { return _bulk_loader->is_cleanuped(); }
+    bool get_clean_up_flag() { return _bulk_loader->is_cleaned_up(); }
     bulk_load_status::type get_bulk_load_status() { return _bulk_loader->_status; }
     int32_t get_stub_downloading_count()
     {
@@ -405,7 +405,7 @@ public:
              state.download_progress == 0 && state.download_status == ERR_OK);
         bool is_ingestion_status_reset =
             (state.__isset.ingest_status && state.ingest_status == ingestion_status::IS_INVALID);
-        bool is_cleanup_flag_reset = (state.__isset.is_cleanuped && !state.is_cleanuped);
+        bool is_cleanup_flag_reset = (state.__isset.is_cleaned_up && !state.is_cleaned_up);
         bool is_paused_flag_reset = (state.__isset.is_paused && !state.is_paused);
         return is_download_state_reset && is_ingestion_status_reset && is_cleanup_flag_reset &&
                is_paused_flag_reset;
@@ -794,23 +794,23 @@ TEST_F(replica_bulk_loader_test, report_group_ingestion_status_test)
 }
 
 // report_group_context_clean_flag unit tests
-TEST_F(replica_bulk_loader_test, report_group_context_clean_flag_in_unhealthy_state)
+TEST_F(replica_bulk_loader_test, report_group_cleanup_flag_in_unhealthy_state)
 {
     // _primary_states.membership.secondaries is empty
     mock_replica_config(partition_status::PS_PRIMARY);
-    ASSERT_FALSE(test_report_group_context_clean_flag());
+    ASSERT_FALSE(test_report_group_cleaned_up());
 }
 
-TEST_F(replica_bulk_loader_test, report_group_context_clean_flag_not_cleanup)
+TEST_F(replica_bulk_loader_test, report_group_cleanup_flag_not_cleaned_up)
 {
     mock_group_cleanup_flag(bulk_load_status::BLS_SUCCEED, true, false);
-    ASSERT_FALSE(test_report_group_context_clean_flag());
+    ASSERT_FALSE(test_report_group_cleaned_up());
 }
 
-TEST_F(replica_bulk_loader_test, report_group_context_clean_flag_all_cleanup)
+TEST_F(replica_bulk_loader_test, report_group_cleanup_flag_all_cleaned_up)
 {
     mock_group_cleanup_flag(bulk_load_status::BLS_INVALID, true, true);
-    ASSERT_TRUE(test_report_group_context_clean_flag());
+    ASSERT_TRUE(test_report_group_cleaned_up());
 }
 
 // report_group_is_paused unit tests

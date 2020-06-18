@@ -222,7 +222,7 @@ public:
         bulk_svc()._app_bulk_load_info[app_id].status = app_status;
 
         auto request = dsn::make_unique<control_bulk_load_request>();
-        request->app_id = app_id;
+        request->app_name = APP_NAME;
         request->type = type;
 
         control_bulk_load_rpc rpc(std::move(request), RPC_CM_CONTROL_BULK_LOAD);
@@ -386,7 +386,7 @@ TEST_F(bulk_load_service_test, control_bulk_load_test)
     for (auto test : tests) {
         ASSERT_EQ(control_bulk_load(app->app_id, test.type, test.app_status), test.expected_err);
     }
-    reset_local_bulk_load_states(app->app_id, app->app_name);
+    reset_local_bulk_load_states(app->app_id, APP_NAME);
 
     fail::teardown();
 }
@@ -501,12 +501,12 @@ public:
         create_basic_response(ERR_OK, status);
 
         partition_bulk_load_state state;
-        state.__set_is_cleanuped(true);
+        state.__set_is_cleaned_up(true);
         _resp.group_bulk_load_state[PRIMARY] = state;
         _resp.group_bulk_load_state[SECONDARY1] = state;
-        state.__set_is_cleanuped(finish_cleanup);
+        state.__set_is_cleaned_up(finish_cleanup);
         _resp.group_bulk_load_state[SECONDARY2] = state;
-        _resp.__set_is_group_bulk_load_context_cleaned(finish_cleanup);
+        _resp.__set_is_group_bulk_load_context_cleaned_up(finish_cleanup);
     }
 
     void mock_response_paused(bool is_group_paused)

@@ -241,7 +241,7 @@ void bulk_load_service::create_partition_bulk_load_dir(const std::string &app_na
                 if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
                     ddebug_f("app({}) start bulk load succeed", app_name);
                     _apps_in_progress_count[pid.get_app_id()] = partition_count;
-                    auto response = rpc.response();
+                    auto &response = rpc.response();
                     response.err = ERR_OK;
                 }
             }
@@ -594,7 +594,7 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
     const std::string &app_name = response.app_name;
     const gpid &pid = response.pid;
 
-    if (!response.__isset.is_group_bulk_load_context_cleaned) {
+    if (!response.__isset.is_group_bulk_load_context_cleaned_up) {
         dwarn_f(
             "receive bulk load response from node({}) app({}), partition({}), primary_status({}), "
             "but is_group_bulk_load_context_cleaned is not set",
@@ -606,9 +606,9 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
     }
 
     for (const auto &kv : response.group_bulk_load_state) {
-        if (!kv.second.__isset.is_cleanuped) {
+        if (!kv.second.__isset.is_cleaned_up) {
             dwarn_f("receive bulk load response from node({}) app({}), partition({}), "
-                    "primary_status({}), but node({}) is_cleanuped is not set",
+                    "primary_status({}), but node({}) is_cleaned_up is not set",
                     primary_addr.to_string(),
                     app_name,
                     pid,
@@ -631,21 +631,21 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
         }
     }
 
-    bool all_clean_up = response.is_group_bulk_load_context_cleaned;
+    bool all_cleaned_up = response.is_group_bulk_load_context_cleaned_up;
     ddebug_f("receive bulk load response from node({}) app({}) partition({}), primary status = {}, "
              "is_group_bulk_load_context_cleaned = {}",
              primary_addr.to_string(),
              app_name,
              pid,
              dsn::enum_to_string(response.primary_bulk_load_status),
-             all_clean_up);
+             all_cleaned_up);
     {
         zauto_write_lock l(_lock);
-        _partitions_cleaned_up[pid] = all_clean_up;
+        _partitions_cleaned_up[pid] = all_cleaned_up;
         _partitions_bulk_load_state[pid] = response.group_bulk_load_state;
     }
 
-    if (all_clean_up) {
+    if (all_cleaned_up) {
         int32_t count;
         {
             zauto_write_lock l(_lock);
@@ -705,50 +705,47 @@ void bulk_load_service::handle_bulk_load_failed(int32_t app_id)
 void bulk_load_service::handle_app_pausing(const bulk_load_response &response,
                                            const rpc_address &primary_addr)
 {
-    gpid pid = response.pid;
+    const std::string &app_name = response.app_name;
+    const gpid &pid = response.pid;
+
     if (!response.__isset.is_group_bulk_load_paused) {
-        dwarn_f("receive bulk load response from node({}) app({}) partition({}), primary "
-                "status({}), but not checking group is_paused",
+        dwarn_f("receive bulk load response from node({}) app({}) partition({}), "
+                "primary_status({}), but is_group_bulk_load_paused is not set",
                 primary_addr.to_string(),
-                response.app_name,
+                app_name,
                 pid,
                 dsn::enum_to_string(response.primary_bulk_load_status));
         return;
     }
 
-    for (auto iter = response.group_bulk_load_state.begin();
-         iter != response.group_bulk_load_state.end();
-         ++iter) {
-        partition_bulk_load_state states = iter->second;
-        if (!states.__isset.is_paused) {
-            dwarn_f("receive bulk load response from node({}) app({}) partition({}), "
-                    "primary_status({}), but node({}) not set paused flag",
+    for (const auto &kv : response.group_bulk_load_state) {
+        if (!kv.second.__isset.is_paused) {
+            dwarn_f("receive bulk load response from node({}) app({}), partition({}), "
+                    "primary_status({}), but node({}) is_paused is not set",
                     primary_addr.to_string(),
-                    response.app_name,
+                    app_name,
                     pid,
                     dsn::enum_to_string(response.primary_bulk_load_status),
-                    iter->first.to_string());
+                    kv.first.to_string());
             return;
         }
     }
 
     bool is_group_paused = response.is_group_bulk_load_paused;
     ddebug_f("receive bulk load response from node({}) app({}) partition({}), primary status = {}, "
-             "group_bulk_load_paused = {}",
+             "is_group_bulk_load_paused = {}",
              primary_addr.to_string(),
-             response.app_name,
-             pid.to_string(),
+             app_name,
+             pid,
              dsn::enum_to_string(response.primary_bulk_load_status),
              is_group_paused);
-
     {
         zauto_write_lock l(_lock);
         _partitions_bulk_load_state[pid] = response.group_bulk_load_state;
     }
 
     if (is_group_paused) {
-        ddebug_f(
-            "app({}) partirion({}) pause bulk load succeed", response.app_name, pid.to_string());
+        ddebug_f("app({}) partirion({}) pause bulk load succeed", response.app_name, pid);
         update_partition_status_on_remote_storage(
             response.app_name, pid, bulk_load_status::BLS_PAUSED);
     }
@@ -1645,77 +1642,75 @@ void bulk_load_service::check_app_bulk_load_consistency(std::shared_ptr<app_stat
 // ThreadPool: THREAD_POOL_META_STATE
 void bulk_load_service::on_control_bulk_load(control_bulk_load_rpc rpc)
 {
-    const auto &request = rpc.request();
+    const std::string app_name = rpc.request().app_name;
+    const auto &control_type = rpc.request().type;
     auto &response = rpc.response();
     response.err = ERR_OK;
 
-    std::shared_ptr<app_state> app;
+    int32_t app_id;
     {
         zauto_read_lock l(app_lock());
 
-        app = _state->get_app(request.app_id);
+        std::shared_ptr<app_state> app = _state->get_app(app_name);
         if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
             response.err = app == nullptr ? ERR_APP_NOT_EXIST : ERR_APP_DROPPED;
-            response.hint_msg =
-                fmt::format("app({}) is not existed or not available", request.app_id);
+            response.hint_msg = fmt::format("app({}) is not existed or not available", app_name);
             return;
         }
 
         if (!app->is_bulk_loading) {
             response.err = ERR_INACTIVE_STATE;
-            response.hint_msg = fmt::format("app({}) is not executing bulk load", app->app_name);
+            response.hint_msg = fmt::format("app({}) is not executing bulk load", app_name);
             return;
         }
+
+        app_id = app->app_id;
     }
 
     zauto_write_lock l(_lock);
-    bulk_load_status::type local_status = get_app_bulk_load_status_unlocked(request.app_id);
-
-    switch (request.type) {
+    bulk_load_status::type app_status = get_app_bulk_load_status_unlocked(app_id);
+    switch (control_type) {
     case bulk_load_control_type::BLC_PAUSE: {
-        if (local_status != bulk_load_status::BLS_DOWNLOADING) {
-            set_control_response(local_status, app->app_name, response);
+        if (app_status != bulk_load_status::BLS_DOWNLOADING) {
+            response.err = ERR_INVALID_STATE;
+            response.hint_msg =
+                fmt::format("app({}) status={}", app_name, dsn::enum_to_string(app_status));
             return;
         }
-        ddebug_f("app({}) start to pause bulk load", app->app_name);
-        update_app_status_on_remote_storage_unlocked(request.app_id,
-                                                     bulk_load_status::type::BLS_PAUSING);
+        ddebug_f("app({}) start to pause bulk load", app_name);
+        update_app_status_on_remote_storage_unlocked(app_id, bulk_load_status::type::BLS_PAUSING);
     } break;
     case bulk_load_control_type::BLC_RESTART: {
-        if (local_status != bulk_load_status::BLS_PAUSED) {
-            set_control_response(local_status, app->app_name, response);
+        if (app_status != bulk_load_status::BLS_PAUSED) {
+            response.err = ERR_INVALID_STATE;
+            response.hint_msg =
+                fmt::format("app({}) status={}", app_name, dsn::enum_to_string(app_status));
             return;
         }
-        ddebug_f("app({}) restart bulk load", app->app_name);
+        ddebug_f("app({}) restart bulk load", app_name);
         update_app_status_on_remote_storage_unlocked(
-            request.app_id, bulk_load_status::type::BLS_DOWNLOADING, true);
+            app_id, bulk_load_status::type::BLS_DOWNLOADING, true);
     } break;
     case bulk_load_control_type::BLC_CANCEL:
-        if (local_status != bulk_load_status::BLS_DOWNLOADING &&
-            local_status != bulk_load_status::BLS_PAUSED) {
-            set_control_response(local_status, app->app_name, response);
+        if (app_status != bulk_load_status::BLS_DOWNLOADING &&
+            app_status != bulk_load_status::BLS_PAUSED) {
+            response.err = ERR_INVALID_STATE;
+            response.hint_msg =
+                fmt::format("app({}) status={}", app_name, dsn::enum_to_string(app_status));
             return;
         }
     case bulk_load_control_type::BLC_FORCE_CANCEL: {
         ddebug_f("app({}) start to {} cancel bulk load, original status = {}",
-                 app->app_name,
-                 request.type == bulk_load_control_type::BLC_FORCE_CANCEL ? "force" : "",
-                 dsn::enum_to_string(local_status));
-        update_app_status_on_remote_storage_unlocked(request.app_id,
+                 app_name,
+                 control_type == bulk_load_control_type::BLC_FORCE_CANCEL ? "force" : "",
+                 dsn::enum_to_string(app_status));
+        update_app_status_on_remote_storage_unlocked(app_id,
                                                      bulk_load_status::type::BLS_CANCELED,
-                                                     local_status == bulk_load_status::BLS_PAUSED);
+                                                     app_status == bulk_load_status::BLS_PAUSED);
     } break;
     default:
         break;
     }
-}
-
-void bulk_load_service::set_control_response(bulk_load_status::type local_status,
-                                             const std::string &app_name,
-                                             control_bulk_load_response &resp)
-{
-    resp.err = ERR_INVALID_STATE;
-    resp.hint_msg = fmt::format("app({}) status={}", app_name, dsn::enum_to_string(local_status));
 }
 
 } // namespace replication
