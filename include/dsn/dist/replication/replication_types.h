@@ -371,6 +371,8 @@ class ddd_diagnose_response;
 
 class app_partition_split_request;
 
+class app_partition_split_response;
+
 class control_split_request;
 
 class control_split_response;
@@ -382,12 +384,6 @@ class stop_split_response;
 class query_split_request;
 
 class query_split_response;
-
-class cancel_app_partition_split_request;
-
-class clear_partition_split_flag_request;
-
-class app_partition_split_response;
 
 class notify_catch_up_request;
 
@@ -5899,6 +5895,64 @@ inline std::ostream &operator<<(std::ostream &out, const app_partition_split_req
     return out;
 }
 
+typedef struct _app_partition_split_response__isset
+{
+    _app_partition_split_response__isset() : err(false), app_id(false), partition_count(false) {}
+    bool err : 1;
+    bool app_id : 1;
+    bool partition_count : 1;
+} _app_partition_split_response__isset;
+
+class app_partition_split_response
+{
+public:
+    app_partition_split_response(const app_partition_split_response &);
+    app_partition_split_response(app_partition_split_response &&);
+    app_partition_split_response &operator=(const app_partition_split_response &);
+    app_partition_split_response &operator=(app_partition_split_response &&);
+    app_partition_split_response() : app_id(0), partition_count(0) {}
+
+    virtual ~app_partition_split_response() throw();
+    ::dsn::error_code err;
+    int32_t app_id;
+    int32_t partition_count;
+
+    _app_partition_split_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_app_id(const int32_t val);
+
+    void __set_partition_count(const int32_t val);
+
+    bool operator==(const app_partition_split_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (!(app_id == rhs.app_id))
+            return false;
+        if (!(partition_count == rhs.partition_count))
+            return false;
+        return true;
+    }
+    bool operator!=(const app_partition_split_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const app_partition_split_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(app_partition_split_response &a, app_partition_split_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const app_partition_split_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
 typedef struct _control_split_request__isset
 {
     _control_split_request__isset()
@@ -6239,171 +6293,6 @@ public:
 void swap(query_split_response &a, query_split_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const query_split_response &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
-typedef struct _cancel_app_partition_split_request__isset
-{
-    _cancel_app_partition_split_request__isset()
-        : app_name(false), original_partition_count(false), is_force(false)
-    {
-    }
-    bool app_name : 1;
-    bool original_partition_count : 1;
-    bool is_force : 1;
-} _cancel_app_partition_split_request__isset;
-
-class cancel_app_partition_split_request
-{
-public:
-    cancel_app_partition_split_request(const cancel_app_partition_split_request &);
-    cancel_app_partition_split_request(cancel_app_partition_split_request &&);
-    cancel_app_partition_split_request &operator=(const cancel_app_partition_split_request &);
-    cancel_app_partition_split_request &operator=(cancel_app_partition_split_request &&);
-    cancel_app_partition_split_request() : app_name(), original_partition_count(0), is_force(0) {}
-
-    virtual ~cancel_app_partition_split_request() throw();
-    std::string app_name;
-    int32_t original_partition_count;
-    bool is_force;
-
-    _cancel_app_partition_split_request__isset __isset;
-
-    void __set_app_name(const std::string &val);
-
-    void __set_original_partition_count(const int32_t val);
-
-    void __set_is_force(const bool val);
-
-    bool operator==(const cancel_app_partition_split_request &rhs) const
-    {
-        if (!(app_name == rhs.app_name))
-            return false;
-        if (!(original_partition_count == rhs.original_partition_count))
-            return false;
-        if (!(is_force == rhs.is_force))
-            return false;
-        return true;
-    }
-    bool operator!=(const cancel_app_partition_split_request &rhs) const { return !(*this == rhs); }
-
-    bool operator<(const cancel_app_partition_split_request &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(cancel_app_partition_split_request &a, cancel_app_partition_split_request &b);
-
-inline std::ostream &operator<<(std::ostream &out, const cancel_app_partition_split_request &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
-typedef struct _clear_partition_split_flag_request__isset
-{
-    _clear_partition_split_flag_request__isset() : app_name(false) {}
-    bool app_name : 1;
-} _clear_partition_split_flag_request__isset;
-
-class clear_partition_split_flag_request
-{
-public:
-    clear_partition_split_flag_request(const clear_partition_split_flag_request &);
-    clear_partition_split_flag_request(clear_partition_split_flag_request &&);
-    clear_partition_split_flag_request &operator=(const clear_partition_split_flag_request &);
-    clear_partition_split_flag_request &operator=(clear_partition_split_flag_request &&);
-    clear_partition_split_flag_request() : app_name() {}
-
-    virtual ~clear_partition_split_flag_request() throw();
-    std::string app_name;
-
-    _clear_partition_split_flag_request__isset __isset;
-
-    void __set_app_name(const std::string &val);
-
-    bool operator==(const clear_partition_split_flag_request &rhs) const
-    {
-        if (!(app_name == rhs.app_name))
-            return false;
-        return true;
-    }
-    bool operator!=(const clear_partition_split_flag_request &rhs) const { return !(*this == rhs); }
-
-    bool operator<(const clear_partition_split_flag_request &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(clear_partition_split_flag_request &a, clear_partition_split_flag_request &b);
-
-inline std::ostream &operator<<(std::ostream &out, const clear_partition_split_flag_request &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
-typedef struct _app_partition_split_response__isset
-{
-    _app_partition_split_response__isset() : err(false), app_id(false), partition_count(false) {}
-    bool err : 1;
-    bool app_id : 1;
-    bool partition_count : 1;
-} _app_partition_split_response__isset;
-
-class app_partition_split_response
-{
-public:
-    app_partition_split_response(const app_partition_split_response &);
-    app_partition_split_response(app_partition_split_response &&);
-    app_partition_split_response &operator=(const app_partition_split_response &);
-    app_partition_split_response &operator=(app_partition_split_response &&);
-    app_partition_split_response() : app_id(0), partition_count(0) {}
-
-    virtual ~app_partition_split_response() throw();
-    ::dsn::error_code err;
-    int32_t app_id;
-    int32_t partition_count;
-
-    _app_partition_split_response__isset __isset;
-
-    void __set_err(const ::dsn::error_code &val);
-
-    void __set_app_id(const int32_t val);
-
-    void __set_partition_count(const int32_t val);
-
-    bool operator==(const app_partition_split_response &rhs) const
-    {
-        if (!(err == rhs.err))
-            return false;
-        if (!(app_id == rhs.app_id))
-            return false;
-        if (!(partition_count == rhs.partition_count))
-            return false;
-        return true;
-    }
-    bool operator!=(const app_partition_split_response &rhs) const { return !(*this == rhs); }
-
-    bool operator<(const app_partition_split_response &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(app_partition_split_response &a, app_partition_split_response &b);
-
-inline std::ostream &operator<<(std::ostream &out, const app_partition_split_response &obj)
 {
     obj.printTo(out);
     return out;

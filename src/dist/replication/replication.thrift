@@ -829,6 +829,20 @@ struct app_partition_split_request
     2:i32                    new_partition_count;
 }
 
+struct app_partition_split_response
+{
+    // Possible errors:
+    // - ERR_APP_NOT_EXIST: if the table is not available
+    // - ERR_INVALID_PARAMETERS: if the given new_partition_count != old_partition_count * 2
+    // - ERR_BUSY - if there's ongoing split already
+    1:dsn.error_code         err;
+    2:i32                    app_id;
+    // app current partition count
+    // if split succeed, partition_count = new partition_count
+    // if split failed, partition_count = original partition_count
+    3:i32                    partition_count;
+}
+
 enum split_control_type
 {
     PSC_INVALID,
@@ -886,44 +900,6 @@ struct query_split_response
     2:string            hint_msg;
     3:i32               new_partition_count;
     4:map<i32,split_status> status;
-}
-
-// TODO(heyuchen): remove
-struct cancel_app_partition_split_request
-{
-    1:string            app_name;
-    2:i32               original_partition_count;
-    3:bool              is_force;
-}
-
-struct clear_partition_split_flag_request
-{
-    1:string            app_name;
-}
-
-// Common response from meta to client
-//-  common errors:
-//     ERR_APP_NOT_EXIST: if the table is not available.
-//-  app_partition_split_request:
-//     ERR_INVALID_PARAMETERS: if the given new_partition_count != old_partition_count * 2
-//     ERR_BUSY - if there's ongoing split already.
-//     ERR_CHILD_DROPPED - if partition split is paused or canceled.
-//-  control_single_partition_split_request:
-//     ERR_INVALID_PARAMETERS: if the given partition index is not parent index
-//     ERR_CHILD_REGISTERED(when pause split): split has been finished
-//     ERR_NO_NEED_OPERATE: when try to pause split already paused or restart split already started
-//-  cancel_app_partition_split_request:
-//     ERR_INVALID_PARAMETERS: if the given original_partition_count * 2 != partition_count
-//     ERR_CHILD_REGISTERED: if all child partitions finish split
-//     ERR_REJECT: if some child partitions finish split but not force cancel split
-struct app_partition_split_response
-{
-    1:dsn.error_code         err;
-    2:i32                    app_id;
-    // app current partition count
-    // if split succeed, partition_count = new partition_count
-    // if split failed, partition_count = original partition_count
-    3:i32                    partition_count;
 }
 
 // child to primary parent, notifying that itself has caught up with parent

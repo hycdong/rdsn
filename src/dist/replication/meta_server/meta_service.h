@@ -73,12 +73,6 @@ typedef rpc_holder<app_partition_split_request, app_partition_split_response>
 typedef rpc_holder<app_partition_split_request, app_partition_split_response>
     app_partition_split_rpc;
 
-typedef rpc_holder<cancel_app_partition_split_request, app_partition_split_response>
-    cancel_app_partition_split_rpc;
-
-typedef rpc_holder<clear_partition_split_flag_request, app_partition_split_response>
-    clear_partition_split_flag_rpc;
-
 typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
 
 typedef rpc_holder<query_child_state_request, query_child_state_response> query_child_state_rpc;
@@ -200,8 +194,6 @@ private:
     void on_register_child_on_meta(register_child_rpc rpc);
     void on_query_child_state(query_child_state_rpc rpc);
 
-    void on_cancel_app_partition_split(cancel_app_partition_split_rpc rpc);
-    void on_clear_partition_split_flag(clear_partition_split_flag_rpc rpc);
     void on_query_partition_split(query_split_rpc rpc);
     void on_control_partition_split(control_split_rpc rpc);
 

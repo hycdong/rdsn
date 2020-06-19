@@ -176,11 +176,6 @@ public:
     // partition split
     dsn::error_code app_partition_split(const std::string &app_name, int partition_count);
 
-    dsn::error_code cancel_app_partition_split(const std::string &app_name,
-                                               int original_partition_count,
-                                               bool is_force);
-    dsn::error_code clear_app_split_flags(const std::string &app_name);
-
     error_with<query_split_response> query_partition_split(const std::string &app_name);
 
     error_with<control_split_response>
