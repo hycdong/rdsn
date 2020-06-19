@@ -913,29 +913,18 @@ void replica::on_update_group_partition_count_reply(
 void replica::register_child_on_meta(ballot b) // on primary parent
 {
     if (status() != partition_status::PS_PRIMARY) {
-        dwarn_f("{} is not primary, can not register child, current status is {}",
-                name(),
-                enum_to_string(status()));
+        dwarn_replica("failed to register child, status = {}", enum_to_string(status()));
         return;
     }
 
     if (_primary_states.reconfiguration_task != nullptr) {
-        ddebug_f("{} is under reconfiguration, delay to register child", name());
+        dwarn_replica("under reconfiguration, delay and retry to register child");
         _primary_states.register_child_task =
             tasking::enqueue(LPC_PARTITION_SPLIT,
                              tracker(),
                              std::bind(&replica::register_child_on_meta, this, b),
                              get_gpid().thread_hash(),
                              std::chrono::seconds(1));
-        return;
-    }
-
-    if (b != get_ballot()) {
-        dwarn_f(
-            "{} failed to register child, may out-dated, request ballot is {}, local ballot is {}",
-            name(),
-            b,
-            get_ballot());
         return;
     }
 
@@ -946,188 +935,129 @@ void replica::register_child_on_meta(ballot b) // on primary parent
     child_config.pid.set_partition_index(_app_info.partition_count +
                                          get_gpid().get_partition_index());
 
-    std::shared_ptr<register_child_request> request(new register_child_request);
-    request->app = _app_info;
-    request->child_config = child_config;
-    request->parent_config = _primary_states.membership;
-    request->primary_address = _stub->_primary_address;
+    register_child_request request;
+    request.app = _app_info;
+    request.child_config = child_config;
+    request.parent_config = _primary_states.membership;
+    request.primary_address = _stub->_primary_address;
 
+    // reject client request
     update_local_configuration_with_no_ballot_change(partition_status::PS_INACTIVE);
     set_inactive_state_transient(true);
     _partition_version = -1;
 
-    ddebug_f("{} set register child partition({}.{}) request to meta, current ballot is {}, child "
-             "ballot is {}",
-             name(),
-             request->child_config.pid.get_app_id(),
-             request->child_config.pid.get_partition_index(),
-             request->parent_config.ballot,
-             request->child_config.ballot);
-
-    rpc_address meta_address(_stub->_failure_detector->get_servers());
-    // TODO(hyc): new change
-    _primary_states.register_child_task = rpc::call(
-        meta_address,
-        RPC_CM_REGISTER_CHILD_REPLICA,
-        *request,
-        tracker(),
-        [=](error_code ec, register_child_response &&response) {
-            on_register_child_on_meta_reply(
-                ec, request, std::make_shared<register_child_response>(std::move(response)));
-        },
-        std::chrono::seconds(0),
-        get_gpid().thread_hash());
+    parent_send_register_request(request);
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::parent_send_register_request(
+    const register_child_request &request) // on primary parent
+{
+    FAIL_POINT_INJECT_F("replica_parent_send_register_request", [](dsn::string_view) {});
+
+    dcheck_eq_replica(status(), partition_status::PS_INACTIVE);
+    ddebug_replica(
+        "send register child({}) request to meta_server, current ballot = {}, child ballot = {}",
+        request.child_config.pid,
+        request.parent_config.ballot,
+        request.child_config.ballot);
+
+    rpc_address meta_address(_stub->_failure_detector->get_servers());
+    std::unique_ptr<register_child_request> req = make_unique<register_child_request>(request);
+    register_child_rpc rpc(std::move(req), RPC_CM_REGISTER_CHILD_REPLICA);
+    _primary_states.register_child_task =
+        rpc.call(meta_address,
+                 tracker(),
+                 [this, rpc](error_code ec) mutable {
+                     on_register_child_on_meta_reply(ec, rpc.request(), rpc.response());
+                 },
+                 _split_states.parent_gpid.thread_hash());
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_register_child_on_meta_reply(
     dsn::error_code ec,
-    std::shared_ptr<register_child_request> request,
-    std::shared_ptr<register_child_response> response) // on primary parent
+    const register_child_request &request,
+    const register_child_response &response) // on primary parent
 {
-    // TODO(hyc): consider where should add check
+    FAIL_POINT_INJECT_F("replica_on_register_child_on_meta_reply", [](dsn::string_view) {});
+
     _checker.only_one_thread_access();
 
-    if (partition_status::PS_INACTIVE != status() || _stub->is_connected() == false) {
-        dwarn_f("{} status wrong or stub is not connected, status is {}",
-                name(),
-                enum_to_string(status()));
+    // primary parent is under reconfiguration, whose status should be PS_INACTIVE
+    if (partition_status::PS_INACTIVE != status() || !_stub->is_connected()) {
+        dwarn_replica("status wrong or stub is not connected, status = {}",
+                      enum_to_string(status()));
         _primary_states.register_child_task = nullptr;
         _primary_states.query_child_state_task = nullptr;
-
         return;
     }
 
-    if (ec == ERR_OK) {
-        ec = response->err;
-    }
+    dsn::error_code err = ec == ERR_OK ? response.err : ec;
+    if (err != ERR_OK) {
+        dwarn_replica(
+            "register child({}) failed, error = {}, request child ballot = {}, local ballot = {}",
+            request.child_config.pid,
+            err.to_string(),
+            request.child_config.ballot,
+            get_ballot());
 
-    // handle register failed
-    if (ec == ERR_CHILD_DROPPED || ec == ERR_REJECT) {
-        dwarn_f("{}: register child({}.{}) failed coz partition split is paused or canceled",
-                name(),
-                request->child_config.pid.get_app_id(),
-                request->child_config.pid.get_partition_index());
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica::child_handle_split_error,
-                      std::placeholders::_1,
-                      "register child failed coz split paused or canceled"));
-        _child_gpid.set_app_id(0);
-        return;
-    }
+        // register request is out-of-dated
+        if (err == ERR_INVALID_VERSION) {
+            return;
+        }
 
-    if (ec != ERR_OK) {
-        dwarn_f("{}: register child({}.{}) reply with error {}, request child ballot is {}, local "
-                "ballot is {}",
-                name(),
-                request->child_config.pid.get_app_id(),
-                request->child_config.pid.get_partition_index(),
-                ec.to_string(),
-                request->child_config.ballot,
-                get_ballot());
-
-        if (ec != ERR_INVALID_VERSION && ec != ERR_CHILD_REGISTERED) {
-            _primary_states.register_child_task = tasking::enqueue(
-                LPC_DELAY_UPDATE_CONFIG,
-                tracker(),
-                [this, request]() {
-                    rpc_address target(_stub->_failure_detector->get_servers());
-                    auto rpc_task_ptr = rpc::call(
-                        target,
-                        RPC_CM_REGISTER_CHILD_REPLICA,
-                        *request,
-                        tracker(),
-                        [=](error_code err, register_child_response &&resp) {
-                            on_register_child_on_meta_reply(
-                                err,
-                                request,
-                                std::make_shared<register_child_response>(std::move(resp)));
-                        },
-                        std::chrono::seconds(0),
-                        get_gpid().thread_hash());
-                    _primary_states.register_child_task = rpc_task_ptr;
-                },
-                get_gpid().thread_hash(),
-                std::chrono::seconds(1));
-
+        // we need not resend register request if child has been registered
+        if (err != ERR_CHILD_REGISTERED) {
+            _primary_states.register_child_task =
+                tasking::enqueue(LPC_DELAY_UPDATE_CONFIG,
+                                 tracker(),
+                                 std::bind(&replica::parent_send_register_request, this, request),
+                                 get_gpid().thread_hash(),
+                                 std::chrono::seconds(1));
             return;
         }
     }
 
-    if (response->parent_config.pid != get_gpid() || response->child_config.pid != _child_gpid) {
-        derror_f("{}: remote gpid ({}.{}) VS local gpid ({}.{}), remote child ({}.{}) VS local "
-                 "child ({}.{}), something wrong with meta, retry",
-                 name(),
-                 response->parent_config.pid.get_app_id(),
-                 response->parent_config.pid.get_partition_index(),
-                 get_gpid().get_app_id(),
-                 get_gpid().get_partition_index(),
-                 response->child_config.pid.get_app_id(),
-                 response->child_config.pid.get_partition_index(),
-                 _child_gpid.get_app_id(),
-                 _child_gpid.get_partition_index());
+    if (err == ERR_OK) {
+        ddebug_replica("register child({}) succeed, response parent ballot = {}, local ballot = "
+                       "{}, local status = {}",
+                       response.child_config.pid,
+                       response.parent_config.ballot,
+                       get_ballot(),
+                       enum_to_string(status()));
 
-        _primary_states.register_child_task = tasking::enqueue(
-            LPC_DELAY_UPDATE_CONFIG,
-            tracker(),
-            [this, request]() {
-                rpc_address target(_stub->_failure_detector->get_servers());
-                auto rpc_task_ptr =
-                    rpc::call(target,
-                              RPC_CM_REGISTER_CHILD_REPLICA,
-                              *request,
-                              tracker(),
-                              [=](error_code err, register_child_response &&resp) {
-                                  on_register_child_on_meta_reply(
-                                      err,
-                                      request,
-                                      std::make_shared<register_child_response>(std::move(resp)));
-                              },
-                              std::chrono::seconds(0),
-                              get_gpid().thread_hash());
-                _primary_states.register_child_task = rpc_task_ptr;
-            },
-            get_gpid().thread_hash(),
-            std::chrono::seconds(1));
-
-        return;
-    }
-
-    if (ec == ERR_OK && response->err == ERR_OK) {
-        ddebug_f(
-            "{}: register child({}.{}) succeed, parent ballot is {}, local ballot is {}, local "
-            "status {}",
-            name(),
-            response->child_config.pid.get_app_id(),
-            response->child_config.pid.get_partition_index(),
-            response->parent_config.ballot,
-            get_ballot(),
-            enum_to_string(status()));
-        dassert(_app_info.partition_count * 2 == response->app.partition_count,
-                "local partition count is %d, remote partition count is %d",
-                _app_info.partition_count,
-                response->app.partition_count);
-        // make child replica become available
+        dcheck_eq_replica(_app_info.partition_count * 2, response.app.partition_count);
         _stub->split_replica_exec(LPC_PARTITION_SPLIT,
-                                  response->child_config.pid,
+                                  response.child_config.pid,
                                   std::bind(&replica::child_partition_active,
                                             std::placeholders::_1,
-                                            response->child_config));
-        update_group_partition_count(response->app.partition_count, false);
+                                            response.child_config));
+        update_group_partition_count(response.app.partition_count, false);
+
+        // TODO(heyuchen): TBD - update parent group partition_count
     }
 
+    // parent register child succeed or child partition has already resgitered
+    // in both situation, we should reset resgiter child task and child_gpid
     _primary_states.register_child_task = nullptr;
-    // TODO(hyc): when to change it into false, should there
-    _primary_states.sync_send_write_request = true;
-    _child_gpid.set_app_id(0);
 
-    if (response->parent_config.ballot >= get_ballot()) {
-        ddebug_f("{} ballot in response is {}, local ballot is {}, should update configuration",
-                 name(),
-                 response->parent_config.ballot,
-                 get_ballot());
-        update_configuration(response->parent_config);
+    _child_gpid.set_app_id(0);
+    if (response.parent_config.ballot >= get_ballot()) {
+        ddebug_replica("response ballot = {}, local ballot = {}, should update configuration",
+                       response.parent_config.ballot,
+                       get_ballot());
+        update_configuration(response.parent_config);
     }
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::child_partition_active(const partition_configuration &config) // on child
+{
+    ddebug_replica("child partition become active");
+    _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
+    _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();
+    update_configuration(config);
 }
 
 ///

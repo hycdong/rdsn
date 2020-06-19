@@ -73,8 +73,6 @@ typedef rpc_holder<app_partition_split_request, app_partition_split_response>
 typedef rpc_holder<app_partition_split_request, app_partition_split_response>
     app_partition_split_rpc;
 
-typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
-
 typedef rpc_holder<query_child_state_request, query_child_state_response> query_child_state_rpc;
 
 class meta_service : public serverlet<meta_service>

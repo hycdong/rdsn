@@ -362,6 +362,13 @@ void replica::update_configuration_on_meta_server(config_type::type type,
                                                   ::dsn::rpc_address node,
                                                   partition_configuration &newConfig)
 {
+    // type should never be `CT_REGISTER_CHILD`
+    // if this happens, it means serious mistake happened during partition split
+    // assert here to stop split and avoid splitting wrong
+    if (type == config_type::CT_REGISTER_CHILD) {
+        dassert_replica(false, "invalid config_type, type = {}", enum_to_string(type));
+    }
+
     newConfig.last_committed_decree = last_committed_decree();
 
     if (type == config_type::CT_PRIMARY_FORCE_UPDATE_BALLOT) {
@@ -370,8 +377,6 @@ void replica::update_configuration_on_meta_server(config_type::type type,
                 "");
         dassert(
             newConfig.primary == node, "%s VS %s", newConfig.primary.to_string(), node.to_string());
-    } else if (type == config_type::CT_REGISTER_CHILD) {
-        dassert(false, "invalid config_type, type = %s", enum_to_string(type));
     } else if (type != config_type::CT_ASSIGN_PRIMARY &&
                type != config_type::CT_UPGRADE_TO_PRIMARY) {
         dassert(status() == partition_status::PS_PRIMARY,
@@ -720,12 +725,11 @@ bool replica::update_local_configuration(const replica_configuration &config,
         break;
     case partition_status::PS_PARTITION_SPLIT:
         if (config.status == partition_status::PS_INACTIVE) {
-            dwarn("%s: status change from %s @ %" PRId64 " to %s @ %" PRId64 " is not allowed",
-                  name(),
-                  enum_to_string(old_status),
-                  old_ballot,
-                  enum_to_string(config.status),
-                  config.ballot);
+            dwarn_replica("status change from {} @ {} to {} @ {} is not allowed",
+                          enum_to_string(old_status),
+                          old_ballot,
+                          enum_to_string(config.status),
+                          config.ballot);
             return false;
         }
         break;
@@ -1319,16 +1323,6 @@ void replica::on_query_child_state_reply(error_code ec,
         _partition_version = _app_info.partition_count - 1;
         _app->set_partition_version(_partition_version);
     }
-}
-
-void replica::child_partition_active(const partition_configuration &config)
-{
-    ddebug_f("{} finish partition split and become active", name());
-    _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
-    // TODO(hyc): should set is false
-    _primary_states.sync_send_write_request = false;
-    _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();
-    update_configuration(config);
 }
 
 } // namespace replication

@@ -144,10 +144,9 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     response.err = ERR_IO_PENDING;
 
     zauto_write_lock(app_lock());
-
     std::shared_ptr<app_state> app = _state->get_app(request.app.app_id);
-    dassert(app != nullptr, "get get app for app id(%d)", request.app.app_id);
-    dassert(app->is_stateful, "don't support stateless apps currently, id(%d)", request.app.app_id);
+    dassert_f(app != nullptr, "app is not existed, id({})", request.app.app_id);
+    dassert_f(app->is_stateful, "app is stateless currently, id({})", request.app.app_id);
 
     dsn::gpid parent_gpid = request.parent_config.pid;
     dsn::gpid child_gpid = request.child_config.pid;
@@ -160,8 +159,9 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
         return;
     }
 
-    partition_configuration parent_config = app->partitions[parent_gpid.get_partition_index()];
-    partition_configuration child_config = app->partitions[child_gpid.get_partition_index()];
+    const partition_configuration &parent_config =
+        app->partitions[parent_gpid.get_partition_index()];
+    const partition_configuration &child_config = app->partitions[child_gpid.get_partition_index()];
     config_context &parent_context = app->helpers->contexts[parent_gpid.get_partition_index()];
 
     // TODO(heyuchen): pause remove
@@ -199,10 +199,8 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 
     if (child_config.ballot != invalid_ballot) {
         dwarn_f(
-            "duplicated register child request, gpid({}.{}) has already been registered, ballot "
-            "is {}",
-            child_gpid.get_app_id(),
-            child_gpid.get_partition_index(),
+            "duplicated register child request, child({}) has already been registered, ballot = {}",
+            child_gpid,
             child_config.ballot);
         response.err = ERR_CHILD_REGISTERED;
         return;
@@ -210,20 +208,15 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 
     if (parent_context.stage == config_status::pending_proposal ||
         parent_context.stage == config_status::pending_remote_sync) {
-        dwarn_f("another request is syncing with remote storage, ignore this request - gpid({}.{}) "
-                "register child",
-                parent_gpid.get_app_id(),
-                parent_gpid.get_partition_index());
+        dwarn_f(
+            "partition({}): another request is syncing with remote storage, ignore this request",
+            parent_gpid);
         return;
     }
 
     app->helpers->split_states.status.erase(parent_gpid.get_partition_index());
     app->helpers->split_states.splitting_count--;
-    ddebug_f("gpid({}.{}) will resgiter child gpid({}.{})",
-             parent_gpid.get_app_id(),
-             parent_gpid.get_partition_index(),
-             child_gpid.get_app_id(),
-             child_gpid.get_partition_index());
+    ddebug_f("parent({}) will register child({})", parent_gpid, child_gpid);
 
     parent_context.stage = config_status::pending_remote_sync;
     parent_context.msg = rpc.dsn_request();
@@ -233,9 +226,8 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 dsn::task_ptr meta_split_service::add_child_on_remote_storage(register_child_rpc rpc,
                                                               bool create_new)
 {
-    auto &request = rpc.request();
-
-    std::string partition_path = _state->get_partition_path(request.child_config.pid);
+    const auto &request = rpc.request();
+    const std::string &partition_path = _state->get_partition_path(request.child_config.pid);
     blob value = dsn::json::json_forwarder<partition_configuration>::encode(request.child_config);
 
     if (create_new) {
@@ -272,12 +264,13 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
     auto &response = rpc.response();
 
     std::shared_ptr<app_state> app = _state->get_app(request.app.app_id);
-    dassert(app->status == app_status::AS_AVAILABLE || app->status == app_status::AS_DROPPING,
-            "if app removed, this task should be cancelled");
+    dassert_f(app != nullptr, "app is not existed, id({})", request.app.app_id);
+    dassert_f(app->status == app_status::AS_AVAILABLE || app->status == app_status::AS_DROPPING,
+              "app is not available now, id({})",
+              request.app.app_id);
 
     dsn::gpid parent_gpid = request.parent_config.pid;
     dsn::gpid child_gpid = request.child_config.pid;
-
     config_context &parent_context = app->helpers->contexts[parent_gpid.get_partition_index()];
 
     if (ec == ERR_TIMEOUT ||
@@ -293,41 +286,31 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
                              },
                              0,
                              std::chrono::seconds(delay));
-    } else if (ec == ERR_OK) {
-        ddebug_f("gpid({}.{}) resgiter child gpid({}.{}) on remote storage succeed",
-                 parent_gpid.get_app_id(),
-                 parent_gpid.get_partition_index(),
-                 child_gpid.get_app_id(),
-                 child_gpid.get_partition_index());
+        return;
+    }
+    dassert_f(ec == ERR_OK, "we can't handle this right now, err = {}", ec.to_string());
+    ddebug_f("parent({}) resgiter child({}) on remote storage succeed", parent_gpid, child_gpid);
 
-        std::shared_ptr<configuration_update_request> update_child_request(
-            new configuration_update_request);
-        update_child_request->config = request.child_config;
-        update_child_request->info = *app;
-        update_child_request->type = config_type::CT_REGISTER_CHILD;
-        update_child_request->node = request.primary_address;
+    // update local child partition configuration
+    std::shared_ptr<configuration_update_request> update_child_request =
+        std::make_shared<configuration_update_request>();
+    update_child_request->config = request.child_config;
+    update_child_request->info = *app;
+    update_child_request->type = config_type::CT_REGISTER_CHILD;
+    update_child_request->node = request.primary_address;
 
-        partition_configuration child_config = app->partitions[child_gpid.get_partition_index()];
-        child_config.secondaries = request.child_config.secondaries;
+    partition_configuration child_config = app->partitions[child_gpid.get_partition_index()];
+    child_config.secondaries = request.child_config.secondaries;
+    _state->update_configuration_locally(*app, update_child_request);
 
-        // update local child partition configuration
-        _state->update_configuration_locally(*app, update_child_request);
-
-        parent_context.pending_sync_task = nullptr;
-        parent_context.stage = config_status::not_pending;
-
-        if (parent_context.msg) {
-            response.err = ERR_OK;
-            response.app = *app;
-            response.parent_config = app->partitions[parent_gpid.get_partition_index()];
-            response.child_config = app->partitions[child_gpid.get_partition_index()];
-            parent_context.msg = nullptr;
-            // TODO(heyuchen): pause add
-            // app->helpers->split_states.status.erase(parent_gpid.get_partition_index());
-            // app->helpers->split_states.splitting_count--;
-        }
-    } else {
-        dassert(false, "we can't handle this right now, err = %s", ec.to_string());
+    parent_context.pending_sync_task = nullptr;
+    parent_context.stage = config_status::not_pending;
+    if (parent_context.msg) {
+        response.err = ERR_OK;
+        response.app = *app;
+        response.parent_config = app->partitions[parent_gpid.get_partition_index()];
+        response.child_config = app->partitions[child_gpid.get_partition_index()];
+        parent_context.msg = nullptr;
     }
 }
 

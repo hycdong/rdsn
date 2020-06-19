@@ -378,11 +378,16 @@ private:
         rpc_address finish_update_address,
         bool is_update_child);
 
-    // all replicas update partition count, primary will register children on meta
-    virtual void register_child_on_meta(ballot b);
-    virtual void on_register_child_on_meta_reply(dsn::error_code ec,
-                                                 std::shared_ptr<register_child_request> request,
-                                                 std::shared_ptr<register_child_response> response);
+    // primary parent register children on meta_server
+    void register_child_on_meta(ballot b);
+    void on_register_child_on_meta_reply(dsn::error_code ec,
+                                         const register_child_request &request,
+                                         const register_child_response &response);
+    // primary sends register request to meta_server
+    void parent_send_register_request(const register_child_request &request);
+
+    // child partition has been registered on meta_server, could be active
+    void child_partition_active(const partition_configuration &config);
 
     // meta <=> replica configuration sync through on_config_sync
     // called by primary replica to check if partition count changed and partition flag changed to
@@ -413,9 +418,6 @@ private:
 
     // parent replica handle child ack when child copy mutation synchronously
     void on_copy_mutation_reply(dsn::error_code ec, ballot b, decree d);
-
-    // child partitions have been registered on meta, could be active
-    void child_partition_active(const partition_configuration &config);
 
     // child copy parent prepare list and call child_learn_states
     void child_copy_prepare_list(learn_state lstate,

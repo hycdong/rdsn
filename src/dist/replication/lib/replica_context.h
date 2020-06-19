@@ -119,7 +119,8 @@ public:
     // otherwise, not during partition split
     bool sync_send_write_request{false};
 
-    // replica->meta register child on meta server and remote storage
+    // Used for partition split
+    // primary parent register child on meta_server task
     dsn::task_ptr register_child_task;
 
     // replica-> meta query child partition configuration

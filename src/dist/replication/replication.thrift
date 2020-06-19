@@ -936,8 +936,7 @@ struct update_group_partition_count_response
     1:dsn.error_code    err;
 }
 
-// primary -> meta server
-// update child partition configuration on meta when finish partition split
+// primary parent -> meta server, register child on meta_server
 struct register_child_request
 {
     1:dsn.layer2.app_info                   app;

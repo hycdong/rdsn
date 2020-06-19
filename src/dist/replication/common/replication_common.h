@@ -38,6 +38,7 @@ typedef std::unordered_map<::dsn::rpc_address, dsn::task_ptr> node_tasks;
 typedef rpc_holder<query_split_request, query_split_response> query_split_rpc;
 typedef rpc_holder<stop_split_request, stop_split_response> stop_split_rpc;
 typedef rpc_holder<control_split_request, control_split_response> control_split_rpc;
+typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
 
 class replication_options
 {

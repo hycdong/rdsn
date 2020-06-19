@@ -940,10 +940,7 @@ void meta_service::on_register_child_on_meta(register_child_rpc rpc)
 
     tasking::enqueue(LPC_META_STATE_NORMAL,
                      tracker(),
-                     [this, rpc]() {
-                         dassert(_split_svc, "meta_split_service is uninitialized");
-                         _split_svc->register_child_on_meta(std::move(rpc));
-                     },
+                     [this, rpc]() { _split_svc->register_child_on_meta(std::move(rpc)); },
                      server_state::sStateHash);
 }
 
