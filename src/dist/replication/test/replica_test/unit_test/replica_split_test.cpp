@@ -615,6 +615,15 @@ public:
         _register_req.primary_address = dsn::rpc_address("127.0.0.1", 10086);
     }
 
+    void mock_update_group_partition_count_request(gpid pid, ballot b)
+    {
+        _update_partition_count_req.pid = pid;
+        _update_partition_count_req.ballot = b;
+        _update_partition_count_req.target_address = dsn::rpc_address("127.0.0.1", 1);
+        _update_partition_count_req.new_partition_count = _old_partition_count * 2;
+        _update_partition_count_req.update_child_group = (pid == _child_pid);
+    }
+
     void generate_child(partition_status::type status)
     {
         _child = _stub->generate_replica(_app_info, _child_pid, status, _init_ballot);
@@ -811,6 +820,38 @@ public:
         _parent->tracker()->wait_outstanding_tasks();
     }
 
+    error_code test_on_update_group_partition_count(mock_replica_ptr &rep, ballot b)
+    {
+        mock_update_group_partition_count_request(rep->get_gpid(), b);
+
+        update_group_partition_count_response resp;
+        rep->on_update_group_partition_count(_update_partition_count_req, resp);
+        if (_update_partition_count_req.update_child_group) {
+            _child->tracker()->wait_outstanding_tasks();
+        }
+        _parent->tracker()->wait_outstanding_tasks();
+        return resp.err;
+    }
+
+    int32_t test_on_update_group_partition_count_reply(error_code resp_err, gpid &pid)
+    {
+        _parent->_primary_states.sync_send_write_request = (pid == _parent_pid);
+        mock_update_group_partition_count_request(pid, _init_ballot);
+        update_group_partition_count_response resp;
+        resp.err = resp_err;
+
+        std::unordered_set<rpc_address> not_replied_address;
+        not_replied_address.insert(dsn::rpc_address("127.0.0.1", 1));
+        _parent->on_update_group_partition_count_reply(
+            ERR_OK, _update_partition_count_req, resp, not_replied_address);
+        _parent->tracker()->wait_outstanding_tasks();
+        if (_update_partition_count_req.update_child_group) {
+            _child->tracker()->wait_outstanding_tasks();
+        }
+
+        return not_replied_address.size();
+    }
+
 public:
     std::unique_ptr<mock_replica_stub> _stub;
 
@@ -827,6 +868,7 @@ public:
     group_check_request _group_check_req;
     notify_catch_up_request _catch_up_req;
     register_child_request _register_req;
+    update_group_partition_count_request _update_partition_count_req;
     std::vector<std::string> _private_log_files;
     std::vector<mutation_ptr> _mutation_list;
     const uint32_t _max_count = 10;
@@ -1077,10 +1119,89 @@ TEST_F(replica_split_test, register_child_reply_succeed)
 
     fail::setup();
     fail::cfg("replica_stub_split_replica_exec", "return()");
+    fail::cfg("replica_update_group_partition_count", "return()");
     test_on_register_child_rely(partition_status::PS_INACTIVE, ERR_OK);
     fail::teardown();
 
     ASSERT_TRUE(is_parent_not_in_split());
+}
+
+TEST_F(replica_split_test, child_update_count_with_not_caught_up)
+{
+    generate_child(partition_status::PS_PARTITION_SPLIT);
+    mock_child_split_context(_parent_pid, true, false);
+
+    error_code err = test_on_update_group_partition_count(_child, _init_ballot);
+    ASSERT_EQ(err, ERR_VERSION_OUTDATED);
+    ASSERT_TRUE(is_parent_not_in_split());
+}
+
+TEST_F(replica_split_test, child_update_count_with_wrong_ballot)
+{
+    generate_child(partition_status::PS_PARTITION_SPLIT);
+    mock_child_split_context(_parent_pid, true, true);
+
+    error_code err = test_on_update_group_partition_count(_child, _init_ballot - 1);
+    ASSERT_EQ(err, ERR_VERSION_OUTDATED);
+    ASSERT_TRUE(is_parent_not_in_split());
+}
+
+TEST_F(replica_split_test, child_update_count_succeed)
+{
+    generate_child(partition_status::PS_PARTITION_SPLIT);
+    mock_child_split_context(_parent_pid, true, true);
+
+    error_code err = test_on_update_group_partition_count(_child, _init_ballot);
+    ASSERT_EQ(err, ERR_OK);
+    ASSERT_EQ(get_partition_version(_child), _old_partition_count * 2 - 1);
+}
+
+TEST_F(replica_split_test, parent_update_count_with_wrong_ballot)
+{
+    error_code err = test_on_update_group_partition_count(_parent, _init_ballot - 1);
+    ASSERT_EQ(err, ERR_VERSION_OUTDATED);
+    ASSERT_EQ(_parent->status(), partition_status::PS_ERROR);
+}
+
+TEST_F(replica_split_test, parent_update_count_succeed)
+{
+    generate_child(partition_status::PS_PARTITION_SPLIT);
+    mock_child_split_context(_parent_pid, true, true);
+
+    error_code err = test_on_update_group_partition_count(_parent, _init_ballot);
+    ASSERT_EQ(err, ERR_OK);
+    ASSERT_EQ(get_partition_version(_parent), _old_partition_count * 2 - 1);
+    ASSERT_TRUE(is_parent_not_in_split());
+}
+
+TEST_F(replica_split_test, update_count_with_child_not_found)
+{
+    generate_child(partition_status::PS_PARTITION_SPLIT);
+
+    int32_t not_replied_size =
+        test_on_update_group_partition_count_reply(ERR_OBJECT_NOT_FOUND, _child_pid);
+    ASSERT_EQ(not_replied_size, 1);
+    ASSERT_TRUE(is_parent_not_in_split());
+}
+
+TEST_F(replica_split_test, update_child_group_count_succeed)
+{
+    generate_child(partition_status::PS_PARTITION_SPLIT);
+
+    fail::setup();
+    fail::cfg("replica_parent_send_register_request", "return()");
+    int32_t not_replied_size = test_on_update_group_partition_count_reply(ERR_OK, _child_pid);
+    fail::teardown();
+
+    ASSERT_EQ(not_replied_size, 0);
+    ASSERT_EQ(get_partition_version(_parent), -1);
+}
+
+TEST_F(replica_split_test, update_parent_group_count_succeed)
+{
+    int32_t not_replied_size = test_on_update_group_partition_count_reply(ERR_OK, _parent_pid);
+    ASSERT_EQ(not_replied_size, 0);
+    ASSERT_FALSE(get_sync_send_write_request());
 }
 
 } // namespace replication

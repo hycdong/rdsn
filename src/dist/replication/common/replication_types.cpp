@@ -15038,284 +15038,6 @@ void notify_cacth_up_response::printTo(std::ostream &out) const
     out << ")";
 }
 
-update_group_partition_count_request::~update_group_partition_count_request() throw() {}
-
-void update_group_partition_count_request::__set_app(const ::dsn::app_info &val)
-{
-    this->app = val;
-}
-
-void update_group_partition_count_request::__set_target_address(const ::dsn::rpc_address &val)
-{
-    this->target_address = val;
-}
-
-void update_group_partition_count_request::__set_config(const replica_configuration &val)
-{
-    this->config = val;
-}
-
-void update_group_partition_count_request::__set_last_committed_decree(const int64_t val)
-{
-    this->last_committed_decree = val;
-}
-
-uint32_t update_group_partition_count_request::read(::apache::thrift::protocol::TProtocol *iprot)
-{
-
-    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
-    uint32_t xfer = 0;
-    std::string fname;
-    ::apache::thrift::protocol::TType ftype;
-    int16_t fid;
-
-    xfer += iprot->readStructBegin(fname);
-
-    using ::apache::thrift::protocol::TProtocolException;
-
-    while (true) {
-        xfer += iprot->readFieldBegin(fname, ftype, fid);
-        if (ftype == ::apache::thrift::protocol::T_STOP) {
-            break;
-        }
-        switch (fid) {
-        case 1:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->app.read(iprot);
-                this->__isset.app = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 2:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->target_address.read(iprot);
-                this->__isset.target_address = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 3:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->config.read(iprot);
-                this->__isset.config = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 4:
-            if (ftype == ::apache::thrift::protocol::T_I64) {
-                xfer += iprot->readI64(this->last_committed_decree);
-                this->__isset.last_committed_decree = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        default:
-            xfer += iprot->skip(ftype);
-            break;
-        }
-        xfer += iprot->readFieldEnd();
-    }
-
-    xfer += iprot->readStructEnd();
-
-    return xfer;
-}
-
-uint32_t
-update_group_partition_count_request::write(::apache::thrift::protocol::TProtocol *oprot) const
-{
-    uint32_t xfer = 0;
-    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("update_group_partition_count_request");
-
-    xfer += oprot->writeFieldBegin("app", ::apache::thrift::protocol::T_STRUCT, 1);
-    xfer += this->app.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("target_address", ::apache::thrift::protocol::T_STRUCT, 2);
-    xfer += this->target_address.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("config", ::apache::thrift::protocol::T_STRUCT, 3);
-    xfer += this->config.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("last_committed_decree", ::apache::thrift::protocol::T_I64, 4);
-    xfer += oprot->writeI64(this->last_committed_decree);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldStop();
-    xfer += oprot->writeStructEnd();
-    return xfer;
-}
-
-void swap(update_group_partition_count_request &a, update_group_partition_count_request &b)
-{
-    using ::std::swap;
-    swap(a.app, b.app);
-    swap(a.target_address, b.target_address);
-    swap(a.config, b.config);
-    swap(a.last_committed_decree, b.last_committed_decree);
-    swap(a.__isset, b.__isset);
-}
-
-update_group_partition_count_request::update_group_partition_count_request(
-    const update_group_partition_count_request &other664)
-{
-    app = other664.app;
-    target_address = other664.target_address;
-    config = other664.config;
-    last_committed_decree = other664.last_committed_decree;
-    __isset = other664.__isset;
-}
-update_group_partition_count_request::update_group_partition_count_request(
-    update_group_partition_count_request &&other665)
-{
-    app = std::move(other665.app);
-    target_address = std::move(other665.target_address);
-    config = std::move(other665.config);
-    last_committed_decree = std::move(other665.last_committed_decree);
-    __isset = std::move(other665.__isset);
-}
-update_group_partition_count_request &update_group_partition_count_request::
-operator=(const update_group_partition_count_request &other666)
-{
-    app = other666.app;
-    target_address = other666.target_address;
-    config = other666.config;
-    last_committed_decree = other666.last_committed_decree;
-    __isset = other666.__isset;
-    return *this;
-}
-update_group_partition_count_request &update_group_partition_count_request::
-operator=(update_group_partition_count_request &&other667)
-{
-    app = std::move(other667.app);
-    target_address = std::move(other667.target_address);
-    config = std::move(other667.config);
-    last_committed_decree = std::move(other667.last_committed_decree);
-    __isset = std::move(other667.__isset);
-    return *this;
-}
-void update_group_partition_count_request::printTo(std::ostream &out) const
-{
-    using ::apache::thrift::to_string;
-    out << "update_group_partition_count_request(";
-    out << "app=" << to_string(app);
-    out << ", "
-        << "target_address=" << to_string(target_address);
-    out << ", "
-        << "config=" << to_string(config);
-    out << ", "
-        << "last_committed_decree=" << to_string(last_committed_decree);
-    out << ")";
-}
-
-update_group_partition_count_response::~update_group_partition_count_response() throw() {}
-
-void update_group_partition_count_response::__set_err(const ::dsn::error_code &val)
-{
-    this->err = val;
-}
-
-uint32_t update_group_partition_count_response::read(::apache::thrift::protocol::TProtocol *iprot)
-{
-
-    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
-    uint32_t xfer = 0;
-    std::string fname;
-    ::apache::thrift::protocol::TType ftype;
-    int16_t fid;
-
-    xfer += iprot->readStructBegin(fname);
-
-    using ::apache::thrift::protocol::TProtocolException;
-
-    while (true) {
-        xfer += iprot->readFieldBegin(fname, ftype, fid);
-        if (ftype == ::apache::thrift::protocol::T_STOP) {
-            break;
-        }
-        switch (fid) {
-        case 1:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->err.read(iprot);
-                this->__isset.err = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        default:
-            xfer += iprot->skip(ftype);
-            break;
-        }
-        xfer += iprot->readFieldEnd();
-    }
-
-    xfer += iprot->readStructEnd();
-
-    return xfer;
-}
-
-uint32_t
-update_group_partition_count_response::write(::apache::thrift::protocol::TProtocol *oprot) const
-{
-    uint32_t xfer = 0;
-    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("update_group_partition_count_response");
-
-    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
-    xfer += this->err.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldStop();
-    xfer += oprot->writeStructEnd();
-    return xfer;
-}
-
-void swap(update_group_partition_count_response &a, update_group_partition_count_response &b)
-{
-    using ::std::swap;
-    swap(a.err, b.err);
-    swap(a.__isset, b.__isset);
-}
-
-update_group_partition_count_response::update_group_partition_count_response(
-    const update_group_partition_count_response &other668)
-{
-    err = other668.err;
-    __isset = other668.__isset;
-}
-update_group_partition_count_response::update_group_partition_count_response(
-    update_group_partition_count_response &&other669)
-{
-    err = std::move(other669.err);
-    __isset = std::move(other669.__isset);
-}
-update_group_partition_count_response &update_group_partition_count_response::
-operator=(const update_group_partition_count_response &other670)
-{
-    err = other670.err;
-    __isset = other670.__isset;
-    return *this;
-}
-update_group_partition_count_response &update_group_partition_count_response::
-operator=(update_group_partition_count_response &&other671)
-{
-    err = std::move(other671.err);
-    __isset = std::move(other671.__isset);
-    return *this;
-}
-void update_group_partition_count_response::printTo(std::ostream &out) const
-{
-    using ::apache::thrift::to_string;
-    out << "update_group_partition_count_response(";
-    out << "err=" << to_string(err);
-    out << ")";
-}
-
 register_child_request::~register_child_request() throw() {}
 
 void register_child_request::__set_app(const ::dsn::app_info &val) { this->app = val; }
@@ -15435,38 +15157,38 @@ void swap(register_child_request &a, register_child_request &b)
     swap(a.__isset, b.__isset);
 }
 
-register_child_request::register_child_request(const register_child_request &other672)
+register_child_request::register_child_request(const register_child_request &other664)
 {
-    app = other672.app;
-    parent_config = other672.parent_config;
-    child_config = other672.child_config;
-    primary_address = other672.primary_address;
-    __isset = other672.__isset;
+    app = other664.app;
+    parent_config = other664.parent_config;
+    child_config = other664.child_config;
+    primary_address = other664.primary_address;
+    __isset = other664.__isset;
 }
-register_child_request::register_child_request(register_child_request &&other673)
+register_child_request::register_child_request(register_child_request &&other665)
 {
-    app = std::move(other673.app);
-    parent_config = std::move(other673.parent_config);
-    child_config = std::move(other673.child_config);
-    primary_address = std::move(other673.primary_address);
-    __isset = std::move(other673.__isset);
+    app = std::move(other665.app);
+    parent_config = std::move(other665.parent_config);
+    child_config = std::move(other665.child_config);
+    primary_address = std::move(other665.primary_address);
+    __isset = std::move(other665.__isset);
 }
-register_child_request &register_child_request::operator=(const register_child_request &other674)
+register_child_request &register_child_request::operator=(const register_child_request &other666)
 {
-    app = other674.app;
-    parent_config = other674.parent_config;
-    child_config = other674.child_config;
-    primary_address = other674.primary_address;
-    __isset = other674.__isset;
+    app = other666.app;
+    parent_config = other666.parent_config;
+    child_config = other666.child_config;
+    primary_address = other666.primary_address;
+    __isset = other666.__isset;
     return *this;
 }
-register_child_request &register_child_request::operator=(register_child_request &&other675)
+register_child_request &register_child_request::operator=(register_child_request &&other667)
 {
-    app = std::move(other675.app);
-    parent_config = std::move(other675.parent_config);
-    child_config = std::move(other675.child_config);
-    primary_address = std::move(other675.primary_address);
-    __isset = std::move(other675.__isset);
+    app = std::move(other667.app);
+    parent_config = std::move(other667.parent_config);
+    child_config = std::move(other667.child_config);
+    primary_address = std::move(other667.primary_address);
+    __isset = std::move(other667.__isset);
     return *this;
 }
 void register_child_request::printTo(std::ostream &out) const
@@ -15599,38 +15321,38 @@ void swap(register_child_response &a, register_child_response &b)
     swap(a.__isset, b.__isset);
 }
 
-register_child_response::register_child_response(const register_child_response &other676)
+register_child_response::register_child_response(const register_child_response &other668)
 {
-    err = other676.err;
-    app = other676.app;
-    parent_config = other676.parent_config;
-    child_config = other676.child_config;
-    __isset = other676.__isset;
+    err = other668.err;
+    app = other668.app;
+    parent_config = other668.parent_config;
+    child_config = other668.child_config;
+    __isset = other668.__isset;
 }
-register_child_response::register_child_response(register_child_response &&other677)
+register_child_response::register_child_response(register_child_response &&other669)
 {
-    err = std::move(other677.err);
-    app = std::move(other677.app);
-    parent_config = std::move(other677.parent_config);
-    child_config = std::move(other677.child_config);
-    __isset = std::move(other677.__isset);
+    err = std::move(other669.err);
+    app = std::move(other669.app);
+    parent_config = std::move(other669.parent_config);
+    child_config = std::move(other669.child_config);
+    __isset = std::move(other669.__isset);
 }
-register_child_response &register_child_response::operator=(const register_child_response &other678)
+register_child_response &register_child_response::operator=(const register_child_response &other670)
 {
-    err = other678.err;
-    app = other678.app;
-    parent_config = other678.parent_config;
-    child_config = other678.child_config;
-    __isset = other678.__isset;
+    err = other670.err;
+    app = other670.app;
+    parent_config = other670.parent_config;
+    child_config = other670.child_config;
+    __isset = other670.__isset;
     return *this;
 }
-register_child_response &register_child_response::operator=(register_child_response &&other679)
+register_child_response &register_child_response::operator=(register_child_response &&other671)
 {
-    err = std::move(other679.err);
-    app = std::move(other679.app);
-    parent_config = std::move(other679.parent_config);
-    child_config = std::move(other679.child_config);
-    __isset = std::move(other679.__isset);
+    err = std::move(other671.err);
+    app = std::move(other671.app);
+    parent_config = std::move(other671.parent_config);
+    child_config = std::move(other671.child_config);
+    __isset = std::move(other671.__isset);
     return *this;
 }
 void register_child_response::printTo(std::ostream &out) const
@@ -15644,6 +15366,302 @@ void register_child_response::printTo(std::ostream &out) const
         << "parent_config=" << to_string(parent_config);
     out << ", "
         << "child_config=" << to_string(child_config);
+    out << ")";
+}
+
+update_group_partition_count_request::~update_group_partition_count_request() throw() {}
+
+void update_group_partition_count_request::__set_target_address(const ::dsn::rpc_address &val)
+{
+    this->target_address = val;
+}
+
+void update_group_partition_count_request::__set_new_partition_count(const int32_t val)
+{
+    this->new_partition_count = val;
+}
+
+void update_group_partition_count_request::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
+
+void update_group_partition_count_request::__set_ballot(const int64_t val) { this->ballot = val; }
+
+void update_group_partition_count_request::__set_update_child_group(const bool val)
+{
+    this->update_child_group = val;
+}
+
+uint32_t update_group_partition_count_request::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->target_address.read(iprot);
+                this->__isset.target_address = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->new_partition_count);
+                this->__isset.new_partition_count = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->pid.read(iprot);
+                this->__isset.pid = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 4:
+            if (ftype == ::apache::thrift::protocol::T_I64) {
+                xfer += iprot->readI64(this->ballot);
+                this->__isset.ballot = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 5:
+            if (ftype == ::apache::thrift::protocol::T_BOOL) {
+                xfer += iprot->readBool(this->update_child_group);
+                this->__isset.update_child_group = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t
+update_group_partition_count_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("update_group_partition_count_request");
+
+    xfer += oprot->writeFieldBegin("target_address", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->target_address.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("new_partition_count", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeI32(this->new_partition_count);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("pid", ::apache::thrift::protocol::T_STRUCT, 3);
+    xfer += this->pid.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("ballot", ::apache::thrift::protocol::T_I64, 4);
+    xfer += oprot->writeI64(this->ballot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("update_child_group", ::apache::thrift::protocol::T_BOOL, 5);
+    xfer += oprot->writeBool(this->update_child_group);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(update_group_partition_count_request &a, update_group_partition_count_request &b)
+{
+    using ::std::swap;
+    swap(a.target_address, b.target_address);
+    swap(a.new_partition_count, b.new_partition_count);
+    swap(a.pid, b.pid);
+    swap(a.ballot, b.ballot);
+    swap(a.update_child_group, b.update_child_group);
+    swap(a.__isset, b.__isset);
+}
+
+update_group_partition_count_request::update_group_partition_count_request(
+    const update_group_partition_count_request &other672)
+{
+    target_address = other672.target_address;
+    new_partition_count = other672.new_partition_count;
+    pid = other672.pid;
+    ballot = other672.ballot;
+    update_child_group = other672.update_child_group;
+    __isset = other672.__isset;
+}
+update_group_partition_count_request::update_group_partition_count_request(
+    update_group_partition_count_request &&other673)
+{
+    target_address = std::move(other673.target_address);
+    new_partition_count = std::move(other673.new_partition_count);
+    pid = std::move(other673.pid);
+    ballot = std::move(other673.ballot);
+    update_child_group = std::move(other673.update_child_group);
+    __isset = std::move(other673.__isset);
+}
+update_group_partition_count_request &update_group_partition_count_request::
+operator=(const update_group_partition_count_request &other674)
+{
+    target_address = other674.target_address;
+    new_partition_count = other674.new_partition_count;
+    pid = other674.pid;
+    ballot = other674.ballot;
+    update_child_group = other674.update_child_group;
+    __isset = other674.__isset;
+    return *this;
+}
+update_group_partition_count_request &update_group_partition_count_request::
+operator=(update_group_partition_count_request &&other675)
+{
+    target_address = std::move(other675.target_address);
+    new_partition_count = std::move(other675.new_partition_count);
+    pid = std::move(other675.pid);
+    ballot = std::move(other675.ballot);
+    update_child_group = std::move(other675.update_child_group);
+    __isset = std::move(other675.__isset);
+    return *this;
+}
+void update_group_partition_count_request::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "update_group_partition_count_request(";
+    out << "target_address=" << to_string(target_address);
+    out << ", "
+        << "new_partition_count=" << to_string(new_partition_count);
+    out << ", "
+        << "pid=" << to_string(pid);
+    out << ", "
+        << "ballot=" << to_string(ballot);
+    out << ", "
+        << "update_child_group=" << to_string(update_child_group);
+    out << ")";
+}
+
+update_group_partition_count_response::~update_group_partition_count_response() throw() {}
+
+void update_group_partition_count_response::__set_err(const ::dsn::error_code &val)
+{
+    this->err = val;
+}
+
+uint32_t update_group_partition_count_response::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->err.read(iprot);
+                this->__isset.err = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t
+update_group_partition_count_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("update_group_partition_count_response");
+
+    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->err.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(update_group_partition_count_response &a, update_group_partition_count_response &b)
+{
+    using ::std::swap;
+    swap(a.err, b.err);
+    swap(a.__isset, b.__isset);
+}
+
+update_group_partition_count_response::update_group_partition_count_response(
+    const update_group_partition_count_response &other676)
+{
+    err = other676.err;
+    __isset = other676.__isset;
+}
+update_group_partition_count_response::update_group_partition_count_response(
+    update_group_partition_count_response &&other677)
+{
+    err = std::move(other677.err);
+    __isset = std::move(other677.__isset);
+}
+update_group_partition_count_response &update_group_partition_count_response::
+operator=(const update_group_partition_count_response &other678)
+{
+    err = other678.err;
+    __isset = other678.__isset;
+    return *this;
+}
+update_group_partition_count_response &update_group_partition_count_response::
+operator=(update_group_partition_count_response &&other679)
+{
+    err = std::move(other679.err);
+    __isset = std::move(other679.__isset);
+    return *this;
+}
+void update_group_partition_count_response::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "update_group_partition_count_response(";
+    out << "err=" << to_string(err);
     out << ")";
 }
 

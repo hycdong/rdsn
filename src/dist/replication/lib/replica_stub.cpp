@@ -2133,7 +2133,7 @@ void replica_stub::open_service()
                          "child_notify_catch_up",
                          &replica_stub::on_notify_primary_split_catch_up);
     register_rpc_handler(RPC_SPLIT_UPDATE_PARTITION_COUNT,
-                         "SplitUpdatePartitionCount",
+                         "update_group_partition_count",
                          &replica_stub::on_update_group_partition_count);
     register_rpc_handler_with_rpc_holder(
         RPC_STOP_SPLIT, "control_partition_split", &replica_stub::on_stop_split);
@@ -2702,7 +2702,7 @@ void replica_stub::on_update_group_partition_count(
     const update_group_partition_count_request &request,
     update_group_partition_count_response &response)
 {
-    replica_ptr replica = get_replica(request.config.pid);
+    replica_ptr replica = get_replica(request.pid);
     if (replica != nullptr) {
         replica->on_update_group_partition_count(request, response);
     } else {

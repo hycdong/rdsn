@@ -520,19 +520,19 @@ TEST_F(meta_split_service_test, start_split_succeed)
 }
 
 // TODO(heyuchen): fix regisiter unit tests error
-//TEST_F(meta_split_service_test, register_child_with_wrong_ballot)
+// TEST_F(meta_split_service_test, register_child_with_wrong_ballot)
 //{
 //    auto resp = register_child(PARENT_BALLOT - 1, invalid_ballot);
 //    ASSERT_EQ(resp.err, ERR_INVALID_VERSION);
 //}
 
-//TEST_F(meta_split_service_test, register_child_with_child_registered)
+// TEST_F(meta_split_service_test, register_child_with_child_registered)
 //{
 //    auto resp = register_child(PARENT_BALLOT, PARENT_BALLOT + 1);
 //    ASSERT_EQ(resp.err, ERR_CHILD_REGISTERED);
 //}
 
-//TEST_F(meta_split_service_test, register_child_succeed)
+// TEST_F(meta_split_service_test, register_child_succeed)
 //{
 //    auto resp = register_child(PARENT_BALLOT, invalid_ballot, true);
 //    ASSERT_EQ(resp.err, ERR_OK);

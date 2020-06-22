@@ -125,7 +125,7 @@ public:
     void on_notify_primary_split_catch_up(const notify_catch_up_request &request,
                                           notify_cacth_up_response &response);
 
-    // on primary, all child catch up, so update group partition count
+    // on all replica, update new partition count
     void on_update_group_partition_count(const update_group_partition_count_request &request,
                                          update_group_partition_count_response &response);
 

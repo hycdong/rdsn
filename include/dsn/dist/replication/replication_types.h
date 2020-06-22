@@ -389,13 +389,13 @@ class notify_catch_up_request;
 
 class notify_cacth_up_response;
 
-class update_group_partition_count_request;
-
-class update_group_partition_count_response;
-
 class register_child_request;
 
 class register_child_response;
+
+class update_group_partition_count_request;
+
+class update_group_partition_count_response;
 
 class query_child_state_request;
 
@@ -6411,125 +6411,6 @@ inline std::ostream &operator<<(std::ostream &out, const notify_cacth_up_respons
     return out;
 }
 
-typedef struct _update_group_partition_count_request__isset
-{
-    _update_group_partition_count_request__isset()
-        : app(false), target_address(false), config(false), last_committed_decree(false)
-    {
-    }
-    bool app : 1;
-    bool target_address : 1;
-    bool config : 1;
-    bool last_committed_decree : 1;
-} _update_group_partition_count_request__isset;
-
-class update_group_partition_count_request
-{
-public:
-    update_group_partition_count_request(const update_group_partition_count_request &);
-    update_group_partition_count_request(update_group_partition_count_request &&);
-    update_group_partition_count_request &operator=(const update_group_partition_count_request &);
-    update_group_partition_count_request &operator=(update_group_partition_count_request &&);
-    update_group_partition_count_request() : last_committed_decree(0) {}
-
-    virtual ~update_group_partition_count_request() throw();
-    ::dsn::app_info app;
-    ::dsn::rpc_address target_address;
-    replica_configuration config;
-    int64_t last_committed_decree;
-
-    _update_group_partition_count_request__isset __isset;
-
-    void __set_app(const ::dsn::app_info &val);
-
-    void __set_target_address(const ::dsn::rpc_address &val);
-
-    void __set_config(const replica_configuration &val);
-
-    void __set_last_committed_decree(const int64_t val);
-
-    bool operator==(const update_group_partition_count_request &rhs) const
-    {
-        if (!(app == rhs.app))
-            return false;
-        if (!(target_address == rhs.target_address))
-            return false;
-        if (!(config == rhs.config))
-            return false;
-        if (!(last_committed_decree == rhs.last_committed_decree))
-            return false;
-        return true;
-    }
-    bool operator!=(const update_group_partition_count_request &rhs) const
-    {
-        return !(*this == rhs);
-    }
-
-    bool operator<(const update_group_partition_count_request &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(update_group_partition_count_request &a, update_group_partition_count_request &b);
-
-inline std::ostream &operator<<(std::ostream &out, const update_group_partition_count_request &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
-typedef struct _update_group_partition_count_response__isset
-{
-    _update_group_partition_count_response__isset() : err(false) {}
-    bool err : 1;
-} _update_group_partition_count_response__isset;
-
-class update_group_partition_count_response
-{
-public:
-    update_group_partition_count_response(const update_group_partition_count_response &);
-    update_group_partition_count_response(update_group_partition_count_response &&);
-    update_group_partition_count_response &operator=(const update_group_partition_count_response &);
-    update_group_partition_count_response &operator=(update_group_partition_count_response &&);
-    update_group_partition_count_response() {}
-
-    virtual ~update_group_partition_count_response() throw();
-    ::dsn::error_code err;
-
-    _update_group_partition_count_response__isset __isset;
-
-    void __set_err(const ::dsn::error_code &val);
-
-    bool operator==(const update_group_partition_count_response &rhs) const
-    {
-        if (!(err == rhs.err))
-            return false;
-        return true;
-    }
-    bool operator!=(const update_group_partition_count_response &rhs) const
-    {
-        return !(*this == rhs);
-    }
-
-    bool operator<(const update_group_partition_count_response &) const;
-
-    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
-    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
-
-    virtual void printTo(std::ostream &out) const;
-};
-
-void swap(update_group_partition_count_response &a, update_group_partition_count_response &b);
-
-inline std::ostream &operator<<(std::ostream &out, const update_group_partition_count_response &obj)
-{
-    obj.printTo(out);
-    return out;
-}
-
 typedef struct _register_child_request__isset
 {
     _register_child_request__isset()
@@ -6659,6 +6540,138 @@ public:
 void swap(register_child_response &a, register_child_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const register_child_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _update_group_partition_count_request__isset
+{
+    _update_group_partition_count_request__isset()
+        : target_address(false),
+          new_partition_count(false),
+          pid(false),
+          ballot(false),
+          update_child_group(false)
+    {
+    }
+    bool target_address : 1;
+    bool new_partition_count : 1;
+    bool pid : 1;
+    bool ballot : 1;
+    bool update_child_group : 1;
+} _update_group_partition_count_request__isset;
+
+class update_group_partition_count_request
+{
+public:
+    update_group_partition_count_request(const update_group_partition_count_request &);
+    update_group_partition_count_request(update_group_partition_count_request &&);
+    update_group_partition_count_request &operator=(const update_group_partition_count_request &);
+    update_group_partition_count_request &operator=(update_group_partition_count_request &&);
+    update_group_partition_count_request()
+        : new_partition_count(0), ballot(0), update_child_group(0)
+    {
+    }
+
+    virtual ~update_group_partition_count_request() throw();
+    ::dsn::rpc_address target_address;
+    int32_t new_partition_count;
+    ::dsn::gpid pid;
+    int64_t ballot;
+    bool update_child_group;
+
+    _update_group_partition_count_request__isset __isset;
+
+    void __set_target_address(const ::dsn::rpc_address &val);
+
+    void __set_new_partition_count(const int32_t val);
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    void __set_ballot(const int64_t val);
+
+    void __set_update_child_group(const bool val);
+
+    bool operator==(const update_group_partition_count_request &rhs) const
+    {
+        if (!(target_address == rhs.target_address))
+            return false;
+        if (!(new_partition_count == rhs.new_partition_count))
+            return false;
+        if (!(pid == rhs.pid))
+            return false;
+        if (!(ballot == rhs.ballot))
+            return false;
+        if (!(update_child_group == rhs.update_child_group))
+            return false;
+        return true;
+    }
+    bool operator!=(const update_group_partition_count_request &rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool operator<(const update_group_partition_count_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(update_group_partition_count_request &a, update_group_partition_count_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const update_group_partition_count_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _update_group_partition_count_response__isset
+{
+    _update_group_partition_count_response__isset() : err(false) {}
+    bool err : 1;
+} _update_group_partition_count_response__isset;
+
+class update_group_partition_count_response
+{
+public:
+    update_group_partition_count_response(const update_group_partition_count_response &);
+    update_group_partition_count_response(update_group_partition_count_response &&);
+    update_group_partition_count_response &operator=(const update_group_partition_count_response &);
+    update_group_partition_count_response &operator=(update_group_partition_count_response &&);
+    update_group_partition_count_response() {}
+
+    virtual ~update_group_partition_count_response() throw();
+    ::dsn::error_code err;
+
+    _update_group_partition_count_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    bool operator==(const update_group_partition_count_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        return true;
+    }
+    bool operator!=(const update_group_partition_count_response &rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool operator<(const update_group_partition_count_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(update_group_partition_count_response &a, update_group_partition_count_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const update_group_partition_count_response &obj)
 {
     obj.printTo(out);
     return out;

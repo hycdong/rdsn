@@ -360,24 +360,6 @@ private:
 
     void parent_prepare_states(const std::string &dir);
 
-    // primary send update partition count request to replicas in the group
-    // if is_update_child is true meaning to update child group partition count
-    // otherwise to update parent group partition count
-    virtual void update_group_partition_count(int new_partition_count, bool is_update_child);
-
-    // all replicas update partition count in memory and disk
-    virtual void on_update_group_partition_count(update_group_partition_count_request request,
-                                                 update_group_partition_count_response &response);
-
-    // primary wait for all replicas update partition count
-    virtual void on_update_group_partition_count_reply(
-        error_code ec,
-        std::shared_ptr<update_group_partition_count_request> request,
-        std::shared_ptr<update_group_partition_count_response> response,
-        std::shared_ptr<std::set<dsn::rpc_address>> left_replicas,
-        rpc_address finish_update_address,
-        bool is_update_child);
-
     // primary parent register children on meta_server
     void register_child_on_meta(ballot b);
     void on_register_child_on_meta_reply(dsn::error_code ec,
@@ -388,6 +370,23 @@ private:
 
     // child partition has been registered on meta_server, could be active
     void child_partition_active(const partition_configuration &config);
+
+    // TODO(heyuchen): to merge to master
+    // primary parent send update partition count request to replicas in the group
+    // - {is_update_child} = true:  update child group partition count
+    // - {is_update_child} = false: update parent group partition count
+    void update_group_partition_count(int32_t new_partition_count, bool is_update_child);
+
+    // all replicas update partition_count in memory and disk
+    void on_update_group_partition_count(const update_group_partition_count_request &request,
+                                         update_group_partition_count_response &response);
+
+    // primary wait for all replicas update partition count
+    void on_update_group_partition_count_reply(
+        error_code ec,
+        const update_group_partition_count_request &request,
+        const update_group_partition_count_response &response,
+        std::unordered_set<dsn::rpc_address> &not_replied_addresses);
 
     // meta <=> replica configuration sync through on_config_sync
     // called by primary replica to check if partition count changed and partition flag changed to
