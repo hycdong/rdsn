@@ -591,7 +591,7 @@ bool replica::update_configuration(const partition_configuration &config)
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
         _primary_states.caught_up_children.clear();
-        parent_handle_split_error();
+        parent_cleanup_split_context();
         // parent_cleanup_split_context();
         //        _partition_version = -1;
         // query_child_state();
@@ -1039,12 +1039,11 @@ void replica::on_config_sync(const app_info &info,
     if (nullptr != _primary_states.reconfiguration_task) {
         // already under reconfiguration, skip configuration sync
     } else if (status() == partition_status::PS_PRIMARY) {
-        check_partition_state(info.partition_count, config, is_splitting);
+        check_partition_state(info.partition_count, is_splitting);
     } else {
         if (_is_initializing) {
             // TODO(hyc): consider
             check_partition_state(info.partition_count,
-                                  config,
                                   is_splitting); // update local partition count if necessary
 
             // in initializing, when replica still primary, need to inc ballot
@@ -1111,9 +1110,7 @@ void replica::replay_prepare_list()
 }
 
 // TODO(hyc): add comments
-void replica::check_partition_state(int partition_count,
-                                    const partition_configuration &config,
-                                    bool is_splitting)
+void replica::check_partition_state(int partition_count, bool is_splitting)
 {
     if (partition_count == _app_info.partition_count) {
         // not during splitting

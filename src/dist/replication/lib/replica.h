@@ -391,9 +391,7 @@ private:
     // meta <=> replica configuration sync through on_config_sync
     // called by primary replica to check if partition count changed and partition flag changed to
     // control partition split
-    virtual void check_partition_state(int partition_count,
-                                       const partition_configuration &config,
-                                       bool is_splitting);
+    virtual void check_partition_state(int partition_count, bool is_splitting);
 
     // child and parent heartbeart to check states
     virtual void check_child_state();
@@ -456,9 +454,6 @@ private:
 
     // parent reset child information when partition split failed
     void parent_cleanup_split_context();
-
-    // parent set is_splitting = false
-    void parent_handle_split_error();
     // child suicide when partition split failed
     void child_handle_split_error(const std::string &error_msg);
     // child handle error while async learn parent states

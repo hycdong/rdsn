@@ -37,15 +37,15 @@ void replica::on_add_child(const group_check_request &request) // on parent part
         return;
     }
 
-    gpid child_gpid = request.child_gpid;
     if (_is_splitting) {
         dwarn_replica("replica is partition splitting, ignore this request");
         return;
     }
 
+    gpid child_gpid = request.child_gpid;
     if (child_gpid.get_partition_index() < _app_info.partition_count) {
-        dwarn_replica("receive old add child request, child gpid is ({}), "
-                      "local partition count is {}, ignore this request",
+        dwarn_replica("receive old add child request, child gpid is ({}), local partition count is "
+                      "{}, ignore this request",
                       child_gpid,
                       _app_info.partition_count);
         return;
@@ -86,7 +86,7 @@ void replica::child_init_replica(gpid parent_gpid,
     if (status() != partition_status::PS_INACTIVE) {
         dwarn_replica("wrong status {}", enum_to_string(status()));
         _stub->split_replica_error_handler(
-            parent_gpid, std::bind(&replica::parent_handle_split_error, std::placeholders::_1));
+            parent_gpid, std::bind(&replica::parent_cleanup_split_context, std::placeholders::_1));
         child_handle_split_error("invalid child status during initialize");
         return;
     }
@@ -98,7 +98,6 @@ void replica::child_init_replica(gpid parent_gpid,
 
     // init split states
     _split_states.parent_gpid = parent_gpid;
-
     _split_states.is_prepare_list_copied = false;
     _split_states.is_caught_up = false;
 
@@ -119,7 +118,7 @@ void replica::child_init_replica(gpid parent_gpid,
 
     ddebug_replica("init ballot is {}, parent gpid is ({})", init_ballot, parent_gpid);
 
-    dsn::error_code ec = _stub->split_replica_exec(
+    error_code ec = _stub->split_replica_exec(
         LPC_PARTITION_SPLIT,
         _split_states.parent_gpid,
         std::bind(&replica::parent_prepare_states, std::placeholders::_1, _app->learn_dir()));
@@ -141,7 +140,7 @@ void replica::check_child_state() // on child
     ddebug_f("{} child partition state checked", name());
 
     // parent check its state
-    dsn::error_code ec =
+    error_code ec =
         _stub->split_replica_exec(LPC_PARTITION_SPLIT,
                                   _split_states.parent_gpid,
                                   std::bind(&replica::parent_check_states, std::placeholders::_1));
@@ -177,7 +176,7 @@ bool replica::parent_check_states() // on parent partition
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "wrong parent states when execute parent_check_states"));
-        parent_handle_split_error();
+        parent_cleanup_split_context();
         return false;
     }
     return true;
@@ -195,7 +194,7 @@ void replica::parent_prepare_states(const std::string &dir) // on parent partiti
     learn_state parent_states;
     int64_t checkpoint_decree;
     // generate checkpoint
-    dsn::error_code ec = _app->copy_checkpoint_to_dir(dir.c_str(), &checkpoint_decree);
+    error_code ec = _app->copy_checkpoint_to_dir(dir.c_str(), &checkpoint_decree);
     if (ec == ERR_OK) {
         ddebug_replica("prepare checkpoint succeed: checkpoint dir = {}, checkpoint decree = {}",
                        dir,
@@ -835,7 +834,7 @@ void replica::on_update_group_partition_count_reply(
                 std::bind(&replica::child_handle_split_error,
                           std::placeholders::_1,
                           "on_update_group_partition_count_reply error"));
-            parent_handle_split_error();
+            parent_cleanup_split_context();
         }
         return;
     }
@@ -1111,11 +1110,6 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica::parent_handle_split_error() // on parent partition
-{
-    _is_splitting = false;
-}
-
 void replica::parent_cleanup_split_context() // on parent partition
 {
     _child_gpid.set_app_id(0);
@@ -1177,7 +1171,7 @@ void replica::on_stop_split(const stop_split_request &req, stop_split_response &
                                                std::bind(&replica::child_handle_split_error,
                                                          std::placeholders::_1,
                                                          "pause partition split"));
-            parent_handle_split_error();
+            parent_cleanup_split_context();
         }
     }
 
@@ -1197,7 +1191,7 @@ void replica::on_stop_split(const stop_split_request &req, stop_split_response &
                                                          std::placeholders::_1,
                                                          "cancel partition split"));
             // TODO(heyuchen): consider it
-            parent_handle_split_error();
+            parent_cleanup_split_context();
         }
     }
 }
