@@ -591,9 +591,10 @@ bool replica::update_configuration(const partition_configuration &config)
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
         _primary_states.caught_up_children.clear();
-        _child_gpid.set_app_id(0);
+        parent_handle_split_error();
+        // parent_cleanup_split_context();
         //        _partition_version = -1;
-        query_child_state();
+        // query_child_state();
     }
 
     if (config.ballot > get_ballot() ||
@@ -1115,7 +1116,12 @@ void replica::check_partition_state(int partition_count,
                                     bool is_splitting)
 {
     if (partition_count == _app_info.partition_count) {
-        // not splitting
+        // not during splitting
+        return;
+    }
+
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_replica("wrong status({}), ignore it", enum_to_string(status()));
         return;
     }
 
@@ -1125,204 +1131,43 @@ void replica::check_partition_state(int partition_count,
         return;
     }
 
-    if (partition_count == _app_info.partition_count * 2) {
-        ddebug_f(
-            "{} app {} partition count changed, local partition count={}, remote partitin count={}",
-            name(),
-            _app_info.app_name,
-            _app_info.partition_count,
-            partition_count);
-        if (_child_gpid.get_app_id() <= 0) {
-            // TODO(hyc): consider partition_version???
-            _partition_version = -1;
-            query_child_state();
-        }
+    dassert_replica(_app_info.partition_count * 2 == partition_count,
+                    "wrong partition count, local({}) VS meta({})",
+                    _app_info.partition_count,
+                    partition_count);
+    if (_is_splitting) {
+        // is already splitting
     }
-}
 
-void replica::query_child_state()
-{
-    // TODO(hyc): why original not check here
-    if (status() != partition_status::PS_PRIMARY) {
-        dwarn_f("{} can not query child partition state, current state is not primary, but {}",
-                name(),
-                enum_to_string(status()));
-        //_partition_version = _app_info.partition_count - 1;
+    if (!_primary_states.learners.empty() ||
+        _primary_states.membership.secondaries.size() + 1 <
+            _primary_states.membership.max_replica_count) {
+        dwarn_replica("there are {} learners or not have enough secondaries(count is {}), wait for "
+                      "next round",
+                      _primary_states.learners.size(),
+                      _primary_states.membership.secondaries.size());
         return;
     }
 
-    if (_primary_states.query_child_state_task != nullptr) {
-        dwarn_f("{} is executing query child state task, skip this request", name());
-        return;
-    }
+    ddebug_replica("app {} partition count changed, local({}) VS meta({})",
+                   _app_info.app_name,
+                   _app_info.partition_count,
+                   partition_count);
 
-    ddebug_f("{} query child partition state on meta", name());
+    gpid child_gpid(get_gpid().get_app_id(),
+                    get_gpid().get_partition_index() + partition_count / 2);
+    ddebug_replica("start to add child({})", child_gpid);
 
-    std::shared_ptr<query_child_state_request> request(new query_child_state_request);
-    request->parent_gpid = get_gpid();
-    dsn::rpc_address meta_address(_stub->_failure_detector->get_servers());
-    rpc::call(
-        meta_address,
-        RPC_CM_QUERY_CHILD_STATE,
-        *request,
-        tracker(),
-        [=](error_code ec, query_child_state_response &&response) {
-            on_query_child_state_reply(
-                ec, request, std::make_shared<query_child_state_response>(std::move(response)));
-        },
-        std::chrono::seconds(0),
-        get_gpid().thread_hash());
-}
+    group_check_request add_child_request;
+    add_child_request.app = _app_info;
+    add_child_request.child_gpid = child_gpid;
+    // TODO(hyc): consider why original not have
+    _primary_states.get_replica_config(status(), add_child_request.config);
+    // add_child_request.config.ballot = get_ballot();
+    _primary_states.sync_send_write_request = false;
 
-void replica::on_query_child_state_reply(error_code ec,
-                                         std::shared_ptr<query_child_state_request> request,
-                                         std::shared_ptr<query_child_state_response> response)
-{
-    // TODO(hyc): consider
-    _checker.only_one_thread_access();
-
-    if (status() != partition_status::PS_PRIMARY) {
-        dwarn_f("{} is not primary, but {}, ignore query child state reply",
-                name(),
-                enum_to_string(status()));
-        _primary_states.query_child_state_task = nullptr;
-        return;
-    }
-
-    if (_child_gpid.get_app_id() > 0) {
-        dwarn_f("{} child_gpid({}.{}) already valid, ignore query child state reply",
-                name(),
-                _child_gpid.get_app_id(),
-                _child_gpid.get_partition_index());
-        _primary_states.query_child_state_task = nullptr;
-        return;
-    }
-
-    if (ec == ERR_OK) {
-        ec = response->err;
-    }
-
-    if (ec != ERR_OK) {
-        dwarn_f(
-            "{} failed to query child state, error is {}, please retry", name(), ec.to_string());
-
-        _primary_states.query_child_state_task = tasking::enqueue(
-            LPC_PARTITION_SPLIT,
-            tracker(),
-            [this, request]() {
-                dsn::rpc_address meta_address(_stub->_failure_detector->get_servers());
-                auto rpc_task_ptr = rpc::call(
-                    meta_address,
-                    RPC_CM_QUERY_CHILD_STATE,
-                    *request,
-                    tracker(),
-                    [=](error_code err, query_child_state_response &&response) {
-                        on_query_child_state_reply(
-                            err,
-                            request,
-                            std::make_shared<query_child_state_response>(std::move(response)));
-                    },
-                    std::chrono::seconds(0),
-                    get_gpid().thread_hash());
-                _primary_states.query_child_state_task = rpc_task_ptr;
-            },
-            get_gpid().thread_hash(),
-            std::chrono::seconds(1));
-        return;
-    }
-
-    _primary_states.query_child_state_task = nullptr;
-    int partition_count = response->partition_count;
-
-    if (partition_count <= 0) {
-        dwarn_f("{} failed to query child state coz something wrong with meta, got invalid "
-                "partition_count {}, please retry",
-                name(),
-                partition_count);
-        _primary_states.query_child_state_task = tasking::enqueue(
-            LPC_PARTITION_SPLIT,
-            tracker(),
-            [this, request]() {
-                dsn::rpc_address meta_address(_stub->_failure_detector->get_servers());
-                auto rpc_task_ptr = rpc::call(
-                    meta_address,
-                    RPC_CM_QUERY_CHILD_STATE,
-                    *request,
-                    tracker(),
-                    [=](error_code err, query_child_state_response &&response) {
-                        on_query_child_state_reply(
-                            err,
-                            request,
-                            std::make_shared<query_child_state_response>(std::move(response)));
-                    },
-                    std::chrono::seconds(0),
-                    get_gpid().thread_hash());
-                _primary_states.query_child_state_task = rpc_task_ptr;
-            },
-            get_gpid().thread_hash(),
-            std::chrono::seconds(1));
-        return;
-    }
-
-    // current app finish partition split
-    if (partition_count == _app_info.partition_count) {
-        ddebug_f("app {}@{} has been finished partition split, current partition count is {}",
-                 _app_info.app_name,
-                 _app_info.app_id,
-                 partition_count);
-        _partition_version = partition_count - 1;
-        _app->set_partition_version(_partition_version);
-        return;
-    }
-
-    // TODO(hyc): consider add assert
-    dassert(_app_info.partition_count * 2 == partition_count,
-            "%d vs %d",
-            _app_info.partition_count,
-            partition_count);
-
-    if (response->ballot != invalid_ballot ||
-        get_gpid().get_partition_index() >= partition_count / 2) {
-        ddebug_f("{} has registered its child replica or current replica is child replica, local "
-                 "partition count is {}, remote partition count is {}, response ballot is {}",
-                 name(),
-                 _app_info.partition_count,
-                 partition_count,
-                 response->ballot);
-        update_group_partition_count(partition_count, false);
-    } else if (!_primary_states.learners.empty() ||
-               _primary_states.membership.secondaries.size() + 1 <
-                   _primary_states.membership.max_replica_count) {
-        ddebug_f(
-            "{} there are {} learners or not have enough secondaries(count is {}), wait next run",
-            name(),
-            _primary_states.learners.size(),
-            _primary_states.membership.secondaries.size());
-        _partition_version = _app_info.partition_count - 1;
-        _app->set_partition_version(_partition_version);
-    } else {
-        // add child
-        gpid child_gpid(get_gpid().get_app_id(),
-                        get_gpid().get_partition_index() + partition_count / 2);
-        ddebug_f("{} start to add child({}.{})",
-                 name(),
-                 child_gpid.get_app_id(),
-                 child_gpid.get_partition_index());
-
-        group_check_request add_child_request;
-        add_child_request.app = _app_info;
-        add_child_request.child_gpid = child_gpid;
-        // TODO(hyc): consider why original not have
-        //        _primary_states.get_replica_config(status(), add_child_request.config);
-        add_child_request.config.ballot = get_ballot();
-        _primary_states.sync_send_write_request = false;
-
-        on_add_child(add_child_request); // parent create child replica
-        broadcast_group_check();         // secondaries create child during group check
-
-        _partition_version = _app_info.partition_count - 1;
-        _app->set_partition_version(_partition_version);
-    }
+    on_add_child(add_child_request); // parent create child replica
+    broadcast_group_check();         // secondaries create child through group check
 }
 
 } // namespace replication

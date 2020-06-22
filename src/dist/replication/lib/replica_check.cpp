@@ -95,8 +95,9 @@ void replica::broadcast_group_check()
         request->node = addr;
         _primary_states.get_replica_config(it->second, request->config);
         request->last_committed_decree = last_committed_decree();
-        request->__isset.child_gpid = true;
-        request->child_gpid = _child_gpid;
+        if (_is_splitting) {
+            request->__set_child_gpid(_child_gpid);
+        }
         request->__set_confirmed_decree(_duplication_mgr->min_confirmed_decree());
 
         if (request->config.status == partition_status::PS_POTENTIAL_SECONDARY) {
@@ -174,8 +175,6 @@ void replica::on_group_check(const group_check_request &request,
         }
         if (request.child_gpid.get_app_id() > 0) { // secondary create child replica
             on_add_child(request);
-        } else {
-            _child_gpid.set_app_id(0);
         }
         break;
     case partition_status::PS_POTENTIAL_SECONDARY:

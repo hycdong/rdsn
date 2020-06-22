@@ -38,10 +38,8 @@ void replica::on_add_child(const group_check_request &request) // on parent part
     }
 
     gpid child_gpid = request.child_gpid;
-    if (_child_gpid == child_gpid) {
-        dwarn_replica("child replica({}) is already existed, might be partition splitting, ignore "
-                      "this request",
-                      child_gpid);
+    if (_is_splitting) {
+        dwarn_replica("replica is partition splitting, ignore this request");
         return;
     }
 
@@ -53,6 +51,7 @@ void replica::on_add_child(const group_check_request &request) // on parent part
         return;
     }
 
+    _is_splitting = true;
     _child_gpid = child_gpid;
     _child_init_ballot = get_ballot();
 
@@ -87,7 +86,8 @@ void replica::child_init_replica(gpid parent_gpid,
     if (status() != partition_status::PS_INACTIVE) {
         dwarn_replica("wrong status {}", enum_to_string(status()));
         _stub->split_replica_error_handler(
-            parent_gpid, std::bind(&replica::parent_cleanup_split_context, std::placeholders::_1));
+            parent_gpid, std::bind(&replica::parent_handle_split_error, std::placeholders::_1));
+        child_handle_split_error("invalid child status during initialize");
         return;
     }
 
@@ -163,7 +163,7 @@ bool replica::parent_check_states() // on parent partition
 {
     FAIL_POINT_INJECT_F("replica_parent_check_states", [](dsn::string_view) { return true; });
 
-    if (_child_init_ballot != get_ballot() || _child_gpid.get_app_id() == 0 ||
+    if (!_is_splitting || _child_init_ballot != get_ballot() || _child_gpid.get_app_id() == 0 ||
         (status() != partition_status::PS_PRIMARY && status() != partition_status::PS_SECONDARY &&
          (status() != partition_status::PS_INACTIVE || !_inactive_is_transient))) {
         dwarn_replica("parent wrong states: status({}), init_ballot({}) VS current_ballot({}), "
@@ -177,7 +177,7 @@ bool replica::parent_check_states() // on parent partition
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "wrong parent states when execute parent_check_states"));
-        parent_cleanup_split_context();
+        parent_handle_split_error();
         return false;
     }
     return true;
@@ -671,25 +671,20 @@ void replica::update_group_partition_count(int new_partition_count,
 {
     FAIL_POINT_INJECT_F("replica_update_group_partition_count", [](dsn::string_view) {});
 
-    if (is_update_child && (_child_gpid.get_app_id() == 0 || _child_init_ballot != get_ballot())) {
-        dwarn_replica("can not update group partition count because current state is out-dated, "
-                      "_child_gpid({}), _child_init_ballot = {}, local ballot = {}",
-                      _child_gpid,
-                      _child_init_ballot,
-                      get_ballot());
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica::child_handle_split_error,
-                      std::placeholders::_1,
-                      "update_group_partition_count because out-dated request"));
+    if (is_update_child && !_is_splitting) {
+        derror_replica("can not update group partition count because current state is out-dated, "
+                       "_child_gpid({}), _child_init_ballot = {}, local ballot = {}",
+                       _child_gpid,
+                       _child_init_ballot,
+                       get_ballot());
         parent_cleanup_split_context();
         return;
     }
 
-    std::unordered_set<dsn::rpc_address> not_replied_addresses;
+    auto not_replied_addresses = std::make_shared<std::unordered_set<dsn::rpc_address>>();
     // _primary_states.statuses is a map structure: rpc address -> partition_status
     for (const auto &kv : _primary_states.statuses) {
-        not_replied_addresses.insert(kv.first);
+        not_replied_addresses->insert(kv.first);
     }
 
     ddebug_replica("start to update {} group partition count, new partition count = {}, ",
@@ -785,7 +780,8 @@ void replica::on_update_group_partition_count_reply(
     error_code ec,
     const update_group_partition_count_request &request,
     const update_group_partition_count_response &response,
-    std::unordered_set<dsn::rpc_address> &not_replied_addresses) // on primary parent
+    std::shared_ptr<std::unordered_set<dsn::rpc_address>>
+        &not_replied_addresses) // on primary parent
 {
     _checker.only_one_thread_access();
 
@@ -839,14 +835,14 @@ void replica::on_update_group_partition_count_reply(
                 std::bind(&replica::child_handle_split_error,
                           std::placeholders::_1,
                           "on_update_group_partition_count_reply error"));
-            parent_cleanup_split_context();
+            parent_handle_split_error();
         }
         return;
     }
 
     // update partition_count succeed
-    not_replied_addresses.erase(request.target_address);
-    if (not_replied_addresses.empty()) {
+    not_replied_addresses->erase(request.target_address);
+    if (not_replied_addresses->empty()) {
         ddebug_replica("update {} group partition_count",
                        request.update_child_group ? "child" : "parent");
         if (request.update_child_group) {
@@ -856,7 +852,7 @@ void replica::on_update_group_partition_count_reply(
         }
     } else {
         ddebug_replica("there are still {} replica not update partition count in {} group",
-                       not_replied_addresses.size(),
+                       not_replied_addresses->size(),
                        request.update_child_group ? "child" : "parent");
     }
 }
@@ -919,7 +915,9 @@ void replica::parent_send_register_request(
 
     rpc_address meta_address(_stub->_failure_detector->get_servers());
     std::unique_ptr<register_child_request> req = make_unique<register_child_request>(request);
-    register_child_rpc rpc(std::move(req), RPC_CM_REGISTER_CHILD_REPLICA);
+
+    register_child_rpc rpc(
+        std::move(req), RPC_CM_REGISTER_CHILD_REPLICA, 0_ms, 0, get_gpid().thread_hash());
     _primary_states.register_child_task =
         rpc.call(meta_address,
                  tracker(),
@@ -996,7 +994,11 @@ void replica::on_register_child_on_meta_reply(
     // in both situation, we should reset resgiter child task and child_gpid
     _primary_states.register_child_task = nullptr;
 
-    _child_gpid.set_app_id(0);
+    // TODO(heyuchen): consider it
+    //    _child_gpid.set_app_id(0);
+    //    _child_init_ballot = 0;
+    //    _is_splitting = false;
+
     if (response.parent_config.ballot >= get_ballot()) {
         ddebug_replica("response ballot = {}, local ballot = {}, should update configuration",
                        response.parent_config.ballot,
@@ -1032,7 +1034,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                 mu->name());
 
         _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
-            r->_child_gpid.set_app_id(0);
+            r->parent_cleanup_split_context();
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });
 
@@ -1059,7 +1061,7 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
                 mu->data.header.ballot,
                 mu->name());
         _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
-            r->_child_gpid.set_app_id(0);
+            r->parent_cleanup_split_context();
             r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
         });
         child_handle_split_error("on_copy_mutation coz ballot changed");
@@ -1109,10 +1111,16 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
+void replica::parent_handle_split_error() // on parent partition
+{
+    _is_splitting = false;
+}
+
 void replica::parent_cleanup_split_context() // on parent partition
 {
     _child_gpid.set_app_id(0);
     _child_init_ballot = 0;
+    _is_splitting = false;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -1164,12 +1172,12 @@ void replica::on_stop_split(const stop_split_request &req, stop_split_response &
 
         resp.err = ERR_OK;
         ddebug_replica("start to pause partition split");
-        if (_child_gpid.get_app_id() > 0) {
+        if (_is_splitting /*_child_gpid.get_app_id() > 0*/) {
             _stub->split_replica_error_handler(_child_gpid,
                                                std::bind(&replica::child_handle_split_error,
                                                          std::placeholders::_1,
                                                          "pause partition split"));
-            parent_cleanup_split_context();
+            parent_handle_split_error();
         }
     }
 
@@ -1183,12 +1191,13 @@ void replica::on_stop_split(const stop_split_request &req, stop_split_response &
 
         resp.err = ERR_OK;
         ddebug_replica("start to cancel partition split");
-        if (_child_gpid.get_app_id() > 0) {
+        if (_is_splitting /*_child_gpid.get_app_id() > 0*/) {
             _stub->split_replica_error_handler(_child_gpid,
                                                std::bind(&replica::child_handle_split_error,
                                                          std::placeholders::_1,
                                                          "cancel partition split"));
-            parent_cleanup_split_context();
+            // TODO(heyuchen): consider it
+            parent_handle_split_error();
         }
     }
 }

@@ -195,7 +195,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     }
     mu->set_left_potential_secondary_ack_count(count);
 
-    if (_child_gpid.get_app_id() > 0) {
+    if (_is_splitting && _child_gpid.get_app_id() > 0) {
         copy_mutation(mu);
     }
 
@@ -442,7 +442,7 @@ void replica::on_prepare(dsn::message_ex *request)
     }
 
     // prepare in child replica
-    if (_child_gpid.get_app_id() > 0) {
+    if (_is_splitting && _child_gpid.get_app_id() > 0) {
         copy_mutation(mu);
     }
 
@@ -760,10 +760,14 @@ void replica::copy_mutation(mutation_ptr &mu)
     }
 
     mutation_ptr new_mu = mutation::copy_no_reply(mu);
-    // TODO(heyuchen): consider it
-    _stub->split_replica_exec(LPC_PARTITION_SPLIT,
-                              _child_gpid,
-                              std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
+    // TODO(heyuchen): consider error hanlding
+    error_code ec = _stub->split_replica_exec(
+        LPC_PARTITION_SPLIT,
+        _child_gpid,
+        std::bind(&replica::on_copy_mutation, std::placeholders::_1, new_mu));
+    if (ec != ERR_OK) {
+        parent_cleanup_split_context();
+    }
 }
 
 void replica::ack_parent(error_code ec, mutation_ptr &mu)

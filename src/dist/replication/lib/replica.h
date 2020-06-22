@@ -386,7 +386,7 @@ private:
         error_code ec,
         const update_group_partition_count_request &request,
         const update_group_partition_count_response &response,
-        std::unordered_set<dsn::rpc_address> &not_replied_addresses);
+        std::shared_ptr<std::unordered_set<dsn::rpc_address>> &not_replied_addresses);
 
     // meta <=> replica configuration sync through on_config_sync
     // called by primary replica to check if partition count changed and partition flag changed to
@@ -394,12 +394,6 @@ private:
     virtual void check_partition_state(int partition_count,
                                        const partition_configuration &config,
                                        bool is_splitting);
-
-    // primary -> meta query child partition configuration
-    virtual void query_child_state();
-    virtual void on_query_child_state_reply(dsn::error_code ec,
-                                            std::shared_ptr<query_child_state_request> request,
-                                            std::shared_ptr<query_child_state_response> response);
 
     // child and parent heartbeart to check states
     virtual void check_child_state();
@@ -462,6 +456,9 @@ private:
 
     // parent reset child information when partition split failed
     void parent_cleanup_split_context();
+
+    // parent set is_splitting = false
+    void parent_handle_split_error();
     // child suicide when partition split failed
     void child_handle_split_error(const std::string &error_msg);
     // child handle error while async learn parent states
@@ -568,6 +565,7 @@ private:
     // in normal cases, _partition_version = partition_count-1
     // when replica reject client read write request, partition_version = -1
     std::atomic<int32_t> _partition_version;
+    bool _is_splitting{false};
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

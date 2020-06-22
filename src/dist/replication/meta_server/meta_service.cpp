@@ -376,8 +376,6 @@ void meta_service::register_rpc_handlers()
     register_rpc_handler_with_rpc_holder(RPC_CM_REGISTER_CHILD_REPLICA,
                                          "register_child_on_meta",
                                          &meta_service::on_register_child_on_meta);
-    register_rpc_handler_with_rpc_holder(
-        RPC_CM_QUERY_CHILD_STATE, "query_child_state", &meta_service::on_query_child_state);
     register_rpc_handler_with_rpc_holder(RPC_CM_QUERY_PARTITION_SPLIT,
                                          "query_partition_split",
                                          &meta_service::on_query_partition_split);
@@ -941,19 +939,6 @@ void meta_service::on_register_child_on_meta(register_child_rpc rpc)
     tasking::enqueue(LPC_META_STATE_NORMAL,
                      tracker(),
                      [this, rpc]() { _split_svc->register_child_on_meta(std::move(rpc)); },
-                     server_state::sStateHash);
-}
-
-void meta_service::on_query_child_state(query_child_state_rpc rpc)
-{
-    RPC_CHECK_STATUS(rpc.dsn_request(), rpc.response());
-
-    tasking::enqueue(LPC_META_STATE_NORMAL,
-                     tracker(),
-                     [this, rpc]() {
-                         dassert(_split_svc, "meta_split_service is uninitialized");
-                         _split_svc->on_query_child_state(std::move(rpc));
-                     },
                      server_state::sStateHash);
 }
 

@@ -314,40 +314,6 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
     }
 }
 
-void meta_split_service::on_query_child_state(query_child_state_rpc rpc)
-{
-    const auto &request = rpc.request();
-    auto &response = rpc.response();
-
-    dsn::gpid parent_gpid = request.parent_gpid;
-
-    zauto_write_lock l(app_lock());
-    std::shared_ptr<app_state> app = _state->get_app(parent_gpid.get_app_id());
-    dassert(app != nullptr, "get get app for app id(%d)", parent_gpid.get_app_id());
-
-    if (app->helpers->contexts[parent_gpid.get_partition_index()].pending_sync_task != nullptr) {
-        dwarn_f("gpid({}.{}) execute pending sync task, please wait and try later",
-                parent_gpid.get_app_id(),
-                parent_gpid.get_partition_index());
-        response.err = ERR_TRY_AGAIN;
-        return;
-    }
-
-    ddebug_f("gpid({}.{}) query child partition state",
-             parent_gpid.get_app_id(),
-             parent_gpid.get_partition_index());
-
-    // TODO(hyc): consider and comments
-    response.err = ERR_OK;
-    response.partition_count = app->partition_count;
-    response.ballot = invalid_ballot;
-
-    if (parent_gpid.get_partition_index() <= app->partition_count / 2) {
-        response.ballot =
-            app->partitions[parent_gpid.get_partition_index() + app->partition_count / 2].ballot;
-    }
-}
-
 // TBD(heyuchen): refactor this function
 void meta_split_service::control_partition_split(control_split_rpc rpc)
 {

@@ -840,8 +840,8 @@ public:
         update_group_partition_count_response resp;
         resp.err = resp_err;
 
-        std::unordered_set<rpc_address> not_replied_address;
-        not_replied_address.insert(dsn::rpc_address("127.0.0.1", 1));
+        auto not_replied_address = std::make_shared<std::unordered_set<rpc_address>>();
+        not_replied_address->insert(dsn::rpc_address("127.0.0.1", 1));
         _parent->on_update_group_partition_count_reply(
             ERR_OK, _update_partition_count_req, resp, not_replied_address);
         _parent->tracker()->wait_outstanding_tasks();
@@ -849,7 +849,7 @@ public:
             _child->tracker()->wait_outstanding_tasks();
         }
 
-        return not_replied_address.size();
+        return not_replied_address->size();
     }
 
 public:

@@ -73,8 +73,6 @@ typedef rpc_holder<app_partition_split_request, app_partition_split_response>
 typedef rpc_holder<app_partition_split_request, app_partition_split_response>
     app_partition_split_rpc;
 
-typedef rpc_holder<query_child_state_request, query_child_state_response> query_child_state_rpc;
-
 class meta_service : public serverlet<meta_service>
 {
 public:
@@ -190,7 +188,6 @@ private:
     // split
     void on_app_partition_split(app_partition_split_rpc rpc);
     void on_register_child_on_meta(register_child_rpc rpc);
-    void on_query_child_state(query_child_state_rpc rpc);
 
     void on_query_partition_split(query_split_rpc rpc);
     void on_control_partition_split(control_split_rpc rpc);

@@ -2621,7 +2621,7 @@ void replica_stub::create_child_replica(rpc_address primary_address,
     } else {
         dwarn_f("failed to create child replica ({}), ignore it and wait next run", child_gpid);
         split_replica_error_handler(parent_gpid,
-                                    [](replica_ptr r) { r->_child_gpid.set_app_id(0); });
+                                    [](replica_ptr r) { r->parent_cleanup_split_context(); });
     }
 }
 
