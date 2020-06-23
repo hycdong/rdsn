@@ -627,6 +627,7 @@ public:
     void generate_child(partition_status::type status)
     {
         _child = _stub->generate_replica(_app_info, _child_pid, status, _init_ballot);
+        _parent->set_is_splitting(true);
         _parent->set_child_gpid(_child_pid);
         _parent->set_init_child_ballot(_init_ballot);
     }
@@ -887,7 +888,8 @@ TEST_F(replica_split_test, add_child_wrong_ballot)
 
 TEST_F(replica_split_test, add_child_with_child_existed)
 {
-    _parent->set_child_gpid(_child_pid);
+    // _parent->set_child_gpid(_child_pid);
+    _parent->set_is_splitting(true);
     test_on_add_child();
     ASSERT_EQ(_stub->get_replica(_child_pid), nullptr);
 }
