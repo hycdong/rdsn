@@ -918,12 +918,9 @@ void replica::parent_send_register_request(
     register_child_rpc rpc(
         std::move(req), RPC_CM_REGISTER_CHILD_REPLICA, 0_ms, 0, get_gpid().thread_hash());
     _primary_states.register_child_task =
-        rpc.call(meta_address,
-                 tracker(),
-                 [this, rpc](error_code ec) mutable {
-                     on_register_child_on_meta_reply(ec, rpc.request(), rpc.response());
-                 },
-                 _split_states.parent_gpid.thread_hash());
+        rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
+            on_register_child_on_meta_reply(ec, rpc.request(), rpc.response());
+        });
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION

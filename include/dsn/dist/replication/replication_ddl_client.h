@@ -174,7 +174,8 @@ public:
     dsn::error_code ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &ddd_partitions);
 
     // partition split
-    dsn::error_code app_partition_split(const std::string &app_name, int partition_count);
+    error_with<start_partition_split_response> start_partition_split(const std::string &app_name,
+                                                                     int partition_count);
 
     error_with<query_split_response> query_partition_split(const std::string &app_name);
 

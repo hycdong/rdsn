@@ -66,12 +66,6 @@ DEFINE_TASK_CODE(LPC_DEFAULT_CALLBACK, TASK_PRIORITY_COMMON, dsn::THREAD_POOL_DE
 typedef rpc_holder<configuration_update_app_env_request, configuration_update_app_env_response>
     app_env_rpc;
 typedef rpc_holder<ddd_diagnose_request, ddd_diagnose_response> ddd_diagnose_rpc;
-typedef rpc_holder<app_partition_split_request, app_partition_split_response>
-    app_partition_split_rpc;
-
-// TODO(hyc): move rpc_holder to another file
-typedef rpc_holder<app_partition_split_request, app_partition_split_response>
-    app_partition_split_rpc;
 
 class meta_service : public serverlet<meta_service>
 {
@@ -186,7 +180,7 @@ private:
     void initialize_duplication_service();
 
     // split
-    void on_app_partition_split(app_partition_split_rpc rpc);
+    void on_start_partition_split(start_split_rpc rpc);
     void on_register_child_on_meta(register_child_rpc rpc);
 
     void on_query_partition_split(query_split_rpc rpc);

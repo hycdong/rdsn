@@ -426,17 +426,16 @@ public:
         create_app(NAME, PARTITION_COUNT);
     }
 
-    app_partition_split_response start_partition_split(const std::string &app_name,
-                                                       int new_partition_count)
+    error_code start_partition_split(const std::string &app_name, int new_partition_count)
     {
-        auto request = dsn::make_unique<app_partition_split_request>();
+        auto request = dsn::make_unique<start_partition_split_request>();
         request->app_name = app_name;
         request->new_partition_count = new_partition_count;
 
-        app_partition_split_rpc rpc(std::move(request), RPC_CM_APP_PARTITION_SPLIT);
-        split_svc().app_partition_split(rpc);
+        start_split_rpc rpc(std::move(request), RPC_CM_START_PARTITION_SPLIT);
+        split_svc().start_partition_split(rpc);
         wait_all();
-        return rpc.response();
+        return rpc.response().err;
     }
 
     register_child_response
@@ -491,6 +490,18 @@ public:
         return rpc.response();
     }
 
+    const int32_t get_app_splitting_count()
+    {
+        auto app = find_app(NAME);
+        return app->helpers->split_states.splitting_count;
+    }
+
+    void set_app_splitting_count(int32_t count)
+    {
+        auto app = find_app(NAME);
+        app->helpers->split_states.splitting_count = count;
+    }
+
     const std::string NAME = "split_table";
     const uint32_t PARTITION_COUNT = 4;
     const uint32_t NEW_PARTITION_COUNT = 8;
@@ -501,22 +512,24 @@ public:
 
 TEST_F(meta_split_service_test, start_split_with_not_existed_app)
 {
-    auto resp = start_partition_split("table_not_exist", PARTITION_COUNT);
-    ASSERT_EQ(resp.err, ERR_APP_NOT_EXIST);
+    ASSERT_EQ(start_partition_split("table_not_exist", PARTITION_COUNT), ERR_APP_NOT_EXIST);
 }
 
 TEST_F(meta_split_service_test, start_split_with_wrong_params)
 {
-    auto resp = start_partition_split(NAME, PARTITION_COUNT);
-    ASSERT_EQ(resp.err, ERR_INVALID_PARAMETERS);
-    ASSERT_EQ(resp.partition_count, PARTITION_COUNT);
+    ASSERT_EQ(start_partition_split(NAME, PARTITION_COUNT), ERR_INVALID_PARAMETERS);
+}
+
+TEST_F(meta_split_service_test, start_split_with_busy)
+{
+    set_app_splitting_count(PARTITION_COUNT);
+    ASSERT_EQ(start_partition_split(NAME, NEW_PARTITION_COUNT), ERR_BUSY);
 }
 
 TEST_F(meta_split_service_test, start_split_succeed)
 {
-    auto resp = start_partition_split(NAME, NEW_PARTITION_COUNT);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.partition_count, NEW_PARTITION_COUNT);
+    ASSERT_EQ(start_partition_split(NAME, NEW_PARTITION_COUNT), ERR_OK);
+    ASSERT_EQ(get_app_splitting_count(), PARTITION_COUNT);
 }
 
 // TODO(heyuchen): fix regisiter unit tests error

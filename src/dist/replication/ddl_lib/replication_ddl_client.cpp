@@ -1528,43 +1528,6 @@ replication_ddl_client::ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &
     return dsn::ERR_OK;
 }
 
-error_code replication_ddl_client::app_partition_split(const std::string &app_name,
-                                                       int new_partition_count)
-{
-    if (new_partition_count < 1) {
-        fmt::print("Failed to split partition for app {}, new partition count should >= 1\n",
-                   app_name);
-        return ERR_INVALID_PARAMETERS;
-    }
-
-    if (app_name.empty() ||
-        !std::all_of(app_name.cbegin(),
-                     app_name.cend(),
-                     (bool (*)(int))replication_ddl_client::valid_app_char)) {
-        fmt::print("Failed to partition split, app_name {} is invalid\n", app_name);
-        return ERR_INVALID_PARAMETERS;
-    }
-
-    auto req = std::make_shared<app_partition_split_request>();
-    req->app_name = app_name;
-    req->new_partition_count = new_partition_count;
-
-    auto resp_task = request_meta<app_partition_split_request>(RPC_CM_APP_PARTITION_SPLIT, req);
-    resp_task->wait();
-    if (resp_task->error() != dsn::ERR_OK) {
-        return resp_task->error();
-    }
-    app_partition_split_response resp;
-    dsn::unmarshall(resp_task->get_response(), resp);
-    if (resp.err == ERR_INVALID_PARAMETERS && new_partition_count != resp.partition_count * 2) {
-        fmt::print("there are {} partitions in {}, new_partition_count should be {}\n",
-                   resp.partition_count,
-                   app_name,
-                   resp.partition_count * 2);
-    }
-    return resp.err;
-}
-
 void replication_ddl_client::query_disk_info(
     const std::vector<dsn::rpc_address> &targets,
     const std::string &app_name,
@@ -1579,6 +1542,15 @@ void replication_ddl_client::query_disk_info(
                                      query_disk_info_rpc(std::move(request), RPC_QUERY_DISK_INFO));
     }
     call_rpcs_async(query_disk_info_rpcs, resps);
+}
+
+error_with<start_partition_split_response>
+replication_ddl_client::start_partition_split(const std::string &app_name, int new_partition_count)
+{
+    auto req = make_unique<start_partition_split_request>();
+    req->__set_app_name(app_name);
+    req->__set_new_partition_count(new_partition_count);
+    return call_rpc_sync(start_split_rpc(std::move(req), RPC_CM_START_PARTITION_SPLIT));
 }
 
 error_with<control_split_response>
