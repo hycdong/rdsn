@@ -496,17 +496,18 @@ public:
         _resp.__set_is_group_ingestion_finished(secondary_istatus == ingestion_status::IS_SUCCEED);
     }
 
-    void mock_response_cleanup_flag(bool finish_cleanup, bulk_load_status::type status)
+    void mock_response_cleaned_up_flag(bool all_cleaned_up, bulk_load_status::type status)
     {
         create_basic_response(ERR_OK, status);
 
-        partition_bulk_load_state state;
+        partition_bulk_load_state state, state2;
         state.__set_is_cleaned_up(true);
         _resp.group_bulk_load_state[PRIMARY] = state;
         _resp.group_bulk_load_state[SECONDARY1] = state;
-        state.__set_is_cleaned_up(finish_cleanup);
-        _resp.group_bulk_load_state[SECONDARY2] = state;
-        _resp.__set_is_group_bulk_load_context_cleaned_up(finish_cleanup);
+
+        state2.__set_is_cleaned_up(all_cleaned_up);
+        _resp.group_bulk_load_state[SECONDARY2] = state2;
+        _resp.__set_is_group_bulk_load_context_cleaned_up(all_cleaned_up);
     }
 
     void mock_response_paused(bool is_group_paused)
@@ -629,19 +630,25 @@ TEST_F(bulk_load_process_test, normal_succeed)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_SUCCEED);
 }
 
-TEST_F(bulk_load_process_test, half_cleanup)
+TEST_F(bulk_load_process_test, succeed_not_all_finished)
 {
-    mock_response_cleanup_flag(false, bulk_load_status::BLS_FAILED);
-    test_on_partition_bulk_load_reply(_partition_count, bulk_load_status::BLS_FAILED);
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
+    mock_response_cleaned_up_flag(false, bulk_load_status::BLS_SUCCEED);
+    test_on_partition_bulk_load_reply(_partition_count, bulk_load_status::BLS_SUCCEED);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_SUCCEED);
 }
 
-TEST_F(bulk_load_process_test, cleanup_succeed)
+TEST_F(bulk_load_process_test, succeed_all_finished)
 {
-    mock_response_cleanup_flag(true, bulk_load_status::BLS_SUCCEED);
+    mock_response_cleaned_up_flag(true, bulk_load_status::BLS_SUCCEED);
     test_on_partition_bulk_load_reply(1, bulk_load_status::BLS_SUCCEED);
-
     ASSERT_FALSE(app_is_bulk_loading(APP_NAME));
+}
+
+TEST_F(bulk_load_process_test, half_cleanup)
+{
+    mock_response_cleaned_up_flag(false, bulk_load_status::BLS_FAILED);
+    test_on_partition_bulk_load_reply(_partition_count, bulk_load_status::BLS_FAILED);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
 }
 
 TEST_F(bulk_load_process_test, pausing)
