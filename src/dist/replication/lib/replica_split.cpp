@@ -956,6 +956,12 @@ void replica::on_register_child_on_meta_reply(
             return;
         }
 
+        // parent partition is not splitting, split may be paused or canceled
+        // meta will send stop request to primary to handle this situation
+        if (err == ERR_INVALID_STATE) {
+            return;
+        }
+
         // we need not resend register request if child has been registered
         if (err != ERR_CHILD_REGISTERED) {
             _primary_states.register_child_task =

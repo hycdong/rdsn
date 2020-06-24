@@ -61,6 +61,7 @@ private:
 
     void restart_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
 
+    void cancel_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
     void do_cancel_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
 
     const std::string control_type_str(split_control_type::type type)
