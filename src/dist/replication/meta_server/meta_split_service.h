@@ -53,13 +53,28 @@ private:
     void control_partition_split(control_split_rpc rpc);
 
     // meta -> primary to pause/cancel split
-    void send_stop_split_request(const rpc_address &primary_addr,
-                                 const std::string &app_name,
+    void send_stop_split_request(std::shared_ptr<app_state> app,
                                  const gpid &pid,
-                                 const int32_t partition_count,
                                  split_control_type::type type);
 
+    void pause_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
+
+    void restart_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
+
     void do_cancel_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
+
+    const std::string control_type_str(split_control_type::type type)
+    {
+        std::string str = "";
+        if (type == split_control_type::PSC_PAUSE) {
+            str = "pause";
+        } else if (type == split_control_type::PSC_RESTART) {
+            str = "restart";
+        } else if (type == split_control_type::PSC_CANCEL) {
+            str = "cancel";
+        }
+        return str;
+    }
 
 private:
     friend class meta_service;

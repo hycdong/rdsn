@@ -147,13 +147,11 @@ const std::map<int, const char *> _duplication_fail_mode_VALUES_TO_NAMES(
     ::apache::thrift::TEnumIterator(3, _kduplication_fail_modeValues, _kduplication_fail_modeNames),
     ::apache::thrift::TEnumIterator(-1, NULL, NULL));
 
-int _ksplit_control_typeValues[] = {split_control_type::PSC_INVALID,
-                                    split_control_type::PSC_PAUSE,
-                                    split_control_type::PSC_RESTART,
-                                    split_control_type::PSC_CANCEL};
-const char *_ksplit_control_typeNames[] = {"PSC_INVALID", "PSC_PAUSE", "PSC_RESTART", "PSC_CANCEL"};
+int _ksplit_control_typeValues[] = {
+    split_control_type::PSC_PAUSE, split_control_type::PSC_RESTART, split_control_type::PSC_CANCEL};
+const char *_ksplit_control_typeNames[] = {"PSC_PAUSE", "PSC_RESTART", "PSC_CANCEL"};
 const std::map<int, const char *> _split_control_type_VALUES_TO_NAMES(
-    ::apache::thrift::TEnumIterator(4, _ksplit_control_typeValues, _ksplit_control_typeNames),
+    ::apache::thrift::TEnumIterator(3, _ksplit_control_typeValues, _ksplit_control_typeNames),
     ::apache::thrift::TEnumIterator(-1, NULL, NULL));
 
 int _ksplit_statusValues[] = {split_status::not_split,
@@ -13964,17 +13962,18 @@ control_split_request::~control_split_request() throw() {}
 
 void control_split_request::__set_app_name(const std::string &val) { this->app_name = val; }
 
-void control_split_request::__set_partition_count_before_split(const int32_t val)
-{
-    this->partition_count_before_split = val;
-}
-
 void control_split_request::__set_control_type(const split_control_type::type val)
 {
     this->control_type = val;
 }
 
 void control_split_request::__set_parent_pidx(const int32_t val) { this->parent_pidx = val; }
+
+void control_split_request::__set_old_partition_count(const int32_t val)
+{
+    this->old_partition_count = val;
+    __isset.old_partition_count = true;
+}
 
 uint32_t control_split_request::read(::apache::thrift::protocol::TProtocol *iprot)
 {
@@ -14005,14 +14004,6 @@ uint32_t control_split_request::read(::apache::thrift::protocol::TProtocol *ipro
             break;
         case 2:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                xfer += iprot->readI32(this->partition_count_before_split);
-                this->__isset.partition_count_before_split = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 3:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
                 int32_t ecast621;
                 xfer += iprot->readI32(ecast621);
                 this->control_type = (split_control_type::type)ecast621;
@@ -14021,10 +14012,18 @@ uint32_t control_split_request::read(::apache::thrift::protocol::TProtocol *ipro
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 4:
+        case 3:
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 xfer += iprot->readI32(this->parent_pidx);
                 this->__isset.parent_pidx = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 4:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->old_partition_count);
+                this->__isset.old_partition_count = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -14051,19 +14050,19 @@ uint32_t control_split_request::write(::apache::thrift::protocol::TProtocol *opr
     xfer += oprot->writeString(this->app_name);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin(
-        "partition_count_before_split", ::apache::thrift::protocol::T_I32, 2);
-    xfer += oprot->writeI32(this->partition_count_before_split);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("control_type", ::apache::thrift::protocol::T_I32, 3);
+    xfer += oprot->writeFieldBegin("control_type", ::apache::thrift::protocol::T_I32, 2);
     xfer += oprot->writeI32((int32_t)this->control_type);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("parent_pidx", ::apache::thrift::protocol::T_I32, 4);
+    xfer += oprot->writeFieldBegin("parent_pidx", ::apache::thrift::protocol::T_I32, 3);
     xfer += oprot->writeI32(this->parent_pidx);
     xfer += oprot->writeFieldEnd();
 
+    if (this->__isset.old_partition_count) {
+        xfer += oprot->writeFieldBegin("old_partition_count", ::apache::thrift::protocol::T_I32, 4);
+        xfer += oprot->writeI32(this->old_partition_count);
+        xfer += oprot->writeFieldEnd();
+    }
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -14073,43 +14072,43 @@ void swap(control_split_request &a, control_split_request &b)
 {
     using ::std::swap;
     swap(a.app_name, b.app_name);
-    swap(a.partition_count_before_split, b.partition_count_before_split);
     swap(a.control_type, b.control_type);
     swap(a.parent_pidx, b.parent_pidx);
+    swap(a.old_partition_count, b.old_partition_count);
     swap(a.__isset, b.__isset);
 }
 
 control_split_request::control_split_request(const control_split_request &other622)
 {
     app_name = other622.app_name;
-    partition_count_before_split = other622.partition_count_before_split;
     control_type = other622.control_type;
     parent_pidx = other622.parent_pidx;
+    old_partition_count = other622.old_partition_count;
     __isset = other622.__isset;
 }
 control_split_request::control_split_request(control_split_request &&other623)
 {
     app_name = std::move(other623.app_name);
-    partition_count_before_split = std::move(other623.partition_count_before_split);
     control_type = std::move(other623.control_type);
     parent_pidx = std::move(other623.parent_pidx);
+    old_partition_count = std::move(other623.old_partition_count);
     __isset = std::move(other623.__isset);
 }
 control_split_request &control_split_request::operator=(const control_split_request &other624)
 {
     app_name = other624.app_name;
-    partition_count_before_split = other624.partition_count_before_split;
     control_type = other624.control_type;
     parent_pidx = other624.parent_pidx;
+    old_partition_count = other624.old_partition_count;
     __isset = other624.__isset;
     return *this;
 }
 control_split_request &control_split_request::operator=(control_split_request &&other625)
 {
     app_name = std::move(other625.app_name);
-    partition_count_before_split = std::move(other625.partition_count_before_split);
     control_type = std::move(other625.control_type);
     parent_pidx = std::move(other625.parent_pidx);
+    old_partition_count = std::move(other625.old_partition_count);
     __isset = std::move(other625.__isset);
     return *this;
 }
@@ -14119,11 +14118,12 @@ void control_split_request::printTo(std::ostream &out) const
     out << "control_split_request(";
     out << "app_name=" << to_string(app_name);
     out << ", "
-        << "partition_count_before_split=" << to_string(partition_count_before_split);
-    out << ", "
         << "control_type=" << to_string(control_type);
     out << ", "
         << "parent_pidx=" << to_string(parent_pidx);
+    out << ", "
+        << "old_partition_count=";
+    (__isset.old_partition_count ? (out << to_string(old_partition_count)) : (out << "<null>"));
     out << ")";
 }
 

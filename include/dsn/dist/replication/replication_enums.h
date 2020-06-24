@@ -71,12 +71,4 @@ ENUM_BEGIN2(replication::split_status::type, split_status, replication::split_st
 ENUM_REG(replication::split_status::splitting)
 ENUM_REG(replication::split_status::paused)
 ENUM_END2(replication::split_status::type, split_status)
-
-ENUM_BEGIN2(replication::split_control_type::type,
-            split_control_type,
-            replication::split_control_type::PSC_INVALID)
-ENUM_REG(replication::split_control_type::PSC_PAUSE)
-ENUM_REG(replication::split_control_type::PSC_RESTART)
-ENUM_REG(replication::split_control_type::PSC_CANCEL)
-ENUM_END2(replication::split_control_type::type, split_control_type)
 }

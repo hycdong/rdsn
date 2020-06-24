@@ -179,10 +179,9 @@ struct split_control_type
 {
     enum type
     {
-        PSC_INVALID = 0,
-        PSC_PAUSE = 1,
-        PSC_RESTART = 2,
-        PSC_CANCEL = 3
+        PSC_PAUSE = 0,
+        PSC_RESTART = 1,
+        PSC_CANCEL = 2
     };
 };
 
@@ -5946,16 +5945,13 @@ inline std::ostream &operator<<(std::ostream &out, const start_partition_split_r
 typedef struct _control_split_request__isset
 {
     _control_split_request__isset()
-        : app_name(false),
-          partition_count_before_split(false),
-          control_type(false),
-          parent_pidx(false)
+        : app_name(false), control_type(false), parent_pidx(false), old_partition_count(false)
     {
     }
     bool app_name : 1;
-    bool partition_count_before_split : 1;
     bool control_type : 1;
     bool parent_pidx : 1;
+    bool old_partition_count : 1;
 } _control_split_request__isset;
 
 class control_split_request
@@ -5967,37 +5963,39 @@ public:
     control_split_request &operator=(control_split_request &&);
     control_split_request()
         : app_name(),
-          partition_count_before_split(0),
           control_type((split_control_type::type)0),
-          parent_pidx(0)
+          parent_pidx(0),
+          old_partition_count(0)
     {
     }
 
     virtual ~control_split_request() throw();
     std::string app_name;
-    int32_t partition_count_before_split;
     split_control_type::type control_type;
     int32_t parent_pidx;
+    int32_t old_partition_count;
 
     _control_split_request__isset __isset;
 
     void __set_app_name(const std::string &val);
 
-    void __set_partition_count_before_split(const int32_t val);
-
     void __set_control_type(const split_control_type::type val);
 
     void __set_parent_pidx(const int32_t val);
+
+    void __set_old_partition_count(const int32_t val);
 
     bool operator==(const control_split_request &rhs) const
     {
         if (!(app_name == rhs.app_name))
             return false;
-        if (!(partition_count_before_split == rhs.partition_count_before_split))
-            return false;
         if (!(control_type == rhs.control_type))
             return false;
         if (!(parent_pidx == rhs.parent_pidx))
+            return false;
+        if (__isset.old_partition_count != rhs.__isset.old_partition_count)
+            return false;
+        else if (__isset.old_partition_count && !(old_partition_count == rhs.old_partition_count))
             return false;
         return true;
     }

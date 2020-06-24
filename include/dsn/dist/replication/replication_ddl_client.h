@@ -181,9 +181,9 @@ public:
 
     error_with<control_split_response>
     control_partition_split(const std::string &app_name,
-                            const int32_t partition_count_before_split,
+                            split_control_type::type control_type,
                             const int32_t parent_pidx,
-                            split_control_type::type control_type);
+                            const int32_t old_partition_count = 0);
 
     void query_disk_info(
         const std::vector<dsn::rpc_address> &targets,

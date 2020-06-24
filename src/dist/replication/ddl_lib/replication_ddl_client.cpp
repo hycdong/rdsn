@@ -1555,15 +1555,15 @@ replication_ddl_client::start_partition_split(const std::string &app_name, int n
 
 error_with<control_split_response>
 replication_ddl_client::control_partition_split(const std::string &app_name,
-                                                const int32_t partition_count_before_split,
+                                                split_control_type::type control_type,
                                                 const int32_t parent_pidx,
-                                                split_control_type::type control_type)
+                                                const int32_t old_partition_count)
 {
     auto req = make_unique<control_split_request>();
     req->__set_app_name(app_name);
-    req->__set_partition_count_before_split(partition_count_before_split);
-    req->__set_parent_pidx(parent_pidx);
     req->__set_control_type(control_type);
+    req->__set_parent_pidx(parent_pidx);
+    req->__set_old_partition_count(old_partition_count);
     return call_rpc_sync(control_split_rpc(std::move(req), RPC_CM_CONTROL_PARTITION_SPLIT));
 }
 

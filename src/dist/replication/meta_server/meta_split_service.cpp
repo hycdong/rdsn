@@ -25,6 +25,7 @@
  */
 
 #include <dsn/dist/fmt_logging.h>
+#include <dsn/utility/fail_point.h>
 
 #include "dist/replication/meta_server/meta_split_service.h"
 #include "dist/replication/meta_server/meta_state_service_utils.h"
@@ -339,15 +340,11 @@ void meta_split_service::control_partition_split(control_split_rpc rpc)
 {
     const auto &req = rpc.request();
     const std::string &app_name = req.app_name;
-    const int32_t &old_partition_count = req.partition_count_before_split;
     const int32_t &parent_pidx = req.parent_pidx;
     const auto &control_type = req.control_type;
-
     auto &response = rpc.response();
-    response.err = ERR_OK;
 
     zauto_write_lock l(app_lock());
-
     std::shared_ptr<app_state> app = _state->get_app(app_name);
     if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
         derror_f("app({}) is not existed or not available", app_name);
@@ -357,25 +354,42 @@ void meta_split_service::control_partition_split(control_split_rpc rpc)
         return;
     }
 
-    if (old_partition_count * 2 != app->partition_count) {
-        derror_f("pause split for app({}) failed, wrong partition count, request({}) VS app({})",
-                 app_name,
-                 old_partition_count,
-                 app->partition_count);
-        response.err = ERR_INVALID_PARAMETERS;
-        response.hint_msg = "wrong partition count";
-        return;
-    }
-
     if (app->helpers->split_states.splitting_count <= 0) {
-        derror_f("pause split for app({}) failed, current app is not splitting", app_name);
+        derror_f(
+            "app({}) is not splitting, {} split failed", app_name, control_type_str(control_type));
         response.err = ERR_INVALID_STATE;
         response.hint_msg = "app is not splitting";
         return;
     }
 
-    if (parent_pidx >= old_partition_count) {
-        derror_f("pause split for app({}) partition[{}] failed, partition is not parent partition",
+    if (control_type == split_control_type::PSC_CANCEL) {
+        if (req.old_partition_count != app->partition_count / 2) {
+            derror_f("wrong partition count: app({}), partition count({}), old_partition_count({})",
+                     app_name,
+                     app->partition_count,
+                     req.old_partition_count);
+            response.err = ERR_INVALID_PARAMETERS;
+            response.hint_msg =
+                fmt::format("wrong partition_count, should be {}", app->partition_count / 2);
+            return;
+        }
+
+        if (app->helpers->split_states.splitting_count != req.old_partition_count) {
+            derror_f("cancel split for app({}) failed, some partitions have finished split",
+                     app_name);
+            response.err = ERR_CHILD_REGISTERED;
+            response.hint_msg = "some partitions finish split";
+            return;
+        }
+
+        do_cancel_partition_split(std::move(app), std::move(rpc));
+        return;
+    }
+
+    // pause or restart partition split
+    if (parent_pidx >= app->partition_count / 2) {
+        derror_f("{} split for app({}) partition[{}] failed, partition is not parent partition",
+                 control_type_str(control_type),
                  app_name,
                  parent_pidx);
         response.err = ERR_INVALID_PARAMETERS;
@@ -384,138 +398,148 @@ void meta_split_service::control_partition_split(control_split_rpc rpc)
     }
 
     if (control_type == split_control_type::PSC_PAUSE) {
-        if (parent_pidx >= 0) {
-            // pause single specific partition
-            auto iter = app->helpers->split_states.status.find(parent_pidx);
-            if (iter == app->helpers->split_states.status.end()) {
-                derror_f(
-                    "pause split for app({}) partition[{}] failed, this parent has registered its "
-                    "child",
-                    app_name,
-                    parent_pidx);
-                response.err = ERR_CHILD_REGISTERED;
-                response.hint_msg = "parent partition has finished split";
-                return;
-            }
-
-            if (iter->second == split_status::paused) {
-                derror_f("duplicated pause split for app({}) partition[{}], split has been paused",
-                         app_name,
-                         parent_pidx);
-                response.err == ERR_NO_NEED_OPERATE;
-                response.hint_msg = "parent partition has paused split";
-                return;
-            }
-
-            iter->second = split_status::paused;
-            ddebug_f("app({}) partition({}) pause split", app_name, parent_pidx);
-            send_stop_split_request(app->partitions[parent_pidx].primary,
-                                    app_name,
-                                    gpid(app->app_id, parent_pidx),
-                                    app->partition_count,
-                                    split_control_type::PSC_PAUSE);
-        } else { // pause all splitting partitions
-            for (auto &kv : app->helpers->split_states.status) {
-                if (kv.second == split_status::splitting) {
-                    const int32_t pidx = kv.first;
-                    kv.second = split_status::paused;
-                    ddebug_f("app({}) partition({}) pause split", app_name, pidx);
-                    send_stop_split_request(app->partitions[pidx].primary,
-                                            app_name,
-                                            gpid(app->app_id, pidx),
-                                            app->partition_count,
-                                            split_control_type::PSC_PAUSE);
-                }
-            }
-        }
-    }
-
-    if (control_type == split_control_type::PSC_RESTART) {
-        if (parent_pidx >= 0) {
-            // restart single specific partition
-            auto iter = app->helpers->split_states.status.find(parent_pidx);
-            if (iter == app->helpers->split_states.status.end()) {
-                derror_f(
-                    "restart split for app({}) partition[{}] failed, partition is not splitting",
-                    app_name,
-                    parent_pidx);
-                response.err = ERR_INVALID_STATE;
-                response.hint_msg = "parent partition is not splitting";
-                return;
-            }
-
-            if (iter->second == split_status::splitting) {
-                derror_f(
-                    "duplicated restart split for app({}) partition[{}], split has been started",
-                    app_name,
-                    parent_pidx);
-                response.err == ERR_NO_NEED_OPERATE;
-                response.hint_msg = "parent partition has started split";
-                return;
-                return;
-            }
-            iter->second = split_status::splitting;
-            ddebug_f("app({}) partition({}) restart split", app_name, parent_pidx);
-        } else { // restart all paused partitions
-            for (auto &kv : app->helpers->split_states.status) {
-                if (kv.second == split_status::paused) {
-                    kv.second = split_status::splitting;
-                    ddebug_f("app({}) partition({}) restart split", app_name, kv.first);
-                }
-            }
-        }
-    }
-
-    if (control_type == split_control_type::PSC_CANCEL) {
-        if (app->helpers->split_states.splitting_count != old_partition_count) {
-            derror_f("cancel split for app({}) failed, some partitions have finished split",
-                     app_name);
-            response.err = ERR_CHILD_REGISTERED;
-            response.hint_msg = "some partitions finish split";
-            return;
-        }
-
-        for (auto &kv : app->helpers->split_states.status) {
-            ddebug_f("app({}) partition({}) cancel split, old status = {}",
-                     app_name,
-                     kv.first,
-                     dsn::enum_to_string(kv.second));
-            kv.second = split_status::canceling;
-            send_stop_split_request(app->partitions[kv.first].primary,
-                                    app_name,
-                                    gpid(app->app_id, kv.first),
-                                    app->partition_count,
-                                    split_control_type::PSC_CANCEL);
-        }
-
-        do_cancel_partition_split(std::move(app), std::move(rpc));
+        pause_partition_split(std::move(app), rpc);
+    } else {
+        restart_partition_split(std::move(app), rpc);
     }
 }
 
-void meta_split_service::send_stop_split_request(const rpc_address &primary_addr,
-                                                 const std::string &app_name,
+void meta_split_service::pause_partition_split(std::shared_ptr<app_state> app,
+                                               control_split_rpc rpc)
+{
+    const auto &req = rpc.request();
+    const std::string &app_name = req.app_name;
+    const int32_t &parent_pidx = req.parent_pidx;
+    auto &response = rpc.response();
+
+    // pause single specific partition
+    if (parent_pidx >= 0) {
+        auto iter = app->helpers->split_states.status.find(parent_pidx);
+        if (iter == app->helpers->split_states.status.end()) {
+            derror_f(
+                "pause split for app({}) partition[{}] failed, child partition has been registered",
+                app_name,
+                parent_pidx);
+            response.err = ERR_CHILD_REGISTERED;
+            response.hint_msg = "partition has finished split";
+            return;
+        }
+
+        if (iter->second == split_status::paused) {
+            dwarn_f("duplicated pause request for app({}) partition[{}], split has been paused",
+                    app_name,
+                    parent_pidx);
+            response.err == ERR_OK;
+            return;
+        }
+
+        iter->second = split_status::paused;
+        response.err = ERR_OK;
+        ddebug_f("app({}) partition({}) pause split", app_name, parent_pidx);
+        send_stop_split_request(app, gpid(app->app_id, parent_pidx), split_control_type::PSC_PAUSE);
+        return;
+    }
+
+    // pause all splitting partitions
+    for (auto &kv : app->helpers->split_states.status) {
+        if (kv.second == split_status::splitting) {
+            const int32_t pidx = kv.first;
+            kv.second = split_status::paused;
+            ddebug_f("app({}) partition({}) pause split", app_name, pidx);
+            send_stop_split_request(
+                app, gpid(app->app_id, parent_pidx), split_control_type::PSC_PAUSE);
+        }
+    }
+    response.err = ERR_OK;
+}
+
+void meta_split_service::restart_partition_split(std::shared_ptr<app_state> app,
+                                                 control_split_rpc rpc)
+{
+    const auto &req = rpc.request();
+    const std::string &app_name = req.app_name;
+    const int32_t &parent_pidx = req.parent_pidx;
+    auto &response = rpc.response();
+
+    // restart single specific partition
+    if (parent_pidx >= 0) {
+        auto iter = app->helpers->split_states.status.find(parent_pidx);
+        if (iter == app->helpers->split_states.status.end()) {
+            derror_f("restart split for app({}) partition[{}] failed, partition is not splitting",
+                     app_name,
+                     parent_pidx);
+            response.err = ERR_INVALID_STATE;
+            response.hint_msg = "partition is not splitting";
+            return;
+        }
+
+        if (iter->second == split_status::splitting) {
+            dwarn_f("duplicated restart request for app({}) partition[{}], partition is already "
+                    "splitting",
+                    app_name,
+                    parent_pidx);
+            response.err == ERR_OK;
+            return;
+        }
+        iter->second = split_status::splitting;
+        response.err = ERR_OK;
+        ddebug_f("app({}) partition({}) restart split", app_name, parent_pidx);
+        return;
+    }
+
+    // restart all paused partitions
+    for (auto &kv : app->helpers->split_states.status) {
+        if (kv.second == split_status::paused) {
+            kv.second = split_status::splitting;
+            ddebug_f("app({}) partition({}) restart split", app_name, kv.first);
+        }
+    }
+    response.err = ERR_OK;
+}
+
+void meta_split_service::send_stop_split_request(std::shared_ptr<app_state> app,
                                                  const gpid &pid,
-                                                 const int32_t partition_count,
                                                  split_control_type::type type)
 {
+    FAIL_POINT_INJECT_F("meta_split_send_stop_split_request", [](dsn::string_view) {});
+
     auto req = make_unique<stop_split_request>();
     req->pid = pid;
-    req->partition_count = partition_count;
+    req->partition_count = app->partition_count;
     req->type = type;
 
-    ddebug_f("send control split request to node({}) app({}), pid({}), split_control_type({})",
+    const auto &primary_addr = app->partitions[pid.get_partition_index()].primary;
+    ddebug_f("send {} split request to node({}) app({}), partition({})",
+             control_type_str(type),
              primary_addr.to_string(),
-             app_name,
-             pid,
-             dsn::enum_to_string(type));
+             app->app_name,
+             pid);
     stop_split_rpc rpc(std::move(req), RPC_STOP_SPLIT, 0_ms, 0, pid.thread_hash());
-    rpc.call(primary_addr, _meta_svc->tracker(), [this, type, rpc](error_code err) mutable {
-        if (err == ERR_OBJECT_NOT_FOUND || err == ERR_INVALID_STATE) {
-            // TODO(heyuchen): retry pause split
-            dwarn_f(" split failed, err = {}", err);
-        }
-        ddebug_f("control split succeed, control type = {}", type);
-    });
+    rpc.call(
+        primary_addr,
+        _meta_svc->tracker(),
+        [this, app, pid, primary_addr, type, rpc](error_code err) mutable {
+            if (err == ERR_OBJECT_NOT_FOUND || err == ERR_INVALID_STATE) {
+                derror_f("send {} split request to node({}) app({}), partition({}) failed, err = "
+                         "{}, retry",
+                         control_type_str(type),
+                         primary_addr.to_string(),
+                         app->app_name,
+                         pid,
+                         err);
+                tasking::enqueue(
+                    LPC_META_CALLBACK,
+                    _meta_svc->tracker(),
+                    std::bind(&meta_split_service::send_stop_split_request, this, app, pid, type),
+                    0,
+                    std::chrono::seconds(1));
+            }
+            ddebug_f("send {} split request to node({}) app({}), partition({}) succeed",
+                     control_type_str(type),
+                     primary_addr.to_string(),
+                     app->app_name,
+                     pid);
+        });
 }
 
 void meta_split_service::do_cancel_partition_split(std::shared_ptr<app_state> app,
@@ -527,14 +551,12 @@ void meta_split_service::do_cancel_partition_split(std::shared_ptr<app_state> ap
                  app->partition_count / 2);
 
         zauto_write_lock l(app_lock());
-
         app->partition_count /= 2;
 
         for (int i = app->partition_count; i < app->partition_count * 2; ++i) {
             app->partitions.erase(app->partitions.cbegin() + i);
             app->helpers->contexts.erase(app->helpers->contexts.cbegin() + i);
         }
-
         app->helpers->split_states.status.clear();
         app->helpers->split_states.splitting_count = 0;
 
@@ -542,6 +564,17 @@ void meta_split_service::do_cancel_partition_split(std::shared_ptr<app_state> ap
         response.err = ERR_OK;
     };
 
+    // send cancel split request to replica server
+    for (auto &kv : app->helpers->split_states.status) {
+        ddebug_f("app({}) partition({}) cancel split, old status = {}",
+                 app->app_name,
+                 kv.first,
+                 dsn::enum_to_string(kv.second));
+        kv.second = split_status::canceling;
+        send_stop_split_request(app, gpid(app->app_id, kv.first), split_control_type::PSC_CANCEL);
+    }
+
+    // update partition_count
     auto copy = *app;
     copy.partition_count /= 2;
     blob value = dsn::json::json_forwarder<app_info>::encode(copy);
