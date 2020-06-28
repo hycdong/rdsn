@@ -99,15 +99,15 @@ public:
 
         // mock node state
         node_state node;
-        node.put_partition(dsn::gpid(app->app_id, PARENT_INDEX), true);
-        mock_node_state(dsn::rpc_address("127.0.0.1", 10086), node);
+        node.put_partition(gpid(app->app_id, PARENT_INDEX), true);
+        mock_node_state(NODE, node);
 
         auto request = dsn::make_unique<register_child_request>();
         request->app.app_name = app->app_name;
         request->app.app_id = app->app_id;
         request->parent_config = parent_config;
         request->child_config = child_config;
-        request->primary_address = dsn::rpc_address("127.0.0.1", 10086);
+        request->primary_address = NODE;
 
         register_child_rpc rpc(std::move(request), RPC_CM_REGISTER_CHILD_REPLICA);
         split_svc().register_child_on_meta(rpc);
@@ -116,6 +116,15 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         return rpc.response().err;
+    }
+
+    int32_t on_config_sync(const configuration_query_by_node_request &req)
+    {
+        configuration_query_by_node_response resp;
+        auto r = fake_rpc_call(
+            RPC_CM_CONFIG_SYNC, LPC_META_CALLBACK, _ss.get(), &server_state::on_config_sync, req);
+        fake_wait_rpc(r, resp);
+        return resp.splitting_replicas.size();
     }
 
     void mock_app_partition_split_context()
@@ -177,6 +186,7 @@ public:
     const int32_t PARENT_BALLOT = 3;
     const int32_t PARENT_INDEX = 0;
     const int32_t CHILD_INDEX = 4;
+    const rpc_address NODE = rpc_address("127.0.0.1", 10086);
     std::shared_ptr<app_state> app;
 };
 
@@ -352,6 +362,7 @@ TEST_F(meta_split_service_test, cancel_split_test)
     fail::teardown();
 }
 
+// register child unit tests
 TEST_F(meta_split_service_test, register_child_test)
 {
     // Test case:
@@ -390,6 +401,55 @@ TEST_F(meta_split_service_test, register_child_test)
         ASSERT_EQ(register_child(PARENT_INDEX, test.parent_ballot, test.wait_zk),
                   test.expected_err);
     }
+}
+
+// config sync unit tests
+TEST_F(meta_split_service_test, on_config_sync_test)
+{
+    create_app("not_splitting_app");
+    auto not_splitting_app = find_app("not_splitting_app");
+    gpid pid1 = gpid(app->app_id, PARENT_INDEX);
+    gpid pid2 = gpid(not_splitting_app->app_id, 0);
+    // mock meta server node state
+    node_state node;
+    node.put_partition(pid1, true);
+    node.put_partition(pid2, true);
+    mock_node_state(NODE, node);
+    // mock request
+    replica_info info1, info2;
+    info1.pid = pid1;
+    info2.pid = pid2;
+    configuration_query_by_node_request req;
+    req.node = NODE;
+    req.__isset.stored_replicas = true;
+    req.stored_replicas.emplace_back(info1);
+    req.stored_replicas.emplace_back(info2);
+
+    // Test case:
+    // - partition is splitting
+    // - partition splitted
+    // - partition split is paused
+    struct config_sync_test
+    {
+        bool mock_child_registered;
+        bool mock_parent_paused;
+        int32_t expected_count;
+    } tests[] = {
+        {false, false, 1}, {true, false, 0}, {false, true, 0},
+    };
+
+    for (auto test : tests) {
+        mock_app_partition_split_context();
+        if (test.mock_child_registered) {
+            mock_child_registered();
+        }
+        if (test.mock_parent_paused) {
+            mock_split_states(split_status::paused, PARENT_INDEX);
+        }
+        ASSERT_EQ(on_config_sync(req), test.expected_count);
+    }
+
+    drop_app("not_splitting_app");
 }
 
 } // namespace replication
