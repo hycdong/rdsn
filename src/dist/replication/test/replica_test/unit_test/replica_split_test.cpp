@@ -18,18 +18,10 @@ public:
         mock_app_info();
         _parent = stub->generate_replica(
             _app_info, PARENT_GPID, partition_status::PS_PRIMARY, INIT_BALLOT);
-        mock_group_check_request();
         fail::setup();
     }
 
     ~replica_split_test() { fail::teardown(); }
-
-    void mock_group_check_request()
-    {
-        _group_check_req.child_gpid = CHILD_GPID;
-        _group_check_req.config.ballot = INIT_BALLOT;
-        _group_check_req.config.status = partition_status::PS_PRIMARY;
-    }
 
     void mock_notify_catch_up_request()
     {
@@ -189,9 +181,15 @@ public:
         _parent->tracker()->wait_outstanding_tasks();
     }
 
-    void test_on_add_child()
+    void test_on_add_child(ballot b, bool is_splitting)
     {
-        _parent->on_add_child(_group_check_req);
+        _parent->set_is_splitting(is_splitting);
+
+        group_check_request req;
+        req.child_gpid = CHILD_GPID;
+        req.config.ballot = b;
+        req.config.status = partition_status::PS_PRIMARY;
+        _parent->on_add_child(req);
         _parent->tracker()->wait_outstanding_tasks();
     }
 
@@ -348,7 +346,6 @@ public:
     gpid CHILD_GPID = gpid(APP_ID, 9);
     ballot INIT_BALLOT = 3;
 
-    group_check_request _group_check_req;
     notify_catch_up_request _catch_up_req;
     register_child_request _register_req;
     update_group_partition_count_request _update_partition_count_req;
@@ -360,14 +357,14 @@ public:
     learn_state _mock_learn_state;
 };
 
-// try_to_start_split unit tests
+// try to start split unit tests
 TEST_F(replica_split_test, start_split_test)
 {
     fail::cfg("replica_on_add_child", "return()");
     fail::cfg("replica_broadcast_group_check", "return()");
 
     // Test case:
-    // - app already splitting
+    // - partition is already splitting
     // - lack of secondary
     // - start split succeed
     struct start_test
@@ -384,33 +381,36 @@ TEST_F(replica_split_test, start_split_test)
     }
 }
 
-TEST_F(replica_split_test, add_child_wrong_ballot)
+// add child unit tests
+TEST_F(replica_split_test, add_child_test)
 {
-    ballot wrong_ballot = 5;
-    _group_check_req.config.ballot = wrong_ballot;
-    test_on_add_child();
-    ASSERT_EQ(stub->get_replica(CHILD_GPID), nullptr);
-}
-
-TEST_F(replica_split_test, add_child_with_child_existed)
-{
-    // _parent->set_child_gpid(CHILD_GPID);
-    _parent->set_is_splitting(true);
-    test_on_add_child();
-    ASSERT_EQ(stub->get_replica(CHILD_GPID), nullptr);
-}
-
-TEST_F(replica_split_test, add_child_succeed)
-{
-    fail::setup();
     fail::cfg("replica_stub_create_child_replica_if_not_found", "return()");
     fail::cfg("replica_child_init_replica", "return()");
+    fail::cfg("replica_child_check_split_context", "return()");
+    ballot WRONG_BALLOT = 2;
 
-    test_on_add_child();
-    ASSERT_NE(stub->get_replica(CHILD_GPID), nullptr);
-    stub->get_replica(CHILD_GPID)->tracker()->wait_outstanding_tasks();
-
-    fail::teardown();
+    // Test case:
+    // - request has wrong ballot
+    // - partition is already splitting
+    // - add child succeed
+    struct add_child_test
+    {
+        ballot req_ballot;
+        bool is_splitting;
+        bool expected_is_splitting;
+        bool child_is_nullptr;
+    } tests[] = {{WRONG_BALLOT, false, false, true},
+                 {INIT_BALLOT, true, true, true},
+                 {INIT_BALLOT, false, true, false}};
+    for (auto test : tests) {
+        parent_cleanup_split_context();
+        test_on_add_child(test.req_ballot, test.is_splitting);
+        ASSERT_EQ(_parent->is_splitting(), test.expected_is_splitting);
+        ASSERT_EQ(stub->get_replica(CHILD_GPID) == nullptr, test.child_is_nullptr);
+        if (!test.child_is_nullptr) {
+            stub->get_replica(CHILD_GPID)->tracker()->wait_outstanding_tasks();
+        }
+    }
 }
 
 TEST_F(replica_split_test, parent_check_states_with_wrong_status)

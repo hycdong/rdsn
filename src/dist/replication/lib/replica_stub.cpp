@@ -2609,7 +2609,7 @@ void replica_stub::create_child_replica(rpc_address primary_address,
 {
     replica_ptr child_replica = create_child_replica_if_not_found(child_gpid, &app, parent_dir);
     if (child_replica != nullptr) {
-        ddebug_f("create child replica ({}) succeed", child_gpid);
+        ddebug_f("app({}), create child replica ({}) succeed", app.app_name, child_gpid);
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          child_replica->tracker(),
                          std::bind(&replica::child_init_replica,
@@ -2619,7 +2619,9 @@ void replica_stub::create_child_replica(rpc_address primary_address,
                                    init_ballot),
                          child_gpid.thread_hash());
     } else {
-        dwarn_f("failed to create child replica ({}), ignore it and wait next run", child_gpid);
+        dwarn_f("failed to create child replica ({}) for app({}), ignore it and wait next run",
+                child_gpid,
+                app.app_name);
         split_replica_error_handler(parent_gpid,
                                     [](replica_ptr r) { r->parent_cleanup_split_context(); });
     }

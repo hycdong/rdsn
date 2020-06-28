@@ -88,7 +88,7 @@ void replica::on_add_child(const group_check_request &request) // on parent part
     }
 
     if (_is_splitting) {
-        dwarn_replica("replica is partition splitting, ignore this request");
+        dwarn_replica("partition is already splitting, ignore this request");
         return;
     }
 
@@ -146,25 +146,20 @@ void replica::child_init_replica(gpid parent_gpid,
     _config.primary = primary_address;
     _config.status = partition_status::PS_PARTITION_SPLIT;
 
-    // init split states
+    // initialize split states
     _split_states.parent_gpid = parent_gpid;
     _split_states.is_prepare_list_copied = false;
     _split_states.is_caught_up = false;
 
     _split_states.splitting_start_ts_ns = dsn_now_ns();
-    // TODO(hyc): pref-counter - delete
-    ddebug_f("{}: splitting_start_ts_ns is {}", name(), _split_states.splitting_start_ts_ns);
     _stub->_counter_replicas_splitting_recent_start_count->increment();
-    // TODO(hyc): delete
-    ddebug_f("stub recent start split count is {}",
-             _stub->_counter_replicas_splitting_recent_start_count.get()->get_value());
 
-    // heartbeat
-    _split_states.check_state_task = tasking::enqueue(LPC_PARTITION_SPLIT,
-                                                      tracker(),
-                                                      std::bind(&replica::check_child_state, this),
-                                                      get_gpid().thread_hash(),
-                                                      std::chrono::seconds(5));
+    _split_states.check_state_task =
+        tasking::enqueue(LPC_PARTITION_SPLIT,
+                         tracker(),
+                         std::bind(&replica::child_check_split_context, this),
+                         get_gpid().thread_hash(),
+                         std::chrono::seconds(5));
 
     ddebug_replica("init ballot is {}, parent gpid is ({})", init_ballot, parent_gpid);
 
@@ -177,8 +172,11 @@ void replica::child_init_replica(gpid parent_gpid,
     }
 }
 
-void replica::check_child_state() // on child
+// TODO(heyuchen): refactor and consider this function
+void replica::child_check_split_context() // on child partition
 {
+    FAIL_POINT_INJECT_F("replica_child_check_split_context", [](dsn::string_view) {});
+
     if (status() != partition_status::PS_PARTITION_SPLIT) {
         dwarn_f("{} status is not PS_PARTITION_SPLIT during check_child_state, but {}",
                 name(),
@@ -200,11 +198,12 @@ void replica::check_child_state() // on child
 
     // restart check_state_task
     // TODO(hyc): consider heartbeat interval
-    _split_states.check_state_task = tasking::enqueue(LPC_PARTITION_SPLIT,
-                                                      tracker(),
-                                                      std::bind(&replica::check_child_state, this),
-                                                      get_gpid().thread_hash(),
-                                                      std::chrono::seconds(5));
+    _split_states.check_state_task =
+        tasking::enqueue(LPC_PARTITION_SPLIT,
+                         tracker(),
+                         std::bind(&replica::child_check_split_context, this),
+                         get_gpid().thread_hash(),
+                         std::chrono::seconds(5));
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION

@@ -388,10 +388,6 @@ private:
         const update_group_partition_count_response &response,
         std::shared_ptr<std::unordered_set<dsn::rpc_address>> &not_replied_addresses);
 
-    // child and parent heartbeart to check states
-    virtual void check_child_state();
-    //    virtual void check_parent_state(gpid child_gpid, ballot child_ballot);
-
     // parent copy mutations to child during partition split
     void copy_mutation(mutation_ptr &mu);
 
@@ -446,6 +442,8 @@ private:
 
     // return true if parent status is valid
     bool parent_check_states();
+    // check if child status is valid
+    void child_check_split_context();
 
     // parent reset child information when partition split failed
     void parent_cleanup_split_context();
