@@ -42,6 +42,7 @@
 
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/dist/replication/replication_app_base.h>
+#include <dsn/utility/fail_point.h>
 
 namespace dsn {
 namespace replication {
@@ -66,6 +67,8 @@ void replica::init_group_check()
 
 void replica::broadcast_group_check()
 {
+    FAIL_POINT_INJECT_F("replica_broadcast_group_check", [](dsn::string_view) {});
+
     dassert(nullptr != _primary_states.group_check_task, "");
 
     ddebug("%s: start to broadcast group check", name());
@@ -96,7 +99,14 @@ void replica::broadcast_group_check()
         _primary_states.get_replica_config(it->second, request->config);
         request->last_committed_decree = last_committed_decree();
         if (_is_splitting) {
-            request->__set_child_gpid(_child_gpid);
+            if (_child_gpid.get_app_id() > 0) {
+                request->__set_child_gpid(_child_gpid);
+            } else {
+                derror_replica(
+                    "partition is splitting but child_gpid({}) is invalid, cleanup split context",
+                    _child_gpid);
+                parent_cleanup_split_context();
+            }
         }
         request->__set_confirmed_decree(_duplication_mgr->min_confirmed_decree());
 
@@ -173,7 +183,7 @@ void replica::on_group_check(const group_check_request &request,
         if (request.last_committed_decree > last_committed_decree()) {
             _prepare_list->commit(request.last_committed_decree, COMMIT_TO_DECREE_HARD);
         }
-        if (request.child_gpid.get_app_id() > 0) { // secondary create child replica
+        if (request.__isset.child_gpid) { // secondary create child replica
             on_add_child(request);
         }
         break;

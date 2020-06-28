@@ -1036,15 +1036,18 @@ void replica::on_config_sync(const app_info &info,
     update_app_envs(info.envs);
     _duplicating = info.duplicating;
 
-    if (nullptr != _primary_states.reconfiguration_task) {
-        // already under reconfiguration, skip configuration sync
-    } else if (status() == partition_status::PS_PRIMARY) {
-        check_partition_state(info.partition_count, is_splitting);
+    if (status() == partition_status::PS_PRIMARY) {
+        if (nullptr != _primary_states.reconfiguration_task) {
+            // already under reconfiguration, skip configuration sync
+        } else if (is_splitting) {
+            try_to_start_split(info.partition_count);
+        }
     } else {
         if (_is_initializing) {
             // TODO(hyc): consider
-            check_partition_state(info.partition_count,
-                                  is_splitting); // update local partition count if necessary
+            if (is_splitting) {
+                try_to_start_split(info.partition_count);
+            }
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&
@@ -1107,64 +1110,6 @@ void replica::replay_prepare_list()
 
         init_prepare(mu, true);
     }
-}
-
-// TODO(hyc): add comments
-void replica::check_partition_state(int partition_count, bool is_splitting)
-{
-    if (partition_count == _app_info.partition_count) {
-        // not during splitting
-        return;
-    }
-
-    if (status() != partition_status::PS_PRIMARY) {
-        dwarn_replica("wrong status({}), ignore it", enum_to_string(status()));
-        return;
-    }
-
-    // TODO(heyuchen): update comment
-    if (!is_splitting) {
-        dwarn_replica("hyc: not splitting");
-        return;
-    }
-
-    dassert_replica(_app_info.partition_count * 2 == partition_count,
-                    "wrong partition count, local({}) VS meta({})",
-                    _app_info.partition_count,
-                    partition_count);
-    if (_is_splitting) {
-        // is already splitting
-    }
-
-    if (!_primary_states.learners.empty() ||
-        _primary_states.membership.secondaries.size() + 1 <
-            _primary_states.membership.max_replica_count) {
-        dwarn_replica("there are {} learners or not have enough secondaries(count is {}), wait for "
-                      "next round",
-                      _primary_states.learners.size(),
-                      _primary_states.membership.secondaries.size());
-        return;
-    }
-
-    ddebug_replica("app {} partition count changed, local({}) VS meta({})",
-                   _app_info.app_name,
-                   _app_info.partition_count,
-                   partition_count);
-
-    gpid child_gpid(get_gpid().get_app_id(),
-                    get_gpid().get_partition_index() + partition_count / 2);
-    ddebug_replica("start to add child({})", child_gpid);
-
-    group_check_request add_child_request;
-    add_child_request.app = _app_info;
-    add_child_request.child_gpid = child_gpid;
-    // TODO(hyc): consider why original not have
-    _primary_states.get_replica_config(status(), add_child_request.config);
-    // add_child_request.config.ballot = get_ballot();
-    _primary_states.sync_send_write_request = false;
-
-    on_add_child(add_child_request); // parent create child replica
-    broadcast_group_check();         // secondaries create child through group check
 }
 
 } // namespace replication

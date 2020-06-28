@@ -388,11 +388,6 @@ private:
         const update_group_partition_count_response &response,
         std::shared_ptr<std::unordered_set<dsn::rpc_address>> &not_replied_addresses);
 
-    // meta <=> replica configuration sync through on_config_sync
-    // called by primary replica to check if partition count changed and partition flag changed to
-    // control partition split
-    virtual void check_partition_state(int partition_count, bool is_splitting);
-
     // child and parent heartbeart to check states
     virtual void check_child_state();
     //    virtual void check_parent_state(gpid child_gpid, ballot child_ballot);
@@ -460,6 +455,9 @@ private:
     void child_handle_async_learn_error();
 
     void on_stop_split(const stop_split_request &req, /*out*/ stop_split_response &resp);
+
+    // called by `on_config_sync` in `replica_config.cpp`
+    void try_to_start_split(const int32_t meta_partition_count);
 
     void init_table_level_latency_counters();
 

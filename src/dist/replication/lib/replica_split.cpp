@@ -19,8 +19,58 @@ typedef rpc_holder<update_group_partition_count_request, update_group_partition_
     update_group_partition_count_rpc;
 
 // ThreadPool: THREAD_POOL_REPLICATION
+void replica::try_to_start_split(const int32_t meta_partition_count) // on primary parent partition
+{
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_replica("wrong status({}), ignore it", enum_to_string(status()));
+        return;
+    }
+
+    dassert_replica(_app_info.partition_count * 2 == meta_partition_count,
+                    "wrong partition count, local({}) VS meta({})",
+                    _app_info.partition_count,
+                    meta_partition_count);
+
+    if (_is_splitting) {
+        // partition is already splitting
+        return;
+    }
+
+    if (!_primary_states.learners.empty() ||
+        _primary_states.membership.secondaries.size() + 1 <
+            _primary_states.membership.max_replica_count) {
+        dwarn_replica("there are {} learners or not have enough secondaries(count is {}), wait for "
+                      "next round",
+                      _primary_states.learners.size(),
+                      _primary_states.membership.secondaries.size());
+        return;
+    }
+
+    ddebug_replica("app {} partition count changed, local({}) VS meta({})",
+                   _app_info.app_name,
+                   _app_info.partition_count,
+                   meta_partition_count);
+    gpid child_gpid(get_gpid().get_app_id(),
+                    get_gpid().get_partition_index() + meta_partition_count / 2);
+    ddebug_replica("start to add child({})", child_gpid);
+
+    group_check_request add_child_request;
+    add_child_request.app = _app_info;
+    add_child_request.child_gpid = child_gpid;
+    // TODO(hyc): consider why original not have
+    _primary_states.get_replica_config(status(), add_child_request.config);
+    _primary_states.sync_send_write_request = false;
+
+    on_add_child(add_child_request);
+    // secondaries create child through group check
+    broadcast_group_check();
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_add_child(const group_check_request &request) // on parent partition
 {
+    FAIL_POINT_INJECT_F("replica_on_add_child", [](dsn::string_view) {});
+
     if (status() != partition_status::PS_PRIMARY && status() != partition_status::PS_SECONDARY &&
         (status() != partition_status::PS_INACTIVE || !_inactive_is_transient)) {
         dwarn_replica("receive add child request with wrong status {}, ignore this request",
