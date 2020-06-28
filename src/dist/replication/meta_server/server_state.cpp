@@ -34,6 +34,7 @@
  *     2016-04-25, Weijie Sun(sunweijie at xiaomi.com), refactor
  */
 
+#include <dsn/dist/fmt_logging.h>
 #include <dsn/utility/factory_store.h>
 #include <dsn/utility/string_conv.h>
 #include <dsn/tool-api/task.h>
@@ -594,22 +595,20 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                                                    ? app->init_partition_count
                                                    : app->partition_count;
                     if (partition_id < init_partition_count) {
-                        dwarn(
-                            "partition node %s not exist on remote storage, may half create before",
-                            partition_path.c_str());
+                        dwarn_f(
+                            "partition node {} not exist on remote storage, may half create before",
+                            partition_path);
                         init_app_partition_node(app, partition_id, nullptr);
                     } else {
-                        dwarn(
-                            "partition node %s not exist on remote storage, may half split before",
-                            partition_path.c_str());
-
+                        dwarn_f(
+                            "partition node {} not exist on remote storage, may half split before",
+                            partition_path);
                         zauto_write_lock l(_lock);
+                        app->helpers->split_states.status[partition_id] = split_status::splitting;
+                        app->helpers->split_states.splitting_count++;
                         app->partitions[partition_id].ballot = invalid_ballot;
                         app->partitions[partition_id].pid = gpid(app->app_id, partition_id);
                         process_one_partition(app);
-                        // TODO(heyuchen): pause add
-                        app->helpers->split_states.status[partition_id] = split_status::splitting;
-                        app->helpers->split_states.splitting_count++;
                     }
                 } else {
                     derror("get partition node failed, reason(%s)", ec.to_string());
