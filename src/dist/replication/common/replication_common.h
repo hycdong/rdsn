@@ -309,12 +309,5 @@ std::string get_remote_chkpt_meta_file(const std::string &root,
                                        int64_t backup_id);
 } // namespace cold_backup
 
-class pc_flags
-{
-public:
-    static const int dropped = 1;
-    static const int child_dropped = 2;
-};
-
 } // namespace replication
 } // namespace dsn

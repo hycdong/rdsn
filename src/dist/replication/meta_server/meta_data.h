@@ -82,6 +82,12 @@ ENUM_REG(pc_status::ill)
 ENUM_REG(pc_status::dead)
 ENUM_END(pc_status)
 
+class pc_flags
+{
+public:
+    static const int dropped = 1;
+};
+
 class proposal_actions
 {
 private:
