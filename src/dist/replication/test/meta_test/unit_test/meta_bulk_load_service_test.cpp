@@ -363,7 +363,6 @@ TEST_F(bulk_load_service_test, control_bulk_load_test)
     std::shared_ptr<app_state> app = find_app(APP_NAME);
     app->is_bulk_loading = true;
     mock_meta_bulk_load_context(app->app_id, app->partition_count, bulk_load_status::BLS_INVALID);
-
     fail::setup();
     fail::cfg("meta_update_app_status_on_remote_storage_unlocked", "return()");
 
@@ -387,7 +386,6 @@ TEST_F(bulk_load_service_test, control_bulk_load_test)
         ASSERT_EQ(control_bulk_load(app->app_id, test.type, test.app_status), test.expected_err);
     }
     reset_local_bulk_load_states(app->app_id, APP_NAME);
-
     fail::teardown();
 }
 
