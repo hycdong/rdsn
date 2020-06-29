@@ -2129,9 +2129,9 @@ void replica_stub::open_service()
     register_rpc_handler(RPC_QUERY_DISK_INFO, "query_disk_info", &replica_stub::on_query_disk_info);
     register_rpc_handler(RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
     register_rpc_handler(RPC_COLD_BACKUP, "ColdBackup", &replica_stub::on_cold_backup);
-    register_rpc_handler(RPC_SPLIT_NOTIFY_CATCH_UP,
-                         "child_notify_catch_up",
-                         &replica_stub::on_notify_primary_split_catch_up);
+    register_rpc_handler_with_rpc_holder(RPC_SPLIT_NOTIFY_CATCH_UP,
+                                         "child_notify_catch_up",
+                                         &replica_stub::on_notify_primary_split_catch_up);
     register_rpc_handler(RPC_SPLIT_UPDATE_PARTITION_COUNT,
                          "update_group_partition_count",
                          &replica_stub::on_update_group_partition_count);
@@ -2688,9 +2688,10 @@ replica_stub::split_replica_exec(dsn::task_code code, gpid pid, local_execution 
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica_stub::on_notify_primary_split_catch_up(const notify_catch_up_request &request,
-                                                    notify_cacth_up_response &response)
+void replica_stub::on_notify_primary_split_catch_up(notify_catch_up_rpc rpc)
 {
+    const notify_catch_up_request &request = rpc.request();
+    notify_cacth_up_response &response = rpc.response();
     replica_ptr replica = get_replica(request.parent_gpid);
     if (replica != nullptr) {
         replica->parent_handle_child_catch_up(request, response);

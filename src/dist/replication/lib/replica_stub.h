@@ -48,6 +48,8 @@ class replica_stub_mock;
 namespace dsn {
 namespace replication {
 
+typedef rpc_holder<notify_catch_up_request, notify_cacth_up_response> notify_catch_up_rpc;
+
 class mutation_log;
 class replication_checker;
 namespace test {
@@ -122,8 +124,7 @@ public:
     //    functions while executing partition split
     //
     // on primary, child notify itself has been caught up parent
-    void on_notify_primary_split_catch_up(const notify_catch_up_request &request,
-                                          notify_cacth_up_response &response);
+    void on_notify_primary_split_catch_up(notify_catch_up_rpc rpc);
 
     // on all replica, update new partition count
     void on_update_group_partition_count(const update_group_partition_count_request &request,

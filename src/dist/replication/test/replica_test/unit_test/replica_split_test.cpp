@@ -23,15 +23,6 @@ public:
 
     ~replica_split_test() { fail::teardown(); }
 
-    void mock_notify_catch_up_request()
-    {
-        _parent->set_child_gpid(CHILD_GPID);
-        _catch_up_req.child_gpid = CHILD_GPID;
-        _catch_up_req.parent_gpid = PARENT_GPID;
-        _catch_up_req.child_ballot = INIT_BALLOT;
-        _catch_up_req.child_address = PRIMARY;
-    }
-
     void mock_register_child_request()
     {
         partition_configuration &p_config = _register_req.parent_config;
@@ -63,23 +54,6 @@ public:
         mock_private_log(PARENT_GPID, _parent, true);
         mock_prepare_list(_parent, true);
     }
-
-    void mock_parent_primary_context(bool will_all_caught_up)
-    {
-        _parent->_primary_states.statuses[dsn::rpc_address("127.0.0.1", 1)] =
-            partition_status::PS_PRIMARY;
-        _parent->_primary_states.statuses[dsn::rpc_address("127.0.0.1", 2)] =
-            partition_status::PS_SECONDARY;
-        _parent->_primary_states.statuses[dsn::rpc_address("127.0.0.1", 3)] =
-            partition_status::PS_SECONDARY;
-        _parent->_primary_states.caught_up_children.insert(dsn::rpc_address("127.0.0.1", 2));
-        if (will_all_caught_up) {
-            _parent->_primary_states.caught_up_children.insert(dsn::rpc_address("127.0.0.1", 3));
-        }
-        _parent->_primary_states.sync_send_write_request = false;
-    }
-
-    bool get_sync_send_write_request() { return _parent->_primary_states.sync_send_write_request; }
 
     primary_context get_replica_primary_context(mock_replica_ptr rep)
     {
@@ -155,10 +129,18 @@ public:
     }
 
     // TODO(heyuchen): refactoring
-    error_code test_parent_handle_child_catch_up()
+    error_code test_parent_handle_child_catch_up(ballot child_ballot)
     {
+        _parent->set_child_gpid(CHILD_GPID);
+
+        notify_catch_up_request req;
+        req.child_gpid = CHILD_GPID;
+        req.parent_gpid = PARENT_GPID;
+        req.child_ballot = child_ballot;
+        req.child_address = PRIMARY;
+
         notify_cacth_up_response resp;
-        _parent->parent_handle_child_catch_up(_catch_up_req, resp);
+        _parent->parent_handle_child_catch_up(req, resp);
         _parent->tracker()->wait_outstanding_tasks();
         return resp.err;
     }
@@ -315,6 +297,20 @@ public:
         }
     }
 
+    void mock_primary_parent_caught_up_context(bool will_all_caught_up)
+    {
+        _parent->_primary_states.statuses.clear();
+        _parent->_primary_states.caught_up_children.clear();
+        _parent->_primary_states.statuses[PRIMARY] = partition_status::PS_PRIMARY;
+        _parent->_primary_states.statuses[SECONDARY] = partition_status::PS_SECONDARY;
+        _parent->_primary_states.statuses[SECONDARY2] = partition_status::PS_SECONDARY;
+        _parent->_primary_states.caught_up_children.insert(SECONDARY);
+        if (will_all_caught_up) {
+            _parent->_primary_states.caught_up_children.insert(SECONDARY2);
+        }
+        _parent->_primary_states.sync_send_write_request = false;
+    }
+
     /// helper functions
     void parent_cleanup_split_context() { _parent->parent_cleanup_split_context(); }
     void cleanup_child_split_context()
@@ -326,6 +322,11 @@ public:
     bool child_is_prepare_list_copied() { return _child->_split_states.is_prepare_list_copied; }
     int32_t child_get_prepare_list_count() { return _child->get_plist()->count(); }
     bool child_is_caught_up() { return _child->_split_states.is_caught_up; }
+
+    bool parent_sync_send_write_request()
+    {
+        return _parent->_primary_states.sync_send_write_request;
+    }
 
     partition_split_context get_split_context() { return _child->_split_states; }
 
@@ -352,7 +353,6 @@ public:
     prepare_list *_mock_plist;
     std::vector<mutation_ptr> _mutation_list;
 
-    notify_catch_up_request _catch_up_req;
     register_child_request _register_req;
     update_group_partition_count_request _update_partition_count_req;
 };
@@ -538,45 +538,29 @@ TEST_F(replica_split_test, catch_up_succeed_with_learn_in_memory_mutations)
     cleanup_child_split_context();
 }
 
-TEST_F(replica_split_test, parent_handle_catch_up_with_wrong_ballot)
+TEST_F(replica_split_test, parent_handle_catch_up_test)
 {
-    mock_notify_catch_up_request();
-    _catch_up_req.child_ballot = 1;
-
-    fail::setup();
     fail::cfg("replica_parent_check_sync_point_commit", "return()");
-    dsn::error_code err = test_parent_handle_child_catch_up();
-    fail::teardown();
+    ballot WRONG_BALLOT = 1;
 
-    ASSERT_EQ(err, ERR_INVALID_STATE);
-}
-
-TEST_F(replica_split_test, parent_handle_catch_up_with_not_all_caught_up)
-{
-    mock_parent_primary_context(false);
-    mock_notify_catch_up_request();
-
-    fail::setup();
-    fail::cfg("replica_parent_check_sync_point_commit", "return()");
-    dsn::error_code err = test_parent_handle_child_catch_up();
-    fail::teardown();
-
-    ASSERT_EQ(err, ERR_OK);
-    ASSERT_FALSE(get_sync_send_write_request());
-}
-
-TEST_F(replica_split_test, parent_handle_catch_up_with_all_caught_up)
-{
-    mock_parent_primary_context(true);
-    mock_notify_catch_up_request();
-
-    fail::setup();
-    fail::cfg("replica_parent_check_sync_point_commit", "return()");
-    dsn::error_code err = test_parent_handle_child_catch_up();
-    fail::teardown();
-
-    ASSERT_EQ(err, ERR_OK);
-    ASSERT_TRUE(get_sync_send_write_request());
+    // Test case:
+    // - request has wrong ballot
+    // - not all child caught up
+    // - all child caught up
+    struct add_child_test
+    {
+        ballot req_ballot;
+        bool all_caught_up;
+        error_code expected_err;
+        bool sync_send_write_request;
+    } tests[] = {{WRONG_BALLOT, false, ERR_INVALID_STATE, false},
+                 {INIT_BALLOT, false, ERR_OK, false},
+                 {INIT_BALLOT, true, ERR_OK, true}};
+    for (auto test : tests) {
+        mock_primary_parent_caught_up_context(test.all_caught_up);
+        ASSERT_EQ(test_parent_handle_child_catch_up(test.req_ballot), test.expected_err);
+        ASSERT_EQ(parent_sync_send_write_request(), test.sync_send_write_request);
+    }
 }
 
 TEST_F(replica_split_test, register_child_test)
@@ -701,7 +685,7 @@ TEST_F(replica_split_test, update_parent_group_count_succeed)
 {
     int32_t not_replied_size = test_on_update_group_partition_count_reply(ERR_OK, PARENT_GPID);
     ASSERT_EQ(not_replied_size, 0);
-    ASSERT_FALSE(get_sync_send_write_request());
+    ASSERT_FALSE(parent_sync_send_write_request());
 }
 
 } // namespace replication
