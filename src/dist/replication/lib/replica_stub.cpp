@@ -2600,6 +2600,7 @@ void replica_stub::gc_tcmalloc_memory()
 //
 // partition split
 //
+//
 void replica_stub::create_child_replica(rpc_address primary_address,
                                         app_info app,
                                         ballot init_ballot,
@@ -2619,9 +2620,9 @@ void replica_stub::create_child_replica(rpc_address primary_address,
                                    init_ballot),
                          child_gpid.thread_hash());
     } else {
-        dwarn_f("failed to create child replica ({}) for app({}), ignore it and wait next run",
-                child_gpid,
-                app.app_name);
+        derror_f("failed to create child replica ({}) for app({}), wait for next run",
+                 child_gpid,
+                 app.app_name);
         split_replica_error_handler(parent_gpid,
                                     [](replica_ptr r) { r->parent_cleanup_split_context(); });
     }

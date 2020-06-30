@@ -122,9 +122,6 @@ public:
     // Used for partition split
     // primary parent register child on meta_server task
     dsn::task_ptr register_child_task;
-
-    // replica-> meta query child partition configuration
-    dsn::task_ptr query_child_state_task;
 };
 
 class secondary_context

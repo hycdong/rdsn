@@ -62,8 +62,6 @@ public:
 
     bool is_parent_not_in_split() { return (_parent->_child_gpid.get_app_id() == 0); }
 
-    int32_t get_partition_version(mock_replica_ptr rep) { return rep->_partition_version.load(); }
-
     /// test functions
     void test_try_to_start_split()
     {
@@ -312,23 +310,23 @@ public:
     }
 
     /// helper functions
-    void parent_cleanup_split_context() { _parent->parent_cleanup_split_context(); }
-    void cleanup_child_split_context()
-    {
-        _child->_split_states.cleanup(true);
-        _child->tracker()->wait_outstanding_tasks();
-    }
     void cleanup_prepare_list(mock_replica_ptr rep) { rep->_prepare_list->reset(0); }
-    bool child_is_prepare_list_copied() { return _child->_split_states.is_prepare_list_copied; }
-    int32_t child_get_prepare_list_count() { return _child->get_plist()->count(); }
-    bool child_is_caught_up() { return _child->_split_states.is_caught_up; }
+    int32_t get_partition_version(mock_replica_ptr rep) { return rep->_partition_version.load(); }
 
+    void parent_cleanup_split_context() { _parent->parent_cleanup_split_context(); }
     bool parent_sync_send_write_request()
     {
         return _parent->_primary_states.sync_send_write_request;
     }
 
-    partition_split_context get_split_context() { return _child->_split_states; }
+    void cleanup_child_split_context()
+    {
+        _child->_split_states.cleanup(true);
+        _child->tracker()->wait_outstanding_tasks();
+    }
+    bool child_is_prepare_list_copied() { return _child->_split_states.is_prepare_list_copied; }
+    int32_t child_get_prepare_list_count() { return _child->get_plist()->count(); }
+    bool child_is_caught_up() { return _child->_split_states.is_caught_up; }
 
 public:
     const std::string APP_NAME = "split_table";
@@ -431,19 +429,6 @@ TEST_F(replica_split_test, parent_check_states)
     generate_child(partition_status::PS_PARTITION_SPLIT);
     bool flag = test_parent_check_states();
     ASSERT_TRUE(flag);
-}
-
-TEST_F(replica_split_test, copy_prepare_list_with_wrong_status)
-{
-    fail::cfg("replica_stub_split_replica_exec", "return()");
-
-    generate_child(partition_status::PS_INACTIVE);
-    mock_child_split_context(false, false);
-
-    test_child_copy_prepare_list();
-    ASSERT_EQ(_child->status(), partition_status::PS_ERROR);
-
-    cleanup_prepare_list(_parent);
 }
 
 TEST_F(replica_split_test, copy_prepare_list_succeed)
@@ -565,14 +550,14 @@ TEST_F(replica_split_test, parent_handle_catch_up_test)
 
 TEST_F(replica_split_test, register_child_test)
 {
-    fail::setup();
     fail::cfg("replica_parent_send_register_request", "return()");
-    test_register_child_on_meta();
-    fail::teardown();
 
+    test_register_child_on_meta();
     ASSERT_EQ(_parent->status(), partition_status::PS_INACTIVE);
     ASSERT_EQ(get_partition_version(_parent), -1);
 }
+
+// TODO(heyuchen): refacor register child reply
 
 TEST_F(replica_split_test, register_child_reply_with_wrong_status)
 {
