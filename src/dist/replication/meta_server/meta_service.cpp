@@ -952,10 +952,7 @@ void meta_service::on_start_bulk_load(start_bulk_load_rpc rpc)
         response.err = ERR_SERVICE_NOT_ACTIVE;
         return;
     }
-    tasking::enqueue(LPC_META_STATE_NORMAL,
-                     tracker(),
-                     [this, rpc]() { _bulk_load_svc->on_start_bulk_load(std::move(rpc)); },
-                     server_state::sStateHash);
+    _bulk_load_svc->on_start_bulk_load(std::move(rpc));
 }
 
 void meta_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
@@ -968,10 +965,7 @@ void meta_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         response.err = ERR_SERVICE_NOT_ACTIVE;
         return;
     }
-    tasking::enqueue(LPC_META_STATE_NORMAL,
-                     tracker(),
-                     [this, rpc]() { _bulk_load_svc->on_query_bulk_load_status(std::move(rpc)); },
-                     server_state::sStateHash);
+    _bulk_load_svc->on_query_bulk_load_status(std::move(rpc));
 }
 
 void meta_service::on_control_bulk_load(control_bulk_load_rpc rpc)
