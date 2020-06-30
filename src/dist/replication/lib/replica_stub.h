@@ -49,6 +49,8 @@ namespace dsn {
 namespace replication {
 
 typedef rpc_holder<notify_catch_up_request, notify_cacth_up_response> notify_catch_up_rpc;
+typedef rpc_holder<update_group_partition_count_request, update_group_partition_count_response>
+    update_group_partition_count_rpc;
 
 class mutation_log;
 class replication_checker;
@@ -127,8 +129,7 @@ public:
     void on_notify_primary_split_catch_up(notify_catch_up_rpc rpc);
 
     // on all replica, update new partition count
-    void on_update_group_partition_count(const update_group_partition_count_request &request,
-                                         update_group_partition_count_response &response);
+    void on_update_group_partition_count(update_group_partition_count_rpc rpc);
 
     //
     //    local messages

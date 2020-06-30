@@ -595,6 +595,7 @@ TEST_F(replica_split_test, register_child_reply_succeed)
     // ASSERT_TRUE(is_parent_not_in_split());
 }
 
+// update child group partition count test
 TEST_F(replica_split_test, child_update_count_with_not_caught_up)
 {
     generate_child(partition_status::PS_PARTITION_SPLIT);
@@ -602,17 +603,18 @@ TEST_F(replica_split_test, child_update_count_with_not_caught_up)
 
     error_code err = test_on_update_group_partition_count(_child, INIT_BALLOT);
     ASSERT_EQ(err, ERR_VERSION_OUTDATED);
-    ASSERT_TRUE(is_parent_not_in_split());
+    ASSERT_EQ(_child->status(), partition_status::PS_ERROR);
 }
 
 TEST_F(replica_split_test, child_update_count_with_wrong_ballot)
 {
+    ballot WRONG_BALLOT = INIT_BALLOT - 1;
     generate_child(partition_status::PS_PARTITION_SPLIT);
     mock_child_split_context(true, true);
 
-    error_code err = test_on_update_group_partition_count(_child, INIT_BALLOT - 1);
+    error_code err = test_on_update_group_partition_count(_child, WRONG_BALLOT);
     ASSERT_EQ(err, ERR_VERSION_OUTDATED);
-    ASSERT_TRUE(is_parent_not_in_split());
+    ASSERT_EQ(_child->status(), partition_status::PS_ERROR);
 }
 
 TEST_F(replica_split_test, child_update_count_succeed)
@@ -625,6 +627,7 @@ TEST_F(replica_split_test, child_update_count_succeed)
     ASSERT_EQ(get_partition_version(_child), NEW_PARTITION_COUNT - 1);
 }
 
+// TODO(heyuchen):
 TEST_F(replica_split_test, parent_update_count_with_wrong_ballot)
 {
     error_code err = test_on_update_group_partition_count(_parent, INIT_BALLOT - 1);

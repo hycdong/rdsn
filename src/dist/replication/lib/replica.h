@@ -386,7 +386,7 @@ private:
         error_code ec,
         const update_group_partition_count_request &request,
         const update_group_partition_count_response &response,
-        std::shared_ptr<std::unordered_set<dsn::rpc_address>> &not_replied_addresses);
+        std::shared_ptr<std::unordered_set<rpc_address>> &not_replied_addresses);
 
     // parent copy mutations to child during partition split
     void copy_mutation(mutation_ptr &mu);
