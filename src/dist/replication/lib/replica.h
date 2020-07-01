@@ -356,13 +356,13 @@ private:
     void on_add_child(const group_check_request &request);
 
     // child replica initialize config and state info
-    void child_init_replica(gpid parent_gpid, dsn::rpc_address primary_address, ballot init_ballot);
+    void child_init_replica(gpid parent_gpid, rpc_address primary_address, ballot init_ballot);
 
     void parent_prepare_states(const std::string &dir);
 
     // primary parent register children on meta_server
     void register_child_on_meta(ballot b);
-    void on_register_child_on_meta_reply(dsn::error_code ec,
+    void on_register_child_on_meta_reply(error_code ec,
                                          const register_child_request &request,
                                          const register_child_response &response);
     // primary sends register request to meta_server
