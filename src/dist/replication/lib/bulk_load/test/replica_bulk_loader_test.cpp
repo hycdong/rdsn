@@ -141,6 +141,7 @@ public:
         state.__set_is_paused(true);
         _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state;
         _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state;
+
         bulk_load_response response;
         _bulk_loader->report_group_is_paused(response);
         return response.is_group_bulk_load_paused;

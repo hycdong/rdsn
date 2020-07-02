@@ -614,7 +614,6 @@ void replica_bulk_loader::pause_bulk_load()
         cleanup_download_task();
         try_decrease_bulk_load_download_count();
     }
-
     _status = bulk_load_status::BLS_PAUSED;
     ddebug_replica("bulk load is paused");
 }

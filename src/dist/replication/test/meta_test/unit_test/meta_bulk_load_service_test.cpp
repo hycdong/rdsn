@@ -512,12 +512,13 @@ public:
     {
         create_basic_response(ERR_OK, bulk_load_status::BLS_PAUSED);
 
-        partition_bulk_load_state state;
+        partition_bulk_load_state state, state2;
         state.__set_is_paused(true);
+        state2.__set_is_paused(is_group_paused);
+
         _resp.group_bulk_load_state[PRIMARY] = state;
         _resp.group_bulk_load_state[SECONDARY1] = state;
-        state.__set_is_paused(is_group_paused);
-        _resp.group_bulk_load_state[SECONDARY2] = state;
+        _resp.group_bulk_load_state[SECONDARY2] = state2;
         _resp.__set_is_group_bulk_load_paused(is_group_paused);
     }
 
