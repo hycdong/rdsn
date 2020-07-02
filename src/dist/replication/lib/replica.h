@@ -360,47 +360,6 @@ private:
 
     void parent_prepare_states(const std::string &dir);
 
-    // primary parent register children on meta_server
-    void register_child_on_meta(ballot b);
-    void on_register_child_on_meta_reply(error_code ec,
-                                         const register_child_request &request,
-                                         const register_child_response &response);
-    // primary sends register request to meta_server
-    void parent_send_register_request(const register_child_request &request);
-
-    // child partition has been registered on meta_server, could be active
-    void child_partition_active(const partition_configuration &config);
-
-    // TODO(heyuchen): to merge to master
-    // primary parent send update partition count request to replicas in the group
-    // - {is_update_child} = true:  update child group partition count
-    // - {is_update_child} = false: update parent group partition count
-    void update_group_partition_count(int32_t new_partition_count, bool is_update_child);
-
-    // all replicas update partition_count in memory and disk
-    void on_update_group_partition_count(const update_group_partition_count_request &request,
-                                         update_group_partition_count_response &response);
-
-    // primary wait for all replicas update partition count
-    void on_update_group_partition_count_reply(
-        error_code ec,
-        const update_group_partition_count_request &request,
-        const update_group_partition_count_response &response,
-        std::shared_ptr<std::unordered_set<rpc_address>> &not_replied_addresses);
-
-    // parent copy mutations to child during partition split
-    void copy_mutation(mutation_ptr &mu);
-
-    // child add mutation into prepare list and private log
-    // after child copy prepare list, before child replica become active
-    void on_copy_mutation(mutation_ptr &mu);
-
-    // child replica send ack to its parent when copy mutation synchronously
-    void ack_parent(dsn::error_code ec, mutation_ptr &mu);
-
-    // parent replica handle child ack when child copy mutation synchronously
-    void on_copy_mutation_reply(dsn::error_code ec, ballot b, decree d);
-
     // child copy parent prepare list and call child_learn_states
     void child_copy_prepare_list(learn_state lstate,
                                  std::vector<mutation_ptr> mutation_list,
@@ -439,6 +398,50 @@ private:
     // primary parent check if sync_point has been committed
     // sync_point is the first decree after parent send write request to child synchronously
     void parent_check_sync_point_commit(decree sync_point);
+
+    // primary parent update child group partition count
+    void update_child_group_partition_count(int32_t new_partition_count);
+    void
+    on_update_child_group_partition_count(const update_child_group_partition_count_request &request,
+                                          update_child_group_partition_count_response &response);
+    void on_update_child_group_partition_count_reply(
+        error_code ec,
+        const update_child_group_partition_count_request &request,
+        const update_child_group_partition_count_response &response,
+        std::shared_ptr<std::unordered_set<rpc_address>> &not_replied_addresses);
+
+    // primary sends update partition count request to child replicas
+    void parent_send_update_partition_count_request(
+        const rpc_address &address,
+        int32_t new_partition_count,
+        std::shared_ptr<std::unordered_set<rpc_address>> &not_replied_addresses);
+
+    // all replicas update partition_count in memory and disk
+    bool update_local_partition_count(int32_t new_partition_count);
+
+    // primary parent register children on meta_server
+    void register_child_on_meta(ballot b);
+    void on_register_child_on_meta_reply(error_code ec,
+                                         const register_child_request &request,
+                                         const register_child_response &response);
+    // primary sends register request to meta_server
+    void parent_send_register_request(const register_child_request &request);
+
+    // child partition has been registered on meta_server, could be active
+    void child_partition_active(const partition_configuration &config);
+
+    // parent copy mutations to child during partition split
+    void copy_mutation(mutation_ptr &mu);
+
+    // child add mutation into prepare list and private log
+    // after child copy prepare list, before child replica become active
+    void on_copy_mutation(mutation_ptr &mu);
+
+    // child replica send ack to its parent when copy mutation synchronously
+    void ack_parent(dsn::error_code ec, mutation_ptr &mu);
+
+    // parent replica handle child ack when child copy mutation synchronously
+    void on_copy_mutation_reply(dsn::error_code ec, ballot b, decree d);
 
     // return true if parent status is valid
     bool parent_check_states();

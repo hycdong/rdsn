@@ -15350,28 +15350,30 @@ void register_child_response::printTo(std::ostream &out) const
     out << ")";
 }
 
-update_group_partition_count_request::~update_group_partition_count_request() throw() {}
+update_child_group_partition_count_request::~update_child_group_partition_count_request() throw() {}
 
-void update_group_partition_count_request::__set_target_address(const ::dsn::rpc_address &val)
+void update_child_group_partition_count_request::__set_target_address(const ::dsn::rpc_address &val)
 {
     this->target_address = val;
 }
 
-void update_group_partition_count_request::__set_new_partition_count(const int32_t val)
+void update_child_group_partition_count_request::__set_new_partition_count(const int32_t val)
 {
     this->new_partition_count = val;
 }
 
-void update_group_partition_count_request::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
-
-void update_group_partition_count_request::__set_ballot(const int64_t val) { this->ballot = val; }
-
-void update_group_partition_count_request::__set_update_child_group(const bool val)
+void update_child_group_partition_count_request::__set_pid(const ::dsn::gpid &val)
 {
-    this->update_child_group = val;
+    this->pid = val;
 }
 
-uint32_t update_group_partition_count_request::read(::apache::thrift::protocol::TProtocol *iprot)
+void update_child_group_partition_count_request::__set_ballot(const int64_t val)
+{
+    this->ballot = val;
+}
+
+uint32_t
+update_child_group_partition_count_request::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -15422,14 +15424,6 @@ uint32_t update_group_partition_count_request::read(::apache::thrift::protocol::
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 5:
-            if (ftype == ::apache::thrift::protocol::T_BOOL) {
-                xfer += iprot->readBool(this->update_child_group);
-                this->__isset.update_child_group = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
         default:
             xfer += iprot->skip(ftype);
             break;
@@ -15442,12 +15436,12 @@ uint32_t update_group_partition_count_request::read(::apache::thrift::protocol::
     return xfer;
 }
 
-uint32_t
-update_group_partition_count_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t update_child_group_partition_count_request::write(
+    ::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("update_group_partition_count_request");
+    xfer += oprot->writeStructBegin("update_child_group_partition_count_request");
 
     xfer += oprot->writeFieldBegin("target_address", ::apache::thrift::protocol::T_STRUCT, 1);
     xfer += this->target_address.write(oprot);
@@ -15465,72 +15459,64 @@ update_group_partition_count_request::write(::apache::thrift::protocol::TProtoco
     xfer += oprot->writeI64(this->ballot);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("update_child_group", ::apache::thrift::protocol::T_BOOL, 5);
-    xfer += oprot->writeBool(this->update_child_group);
-    xfer += oprot->writeFieldEnd();
-
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
 }
 
-void swap(update_group_partition_count_request &a, update_group_partition_count_request &b)
+void swap(update_child_group_partition_count_request &a,
+          update_child_group_partition_count_request &b)
 {
     using ::std::swap;
     swap(a.target_address, b.target_address);
     swap(a.new_partition_count, b.new_partition_count);
     swap(a.pid, b.pid);
     swap(a.ballot, b.ballot);
-    swap(a.update_child_group, b.update_child_group);
     swap(a.__isset, b.__isset);
 }
 
-update_group_partition_count_request::update_group_partition_count_request(
-    const update_group_partition_count_request &other672)
+update_child_group_partition_count_request::update_child_group_partition_count_request(
+    const update_child_group_partition_count_request &other672)
 {
     target_address = other672.target_address;
     new_partition_count = other672.new_partition_count;
     pid = other672.pid;
     ballot = other672.ballot;
-    update_child_group = other672.update_child_group;
     __isset = other672.__isset;
 }
-update_group_partition_count_request::update_group_partition_count_request(
-    update_group_partition_count_request &&other673)
+update_child_group_partition_count_request::update_child_group_partition_count_request(
+    update_child_group_partition_count_request &&other673)
 {
     target_address = std::move(other673.target_address);
     new_partition_count = std::move(other673.new_partition_count);
     pid = std::move(other673.pid);
     ballot = std::move(other673.ballot);
-    update_child_group = std::move(other673.update_child_group);
     __isset = std::move(other673.__isset);
 }
-update_group_partition_count_request &update_group_partition_count_request::
-operator=(const update_group_partition_count_request &other674)
+update_child_group_partition_count_request &update_child_group_partition_count_request::
+operator=(const update_child_group_partition_count_request &other674)
 {
     target_address = other674.target_address;
     new_partition_count = other674.new_partition_count;
     pid = other674.pid;
     ballot = other674.ballot;
-    update_child_group = other674.update_child_group;
     __isset = other674.__isset;
     return *this;
 }
-update_group_partition_count_request &update_group_partition_count_request::
-operator=(update_group_partition_count_request &&other675)
+update_child_group_partition_count_request &update_child_group_partition_count_request::
+operator=(update_child_group_partition_count_request &&other675)
 {
     target_address = std::move(other675.target_address);
     new_partition_count = std::move(other675.new_partition_count);
     pid = std::move(other675.pid);
     ballot = std::move(other675.ballot);
-    update_child_group = std::move(other675.update_child_group);
     __isset = std::move(other675.__isset);
     return *this;
 }
-void update_group_partition_count_request::printTo(std::ostream &out) const
+void update_child_group_partition_count_request::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "update_group_partition_count_request(";
+    out << "update_child_group_partition_count_request(";
     out << "target_address=" << to_string(target_address);
     out << ", "
         << "new_partition_count=" << to_string(new_partition_count);
@@ -15538,19 +15524,20 @@ void update_group_partition_count_request::printTo(std::ostream &out) const
         << "pid=" << to_string(pid);
     out << ", "
         << "ballot=" << to_string(ballot);
-    out << ", "
-        << "update_child_group=" << to_string(update_child_group);
     out << ")";
 }
 
-update_group_partition_count_response::~update_group_partition_count_response() throw() {}
+update_child_group_partition_count_response::~update_child_group_partition_count_response() throw()
+{
+}
 
-void update_group_partition_count_response::__set_err(const ::dsn::error_code &val)
+void update_child_group_partition_count_response::__set_err(const ::dsn::error_code &val)
 {
     this->err = val;
 }
 
-uint32_t update_group_partition_count_response::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t
+update_child_group_partition_count_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -15589,12 +15576,12 @@ uint32_t update_group_partition_count_response::read(::apache::thrift::protocol:
     return xfer;
 }
 
-uint32_t
-update_group_partition_count_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t update_child_group_partition_count_response::write(
+    ::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("update_group_partition_count_response");
+    xfer += oprot->writeStructBegin("update_child_group_partition_count_response");
 
     xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
     xfer += this->err.write(oprot);
@@ -15605,43 +15592,44 @@ update_group_partition_count_response::write(::apache::thrift::protocol::TProtoc
     return xfer;
 }
 
-void swap(update_group_partition_count_response &a, update_group_partition_count_response &b)
+void swap(update_child_group_partition_count_response &a,
+          update_child_group_partition_count_response &b)
 {
     using ::std::swap;
     swap(a.err, b.err);
     swap(a.__isset, b.__isset);
 }
 
-update_group_partition_count_response::update_group_partition_count_response(
-    const update_group_partition_count_response &other676)
+update_child_group_partition_count_response::update_child_group_partition_count_response(
+    const update_child_group_partition_count_response &other676)
 {
     err = other676.err;
     __isset = other676.__isset;
 }
-update_group_partition_count_response::update_group_partition_count_response(
-    update_group_partition_count_response &&other677)
+update_child_group_partition_count_response::update_child_group_partition_count_response(
+    update_child_group_partition_count_response &&other677)
 {
     err = std::move(other677.err);
     __isset = std::move(other677.__isset);
 }
-update_group_partition_count_response &update_group_partition_count_response::
-operator=(const update_group_partition_count_response &other678)
+update_child_group_partition_count_response &update_child_group_partition_count_response::
+operator=(const update_child_group_partition_count_response &other678)
 {
     err = other678.err;
     __isset = other678.__isset;
     return *this;
 }
-update_group_partition_count_response &update_group_partition_count_response::
-operator=(update_group_partition_count_response &&other679)
+update_child_group_partition_count_response &update_child_group_partition_count_response::
+operator=(update_child_group_partition_count_response &&other679)
 {
     err = std::move(other679.err);
     __isset = std::move(other679.__isset);
     return *this;
 }
-void update_group_partition_count_response::printTo(std::ostream &out) const
+void update_child_group_partition_count_response::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "update_group_partition_count_response(";
+    out << "update_child_group_partition_count_response(";
     out << "err=" << to_string(err);
     out << ")";
 }

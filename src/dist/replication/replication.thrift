@@ -943,17 +943,16 @@ struct register_child_response
     4:dsn.layer2.partition_configuration    child_config;
 }
 
-// parent primary send to group replicas to update partition count
-struct update_group_partition_count_request
+// parent primary send to child group replicas to update partition count
+struct update_child_group_partition_count_request
 {
     1:dsn.rpc_address   target_address;
     2:i32               new_partition_count;
     3:dsn.gpid          pid;
     4:i64               ballot;
-    5:bool              update_child_group;
 }
 
-struct update_group_partition_count_response
+struct update_child_group_partition_count_response
 {
     // Possible errors:
     // - ERR_OBJECT_NOT_FOUND: replica can not be found
