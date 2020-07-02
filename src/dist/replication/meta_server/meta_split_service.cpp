@@ -106,7 +106,6 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
 }
 
 // ThreadPool: THREAD_POOL_META_SERVER
-// TODO(heyuchen): consider if register_child_request param all needed
 void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -120,6 +119,8 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     dassert_f(app->is_stateful, "app({}) is stateless currently", app_name);
 
     const gpid &parent_gpid = request.parent_config.pid;
+    const auto &parent_config = app->partitions[parent_gpid.get_partition_index()];
+
     auto iter = app->helpers->split_states.status.find(parent_gpid.get_partition_index());
     if (iter == app->helpers->split_states.status.end()) {
         dwarn_f("app({}) partition({}) register child failed, this partition has already splitted "
@@ -127,8 +128,10 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
                 app_name,
                 parent_gpid);
         response.err = ERR_CHILD_REGISTERED;
+        response.parent_config = parent_config;
         return;
     }
+
     if (iter->second != split_status::splitting) {
         derror_f("app({}) partition({}) register child failed, current partition split_status = {}",
                  app_name,
@@ -138,16 +141,16 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
         return;
     }
 
-    const ballot parent_ballot = app->partitions[parent_gpid.get_partition_index()].ballot;
-    if (request.parent_config.ballot < parent_ballot) {
+    if (request.parent_config.ballot != parent_config.ballot) {
         derror_f("app({}) partition({}) register child failed, request is out-dated, request "
                  "ballot = {}, "
                  "local ballot = {}",
                  app_name,
                  parent_gpid,
                  request.parent_config.ballot,
-                 parent_ballot);
+                 parent_config.ballot);
         response.err = ERR_INVALID_VERSION;
+        response.parent_config = parent_config;
         return;
     }
 
@@ -163,7 +166,10 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 
     app->helpers->split_states.status.erase(parent_gpid.get_partition_index());
     app->helpers->split_states.splitting_count--;
-    ddebug_f("parent({}) will register child({})", parent_gpid, request.child_config.pid);
+    ddebug_f("app({}) parent({}) will register child({})",
+             app_name,
+             parent_gpid,
+             request.child_config.pid);
 
     parent_context.stage = config_status::pending_remote_sync;
     parent_context.msg = rpc.dsn_request();

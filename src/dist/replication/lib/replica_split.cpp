@@ -1015,28 +1015,28 @@ void replica::on_register_child_on_meta_reply(
     if (partition_status::PS_INACTIVE != status() || !_stub->is_connected()) {
         derror_replica("status wrong or stub is not connected, status = {}",
                        enum_to_string(status()));
+        // TODO(heyuchen): consider other status
         _primary_states.register_child_task = nullptr;
         return;
     }
 
     error_code err = ec == ERR_OK ? response.err : ec;
-
-    // TODO(heyuchen): consider error handling
-    if (err == ERR_INVALID_VERSION) {
-        derror_replica("register child({}) failed, error = {}, request is out-of-dated");
-        return;
-    }
-
-    // parent partition is not splitting, split may be paused or canceled
-    // meta will send stop request to primary to handle this situation
     if (err == ERR_INVALID_STATE) {
-        derror_replica("register child({}) failed, error = {}, parent partition is not splitting");
+        derror_replica("register child({}) failed, error = {}, split has been paused or canceled");
+        _stub->split_replica_error_handler(
+            _child_gpid,
+            std::bind(&replica::child_handle_split_error,
+                      std::placeholders::_1,
+                      "register child failed, split has been stopped"));
+        parent_cleanup_split_context();
         return;
     }
 
-    if (err == ERR_CHILD_REGISTERED) {
-        dwarn_replica("child({}) has already been registered", request.child_config.pid);
-
+    if (err == ERR_INVALID_VERSION || err == ERR_CHILD_REGISTERED) {
+        derror_replica("register child({}) failed, error = {}, request is out-of-dated or child "
+                       "has already been registered",
+                       request.child_config.pid,
+                       err);
         _primary_states.register_child_task = nullptr;
         _primary_states.sync_send_write_request = false;
         if (response.parent_config.ballot >= get_ballot()) {
@@ -1045,7 +1045,9 @@ void replica::on_register_child_on_meta_reply(
                            get_ballot());
             update_configuration(response.parent_config);
         }
+
         // TODO(heyuchen): query child partition state on meta server
+        // consider cleanup parent split context
 
         return;
     }
@@ -1062,13 +1064,6 @@ void replica::on_register_child_on_meta_reply(
         return;
     }
 
-    if (response.parent_config.ballot < get_ballot()) {
-        // TODO(heyuchen): handle out-date, update log
-        derror_replica(
-            "hyc, aaa, remote {} VS local {}", response.parent_config.ballot, get_ballot());
-        return;
-    }
-
     ddebug_replica("register child({}) succeed, response parent ballot = {}, local ballot = "
                    "{}, local status = {}",
                    response.child_config.pid,
@@ -1076,13 +1071,16 @@ void replica::on_register_child_on_meta_reply(
                    get_ballot(),
                    enum_to_string(status()));
 
+    dcheck_ge_replica(response.parent_config.ballot, get_ballot());
     dcheck_eq_replica(_app_info.partition_count * 2, response.app.partition_count);
+
     // TODO(heyuchen): handle error
     // register child succeed, but child not found on this stub
     _stub->split_replica_exec(
         LPC_PARTITION_SPLIT,
         response.child_config.pid,
         std::bind(&replica::child_partition_active, std::placeholders::_1, response.child_config));
+
     // update parent config
     update_configuration(response.parent_config);
     // update primary parent group partition_count
