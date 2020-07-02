@@ -67,8 +67,10 @@ ENUM_REG(replication::node_status::NS_ALIVE)
 ENUM_REG(replication::node_status::NS_UNALIVE)
 ENUM_END2(replication::node_status::type, node_status)
 
-ENUM_BEGIN2(replication::split_status::type, split_status, replication::split_status::not_split)
-ENUM_REG(replication::split_status::splitting)
-ENUM_REG(replication::split_status::paused)
+ENUM_BEGIN2(replication::split_status::type, split_status, replication::split_status::NOT_SPLIT)
+ENUM_REG(replication::split_status::NOT_SPLIT)
+ENUM_REG(replication::split_status::SPLITTING)
+ENUM_REG(replication::split_status::PAUSED)
+ENUM_REG(replication::split_status::CANCELING)
 ENUM_END2(replication::split_status::type, split_status)
 }

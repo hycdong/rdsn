@@ -1026,7 +1026,7 @@ bool replica::update_local_configuration_with_no_ballot_change(partition_status:
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::on_config_sync(const app_info &info,
                              const partition_configuration &config,
-                             bool is_splitting)
+                             split_status::type partition_split_status)
 {
     dinfo_replica("configuration sync");
     // no outdated update
@@ -1039,15 +1039,13 @@ void replica::on_config_sync(const app_info &info,
     if (status() == partition_status::PS_PRIMARY) {
         if (nullptr != _primary_states.reconfiguration_task) {
             // already under reconfiguration, skip configuration sync
-        } else if (is_splitting) {
-            try_to_start_split(info.partition_count);
+        } else {
+            check_partition_count(info.partition_count, partition_split_status);
         }
     } else {
         if (_is_initializing) {
             // TODO(hyc): consider
-            if (is_splitting) {
-                try_to_start_split(info.partition_count);
-            }
+            check_partition_count(info.partition_count, partition_split_status);
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&

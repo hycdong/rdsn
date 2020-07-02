@@ -110,6 +110,20 @@ struct node_status
 
 extern const std::map<int, const char *> _node_status_VALUES_TO_NAMES;
 
+struct split_status
+{
+    enum type
+    {
+        INVALID = 0,
+        NOT_SPLIT = 1,
+        SPLITTING = 2,
+        PAUSED = 3,
+        CANCELING = 4
+    };
+};
+
+extern const std::map<int, const char *> _split_status_VALUES_TO_NAMES;
+
 struct meta_function_level
 {
     enum type
@@ -186,19 +200,6 @@ struct split_control_type
 };
 
 extern const std::map<int, const char *> _split_control_type_VALUES_TO_NAMES;
-
-struct split_status
-{
-    enum type
-    {
-        not_split = 0,
-        splitting = 1,
-        paused = 2,
-        canceling = 3
-    };
-};
-
-extern const std::map<int, const char *> _split_status_VALUES_TO_NAMES;
 
 class mutation_header;
 
@@ -1851,7 +1852,7 @@ public:
     ::dsn::error_code err;
     std::vector<configuration_update_request> partitions;
     std::vector<replica_info> gc_replicas;
-    std::set<::dsn::gpid> splitting_replicas;
+    std::map<::dsn::gpid, split_status::type> splitting_replicas;
 
     _configuration_query_by_node_response__isset __isset;
 
@@ -1861,7 +1862,7 @@ public:
 
     void __set_gc_replicas(const std::vector<replica_info> &val);
 
-    void __set_splitting_replicas(const std::set<::dsn::gpid> &val);
+    void __set_splitting_replicas(const std::map<::dsn::gpid, split_status::type> &val);
 
     bool operator==(const configuration_query_by_node_response &rhs) const
     {

@@ -212,6 +212,15 @@ enum node_status
     NS_UNALIVE,
 }
 
+// TODO(heyuchen): update it to UPPER
+enum split_status
+{
+    NOT_SPLIT,
+    SPLITTING,
+    PAUSED,
+    CANCELING
+}
+
 struct node_info
 {
     1:node_status      status = node_status.NS_INVALID;
@@ -261,8 +270,8 @@ struct configuration_query_by_node_response
     1:dsn.error_code err;
     2:list<configuration_update_request> partitions;
     3:optional list<replica_info> gc_replicas;
-    // TODO(heyuchen):
-    4:optional set<dsn.gpid> splitting_replicas;
+    // TODO(heyuchen): add comment
+    4:optional map<dsn.gpid, split_status> splitting_replicas;
 }
 
 struct create_app_options
@@ -881,14 +890,6 @@ struct stop_split_request
 struct stop_split_response
 {
     1:dsn.error_code    err;
-}
-
-enum split_status
-{
-    not_split,
-    splitting,
-    paused,
-    canceling
 }
 
 struct query_split_request

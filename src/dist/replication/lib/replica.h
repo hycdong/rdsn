@@ -121,8 +121,9 @@ public:
     //    messages and tools from/for meta server
     //
     void on_config_proposal(configuration_update_request &proposal);
-    void
-    on_config_sync(const app_info &info, const partition_configuration &config, bool is_splitting);
+    void on_config_sync(const app_info &info,
+                        const partition_configuration &config,
+                        split_status::type partition_split_status);
     void on_cold_backup(const backup_request &request, /*out*/ backup_response &response);
 
     //
@@ -458,6 +459,9 @@ private:
     void on_stop_split(const stop_split_request &req, /*out*/ stop_split_response &resp);
 
     // called by `on_config_sync` in `replica_config.cpp`
+    void check_partition_count(const int32_t meta_partition_count,
+                               split_status::type partition_split_status);
+
     void try_to_start_split(const int32_t meta_partition_count);
 
     void init_table_level_latency_counters();

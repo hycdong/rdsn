@@ -1347,15 +1347,24 @@ void replica_stub::on_node_query_reply(error_code err,
 
         for (auto it = resp.partitions.begin(); it != resp.partitions.end(); ++it) {
             const gpid pid = it->config.pid;
-            bool is_splitting = splitting_count > 0 &&
-                                resp.splitting_replicas.find(pid) != resp.splitting_replicas.end();
+
+            auto partition_split_status = split_status::NOT_SPLIT;
+            if (splitting_count > 0) {
+                auto iter = resp.splitting_replicas.find(pid);
+                if (iter != resp.splitting_replicas.end()) {
+                    partition_split_status = iter->second;
+                }
+            }
+
             rs.erase(pid);
-            tasking::enqueue(
-                LPC_QUERY_NODE_CONFIGURATION_SCATTER,
-                &_tracker,
-                std::bind(
-                    &replica_stub::on_node_query_reply_scatter, this, this, *it, is_splitting),
-                it->config.pid.thread_hash());
+            tasking::enqueue(LPC_QUERY_NODE_CONFIGURATION_SCATTER,
+                             &_tracker,
+                             std::bind(&replica_stub::on_node_query_reply_scatter,
+                                       this,
+                                       this,
+                                       *it,
+                                       partition_split_status),
+                             it->config.pid.thread_hash());
         }
 
         // for rps not exist on meta_servers
@@ -1390,11 +1399,14 @@ void replica_stub::set_meta_server_connected_for_test(
     _state = NS_Connected;
 
     for (auto it = resp.partitions.begin(); it != resp.partitions.end(); ++it) {
-        tasking::enqueue(
-            LPC_QUERY_NODE_CONFIGURATION_SCATTER,
-            &_tracker,
-            std::bind(&replica_stub::on_node_query_reply_scatter, this, this, *it, false),
-            it->config.pid.thread_hash());
+        tasking::enqueue(LPC_QUERY_NODE_CONFIGURATION_SCATTER,
+                         &_tracker,
+                         std::bind(&replica_stub::on_node_query_reply_scatter,
+                                   this,
+                                   this,
+                                   *it,
+                                   split_status::NOT_SPLIT),
+                         it->config.pid.thread_hash());
     }
 }
 
@@ -1410,11 +1422,11 @@ void replica_stub::set_replica_state_subscriber_for_test(replica_state_subscribe
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_stub::on_node_query_reply_scatter(replica_stub_ptr this_,
                                                const configuration_update_request &req,
-                                               bool is_replica_splitting)
+                                               split_status::type partition_split_status)
 {
     replica_ptr replica = get_replica(req.config.pid);
     if (replica != nullptr) {
-        replica->on_config_sync(req.info, req.config, is_replica_splitting);
+        replica->on_config_sync(req.info, req.config, partition_split_status);
     } else {
         if (req.config.primary == _primary_address) {
             ddebug("%s@%s: replica not exists on replica server, which is primary, remove it "

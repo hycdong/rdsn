@@ -15,6 +15,20 @@ namespace dsn {
 namespace replication {
 
 // ThreadPool: THREAD_POOL_REPLICATION
+void replica::check_partition_count(const int32_t meta_partition_count,
+                                    split_status::type partition_split_status)
+{
+    if (meta_partition_count == _app_info.partition_count) {
+        return;
+    }
+
+    // TODO(heyuchen): update
+    if (partition_split_status == split_status::SPLITTING) {
+        try_to_start_split(meta_partition_count);
+    }
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::try_to_start_split(const int32_t meta_partition_count) // on primary parent partition
 {
     if (status() != partition_status::PS_PRIMARY) {

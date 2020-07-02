@@ -142,7 +142,7 @@ public:
             } else {
                 app->partitions[i].ballot = PARENT_BALLOT;
                 app->helpers->contexts[i].stage = config_status::not_pending;
-                app->helpers->split_states.status[i] = split_status::splitting;
+                app->helpers->split_states.status[i] = split_status::SPLITTING;
             }
         }
     }
@@ -365,11 +365,11 @@ TEST_F(meta_split_service_test, pause_split_test)
             mock_child_registered();
         }
         if (test.mock_parent_paused) {
-            mock_split_states(split_status::paused, test.parent_pidx);
+            mock_split_states(split_status::PAUSED, test.parent_pidx);
         }
         ASSERT_EQ(pause_partition_split(test.app_name, test.parent_pidx), test.expected_err);
         if (test.check_status) {
-            ASSERT_TRUE(check_split_status(split_status::paused, test.parent_pidx));
+            ASSERT_TRUE(check_split_status(split_status::PAUSED, test.parent_pidx));
         }
     }
     fail::teardown();
@@ -403,11 +403,11 @@ TEST_F(meta_split_service_test, restart_split_test)
             mock_child_registered();
         }
         if (test.mock_parent_paused) {
-            mock_split_states(split_status::paused, test.parent_pidx);
+            mock_split_states(split_status::PAUSED, test.parent_pidx);
         }
         ASSERT_EQ(restart_partition_split(NAME, test.parent_pidx), test.expected_err);
         if (test.check_status) {
-            ASSERT_TRUE(check_split_status(split_status::splitting, test.parent_pidx));
+            ASSERT_TRUE(check_split_status(split_status::SPLITTING, test.parent_pidx));
         }
     }
 }
@@ -478,7 +478,7 @@ TEST_F(meta_split_service_test, register_child_test)
             mock_child_registered();
         }
         if (test.mock_parent_paused) {
-            mock_split_states(split_status::paused, PARENT_INDEX);
+            mock_split_states(split_status::PAUSED, PARENT_INDEX);
         }
         if (test.mock_pending) {
             app->helpers->contexts[PARENT_INDEX].stage = config_status::pending_remote_sync;
@@ -520,7 +520,7 @@ TEST_F(meta_split_service_test, on_config_sync_test)
         bool mock_parent_paused;
         int32_t expected_count;
     } tests[] = {
-        {false, false, 1}, {true, false, 0}, {false, true, 0},
+        {false, false, 1}, {true, false, 0}, {false, true, 1},
     };
 
     for (auto test : tests) {
@@ -529,7 +529,7 @@ TEST_F(meta_split_service_test, on_config_sync_test)
             mock_child_registered();
         }
         if (test.mock_parent_paused) {
-            mock_split_states(split_status::paused, PARENT_INDEX);
+            mock_split_states(split_status::PAUSED, PARENT_INDEX);
         }
         ASSERT_EQ(on_config_sync(req), test.expected_count);
     }

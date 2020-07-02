@@ -604,7 +604,7 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                             "partition node {} not exist on remote storage, may half split before",
                             partition_path);
                         zauto_write_lock l(_lock);
-                        app->helpers->split_states.status[partition_id] = split_status::splitting;
+                        app->helpers->split_states.status[partition_id] = split_status::SPLITTING;
                         app->helpers->split_states.splitting_count++;
                         app->partitions[partition_id].ballot = invalid_ballot;
                         app->partitions[partition_id].pid = gpid(app->app_id, partition_id);
@@ -803,7 +803,8 @@ void server_state::on_config_sync(dsn::message_ex *msg)
 
     bool reject_this_request = false;
     response.__isset.gc_replicas = false;
-    std::set<gpid> splitting_replicas;
+
+    std::map<gpid, split_status::type> splitting_replicas;
     ddebug("got config sync request from %s, stored_replicas_count(%d)",
            request.node.to_string(),
            (int)request.stored_replicas.size());
@@ -841,9 +842,8 @@ void server_state::on_config_sync(dsn::message_ex *msg)
                 const split_state &app_split_states = app->helpers->split_states;
                 if (app_split_states.splitting_count > 0) {
                     auto iter = app_split_states.status.find(pid.get_partition_index());
-                    if (iter != app_split_states.status.end() &&
-                        iter->second == split_status::splitting) {
-                        splitting_replicas.insert(pid);
+                    if (iter != app_split_states.status.end()) {
+                        splitting_replicas[pid] = iter->second;
                     }
                 }
 
