@@ -15,32 +15,37 @@ namespace dsn {
 namespace replication {
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica::check_partition_count(const int32_t meta_partition_count,
-                                    split_status::type partition_split_status)
+void replica::check_partition_count(
+    const int32_t meta_partition_count,
+    split_status::type partition_split_status) // on primary parent partition
 {
     if (meta_partition_count == _app_info.partition_count) {
         return;
     }
 
-    // TODO(heyuchen): update
+    if (status() != partition_status::PS_PRIMARY) {
+        dwarn_replica("wrong status({}), ignore it", enum_to_string(status()));
+        return;
+    }
+
+    dcheck_eq_replica(_app_info.partition_count * 2, meta_partition_count);
+
     if (partition_split_status == split_status::SPLITTING) {
         try_to_start_split(meta_partition_count);
+    } else if (partition_split_status == split_status::NOT_SPLIT) {
+        update_local_partition_count(meta_partition_count);
+        broadcast_group_check();
+        _primary_states.sync_send_write_request = false;
+        parent_cleanup_split_context();
+    } else {
+        dwarn_replica("split has been paused or canceling, status = {}",
+                      enum_to_string(partition_split_status));
     }
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::try_to_start_split(const int32_t meta_partition_count) // on primary parent partition
 {
-    if (status() != partition_status::PS_PRIMARY) {
-        dwarn_replica("wrong status({}), ignore it", enum_to_string(status()));
-        return;
-    }
-
-    dassert_replica(_app_info.partition_count * 2 == meta_partition_count,
-                    "wrong partition count, local({}) VS meta({})",
-                    _app_info.partition_count,
-                    meta_partition_count);
-
     if (_is_splitting) {
         dwarn_replica("partition is already splitting, ignore this request");
         return;
@@ -63,6 +68,7 @@ void replica::try_to_start_split(const int32_t meta_partition_count) // on prima
 
     _primary_states.caught_up_children.clear();
     _primary_states.sync_send_write_request = false;
+    _partition_version = _app_info.partition_count - 1;
 
     group_check_request add_child_request;
     add_child_request.app = _app_info;
@@ -1025,6 +1031,7 @@ void replica::on_register_child_on_meta_reply(
 {
     _checker.only_one_thread_access();
 
+    // TODO(heyuchen): consider it
     // primary parent is under reconfiguration, whose status should be PS_INACTIVE
     if (partition_status::PS_INACTIVE != status() || !_stub->is_connected()) {
         derror_replica("status wrong or stub is not connected, status = {}",
@@ -1035,10 +1042,14 @@ void replica::on_register_child_on_meta_reply(
     }
 
     error_code err = ec == ERR_OK ? response.err : ec;
+
+    // TODO(heyuchen): consider it
     if (err == ERR_INVALID_STATE) {
-        derror_replica("register child({}) failed, error = {}, split has been paused or canceled");
+        derror_replica("register child({}) failed, error = {}, split has been paused or canceled",
+                       request.child_config.pid,
+                       err);
         _stub->split_replica_error_handler(
-            _child_gpid,
+            request.child_config.pid,
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "register child failed, split has been stopped"));
@@ -1059,10 +1070,14 @@ void replica::on_register_child_on_meta_reply(
                            get_ballot());
             update_configuration(response.parent_config);
         }
-
-        // TODO(heyuchen): query child partition state on meta server
-        // consider cleanup parent split context
-
+        // TODO(heyuchen): remove it after add query child states
+        //        if(err == ERR_CHILD_REGISTERED){
+        //            _stub->split_replica_exec(
+        //                LPC_PARTITION_SPLIT,
+        //                response.child_config.pid,
+        //                std::bind(&replica::child_partition_active, std::placeholders::_1,
+        //                response.child_config));
+        //        }
         return;
     }
 
@@ -1097,18 +1112,25 @@ void replica::on_register_child_on_meta_reply(
 
     // update parent config
     update_configuration(response.parent_config);
+
+    _primary_states.register_child_task = nullptr;
+    _primary_states.sync_send_write_request = false;
+
     // update primary parent group partition_count
     update_local_partition_count(_app_info.partition_count * 2);
     broadcast_group_check();
 
-    _primary_states.register_child_task = nullptr;
-    _primary_states.sync_send_write_request = false;
     parent_cleanup_split_context();
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::child_partition_active(const partition_configuration &config) // on child
 {
+    if (status() != partition_status::PS_PARTITION_SPLIT) {
+        dwarn_replica("child partition has been active, status={}", enum_to_string(status()));
+        return;
+    }
+
     ddebug_replica("child partition become active");
     _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
     _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();

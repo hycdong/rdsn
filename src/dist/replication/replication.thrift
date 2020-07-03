@@ -922,6 +922,24 @@ struct notify_cacth_up_response
     1:dsn.error_code    err;
 }
 
+// parent primary send to child group replicas to update partition count
+struct update_child_group_partition_count_request
+{
+    1:dsn.rpc_address   target_address;
+    2:i32               new_partition_count;
+    3:dsn.gpid          pid;
+    4:i64               ballot;
+}
+
+struct update_child_group_partition_count_response
+{
+    // Possible errors:
+    // - ERR_OBJECT_NOT_FOUND: replica can not be found
+    // - ERR_VERSION_OUTDATED: request is out-dated
+    // - ERR_FILE_OPERATION_FAILED: update app_info failed
+    1:dsn.error_code    err;
+}
+
 // primary parent -> meta server, register child on meta_server
 struct register_child_request
 {
@@ -942,24 +960,6 @@ struct register_child_response
     2:dsn.layer2.app_info                   app;
     3:dsn.layer2.partition_configuration    parent_config;
     4:dsn.layer2.partition_configuration    child_config;
-}
-
-// parent primary send to child group replicas to update partition count
-struct update_child_group_partition_count_request
-{
-    1:dsn.rpc_address   target_address;
-    2:i32               new_partition_count;
-    3:dsn.gpid          pid;
-    4:i64               ballot;
-}
-
-struct update_child_group_partition_count_response
-{
-    // Possible errors:
-    // - ERR_OBJECT_NOT_FOUND: replica can not be found
-    // - ERR_VERSION_OUTDATED: request is out-dated
-    // - ERR_FILE_OPERATION_FAILED: update app_info failed
-    1:dsn.error_code    err;
 }
 
 /*

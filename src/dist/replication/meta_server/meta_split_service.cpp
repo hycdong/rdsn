@@ -119,34 +119,14 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     dassert_f(app->is_stateful, "app({}) is stateless currently", app_name);
 
     const gpid &parent_gpid = request.parent_config.pid;
+    const gpid &child_gpid = request.child_config.pid;
     const auto &parent_config = app->partitions[parent_gpid.get_partition_index()];
-
-    auto iter = app->helpers->split_states.status.find(parent_gpid.get_partition_index());
-    if (iter == app->helpers->split_states.status.end()) {
-        dwarn_f("app({}) partition({}) register child failed, this partition has already splitted "
-                "or split has been canceled",
-                app_name,
-                parent_gpid);
-        response.err = ERR_CHILD_REGISTERED;
-        response.parent_config = parent_config;
-        return;
-    }
-
-    if (iter->second != split_status::SPLITTING) {
-        derror_f("app({}) partition({}) register child failed, current partition split_status = {}",
-                 app_name,
-                 parent_gpid,
-                 dsn::enum_to_string(iter->second));
-        response.err = ERR_INVALID_STATE;
-        return;
-    }
-
     if (request.parent_config.ballot != parent_config.ballot) {
-        derror_f("app({}) partition({}) register child failed, request is out-dated, request "
-                 "ballot = {}, "
-                 "local ballot = {}",
+        derror_f("app({}) partition({}) register child({}) failed, request is out-dated, request "
+                 "parent ballot = {}, local parent ballot = {}",
                  app_name,
                  parent_gpid,
+                 child_gpid,
                  request.parent_config.ballot,
                  parent_config.ballot);
         response.err = ERR_INVALID_VERSION;
@@ -164,12 +144,46 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
         return;
     }
 
+    if (child_gpid.get_partition_index() >= app->partition_count) {
+        derror_f(
+            "app({}) partition({}) register child({}) failed, partition split has been canceled",
+            app_name,
+            parent_gpid,
+            child_gpid);
+        response.err = ERR_INVALID_STATE;
+        return;
+    }
+
+    auto iter = app->helpers->split_states.status.find(parent_gpid.get_partition_index());
+    if (iter == app->helpers->split_states.status.end()) {
+        derror_f(
+            "duplicated register request, app({}) child partition({}) has already been registered",
+            app_name,
+            child_gpid);
+        const auto &child_config = app->partitions[child_gpid.get_partition_index()];
+        dassert_f(child_config.ballot > 0,
+                  "app({}) partition({}) should have been registered",
+                  app_name,
+                  child_gpid);
+        response.err = ERR_CHILD_REGISTERED;
+        response.parent_config = parent_config;
+        return;
+    }
+
+    if (iter->second != split_status::SPLITTING) {
+        derror_f(
+            "app({}) partition({}) register child({}) failed, current partition split_status = {}",
+            app_name,
+            parent_gpid,
+            child_gpid,
+            dsn::enum_to_string(iter->second));
+        response.err = ERR_INVALID_STATE;
+        return;
+    }
+
     app->helpers->split_states.status.erase(parent_gpid.get_partition_index());
     app->helpers->split_states.splitting_count--;
-    ddebug_f("app({}) parent({}) will register child({})",
-             app_name,
-             parent_gpid,
-             request.child_config.pid);
+    ddebug_f("app({}) parent({}) will register child({})", app_name, parent_gpid, child_gpid);
 
     parent_context.stage = config_status::pending_remote_sync;
     parent_context.msg = rpc.dsn_request();
@@ -257,8 +271,6 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
     child_config.secondaries = request.child_config.secondaries;
     _state->update_configuration_locally(*app, update_child_request);
 
-    parent_context.pending_sync_task = nullptr;
-    parent_context.stage = config_status::not_pending;
     if (parent_context.msg) {
         response.err = ERR_OK;
         response.app = *app;
@@ -266,6 +278,8 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
         response.child_config = app->partitions[child_gpid.get_partition_index()];
         parent_context.msg = nullptr;
     }
+    parent_context.pending_sync_task = nullptr;
+    parent_context.stage = config_status::not_pending;
 }
 
 // ThreadPool: THREAD_POOL_META_SERVER
