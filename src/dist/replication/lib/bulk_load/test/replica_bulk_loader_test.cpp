@@ -139,8 +139,8 @@ public:
         mock_group_progress(status, 10, 50, 50);
         partition_bulk_load_state state;
         state.__set_is_paused(true);
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY] = state;
-        _replica->_primary_states.secondary_bulk_load_states[SECONDARY2] = state;
+        _replica->set_secondary_bulk_load_state(SECONDARY, state);
+        _replica->set_secondary_bulk_load_state(SECONDARY2, state);
 
         bulk_load_response response;
         _bulk_loader->report_group_is_paused(response);
@@ -411,16 +411,6 @@ public:
                is_paused_flag_reset;
     }
 
-    bool primary_is_bulk_load_states_cleaned()
-    {
-        if (_replica->status() != partition_status::PS_PRIMARY) {
-            return false;
-        }
-        auto pstates = _replica->_primary_states;
-        return (pstates.ingestion_is_empty_prepare_sent == false &&
-                pstates.secondary_bulk_load_states.size() == 0);
-    }
-
 public:
     std::unique_ptr<mock_replica> _replica;
     std::unique_ptr<replica_bulk_loader> _bulk_loader;
@@ -567,9 +557,9 @@ TEST_F(replica_bulk_loader_test, rollback_to_downloading_test)
     for (auto test : tests) {
         test_rollback_to_downloading(test.status);
         ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADING);
-        ASSERT_TRUE(primary_is_bulk_load_states_cleaned());
-        ASSERT_EQ(get_ingestion_status(), ingestion_status::IS_INVALID);
-        ASSERT_FALSE(is_ingestion());
+        ASSERT_TRUE(_replica->is_primary_bulk_load_states_cleaned());
+        ASSERT_EQ(_replica->get_ingestion_status(), ingestion_status::IS_INVALID);
+        ASSERT_FALSE(_replica->is_ingestion());
     }
 }
 
