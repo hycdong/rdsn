@@ -98,7 +98,7 @@ void replica::broadcast_group_check()
         request->node = addr;
         _primary_states.get_replica_config(it->second, request->config);
         request->last_committed_decree = last_committed_decree();
-        if (_is_splitting) {
+        if (_split_status == split_status::SPLITTING) {
             if (_child_gpid.get_app_id() > 0) {
                 request->__set_child_gpid(_child_gpid);
             } else {

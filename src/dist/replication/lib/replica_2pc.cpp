@@ -195,7 +195,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     }
     mu->set_left_potential_secondary_ack_count(count);
 
-    if (_is_splitting && _child_gpid.get_app_id() > 0) {
+    if (_split_status == split_status::SPLITTING && _child_gpid.get_app_id() > 0) {
         copy_mutation(mu);
     }
 
@@ -442,7 +442,7 @@ void replica::on_prepare(dsn::message_ex *request)
     }
 
     // prepare in child replica
-    if (_is_splitting && _child_gpid.get_app_id() > 0) {
+    if (_split_status == split_status::SPLITTING && _child_gpid.get_app_id() > 0) {
         copy_mutation(mu);
     }
 

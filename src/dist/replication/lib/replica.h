@@ -563,7 +563,7 @@ private:
     // in normal cases, _partition_version = partition_count-1
     // when replica reject client read write request, partition_version = -1
     std::atomic<int32_t> _partition_version;
-    bool _is_splitting{false};
+    split_status::type _split_status{split_status::NOT_SPLIT};
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;

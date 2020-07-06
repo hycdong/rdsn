@@ -144,8 +144,8 @@ public:
     {
         _primary_states.membership = pconfig;
     }
-    bool is_splitting() { return _is_splitting; }
-    void set_is_splitting(bool flag) { _is_splitting = flag; }
+    bool is_splitting() { return (_split_status == split_status::SPLITTING); }
+    void set_split_status(split_status::type status) { _split_status = status; }
 
 private:
     decree _max_gced_decree{invalid_decree - 1};

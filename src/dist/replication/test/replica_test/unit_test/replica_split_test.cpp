@@ -62,7 +62,7 @@ public:
 
     void test_on_add_child(ballot b, bool is_splitting)
     {
-        _parent->set_is_splitting(is_splitting);
+        _parent->set_split_status(is_splitting ? split_status::SPLITTING : split_status::NOT_SPLIT);
 
         group_check_request req;
         req.child_gpid = CHILD_GPID;
@@ -218,7 +218,7 @@ public:
     void generate_child(partition_status::type status)
     {
         _child = stub->generate_replica(_app_info, CHILD_GPID, status, INIT_BALLOT);
-        _parent->set_is_splitting(true);
+        _parent->set_split_status(split_status::SPLITTING);
         _parent->set_child_gpid(CHILD_GPID);
         _parent->set_init_child_ballot(INIT_BALLOT);
     }
@@ -378,15 +378,17 @@ TEST_F(replica_split_test, start_split_test)
     // - start split succeed
     struct start_test
     {
-        bool is_splitting;
+        split_status::type status;
         bool lack_of_secondary;
-    } tests[] = {{true, false}, {false, true}, {false, false}};
+    } tests[] = {{split_status::SPLITTING, false},
+                 {split_status::NOT_SPLIT, true},
+                 {split_status::NOT_SPLIT, false}};
     for (auto test : tests) {
         parent_cleanup_split_context();
-        _parent->set_is_splitting(test.is_splitting);
+        _parent->set_split_status(test.status);
         mock_parent_primary_configuration(test.lack_of_secondary);
         test_try_to_start_split();
-        ASSERT_EQ(_parent->is_splitting(), test.is_splitting);
+        ASSERT_EQ(_parent->is_splitting(), test.status == split_status::SPLITTING);
     }
 }
 
