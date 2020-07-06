@@ -30,6 +30,8 @@ void replica::check_partition_count(
 
     dcheck_eq_replica(_app_info.partition_count * 2, meta_partition_count);
 
+    ddebug_replica("split_status = {}", enum_to_string(partition_split_status));
+
     if (partition_split_status == split_status::SPLITTING) {
         try_to_start_split(meta_partition_count);
     } else if (partition_split_status == split_status::NOT_SPLIT) {
@@ -37,9 +39,30 @@ void replica::check_partition_count(
         broadcast_group_check();
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
-    } else {
+    } /*else {
         dwarn_replica("split has been paused or canceling, status = {}",
                       enum_to_string(partition_split_status));
+    }*/
+    else if (partition_split_status == split_status::PAUSED) {
+        if (_split_status != split_status::PAUSED && _split_status != split_status::CANCELING) {
+            ddebug_replica("start to pause partition split");
+            _split_status = split_status::PAUSED;
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "pause partition split"));
+            broadcast_group_check();
+        }
+    } else if (partition_split_status == split_status::CANCELING) {
+        ddebug_replica("start to cancel partition split");
+        // TODO(heyuchen): consider it
+        if (_split_status == split_status::SPLITTING || _split_status == split_status::PAUSED) {
+            _split_status = split_status::CANCELING;
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "cancel partition split"));
+        }
     }
 }
 
@@ -1268,6 +1291,7 @@ void replica::child_handle_async_learn_error() // on child partition
     _split_states.async_learn_task = nullptr;
 }
 
+// TODO(heyuchen): remove it
 void replica::on_stop_split(const stop_split_request &req, stop_split_response &resp)
 {
     _checker.only_one_thread_access();

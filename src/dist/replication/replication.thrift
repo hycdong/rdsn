@@ -161,6 +161,14 @@ struct learn_notify_response
     3:i64                   signature; // learning signature
 }
 
+enum split_status
+{
+    NOT_SPLIT,
+    SPLITTING,
+    PAUSED,
+    CANCELING
+}
+
 struct group_check_request
 {
     1:dsn.layer2.app_info   app;
@@ -175,6 +183,7 @@ struct group_check_request
 
     // Used to deliver child gpid during partition split
     6:optional dsn.gpid     child_gpid;
+    7:optional split_status primary_split_status;
 }
 
 struct group_check_response
@@ -210,15 +219,6 @@ enum node_status
     NS_INVALID,
     NS_ALIVE,
     NS_UNALIVE,
-}
-
-// TODO(heyuchen): update it to UPPER
-enum split_status
-{
-    NOT_SPLIT,
-    SPLITTING,
-    PAUSED,
-    CANCELING
 }
 
 struct node_info

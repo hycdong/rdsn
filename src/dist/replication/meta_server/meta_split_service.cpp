@@ -397,7 +397,8 @@ void meta_split_service::pause_partition_split(std::shared_ptr<app_state> app,
         iter->second = split_status::PAUSED;
         response.err = ERR_OK;
         ddebug_f("app({}) partition({}) pause split", app_name, parent_pidx);
-        send_stop_split_request(app, gpid(app->app_id, parent_pidx), split_control_type::PSC_PAUSE);
+        // send_stop_split_request(app, gpid(app->app_id, parent_pidx),
+        // split_control_type::PSC_PAUSE);
         return;
     }
 
@@ -407,8 +408,8 @@ void meta_split_service::pause_partition_split(std::shared_ptr<app_state> app,
             const int32_t pidx = kv.first;
             kv.second = split_status::PAUSED;
             ddebug_f("app({}) partition({}) pause split", app_name, pidx);
-            send_stop_split_request(
-                app, gpid(app->app_id, parent_pidx), split_control_type::PSC_PAUSE);
+            // send_stop_split_request(app, gpid(app->app_id, parent_pidx),
+            // split_control_type::PSC_PAUSE);
         }
     }
     response.err = ERR_OK;

@@ -99,6 +99,8 @@ void primary_context::cleanup(bool clean_pending_mutations)
     caught_up_children.clear();
 
     sync_send_write_request = false;
+
+    stopping_split.clear();
 }
 
 bool primary_context::is_cleaned()

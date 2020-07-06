@@ -122,6 +122,9 @@ public:
     // Used for partition split
     // primary parent register child on meta_server task
     dsn::task_ptr register_child_task;
+
+    // TODO(heyuchen):
+    std::unordered_set<dsn::rpc_address> stopping_split;
 };
 
 class secondary_context
