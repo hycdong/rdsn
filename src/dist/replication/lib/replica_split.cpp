@@ -30,7 +30,11 @@ void replica::check_partition_count(
 
     dcheck_eq_replica(_app_info.partition_count * 2, meta_partition_count);
 
-    ddebug_replica("split_status = {}", enum_to_string(partition_split_status));
+    ddebug_replica("request split_status = {}, local split_status = {}",
+                   enum_to_string(partition_split_status),
+                   enum_to_string(_split_status));
+
+    // TODO(heyuchen): consider where to reset partition_version
 
     if (partition_split_status == split_status::SPLITTING) {
         try_to_start_split(meta_partition_count);
@@ -39,30 +43,16 @@ void replica::check_partition_count(
         broadcast_group_check();
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
-    } /*else {
-        dwarn_replica("split has been paused or canceling, status = {}",
-                      enum_to_string(partition_split_status));
-    }*/
-    else if (partition_split_status == split_status::PAUSED) {
-        if (_split_status != split_status::PAUSED && _split_status != split_status::CANCELING) {
-            ddebug_replica("start to pause partition split");
-            _split_status = split_status::PAUSED;
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "pause partition split"));
-            broadcast_group_check();
-        }
-    } else if (partition_split_status == split_status::CANCELING) {
-        ddebug_replica("start to cancel partition split");
-        // TODO(heyuchen): consider it
-        if (_split_status == split_status::SPLITTING || _split_status == split_status::PAUSED) {
-            _split_status = split_status::CANCELING;
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "cancel partition split"));
-        }
+    } else {
+        const std::string type =
+            partition_split_status == split_status::PAUSED ? "pause" : "cancel";
+        ddebug_replica("start to {} partition split", type);
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "stop partition split"));
+        _split_status = partition_split_status;
+        broadcast_group_check();
     }
 }
 
@@ -1066,26 +1056,25 @@ void replica::on_register_child_on_meta_reply(
     }
 
     error_code err = ec == ERR_OK ? response.err : ec;
-
-    // TODO(heyuchen): consider it
-    if (err == ERR_INVALID_STATE) {
-        derror_replica("register child({}) failed, error = {}, split has been paused or canceled",
-                       request.child_config.pid,
-                       err);
-        _stub->split_replica_error_handler(
-            request.child_config.pid,
-            std::bind(&replica::child_handle_split_error,
-                      std::placeholders::_1,
-                      "register child failed, split has been stopped"));
-        parent_cleanup_split_context();
-        return;
-    }
-
-    if (err == ERR_INVALID_VERSION || err == ERR_CHILD_REGISTERED) {
-        derror_replica("register child({}) failed, error = {}, request is out-of-dated or child "
-                       "has already been registered",
-                       request.child_config.pid,
-                       err);
+    if (err == ERR_INVALID_STATE || err == ERR_INVALID_VERSION || err == ERR_CHILD_REGISTERED) {
+        if (err == ERR_INVALID_STATE) {
+            derror_replica(
+                "register child({}) failed, error = {}, split has been paused or canceled",
+                request.child_config.pid,
+                err);
+            _stub->split_replica_error_handler(
+                request.child_config.pid,
+                std::bind(&replica::child_handle_split_error,
+                          std::placeholders::_1,
+                          "register child failed, split has been stopped"));
+            parent_cleanup_split_context();
+        } else {
+            derror_replica(
+                "register child({}) failed, error = {}, request is out-of-dated or child "
+                "has already been registered",
+                request.child_config.pid,
+                err);
+        }
         _primary_states.register_child_task = nullptr;
         _primary_states.sync_send_write_request = false;
         if (response.parent_config.ballot >= get_ballot()) {
@@ -1094,14 +1083,6 @@ void replica::on_register_child_on_meta_reply(
                            get_ballot());
             update_configuration(response.parent_config);
         }
-        // TODO(heyuchen): remove it after add query child states
-        //        if(err == ERR_CHILD_REGISTERED){
-        //            _stub->split_replica_exec(
-        //                LPC_PARTITION_SPLIT,
-        //                response.child_config.pid,
-        //                std::bind(&replica::child_partition_active, std::placeholders::_1,
-        //                response.child_config));
-        //        }
         return;
     }
 
@@ -1127,8 +1108,6 @@ void replica::on_register_child_on_meta_reply(
     dcheck_ge_replica(response.parent_config.ballot, get_ballot());
     dcheck_eq_replica(_app_info.partition_count * 2, response.app.partition_count);
 
-    // TODO(heyuchen): handle error
-    // register child succeed, but child not found on this stub
     _stub->split_replica_exec(
         LPC_PARTITION_SPLIT,
         response.child_config.pid,
@@ -1136,7 +1115,6 @@ void replica::on_register_child_on_meta_reply(
 
     // update parent config
     update_configuration(response.parent_config);
-
     _primary_states.register_child_task = nullptr;
     _primary_states.sync_send_write_request = false;
 
@@ -1291,56 +1269,32 @@ void replica::child_handle_async_learn_error() // on child partition
     _split_states.async_learn_task = nullptr;
 }
 
-// TODO(heyuchen): remove it
-void replica::on_stop_split(const stop_split_request &req, stop_split_response &resp)
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::parent_send_notify_cancel_request() // on primary parent
 {
-    _checker.only_one_thread_access();
+    FAIL_POINT_INJECT_F("replica_parent_send_notify_cancel_request", [](dsn::string_view) {});
 
-    if (status() != partition_status::PS_PRIMARY) {
-        dwarn_replica("receive control split request with wrong status {}",
-                      enum_to_string(status()));
-        resp.err = ERR_INVALID_STATE;
-        return;
-    }
+    rpc_address meta_address(_stub->_failure_detector->get_servers());
+    std::unique_ptr<notify_cancel_split_request> req = make_unique<notify_cancel_split_request>();
+    req->parent_gpid = get_gpid();
+    req->partition_count = _app_info.partition_count;
 
-    if (req.type == split_control_type::PSC_PAUSE) {
-        if (req.partition_count != _app_info.partition_count * 2) {
-            // TODO(heyuchen): update this log
-            dwarn_replica("receive pause split request with wrong partition_count");
-            resp.err = ERR_NO_NEED_OPERATE;
-            return;
+    notify_cancel_split_rpc rpc(
+        std::move(req), RPC_CM_NOTIFY_CANCEL_SPLIT, 0_ms, 0, get_gpid().thread_hash());
+    rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
+        if (ec != ERR_OK) {
+            dwarn_replica("notify cancel split failed, error = {}, wait and retry", ec);
+            tasking::enqueue(LPC_PARTITION_SPLIT,
+                             tracker(),
+                             std::bind(&replica::parent_send_notify_cancel_request, this),
+                             get_gpid().thread_hash(),
+                             std::chrono::seconds(1));
         }
-
-        resp.err = ERR_OK;
-        ddebug_replica("start to pause partition split");
-        if (_split_status == split_status::SPLITTING /*_child_gpid.get_app_id() > 0*/) {
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "pause partition split"));
-            parent_cleanup_split_context();
+        error_code err = rpc.response().err;
+        if (err != ERR_OK) {
+            dwarn_replica("notify cancel split failed, error = {}, ignore out-dated reuqest", err);
         }
-    }
-
-    if (req.type == split_control_type::PSC_CANCEL) {
-        if (req.partition_count != _app_info.partition_count) {
-            // TODO(heyuchen): update this log
-            dwarn_replica("receive cancel split request with wrong partition_count");
-            resp.err = ERR_NO_NEED_OPERATE;
-            return;
-        }
-
-        resp.err = ERR_OK;
-        ddebug_replica("start to cancel partition split");
-        if (_split_status == split_status::SPLITTING /*_child_gpid.get_app_id() > 0*/) {
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "cancel partition split"));
-            // TODO(heyuchen): consider it
-            parent_cleanup_split_context();
-        }
-    }
+    });
 }
 
 } // namespace replication

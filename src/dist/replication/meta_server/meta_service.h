@@ -185,6 +185,7 @@ private:
 
     void on_query_partition_split(query_split_rpc rpc);
     void on_control_partition_split(control_split_rpc rpc);
+    void on_notify_cancel_split(notify_cancel_split_rpc rpc);
 
     // common routines
     // ret:

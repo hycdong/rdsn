@@ -329,9 +329,6 @@ TEST_F(meta_split_service_test, query_split_succeed)
 // pause split unit tests
 TEST_F(meta_split_service_test, pause_split_test)
 {
-    fail::setup();
-    fail::cfg("meta_split_send_stop_split_request", "return()");
-
     // Test case:
     // - app not existed
     // - app is not splitting
@@ -372,7 +369,6 @@ TEST_F(meta_split_service_test, pause_split_test)
             ASSERT_TRUE(check_split_status(split_status::PAUSED, test.parent_pidx));
         }
     }
-    fail::teardown();
 }
 
 // restart split unit tests
@@ -415,9 +411,6 @@ TEST_F(meta_split_service_test, restart_split_test)
 // cancel split unit tests
 TEST_F(meta_split_service_test, cancel_split_test)
 {
-    fail::setup();
-    fail::cfg("meta_split_send_stop_split_request", "return()");
-
     // Test case:
     // - wrong partition count
     // - cancel split with child registered
@@ -440,11 +433,10 @@ TEST_F(meta_split_service_test, cancel_split_test)
         ASSERT_EQ(cancel_partition_split(NAME, test.old_partition_count), test.expected_err);
         if (test.check_status) {
             auto app = find_app(NAME);
-            ASSERT_EQ(app->partition_count, test.old_partition_count);
-            ASSERT_EQ(app->helpers->split_states.splitting_count, 0);
+            ASSERT_EQ(app->partition_count, NEW_PARTITION_COUNT);
+            ASSERT_EQ(app->helpers->split_states.splitting_count, PARTITION_COUNT);
         }
     }
-    fail::teardown();
 }
 
 // register child unit tests

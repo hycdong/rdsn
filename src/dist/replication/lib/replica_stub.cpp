@@ -2147,8 +2147,6 @@ void replica_stub::open_service()
     register_rpc_handler_with_rpc_holder(RPC_SPLIT_UPDATE_CHILD_PARTITION_COUNT,
                                          "update_child_group_partition_count",
                                          &replica_stub::on_update_child_group_partition_count);
-    register_rpc_handler_with_rpc_holder(
-        RPC_STOP_SPLIT, "control_partition_split", &replica_stub::on_stop_split);
 
     _kill_partition_command = ::dsn::command_manager::instance().register_app_command(
         {"kill_partition"},
@@ -2747,24 +2745,6 @@ void replica_stub::update_disk_holding_replicas()
                 }
             }
         }
-    }
-}
-
-void replica_stub::on_stop_split(stop_split_rpc rpc)
-{
-    const stop_split_request &request = rpc.request();
-    stop_split_response &response = rpc.response();
-
-    ddebug_f("[{}@{}]: receive control partition split request, type = {}",
-             request.pid,
-             _primary_address_str,
-             request.type);
-    replica_ptr rep = get_replica(request.pid);
-    if (rep != nullptr) {
-        rep->on_stop_split(request, response);
-    } else {
-        derror_f("replica({}) is not existed", request.pid);
-        response.err = ERR_OBJECT_NOT_FOUND;
     }
 }
 

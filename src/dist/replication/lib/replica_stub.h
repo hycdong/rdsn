@@ -106,7 +106,6 @@ public:
     void on_query_app_info(const query_app_info_request &req,
                            /*out*/ query_app_info_response &resp);
     void on_cold_backup(const backup_request &request, /*out*/ backup_response &response);
-    void on_stop_split(stop_split_rpc rpc);
 
     //
     //    messages from peers (primary or secondary)

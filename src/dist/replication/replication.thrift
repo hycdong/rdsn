@@ -878,20 +878,6 @@ struct control_split_response
     2:string            hint_msg;
 }
 
-// meta -> replica to pause or cancel split
-struct stop_split_request
-{
-    1:dsn.gpid              pid;
-    // for pause split, partition_count = new_partition_count
-    2:i32                   partition_count;
-    3:split_control_type    type;
-}
-
-struct stop_split_response
-{
-    1:dsn.error_code    err;
-}
-
 struct query_split_request
 {
     1:string    app_name;
@@ -960,6 +946,21 @@ struct register_child_response
     2:dsn.layer2.app_info                   app;
     3:dsn.layer2.partition_configuration    parent_config;
     4:dsn.layer2.partition_configuration    child_config;
+}
+
+// replica -> meta to report cancel split succeed
+struct notify_cancel_split_request
+{
+    1:dsn.gpid  parent_gpid;
+    2:i32       partition_count;
+}
+
+struct notify_cancel_split_response
+{
+    // Possible errors:
+    // - ERR_INVALID_VERSION: request is out-dated
+    // - ERR_INVALID_STATE: parent is not canceling
+    1:dsn.error_code    err;
 }
 
 /*

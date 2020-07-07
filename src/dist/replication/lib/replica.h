@@ -456,8 +456,6 @@ private:
     // child handle error while async learn parent states
     void child_handle_async_learn_error();
 
-    void on_stop_split(const stop_split_request &req, /*out*/ stop_split_response &resp);
-
     // called by `on_config_sync` in `replica_config.cpp`
     void check_partition_count(const int32_t meta_partition_count,
                                split_status::type partition_split_status);
@@ -465,6 +463,8 @@ private:
     void try_to_start_split(const int32_t meta_partition_count);
 
     void init_table_level_latency_counters();
+
+    void parent_send_notify_cancel_request();
 
 private:
     friend class ::dsn::replication::replication_checker;
