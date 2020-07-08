@@ -643,6 +643,20 @@ TEST_F(bulk_load_process_test, succeed_all_finished)
     ASSERT_FALSE(app_is_bulk_loading(APP_NAME));
 }
 
+TEST_F(bulk_load_process_test, cancel_not_all_finished)
+{
+    mock_response_cleaned_up_flag(false, bulk_load_status::BLS_CANCELED);
+    test_on_partition_bulk_load_reply(_partition_count, bulk_load_status::BLS_CANCELED);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_CANCELED);
+}
+
+TEST_F(bulk_load_process_test, cancel_all_finished)
+{
+    mock_response_cleaned_up_flag(true, bulk_load_status::BLS_CANCELED);
+    test_on_partition_bulk_load_reply(1, bulk_load_status::BLS_CANCELED);
+    ASSERT_FALSE(app_is_bulk_loading(APP_NAME));
+}
+
 TEST_F(bulk_load_process_test, half_cleanup)
 {
     mock_response_cleaned_up_flag(false, bulk_load_status::BLS_FAILED);

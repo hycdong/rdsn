@@ -597,24 +597,27 @@ void bulk_load_service::handle_bulk_load_finish(const bulk_load_response &respon
     const std::string &app_name = response.app_name;
     const gpid &pid = response.pid;
 
-    dassert_f(
-        response.__isset.is_group_bulk_load_context_cleaned_up,
-        "receive bulk load response from node({}) app({}), partition({}), primary_status({}), "
-        "but is_group_bulk_load_context_cleaned_up is not set",
-        primary_addr.to_string(),
-        app_name,
-        pid,
-        dsn::enum_to_string(response.primary_bulk_load_status));
+    if (!response.__isset.is_group_bulk_load_context_cleaned_up) {
+        dwarn_f("receive bulk load response from node({}) app({}), partition({}), "
+                "primary_status({}), but is_group_bulk_load_context_cleaned_up is not set",
+                primary_addr.to_string(),
+                app_name,
+                pid,
+                dsn::enum_to_string(response.primary_bulk_load_status));
+        return;
+    }
 
     for (const auto &kv : response.group_bulk_load_state) {
-        dassert_f(kv.second.__isset.is_cleaned_up,
-                  "receive bulk load response from node({}) app({}), partition({}), "
-                  "primary_status({}), but node({}) is_cleaned_up is not set",
-                  primary_addr.to_string(),
-                  app_name,
-                  pid,
-                  dsn::enum_to_string(response.primary_bulk_load_status),
-                  kv.first.to_string());
+        if (!kv.second.__isset.is_cleaned_up) {
+            dwarn_f("receive bulk load response from node({}) app({}), partition({}), "
+                    "primary_status({}), but node({}) is_cleaned_up is not set",
+                    primary_addr.to_string(),
+                    app_name,
+                    pid,
+                    dsn::enum_to_string(response.primary_bulk_load_status),
+                    kv.first.to_string());
+            return;
+        }
     }
 
     {
@@ -1719,13 +1722,12 @@ void bulk_load_service::on_control_bulk_load(control_bulk_load_rpc rpc)
     case bulk_load_control_type::BLC_CANCEL:
         if (app_status != bulk_load_status::BLS_DOWNLOADING &&
             app_status != bulk_load_status::BLS_PAUSED) {
-            derror_f(
-                "cancel bulk load for app({}) failed, can not cancel bulk load with status({})",
-                app_name,
-                dsn::enum_to_string(app_status));
+            auto hint_msg = fmt::format("can not cancel bulk load for app({}) with status({})",
+                                        app_name,
+                                        dsn::enum_to_string(app_status));
+            derror_f("{}", hint_msg);
             response.err = ERR_INVALID_STATE;
-            response.__set_hint_msg(
-                fmt::format("app({}) status={}", app_name, dsn::enum_to_string(app_status)));
+            response.__set_hint_msg(hint_msg);
             return;
         }
     case bulk_load_control_type::BLC_FORCE_CANCEL: {
