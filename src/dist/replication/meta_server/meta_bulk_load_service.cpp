@@ -932,10 +932,10 @@ void bulk_load_service::update_app_status_on_remote_storage_reply(const app_bulk
         }
     }
 
-    if (new_status == bulk_load_status::BLS_FAILED ||
+    if (new_status == bulk_load_status::BLS_PAUSING ||
         new_status == bulk_load_status::BLS_DOWNLOADING ||
-        new_status == bulk_load_status::BLS_PAUSING ||
-        new_status == bulk_load_status::BLS_CANCELED) {
+        new_status == bulk_load_status::BLS_CANCELED ||
+        new_status == bulk_load_status::BLS_FAILED) {
         for (int i = 0; i < ainfo.partition_count; ++i) {
             update_partition_status_on_remote_storage(
                 ainfo.app_name, gpid(app_id, i), new_status, should_send_request);

@@ -577,13 +577,6 @@ TEST_F(bulk_load_process_test, downloading_corrupt)
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
 }
 
-TEST_F(bulk_load_process_test, normal_downloading)
-{
-    mock_response_progress(ERR_OK, false);
-    test_on_partition_bulk_load_reply(_partition_count, bulk_load_status::BLS_DOWNLOADING);
-    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
-}
-
 TEST_F(bulk_load_process_test, downloading_report_metadata)
 {
     mock_response_bulk_load_metadata();
@@ -591,6 +584,13 @@ TEST_F(bulk_load_process_test, downloading_report_metadata)
 
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
     ASSERT_FALSE(need_update_metadata(gpid(_app_id, _pidx)));
+}
+
+TEST_F(bulk_load_process_test, normal_downloading)
+{
+    mock_response_progress(ERR_OK, false);
+    test_on_partition_bulk_load_reply(_partition_count, bulk_load_status::BLS_DOWNLOADING);
+    ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_DOWNLOADING);
 }
 
 TEST_F(bulk_load_process_test, downloaded_succeed)
@@ -657,11 +657,18 @@ TEST_F(bulk_load_process_test, cancel_all_finished)
     ASSERT_FALSE(app_is_bulk_loading(APP_NAME));
 }
 
-TEST_F(bulk_load_process_test, half_cleanup)
+TEST_F(bulk_load_process_test, failed_not_all_finished)
 {
     mock_response_cleaned_up_flag(false, bulk_load_status::BLS_FAILED);
     test_on_partition_bulk_load_reply(_partition_count, bulk_load_status::BLS_FAILED);
     ASSERT_EQ(get_app_bulk_load_status(_app_id), bulk_load_status::BLS_FAILED);
+}
+
+TEST_F(bulk_load_process_test, failed_all_finished)
+{
+    mock_response_cleaned_up_flag(true, bulk_load_status::BLS_FAILED);
+    test_on_partition_bulk_load_reply(1, bulk_load_status::BLS_FAILED);
+    ASSERT_FALSE(app_is_bulk_loading(APP_NAME));
 }
 
 TEST_F(bulk_load_process_test, pausing)

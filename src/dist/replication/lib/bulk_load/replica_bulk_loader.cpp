@@ -259,16 +259,16 @@ error_code replica_bulk_loader::do_bulk_load(const std::string &app_name,
             handle_bulk_load_finish(meta_status);
         }
         break;
+    case bulk_load_status::BLS_PAUSING:
+        pause_bulk_load();
+        break;
+    case bulk_load_status::BLS_CANCELED:
+        handle_bulk_load_finish(bulk_load_status::BLS_CANCELED);
+        break;
     case bulk_load_status::BLS_FAILED:
         handle_bulk_load_finish(bulk_load_status::BLS_FAILED);
         _stub->_counter_bulk_load_failed_count->increment();
         break;
-    case bulk_load_status::BLS_PAUSING:
-        pause_bulk_load();
-        break;
-    case bulk_load_status::BLS_CANCELED: {
-        handle_bulk_load_finish(bulk_load_status::BLS_CANCELED);
-    } break;
     default:
         break;
     }
@@ -697,8 +697,8 @@ void replica_bulk_loader::report_bulk_load_states_to_meta(bulk_load_status::type
         report_group_ingestion_status(response);
         break;
     case bulk_load_status::BLS_SUCCEED:
-    case bulk_load_status::BLS_FAILED:
     case bulk_load_status::BLS_CANCELED:
+    case bulk_load_status::BLS_FAILED:
         report_group_cleaned_up(response);
         break;
     case bulk_load_status::BLS_PAUSING:
@@ -732,8 +732,8 @@ void replica_bulk_loader::report_bulk_load_states_to_primary(bulk_load_status::t
         bulk_load_state.__set_ingest_status(_replica->_app->get_ingestion_status());
         break;
     case bulk_load_status::BLS_SUCCEED:
-    case bulk_load_status::BLS_FAILED:
     case bulk_load_status::BLS_CANCELED:
+    case bulk_load_status::BLS_FAILED:
         bulk_load_state.__set_is_cleaned_up(is_cleaned_up());
         break;
     case bulk_load_status::BLS_PAUSING:

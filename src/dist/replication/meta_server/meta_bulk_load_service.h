@@ -363,7 +363,6 @@ private:
 
     /// bulk load states
     std::unordered_set<int32_t> _bulk_load_app_id;
-    std::unordered_map<app_id, bool> _apps_cleaning_up;
     std::unordered_map<app_id, app_bulk_load_info> _app_bulk_load_info;
 
     std::unordered_map<app_id, int32_t> _apps_in_progress_count;
@@ -377,7 +376,10 @@ private:
     // partition_index -> group bulk load states(node address -> state)
     std::unordered_map<gpid, std::map<rpc_address, partition_bulk_load_state>>
         _partitions_bulk_load_state;
+
     std::unordered_map<gpid, bool> _partitions_cleaned_up;
+    // Used for bulk load failed and app unavailable to avoid duplicated clean up
+    std::unordered_map<app_id, bool> _apps_cleaning_up;
 };
 
 } // namespace replication
