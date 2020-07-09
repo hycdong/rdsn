@@ -239,33 +239,31 @@ private:
     ///
     void try_to_continue_bulk_load();
 
-    void continue_bulk_load(
+    void try_to_continue_app_bulk_load(
         const app_bulk_load_info &ainfo,
-        std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map);
+        const std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map);
 
-    bool check_bulk_load_status(
-        int32_t app_id,
-        int32_t partition_count,
-        const app_bulk_load_info &ainfo,
-        std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
-        std::unordered_set<int32_t> &different_status_pidx_set /*out*/);
+    bool validate_app_bulk_load_status(int32_t app_id,
+                                       int32_t partition_count,
+                                       const app_bulk_load_info &ainfo,
+                                       int32_t partition_bulk_load_info_size);
 
     bool validate_partition_bulk_load_status(
         const app_bulk_load_info &ainfo,
-        std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
+        const std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
         std::unordered_set<int32_t> &different_status_pidx_set /*out*/);
 
-    void do_continue_bulk_load(
+    void do_continue_app_bulk_load(
         const app_bulk_load_info &ainfo,
-        std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
-        std::unordered_set<int32_t> &different_status_pidx_set);
+        const std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map,
+        const std::unordered_set<int32_t> &different_status_pidx_set);
 
-    // Called by `do_continue_bulk_load`
+    // called by `do_continue_app_bulk_load`
     // only used when meta server leader switch and when app status is downloading and some
     // partition bulk load not existed on remote storage
-    void create_partition_bulk_load_dir(const std::string &app_name,
-                                        const gpid &pid,
-                                        int32_t partition_count);
+    void create_missing_partition_bulk_load_dir(const std::string &app_name,
+                                                const gpid &pid,
+                                                int32_t partition_count);
     ///
     /// helper functions
     ///
