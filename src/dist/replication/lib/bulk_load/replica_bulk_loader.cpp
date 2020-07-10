@@ -13,8 +13,6 @@
 namespace dsn {
 namespace replication {
 
-typedef rpc_holder<group_bulk_load_request, group_bulk_load_response> group_bulk_load_rpc;
-
 replica_bulk_loader::replica_bulk_loader(replica *r)
     : replica_base(r), _replica(r), _stub(r->get_replica_stub())
 {
@@ -602,20 +600,6 @@ error_code replica_bulk_loader::remove_local_bulk_load_dir(const std::string &bu
     return ERR_OK;
 }
 
-void replica_bulk_loader::pause_bulk_load()
-{
-    if (_status == bulk_load_status::BLS_PAUSED) {
-        ddebug_replica("bulk load has been paused");
-        return;
-    }
-    if (_status == bulk_load_status::BLS_DOWNLOADING) {
-        cleanup_download_task();
-        try_decrease_bulk_load_download_count();
-    }
-    _status = bulk_load_status::BLS_PAUSED;
-    ddebug_replica("bulk load is paused");
-}
-
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_loader::cleanup_download_task()
 {
@@ -672,6 +656,20 @@ bool replica_bulk_loader::is_cleaned_up()
     return true;
 }
 
+void replica_bulk_loader::pause_bulk_load()
+{
+    if (_status == bulk_load_status::BLS_PAUSED) {
+        ddebug_replica("bulk load has been paused");
+        return;
+    }
+    if (_status == bulk_load_status::BLS_DOWNLOADING) {
+        cleanup_download_task();
+        try_decrease_bulk_load_download_count();
+    }
+    _status = bulk_load_status::BLS_PAUSED;
+    ddebug_replica("bulk load is paused");
+}
+
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_bulk_loader::report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
                                                           bool report_metadata,
@@ -707,42 +705,6 @@ void replica_bulk_loader::report_bulk_load_states_to_meta(bulk_load_status::type
     }
 
     response.primary_bulk_load_status = _status;
-}
-
-// ThreadPool: THREAD_POOL_REPLICATION
-void replica_bulk_loader::report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
-                                                             group_bulk_load_response &response)
-{
-    if (status() != partition_status::PS_SECONDARY) {
-        response.err = ERR_INVALID_STATE;
-        return;
-    }
-
-    partition_bulk_load_state bulk_load_state;
-    auto local_status = _status;
-    switch (remote_status) {
-    case bulk_load_status::BLS_DOWNLOADING:
-    case bulk_load_status::BLS_DOWNLOADED:
-        bulk_load_state.__set_download_progress(_download_progress.load());
-        bulk_load_state.__set_download_status(_download_status.load());
-        break;
-    case bulk_load_status::BLS_INGESTING:
-        bulk_load_state.__set_ingest_status(_replica->_app->get_ingestion_status());
-        break;
-    case bulk_load_status::BLS_SUCCEED:
-    case bulk_load_status::BLS_CANCELED:
-    case bulk_load_status::BLS_FAILED:
-        bulk_load_state.__set_is_cleaned_up(is_cleaned_up());
-        break;
-    case bulk_load_status::BLS_PAUSING:
-        bulk_load_state.__set_is_paused(local_status == bulk_load_status::BLS_PAUSED);
-        break;
-    default:
-        break;
-    }
-
-    response.status = local_status;
-    response.bulk_load_state = bulk_load_state;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -898,6 +860,42 @@ void replica_bulk_loader::report_group_is_paused(bulk_load_response &response)
     }
     ddebug_replica("group bulk load is_paused = {}", group_is_paused);
     response.__set_is_group_bulk_load_paused(group_is_paused);
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_bulk_loader::report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
+                                                             group_bulk_load_response &response)
+{
+    if (status() != partition_status::PS_SECONDARY) {
+        response.err = ERR_INVALID_STATE;
+        return;
+    }
+
+    partition_bulk_load_state bulk_load_state;
+    auto local_status = _status;
+    switch (remote_status) {
+    case bulk_load_status::BLS_DOWNLOADING:
+    case bulk_load_status::BLS_DOWNLOADED:
+        bulk_load_state.__set_download_progress(_download_progress.load());
+        bulk_load_state.__set_download_status(_download_status.load());
+        break;
+    case bulk_load_status::BLS_INGESTING:
+        bulk_load_state.__set_ingest_status(_replica->_app->get_ingestion_status());
+        break;
+    case bulk_load_status::BLS_SUCCEED:
+    case bulk_load_status::BLS_CANCELED:
+    case bulk_load_status::BLS_FAILED:
+        bulk_load_state.__set_is_cleaned_up(is_cleaned_up());
+        break;
+    case bulk_load_status::BLS_PAUSING:
+        bulk_load_state.__set_is_paused(local_status == bulk_load_status::BLS_PAUSED);
+        break;
+    default:
+        break;
+    }
+
+    response.status = local_status;
+    response.bulk_load_state = bulk_load_state;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION

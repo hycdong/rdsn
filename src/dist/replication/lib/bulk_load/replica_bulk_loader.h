@@ -18,9 +18,6 @@ public:
     ~replica_bulk_loader();
 
 private:
-    //
-    // bulk load core functions
-    //
     void on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response);
     void broadcast_group_bulk_load(const bulk_load_request &meta_req);
     void on_group_bulk_load(const group_bulk_load_request &request,
@@ -68,13 +65,13 @@ private:
     void handle_bulk_load_succeed();
     // called when bulk load succeed or failed or canceled
     void handle_bulk_load_finish(bulk_load_status::type new_status);
+    void pause_bulk_load();
+
     error_code remove_local_bulk_load_dir(const std::string &bulk_load_dir);
     void cleanup_download_task();
     void clear_bulk_load_states();
     bool is_cleaned_up();
-    void pause_bulk_load();
 
-    // only called by primary
     void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
                                          bool report_metadata,
                                          /*out*/ bulk_load_response &response);
@@ -83,16 +80,19 @@ private:
     void report_group_cleaned_up(/*out*/ bulk_load_response &response);
     void report_group_is_paused(/*out*/ bulk_load_response &response);
 
-    // only called by secondary
     void report_bulk_load_states_to_primary(bulk_load_status::type remote_status,
                                             /*out*/ group_bulk_load_response &response);
 
     // called by `update_local_configuration` to do possible states cleaning up
     void clear_bulk_load_states_if_needed(partition_status::type new_status);
 
-    //
-    // bulk load helper functions
-    //
+    ///
+    /// bulk load path on remote file provider:
+    /// <bulk_load_root>/<cluster_name>/<app_name>/{bulk_load_info}
+    /// <bulk_load_root>/<cluster_name>/<app_name>/<partition_index>/<file_name>
+    /// <bulk_load_root>/<cluster_name>/<app_name>/<partition_index>/bulk_load_metadata
+    ///
+    // get partition's file dir on remote file provider
     inline std::string get_remote_bulk_load_dir(const std::string &app_name,
                                                 const std::string &cluster_name,
                                                 uint32_t pidx) const
@@ -102,7 +102,9 @@ private:
             << "/" << pidx;
         return oss.str();
     }
-    bulk_load_status::type get_bulk_load_status() { return _status; }
+
+    inline bulk_load_status::type get_bulk_load_status() const { return _status; }
+
     void set_bulk_load_status(bulk_load_status::type status) { _status = status; }
 
     inline uint64_t max_download_file_size() const { return _max_download_file_size.load(); }
@@ -141,10 +143,7 @@ private:
     friend class replica_stub;
     friend class replica_bulk_loader_test;
 
-    // replica bulk load status
-    // only will be read/write in replication thread pool
     bulk_load_status::type _status{bulk_load_status::BLS_INVALID};
-
     bulk_load_metadata _metadata;
     std::atomic<uint64_t> _cur_downloaded_size{0};
     std::atomic<int32_t> _download_progress{0};

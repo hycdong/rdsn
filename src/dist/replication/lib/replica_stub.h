@@ -47,6 +47,8 @@
 namespace dsn {
 namespace replication {
 
+typedef rpc_holder<group_bulk_load_request, group_bulk_load_response> group_bulk_load_rpc;
+
 class mutation_log;
 class replication_checker;
 namespace test {

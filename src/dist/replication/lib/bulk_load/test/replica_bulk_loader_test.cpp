@@ -25,8 +25,8 @@ public:
 
     ~replica_bulk_loader_test() { fail::teardown(); }
 
-public:
-    /// test helper functions
+    /// bulk load functions
+
     error_code test_on_bulk_load()
     {
         bulk_load_response resp;
@@ -40,11 +40,6 @@ public:
         group_bulk_load_response resp;
         _bulk_loader->on_group_bulk_load(_group_req, resp);
         return resp.err;
-    }
-
-    error_code test_parse_bulk_load_metadata(const std::string &file_path)
-    {
-        return _bulk_loader->parse_bulk_load_metadata(file_path);
     }
 
     error_code test_start_downloading()
@@ -72,6 +67,11 @@ public:
         test_start_downloading();
     }
 
+    error_code test_parse_bulk_load_metadata(const std::string &file_path)
+    {
+        return _bulk_loader->parse_bulk_load_metadata(file_path);
+    }
+
     void test_update_download_progress(uint64_t file_size)
     {
         _bulk_loader->update_bulk_load_download_progress(file_size, "test_file_name");
@@ -90,6 +90,7 @@ public:
             status, download_progress, istatus, is_bulk_load_ingestion);
         _bulk_loader->handle_bulk_load_finish(req_status);
     }
+
     void test_pause_bulk_load(bulk_load_status::type status, int32_t progress)
     {
         mock_replica_bulk_load_varieties(status, progress, ingestion_status::IS_INVALID);
@@ -159,6 +160,59 @@ public:
     }
 
     /// mock structure functions
+
+    void
+    create_bulk_load_request(bulk_load_status::type status, ballot b, int32_t downloading_count = 0)
+    {
+        _req.app_name = APP_NAME;
+        _req.ballot = b;
+        _req.cluster_name = CLUSTER;
+        _req.meta_bulk_load_status = status;
+        _req.pid = PID;
+        _req.remote_provider_name = PROVIDER;
+        stub->set_bulk_load_recent_downloading_replica_count(downloading_count);
+    }
+
+    void create_bulk_load_request(bulk_load_status::type status, int32_t downloading_count = 0)
+    {
+        if (status != bulk_load_status::BLS_DOWNLOADING) {
+            downloading_count = 0;
+        }
+        create_bulk_load_request(status, BALLOT, downloading_count);
+    }
+
+    void create_group_bulk_load_request(bulk_load_status::type status, ballot b)
+    {
+        _group_req.app_name = APP_NAME;
+        _group_req.meta_bulk_load_status = status;
+        _group_req.config.status = partition_status::PS_SECONDARY;
+        _group_req.config.ballot = b;
+        _group_req.target_address = SECONDARY;
+    }
+
+    void mock_replica_config(partition_status::type status)
+    {
+        replica_configuration rconfig;
+        rconfig.ballot = BALLOT;
+        rconfig.pid = PID;
+        rconfig.primary = PRIMARY;
+        rconfig.status = status;
+        _replica->_config = rconfig;
+    }
+
+    void mock_primary_states()
+    {
+        mock_replica_config(partition_status::PS_PRIMARY);
+        partition_configuration config;
+        config.max_replica_count = 3;
+        config.pid = PID;
+        config.ballot = BALLOT;
+        config.primary = PRIMARY;
+        config.secondaries.emplace_back(SECONDARY);
+        config.secondaries.emplace_back(SECONDARY2);
+        _replica->set_primary_partition_configuration(config);
+    }
+
     void create_local_file(const std::string &file_name)
     {
         std::string whole_name = utils::filesystem::path_combine(LOCAL_DIR, file_name);
@@ -230,35 +284,6 @@ public:
         return true;
     }
 
-    void
-    create_bulk_load_request(bulk_load_status::type status, ballot b, int32_t downloading_count = 0)
-    {
-        _req.app_name = APP_NAME;
-        _req.ballot = b;
-        _req.cluster_name = CLUSTER;
-        _req.meta_bulk_load_status = status;
-        _req.pid = PID;
-        _req.remote_provider_name = PROVIDER;
-        stub->set_bulk_load_recent_downloading_replica_count(downloading_count);
-    }
-
-    void create_bulk_load_request(bulk_load_status::type status, int32_t downloading_count = 0)
-    {
-        if (status != bulk_load_status::BLS_DOWNLOADING) {
-            downloading_count = 0;
-        }
-        create_bulk_load_request(status, BALLOT, downloading_count);
-    }
-
-    void create_group_bulk_load_request(bulk_load_status::type status, ballot b)
-    {
-        _group_req.app_name = APP_NAME;
-        _group_req.meta_bulk_load_status = status;
-        _group_req.config.status = partition_status::PS_SECONDARY;
-        _group_req.config.ballot = b;
-        _group_req.target_address = SECONDARY;
-    }
-
     void mock_downloading_progress(uint64_t file_total_size,
                                    uint64_t cur_downloaded_size,
                                    int32_t download_progress)
@@ -267,29 +292,6 @@ public:
         _bulk_loader->_metadata.file_total_size = file_total_size;
         _bulk_loader->_cur_downloaded_size = cur_downloaded_size;
         _bulk_loader->_download_progress = download_progress;
-    }
-
-    void mock_replica_config(partition_status::type status)
-    {
-        replica_configuration rconfig;
-        rconfig.ballot = BALLOT;
-        rconfig.pid = PID;
-        rconfig.primary = PRIMARY;
-        rconfig.status = status;
-        _replica->_config = rconfig;
-    }
-
-    void mock_primary_states()
-    {
-        mock_replica_config(partition_status::PS_PRIMARY);
-        partition_configuration config;
-        config.max_replica_count = 3;
-        config.pid = PID;
-        config.ballot = BALLOT;
-        config.primary = PRIMARY;
-        config.secondaries.emplace_back(SECONDARY);
-        config.secondaries.emplace_back(SECONDARY2);
-        _replica->set_primary_partition_configuration(config);
     }
 
     void mock_replica_bulk_load_varieties(bulk_load_status::type status,
@@ -379,19 +381,9 @@ public:
     }
 
     /// helper functions
-
-    int32_t get_download_progress() { return _bulk_loader->_download_progress.load(); }
-    bool is_cleaned_up() { return _bulk_loader->is_cleaned_up(); }
     bulk_load_status::type get_bulk_load_status() { return _bulk_loader->_status; }
-    int32_t get_stub_downloading_count()
-    {
-        return stub->get_bulk_load_recent_downloading_replica_count();
-    }
-
-    ingestion_status::type get_ingestion_status() { return _replica->_app->get_ingestion_status(); }
-
-    int32_t is_ingestion() { return _replica->_is_bulk_load_ingestion; }
-
+    bool is_cleaned_up() { return _bulk_loader->is_cleaned_up(); }
+    int32_t get_download_progress() { return _bulk_loader->_download_progress.load(); }
     bool is_secondary_bulk_load_state_reset()
     {
         const partition_bulk_load_state &state = _replica->get_secondary_bulk_load_state(SECONDARY);
@@ -409,23 +401,25 @@ public:
 public:
     std::unique_ptr<mock_replica> _replica;
     std::unique_ptr<replica_bulk_loader> _bulk_loader;
-    file_meta _file_meta;
-    bulk_load_metadata _metadata;
+
     bulk_load_request _req;
     group_bulk_load_request _group_req;
+
+    file_meta _file_meta;
+    bulk_load_metadata _metadata;
 
     std::string APP_NAME = "replica";
     std::string CLUSTER = "cluster";
     std::string PROVIDER = "local_service";
-    std::string LOCAL_DIR = bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR;
-    std::string METADATA = bulk_load_constant::BULK_LOAD_METADATA;
-    std::string FILE_NAME = "test_sst_file";
     gpid PID = gpid(1, 0);
     ballot BALLOT = 3;
     rpc_address PRIMARY = rpc_address("127.0.0.2", 34801);
     rpc_address SECONDARY = rpc_address("127.0.0.3", 34801);
     rpc_address SECONDARY2 = rpc_address("127.0.0.4", 34801);
     int32_t MAX_DOWNLOADING_COUNT = 5;
+    std::string LOCAL_DIR = bulk_load_constant::BULK_LOAD_LOCAL_ROOT_DIR;
+    std::string METADATA = bulk_load_constant::BULK_LOAD_METADATA;
+    std::string FILE_NAME = "test_sst_file";
 };
 
 // on_bulk_load unit tests
@@ -469,36 +463,6 @@ TEST_F(replica_bulk_loader_test, on_group_bulk_load_test)
     }
 }
 
-// parse_bulk_load_metadata unit tests
-TEST_F(replica_bulk_loader_test, bulk_load_metadata_not_exist)
-{
-    error_code ec = test_parse_bulk_load_metadata("path_not_exist");
-    ASSERT_EQ(ec, ERR_FILE_OPERATION_FAILED);
-}
-
-TEST_F(replica_bulk_loader_test, bulk_load_metadata_corrupt)
-{
-    utils::filesystem::create_directory(LOCAL_DIR);
-    create_local_file(METADATA);
-    std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
-    error_code ec = test_parse_bulk_load_metadata(metadata_file_name);
-    ASSERT_EQ(ec, ERR_CORRUPTION);
-    utils::filesystem::remove_path(LOCAL_DIR);
-}
-
-TEST_F(replica_bulk_loader_test, bulk_load_metadata_parse_succeed)
-{
-    utils::filesystem::create_directory(LOCAL_DIR);
-    error_code ec = create_local_metadata_file();
-    ASSERT_EQ(ec, ERR_OK);
-
-    std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
-    ec = test_parse_bulk_load_metadata(metadata_file_name);
-    ASSERT_EQ(ec, ERR_OK);
-    ASSERT_TRUE(validate_metadata());
-    utils::filesystem::remove_path(LOCAL_DIR);
-}
-
 // start_downloading unit tests
 TEST_F(replica_bulk_loader_test, start_downloading_test)
 {
@@ -530,7 +494,7 @@ TEST_F(replica_bulk_loader_test, start_downloading_test)
 
         ASSERT_EQ(test_start_downloading(), test.expected_err);
         ASSERT_EQ(get_bulk_load_status(), test.expected_status);
-        ASSERT_EQ(get_stub_downloading_count(), test.expected_downloading_count);
+        ASSERT_EQ(stub->get_bulk_load_downloading_count(), test.expected_downloading_count);
     }
 }
 
@@ -554,6 +518,36 @@ TEST_F(replica_bulk_loader_test, rollback_to_downloading_test)
     }
 }
 
+// parse_bulk_load_metadata unit tests
+TEST_F(replica_bulk_loader_test, bulk_load_metadata_not_exist)
+{
+    error_code ec = test_parse_bulk_load_metadata("path_not_exist");
+    ASSERT_EQ(ec, ERR_FILE_OPERATION_FAILED);
+}
+
+TEST_F(replica_bulk_loader_test, bulk_load_metadata_corrupt)
+{
+    utils::filesystem::create_directory(LOCAL_DIR);
+    create_local_file(METADATA);
+    std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
+    error_code ec = test_parse_bulk_load_metadata(metadata_file_name);
+    ASSERT_EQ(ec, ERR_CORRUPTION);
+    utils::filesystem::remove_path(LOCAL_DIR);
+}
+
+TEST_F(replica_bulk_loader_test, bulk_load_metadata_parse_succeed)
+{
+    utils::filesystem::create_directory(LOCAL_DIR);
+    error_code ec = create_local_metadata_file();
+    ASSERT_EQ(ec, ERR_OK);
+
+    std::string metadata_file_name = utils::filesystem::path_combine(LOCAL_DIR, METADATA);
+    ec = test_parse_bulk_load_metadata(metadata_file_name);
+    ASSERT_EQ(ec, ERR_OK);
+    ASSERT_TRUE(validate_metadata());
+    utils::filesystem::remove_path(LOCAL_DIR);
+}
+
 // finish download test
 TEST_F(replica_bulk_loader_test, finish_download_test)
 {
@@ -562,7 +556,7 @@ TEST_F(replica_bulk_loader_test, finish_download_test)
 
     test_update_download_progress(50);
     ASSERT_EQ(get_bulk_load_status(), bulk_load_status::BLS_DOWNLOADED);
-    ASSERT_EQ(get_stub_downloading_count(), 2);
+    ASSERT_EQ(stub->get_bulk_load_downloading_count(), 2);
 }
 
 // start ingestion test
