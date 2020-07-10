@@ -516,11 +516,11 @@ void bulk_load_service::handle_app_downloading(const bulk_load_response &respons
 void bulk_load_service::handle_app_ingestion(const bulk_load_response &response,
                                              const rpc_address &primary_addr)
 {
-    std::string app_name = response.app_name;
-    gpid pid = response.pid;
+    const std::string &app_name = response.app_name;
+    const gpid &pid = response.pid;
 
     if (!response.__isset.is_group_ingestion_finished) {
-        dwarn_f("receive bulk load response from node({}) app({}) partition({}), "
+        dwarn_f("receive bulk load response from node({}) app({}), partition({}), "
                 "primary_status({}), but is_group_ingestion_finished is not set",
                 primary_addr.to_string(),
                 app_name,
@@ -749,7 +749,7 @@ void bulk_load_service::update_partition_metadata_on_remote_stroage(
     zauto_read_lock l(_lock);
     partition_bulk_load_info pinfo = _partition_bulk_load_info[pid];
     pinfo.metadata = metadata;
-    blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
+    blob value = json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
     _meta_svc->get_meta_storage()->set_data(
         get_partition_bulk_load_path(pid), std::move(value), [this, app_name, pid, pinfo]() {
@@ -786,7 +786,7 @@ void bulk_load_service::update_partition_status_on_remote_storage(const std::str
 
     _partitions_pending_sync_flag[pid] = true;
     pinfo.status = new_status;
-    blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
+    blob value = json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
 
     _meta_svc->get_meta_storage()->set_data(
         get_partition_bulk_load_path(pid),
@@ -814,7 +814,7 @@ void bulk_load_service::update_partition_status_on_remote_storage_reply(
 
         ddebug_f("app({}) update partition({}) status from {} to {}",
                  app_name,
-                 pid.to_string(),
+                 pid,
                  dsn::enum_to_string(old_status),
                  dsn::enum_to_string(new_status));
 
@@ -829,7 +829,7 @@ void bulk_load_service::update_partition_status_on_remote_storage_reply(
             break;
         case bulk_load_status::BLS_DOWNLOADING:
             if (old_status != new_status) {
-                _partitions_bulk_load_state[pid].clear();
+                _partitions_bulk_load_state.erase(pid);
                 _partitions_total_download_progress[pid] = 0;
                 _partitions_cleaned_up[pid] = false;
                 if (--_apps_in_progress_count[pid.get_app_id()] == 0) {
@@ -966,8 +966,7 @@ void bulk_load_service::partition_ingestion(const std::string &app_name, const g
     }
 
     if (primary_addr.is_invalid()) {
-        dwarn_f(
-            "app({}) partition({}) primary is invalid, try it later", app_name, pid.to_string());
+        dwarn_f("app({}) partition({}) primary is invalid, try it later", app_name, pid);
         tasking::enqueue(LPC_BULK_LOAD_INGESTION,
                          _meta_svc->tracker(),
                          std::bind(&bulk_load_service::partition_ingestion, this, app_name, pid),
@@ -1060,7 +1059,7 @@ void bulk_load_service::on_partition_ingestion_reply(error_code err,
         return;
     }
 
-    ddebug_f("app({}) partition({}) receive ingestion reply succeed", app_name, pid);
+    ddebug_f("app({}) partition({}) receive ingestion response succeed", app_name, pid);
 }
 
 // ThreadPool: THREAD_POOL_META_STATE, THREAD_POOL_META_SERVER
@@ -1070,7 +1069,7 @@ void bulk_load_service::remove_bulk_load_dir_on_remote_storage(int32_t app_id,
     std::string bulk_load_path = get_app_bulk_load_path(app_id);
     _meta_svc->get_meta_storage()->delete_node_recursively(
         std::move(bulk_load_path), [this, app_id, app_name, bulk_load_path]() {
-            ddebug_f("remove app({}) bulk load dir {}", app_name, bulk_load_path);
+            ddebug_f("remove app({}) bulk load dir {} succeed", app_name, bulk_load_path);
             reset_local_bulk_load_states(app_id, app_name);
         });
 }

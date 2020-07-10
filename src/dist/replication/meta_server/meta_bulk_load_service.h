@@ -11,7 +11,7 @@ namespace dsn {
 namespace replication {
 
 ///
-/// bulk load layout on remote storage:
+/// bulk load path on remote storage:
 /// <cluster_root>/bulk_load/<app_id> -> app_bulk_load_info
 /// <cluster_root>/bulk_load/<app_id>/<pidx> -> partition_bulk_load_info
 ///
@@ -43,12 +43,54 @@ struct bulk_load_info
     DEFINE_JSON_SERIALIZATION(app_id, app_name, partition_count)
 };
 
+///
+/// Bulk load process:
+/// when client sent `start_bulk_load_rpc` to meta server to start bulk load,
+/// meta server create bulk load structures on remote storage, and send `RPC_BULK_LOAD` rpc to
+/// each primary replica periodically until bulk load succeed or failed. whole process below:
+///
+///           start bulk load
+///                  |
+///                  v
+///          is_bulk_loading = true
+///                  |
+///                  v
+///     create bulk load info on remote storage
+///                  |
+///         Err      v
+///     ---------Downloading <---------|
+///     |            |                 |
+///     |            v         Err     |
+///     |        Downloaded  --------->|
+///     |            |                 |
+///     | IngestErr  v         Err     |
+///     |<------- Ingesting  --------->|
+///     |            |                 |
+///     v            v         Err     |
+///   Failed       Succeed   --------->|
+///     |            |
+///     v            v
+///    remove bulk load info on remote storage
+///                  |
+///                  v
+///         is_bulk_loading = false
+///                  |
+///                  v
+///            bulk load end
+
 class bulk_load_service
 {
 public:
     explicit bulk_load_service(meta_service *meta_svc, const std::string &bulk_load_dir);
 
     void initialize_bulk_load_service();
+
+    // client -> meta server to start bulk load
+    void on_start_bulk_load(start_bulk_load_rpc rpc);
+    // client -> meta server to pause/restart/cancel/force_cancel bulk load
+    void on_control_bulk_load(control_bulk_load_rpc rpc);
+    // client -> meta server to query bulk load status
+    void on_query_bulk_load_status(query_bulk_load_rpc rpc);
 
     // Called by `sync_apps_from_remote_stroage`, check bulk load state consistency
     // Handle inconsistent conditions below:
@@ -57,50 +99,7 @@ public:
     // remote stroage
     void check_app_bulk_load_consistency(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
-    // client -> meta server to start bulk load
-    void on_start_bulk_load(start_bulk_load_rpc rpc);
-    // client -> meta server to query bulk load status
-    void on_query_bulk_load_status(query_bulk_load_rpc rpc);
-    // client -> meta server to pause/restart/cancel/force_cancel bulk load
-    void on_control_bulk_load(control_bulk_load_rpc rpc);
-
 private:
-    // TODO(heyuchen): consider pause and cancel
-    ///
-    /// Bulk load process:
-    /// when client sent `start_bulk_load_rpc` to meta server to start bulk load,
-    /// meta server create bulk load structures on remote storage, and send `RPC_BULK_LOAD` rpc to
-    /// each primary replica periodically until bulk load succeed or failed. whole process below:
-    ///
-    ///           start bulk load
-    ///                  |
-    ///                  v
-    ///          is_bulk_loading = true
-    ///                  |
-    ///                  v
-    ///     create bulk load info on remote storage
-    ///                  |
-    ///         Err      v
-    ///     ---------Downloading <---------|
-    ///     |            |                 |
-    ///     |            v         Err     |
-    ///     |        Downloaded  --------->|
-    ///     |            |                 |
-    ///     | IngestErr  v         Err     |
-    ///     |<------- Ingesting  --------->|
-    ///     |            |                 |
-    ///     v            v         Err     |
-    ///   Failed       Succeed   --------->|
-    ///     |            |
-    ///     v            v
-    ///    remove bulk load info on remote storage
-    ///                  |
-    ///                  v
-    ///         is_bulk_loading = false
-    ///                  |
-    ///                  v
-    ///            bulk load end
-
     // Called by `on_start_bulk_load`, check request params
     // - ERR_OK: pass params check
     // - ERR_INVALID_PARAMETERS: wrong file_provider type
@@ -138,14 +137,14 @@ private:
     void handle_bulk_load_finish(const bulk_load_response &response,
                                  const rpc_address &primary_addr);
 
-    void try_rollback_to_downloading(const std::string &app_name, const gpid &pid);
-
-    void handle_bulk_load_failed(int32_t app_id);
-
     void handle_app_pausing(const bulk_load_response &response, const rpc_address &primary_addr);
 
     // app not existed or not available during bulk load
     void handle_app_unavailable(int32_t app_id, const std::string &app_name);
+
+    void try_rollback_to_downloading(const std::string &app_name, const gpid &pid);
+
+    void handle_bulk_load_failed(int32_t app_id);
 
     // Called when app bulk load status update to ingesting
     // create ingestion_request and send it to primary
@@ -178,6 +177,10 @@ private:
                                                      const gpid &pid,
                                                      const bulk_load_metadata &metadata);
 
+    // update partition bulk load status on remote storage
+    // if should_send_request = true, will send bulk load request after update local partition
+    // status, this parameter will be true when restarting bulk load, status will turn from paused
+    // to downloading
     void update_partition_status_on_remote_storage(const std::string &app_name,
                                                    const gpid &pid,
                                                    bulk_load_status::type new_status,
@@ -188,6 +191,7 @@ private:
                                                          bulk_load_status::type new_status,
                                                          bool should_send_request);
 
+    // update app bulk load status on remote storage
     void update_app_status_on_remote_storage_unlocked(int32_t app_id,
                                                       bulk_load_status::type new_status,
                                                       bool should_send_request = false);
@@ -209,6 +213,7 @@ private:
 
     // update app's is_bulk_loading to false on remote_storage
     void update_app_not_bulk_loading_on_remote_storage(std::shared_ptr<app_state> app);
+
     ///
     /// sync bulk load states from remote storage
     /// called when service initialized or meta server leader switch
@@ -259,6 +264,8 @@ private:
     ///
     /// helper functions
     ///
+    // get bulk_load_info path on file provider
+    // <bulk_load_provider_root>/<cluster_name>/<app_name>/bulk_load_info
     inline std::string get_bulk_load_info_path(const std::string &app_name,
                                                const std::string &cluster_name) const
     {
@@ -268,6 +275,8 @@ private:
         return oss.str();
     }
 
+    // get app_bulk_load_info path on remote stroage
+    // <_bulk_load_root>/<app_id>
     inline std::string get_app_bulk_load_path(int32_t app_id) const
     {
         std::stringstream oss;
@@ -275,6 +284,8 @@ private:
         return oss.str();
     }
 
+    // get partition_bulk_load_info path on remote stroage
+    // <_bulk_load_root>/<app_id>/<partition_id>
     inline std::string get_partition_bulk_load_path(const std::string &app_bulk_load_path,
                                                     int partition_id) const
     {
@@ -288,27 +299,6 @@ private:
         std::stringstream oss;
         oss << get_app_bulk_load_path(pid.get_app_id()) << "/" << pid.get_partition_index();
         return oss.str();
-    }
-
-    inline bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
-    {
-        zauto_read_lock l(_lock);
-        return get_app_bulk_load_status_unlocked(app_id);
-    }
-
-    inline bulk_load_status::type get_app_bulk_load_status_unlocked(int32_t app_id) const
-    {
-        const auto &iter = _app_bulk_load_info.find(app_id);
-        if (iter != _app_bulk_load_info.end()) {
-            return iter->second.status;
-        } else {
-            return bulk_load_status::BLS_INVALID;
-        }
-    }
-
-    inline bool is_app_bulk_loading_unlocked(int32_t app_id) const
-    {
-        return (_bulk_load_app_id.find(app_id) != _bulk_load_app_id.end());
     }
 
     inline bool is_partition_metadata_not_updated(gpid pid)
@@ -337,6 +327,27 @@ private:
         }
     }
 
+    inline bulk_load_status::type get_app_bulk_load_status(int32_t app_id)
+    {
+        zauto_read_lock l(_lock);
+        return get_app_bulk_load_status_unlocked(app_id);
+    }
+
+    inline bulk_load_status::type get_app_bulk_load_status_unlocked(int32_t app_id) const
+    {
+        const auto &iter = _app_bulk_load_info.find(app_id);
+        if (iter != _app_bulk_load_info.end()) {
+            return iter->second.status;
+        } else {
+            return bulk_load_status::BLS_INVALID;
+        }
+    }
+
+    inline bool is_app_bulk_loading_unlocked(int32_t app_id) const
+    {
+        return (_bulk_load_app_id.find(app_id) != _bulk_load_app_id.end());
+    }
+
     mss::meta_storage *get_sync_bulk_load_storage() const { return _sync_bulk_load_storage.get(); }
 
 private:
@@ -349,7 +360,7 @@ private:
     zrwlock_nr &app_lock() const { return _state->_lock; }
     zrwlock_nr _lock; // bulk load states lock
 
-    std::string _bulk_load_root; // <cluster_root>/bulk_load
+    const std::string _bulk_load_root; // <cluster_root>/bulk_load
 
     /// bulk load states
     std::unordered_set<int32_t> _bulk_load_app_id;
