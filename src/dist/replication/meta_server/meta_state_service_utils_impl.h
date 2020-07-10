@@ -75,7 +75,7 @@ struct operation : pipeline::environment
     void initialize(meta_storage *storage)
     {
         _ms = storage;
-        task_tracker(storage->_tracker).thread_pool(storage->_cb_code);
+        task_tracker(storage->_tracker).thread_pool(LPC_META_STATE_HIGH);
     }
 
     // The common strategy for error handling:
@@ -100,8 +100,6 @@ struct operation : pipeline::environment
     dist::meta_state_service *remote_storage() const { return _ms->_remote; }
 
     dsn::task_tracker *tracker() const { return _ms->_tracker; }
-
-    dsn::task_code task_code() const { return _ms->_cb_code; }
 
 private:
     meta_storage *_ms{nullptr};
@@ -136,7 +134,7 @@ struct on_create_recursively : operation
         }
 
         remote_storage()->create_node(_cur_path,
-                                      task_code(),
+                                      LPC_META_STATE_HIGH,
                                       [op = *this](error_code ec) mutable { op.on_error(ec); },
                                       args->nodes.empty() ? args->val : blob(),
                                       tracker());
@@ -176,7 +174,7 @@ struct on_create : operation
     void run()
     {
         remote_storage()->create_node(args->node,
-                                      task_code(),
+                                      LPC_META_STATE_HIGH,
                                       [op = *this](error_code ec) mutable { op.on_error(ec); },
                                       args->val,
                                       tracker());
@@ -207,7 +205,7 @@ struct on_delete : operation
     {
         remote_storage()->delete_node(args->node,
                                       args->is_recursively_delete,
-                                      task_code(),
+                                      LPC_META_STATE_HIGH,
                                       [op = *this](error_code ec) mutable { op.on_error(ec); },
                                       tracker());
     }
@@ -238,7 +236,7 @@ struct on_get_data : operation
     {
         remote_storage()->get_data(
             args->node,
-            task_code(),
+            LPC_META_STATE_HIGH,
             [op = *this](error_code ec, const blob &val) mutable { op.on_error(ec, val); },
             tracker());
     }
@@ -267,7 +265,7 @@ struct on_set_data : operation
     {
         remote_storage()->set_data(args->node,
                                    args->val,
-                                   task_code(),
+                                   LPC_META_STATE_HIGH,
                                    [op = *this](error_code ec) mutable { op.on_error(ec); },
                                    tracker());
     }
@@ -296,7 +294,7 @@ struct on_get_children : operation
     {
         remote_storage()->get_children(
             args->node,
-            task_code(),
+            LPC_META_STATE_HIGH,
             [op = *this](error_code ec, const std::vector<std::string> &children) mutable {
                 op.on_error(ec, children);
             },

@@ -300,6 +300,11 @@ public:
         return bulk_svc().is_partition_metadata_not_updated(pid);
     }
 
+    bool app_bulk_load_states_reset(int32_t app_id)
+    {
+        return bulk_svc()._bulk_load_app_id.find(app_id) == bulk_svc()._bulk_load_app_id.end();
+    }
+
 public:
     int32_t APP_ID = 1;
     std::string APP_NAME = "bulk_load_test";
@@ -905,9 +910,9 @@ TEST_F(bulk_load_failover_test, sync_bulk_load)
 }
 
 /// check_app_bulk_load_consistency unit test
+// create app(is_bulk_loading=true), but no bulk load info on remote storage
 TEST_F(bulk_load_failover_test, status_inconsistency_wrong_app_status)
 {
-    // create app(is_bulk_loading=true), but no bulk load info on remote storage
     mock_app_info(SYNC_APP_ID, SYNC_PARTITION_COUNT, SYNC_APP_NAME, true);
     initialize_meta_server_with_mock_bulk_load(
         _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
@@ -917,10 +922,27 @@ TEST_F(bulk_load_failover_test, status_inconsistency_wrong_app_status)
     ASSERT_FALSE(app_is_bulk_loading(SYNC_APP_NAME));
 }
 
+// create app bulk load info on remote storage, but this app not existed
 TEST_F(bulk_load_failover_test, status_inconsistency_wrong_bulk_load_dir)
 {
-    try_to_continue_bulk_load(bulk_load_status::BLS_DOWNLOADED, false);
-    ASSERT_FALSE(app_is_bulk_loading(SYNC_APP_NAME));
+    std::unordered_map<int32_t, bulk_load_status::type> partition_bulk_load_status_map;
+    partition_bulk_load_status_map[0] = bulk_load_status::BLS_DOWNLOADING;
+    partition_bulk_load_status_map[1] = bulk_load_status::BLS_DOWNLOADING;
+    prepare_bulk_load_structures(SYNC_APP_ID,
+                                 PARTITION_COUNT,
+                                 SYNC_APP_NAME,
+                                 bulk_load_status::BLS_DOWNLOADING,
+                                 partition_bulk_load_status_map,
+                                 true);
+    _app_info.clear();
+    mock_app_info(APP_ID, PARTITION_COUNT, APP_NAME, false);
+
+    initialize_meta_server_with_mock_bulk_load(
+        _app_id_set, _app_bulk_load_info_map, _partition_bulk_load_info_map, _app_info);
+    bulk_svc().initialize_bulk_load_service();
+    wait_all();
+
+    ASSERT_TRUE(app_bulk_load_states_reset(SYNC_APP_ID));
 }
 
 /// try_to_continue_bulk_load unit test

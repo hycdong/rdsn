@@ -35,10 +35,8 @@ namespace dsn {
 namespace replication {
 namespace mss {
 
-meta_storage::meta_storage(dist::meta_state_service *remote_storage,
-                           task_tracker *tracker,
-                           task_code callback_code)
-    : _remote(remote_storage), _tracker(tracker), _cb_code(callback_code)
+meta_storage::meta_storage(dist::meta_state_service *remote_storage, task_tracker *tracker)
+    : _remote(remote_storage), _tracker(tracker)
 {
     dassert(tracker != nullptr, "must set task tracker");
 }
