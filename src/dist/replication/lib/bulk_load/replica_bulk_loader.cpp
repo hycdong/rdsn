@@ -902,5 +902,16 @@ void replica_bulk_loader::report_group_is_paused(bulk_load_response &response)
     response.__set_is_group_bulk_load_paused(group_is_paused);
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_bulk_loader::clear_bulk_load_states_if_needed(partition_status::type new_status)
+{
+    partition_status::type old_status = status();
+    if ((new_status == partition_status::PS_PRIMARY ||
+         new_status == partition_status::PS_SECONDARY) &&
+        new_status != old_status) {
+        clear_bulk_load_states();
+    }
+}
+
 } // namespace replication
 } // namespace dsn

@@ -359,11 +359,11 @@ public:
 
     void mock_group_ingestion_states(ingestion_status::type s1_status,
                                      ingestion_status::type s2_status,
-                                     bool is_ingestion_commit = true)
+                                     bool is_empty_prepare_sent = true)
     {
         mock_replica_bulk_load_varieties(
             bulk_load_status::BLS_INGESTING, 100, ingestion_status::IS_SUCCEED);
-        mock_secondary_ingestion_states(s1_status, s2_status, is_ingestion_commit);
+        mock_secondary_ingestion_states(s1_status, s2_status, is_empty_prepare_sent);
     }
 
     void mock_group_cleanup_flag(bulk_load_status::type primary_status,
