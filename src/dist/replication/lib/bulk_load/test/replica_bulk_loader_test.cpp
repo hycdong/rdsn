@@ -540,11 +540,9 @@ TEST_F(replica_bulk_loader_test, rollback_to_downloading_test)
     struct test_struct
     {
         bulk_load_status::type status;
-    } tests[]{
-        {bulk_load_status::BLS_PAUSED},
-        {bulk_load_status::BLS_INGESTING},
-        {bulk_load_status::BLS_SUCCEED}
-    };
+    } tests[]{{bulk_load_status::BLS_PAUSED},
+              {bulk_load_status::BLS_INGESTING},
+              {bulk_load_status::BLS_SUCCEED}};
 
     for (auto test : tests) {
         test_rollback_to_downloading(test.status);
