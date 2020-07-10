@@ -55,11 +55,8 @@ public:
     void test_rollback_to_downloading(bulk_load_status::type cur_status)
     {
         switch (cur_status) {
-        case bulk_load_status::BLS_DOWNLOADING:
-            mock_group_progress(bulk_load_status::BLS_DOWNLOADING, 30, 30, 30);
-            break;
-        case bulk_load_status::BLS_DOWNLOADED:
-            mock_group_progress(bulk_load_status::BLS_DOWNLOADED);
+        case bulk_load_status::BLS_PAUSED:
+            mock_group_progress(bulk_load_status::BLS_DOWNLOADING, 30, 100, 100);
             break;
         case bulk_load_status::BLS_INGESTING:
             mock_group_ingestion_states(
@@ -67,9 +64,6 @@ public:
             break;
         case bulk_load_status::BLS_SUCCEED:
             mock_group_cleanup_flag(bulk_load_status::BLS_SUCCEED);
-            break;
-        case bulk_load_status::BLS_PAUSED:
-            mock_group_progress(bulk_load_status::BLS_DOWNLOADING, 30, 100, 100);
             break;
         default:
             return;
@@ -547,11 +541,9 @@ TEST_F(replica_bulk_loader_test, rollback_to_downloading_test)
     {
         bulk_load_status::type status;
     } tests[]{
-        {bulk_load_status::BLS_DOWNLOADING},
-        {bulk_load_status::BLS_DOWNLOADED},
-        {bulk_load_status::BLS_INGESTING},
-        {bulk_load_status::BLS_SUCCEED},
         {bulk_load_status::BLS_PAUSED},
+        {bulk_load_status::BLS_INGESTING},
+        {bulk_load_status::BLS_SUCCEED}
     };
 
     for (auto test : tests) {
