@@ -51,6 +51,8 @@ void replica::init_group_check()
 {
     _checker.only_one_thread_access();
 
+    FAIL_POINT_INJECT_F("replica_init_group_check", [](dsn::string_view) {});
+
     ddebug("%s: init group check", name());
 
     if (partition_status::PS_PRIMARY != status() || _options->group_check_disabled)
