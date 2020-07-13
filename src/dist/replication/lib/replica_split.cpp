@@ -53,6 +53,8 @@ void replica::check_partition_count(
                                                      "stop partition split"));
         _split_status = partition_split_status;
         broadcast_group_check();
+        // TODO(heyuchen): add it
+        // _partition_version = _app_info.partition_count - 1;
     }
 }
 
@@ -185,7 +187,7 @@ void replica::child_init_replica(gpid parent_gpid,
                          tracker(),
                          std::bind(&replica::child_check_split_context, this),
                          get_gpid().thread_hash(),
-                         std::chrono::seconds(5));
+                         std::chrono::seconds(3));
 
     ddebug_replica(
         "child initialize succeed, init_ballot={}, parent_gpid={}", init_ballot, parent_gpid);
@@ -199,7 +201,6 @@ void replica::child_init_replica(gpid parent_gpid,
     }
 }
 
-// TODO(heyuchen): refactor and consider this function
 void replica::child_check_split_context() // on child partition
 {
     FAIL_POINT_INJECT_F("replica_child_check_split_context", [](dsn::string_view) {});
@@ -212,25 +213,21 @@ void replica::child_check_split_context() // on child partition
         return;
     }
 
-    ddebug_f("{} child partition state checked", name());
-
-    // parent check its state
     error_code ec =
         _stub->split_replica_exec(LPC_PARTITION_SPLIT,
                                   _split_states.parent_gpid,
                                   std::bind(&replica::parent_check_states, std::placeholders::_1));
     if (ec != ERR_OK) {
         child_handle_split_error("check_child_state failed because parent gpid is invalid");
+        return;
     }
 
-    // restart check_state_task
-    // TODO(hyc): consider heartbeat interval
     _split_states.check_state_task =
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          tracker(),
                          std::bind(&replica::child_check_split_context, this),
                          get_gpid().thread_hash(),
-                         std::chrono::seconds(5));
+                         std::chrono::seconds(3));
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION

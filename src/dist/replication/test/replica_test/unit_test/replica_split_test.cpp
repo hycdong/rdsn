@@ -56,7 +56,6 @@ public:
         _parent->tracker()->wait_outstanding_tasks();
     }
 
-    // TODO(heyuchen):
     bool test_parent_check_states() { return _parent->parent_check_states(); }
 
     void test_child_copy_prepare_list()
@@ -101,7 +100,6 @@ public:
         _child->tracker()->wait_outstanding_tasks();
     }
 
-    // TODO(heyuchen): refactoring
     error_code test_parent_handle_child_catch_up(ballot child_ballot)
     {
         _parent->set_child_gpid(CHILD_GPID);
@@ -366,8 +364,6 @@ public:
     std::vector<std::string> _private_log_files;
     prepare_list *_mock_plist;
     std::vector<mutation_ptr> _mutation_list;
-
-    // update_group_partition_count_request _update_partition_count_req;
 };
 
 // try to start split unit tests
@@ -427,25 +423,19 @@ TEST_F(replica_split_test, add_child_test)
     }
 }
 
-// TODO(heyuchen): refactor this unit test
 TEST_F(replica_split_test, parent_check_states_with_wrong_status)
 {
+    fail::cfg("replica_stub_split_replica_exec", "return()");
     generate_child(partition_status::PS_PARTITION_SPLIT);
     _parent->set_partition_status(partition_status::PS_POTENTIAL_SECONDARY);
 
-    fail::setup();
-    fail::cfg("replica_stub_split_replica_exec", "return()");
-    bool flag = test_parent_check_states();
-    ASSERT_FALSE(flag);
-    fail::teardown();
+    ASSERT_FALSE(test_parent_check_states());
 }
 
-// TODO(heyuchen): refactor this unit test
 TEST_F(replica_split_test, parent_check_states)
 {
     generate_child(partition_status::PS_PARTITION_SPLIT);
-    bool flag = test_parent_check_states();
-    ASSERT_TRUE(flag);
+    ASSERT_TRUE(test_parent_check_states());
 }
 
 TEST_F(replica_split_test, copy_prepare_list_succeed)
