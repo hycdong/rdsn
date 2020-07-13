@@ -28,45 +28,6 @@ TEST(cold_backup_context, write_metadata_file) { app->write_backup_metadata_test
 
 TEST(cold_backup_context, write_current_chkpt_file) { app->write_current_chkpt_file_test(); }
 
-// TEST(split, on_add_child) { app->on_add_child_test(); }
-
-// TEST(split, child_init_replica) { app->child_init_replica_test(); }
-
-// TEST(split, check_child_state) { app->check_child_state_test(); }
-
-// TEST(split, prepare_copy_parent_state) { app->prepare_copy_parent_state_test(); }
-
-// TEST(split, copy_parent_state) { app->copy_parent_state_test(); }
-
-// TEST(split, apply_parent_state) { app->apply_parent_state_test(); }
-
-// TEST(split, child_catch_up) { app->child_catch_up_test(); }
-
-// TEST(split, notify_primary_split_catch_up) { app->notify_primary_split_catch_up_test(); }
-
-// TEST(split, on_notify_primary_split_catch_up) { app->on_notify_primary_split_catch_up_test(); }
-
-// TEST(split, check_sync_point) { app->check_sync_point_test(); }
-
-// TEST(split, update_group_partition_count) { app->update_group_partition_count_test(); }
-
-// TEST(split, on_update_group_partition_count) { app->on_update_group_partition_count_test(); }
-
-// TEST(split, on_update_group_partition_count_reply)
-//{
-//    app->on_update_group_partition_count_reply_test();
-//}
-
-// TEST(split, register_child_on_meta) { app->register_child_on_meta_test(); }
-
-// TEST(split, on_register_child_on_meta_reply) { app->on_register_child_on_meta_reply_test(); }
-
-// TEST(split, check_partition_state) { app->check_partition_state_test(); }
-
-// TEST(split, query_child_state) { app->query_child_state_test(); }
-
-// TEST(split, on_query_child_state_reply) { app->on_query_child_state_reply_test(); }
-
 error_code replication_service_test_app::start(const std::vector<std::string> &args)
 {
     gtest_ret = RUN_ALL_TESTS();

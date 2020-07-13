@@ -672,31 +672,5 @@ TEST_F(replica_split_test, register_child_reply_succeed)
     // ASSERT_TRUE(is_parent_not_in_split());
 }
 
-// TODO(heyuchen):
-// TEST_F(replica_split_test, parent_update_count_with_wrong_ballot)
-//{
-//    error_code err = test_on_update_group_partition_count(_parent, INIT_BALLOT - 1);
-//    ASSERT_EQ(err, ERR_VERSION_OUTDATED);
-//    ASSERT_EQ(_parent->status(), partition_status::PS_ERROR);
-//}
-
-// TEST_F(replica_split_test, parent_update_count_succeed)
-//{
-//    generate_child(partition_status::PS_PARTITION_SPLIT);
-//    mock_child_split_context(true, true);
-
-//    error_code err = test_on_update_group_partition_count(_parent, INIT_BALLOT);
-//    ASSERT_EQ(err, ERR_OK);
-//    ASSERT_EQ(get_partition_version(_parent), NEW_PARTITION_COUNT - 1);
-//    ASSERT_TRUE(is_parent_not_in_split());
-//}
-
-// TEST_F(replica_split_test, update_parent_group_count_succeed)
-//{
-//    int32_t not_replied_size = test_on_update_group_partition_count_reply(ERR_OK, PARENT_GPID);
-//    ASSERT_EQ(not_replied_size, 0);
-//    ASSERT_FALSE(parent_sync_send_write_request());
-//}
-
 } // namespace replication
 } // namespace dsn

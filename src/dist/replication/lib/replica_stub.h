@@ -151,7 +151,7 @@ public:
     //
     // common routines for inquiry
     //
-    virtual replica_ptr get_replica(gpid id);
+    replica_ptr get_replica(gpid id);
     replication_options &options() { return _options; }
     bool is_connected() const { return NS_Connected == _state; }
     virtual rpc_address get_meta_server_address() const { return _failure_detector->get_servers(); }
