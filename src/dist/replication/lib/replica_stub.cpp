@@ -1348,11 +1348,11 @@ void replica_stub::on_node_query_reply(error_code err,
         for (auto it = resp.partitions.begin(); it != resp.partitions.end(); ++it) {
             const gpid pid = it->config.pid;
 
-            auto partition_split_status = split_status::NOT_SPLIT;
+            auto meta_split_status = split_status::NOT_SPLIT;
             if (splitting_count > 0) {
                 auto iter = resp.splitting_replicas.find(pid);
                 if (iter != resp.splitting_replicas.end()) {
-                    partition_split_status = iter->second;
+                    meta_split_status = iter->second;
                 }
             }
 
@@ -1363,7 +1363,7 @@ void replica_stub::on_node_query_reply(error_code err,
                                        this,
                                        this,
                                        *it,
-                                       partition_split_status),
+                                       meta_split_status),
                              it->config.pid.thread_hash());
         }
 
@@ -1422,11 +1422,11 @@ void replica_stub::set_replica_state_subscriber_for_test(replica_state_subscribe
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_stub::on_node_query_reply_scatter(replica_stub_ptr this_,
                                                const configuration_update_request &req,
-                                               split_status::type partition_split_status)
+                                               split_status::type meta_split_status)
 {
     replica_ptr replica = get_replica(req.config.pid);
     if (replica != nullptr) {
-        replica->on_config_sync(req.info, req.config, partition_split_status);
+        replica->on_config_sync(req.info, req.config, meta_split_status);
     } else {
         if (req.config.primary == _primary_address) {
             ddebug("%s@%s: replica not exists on replica server, which is primary, remove it "

@@ -123,7 +123,7 @@ public:
     void on_config_proposal(configuration_update_request &proposal);
     void on_config_sync(const app_info &info,
                         const partition_configuration &config,
-                        split_status::type partition_split_status);
+                        split_status::type meta_split_status);
     void on_cold_backup(const backup_request &request, /*out*/ backup_response &response);
 
     //
@@ -354,7 +354,7 @@ private:
     /////////////////////////////////////////////////////////////////
     // partition split
     // parent partition create child
-    void on_add_child(const group_check_request &request);
+    void parent_start_split(const group_check_request &request);
 
     // child replica initialize config and state info
     void child_init_replica(gpid parent_gpid, rpc_address primary_address, ballot init_ballot);
@@ -458,13 +458,11 @@ private:
 
     // called by `on_config_sync` in `replica_config.cpp`
     void check_partition_count(const int32_t meta_partition_count,
-                               split_status::type partition_split_status);
-
-    void try_to_start_split(const int32_t meta_partition_count);
-
-    void init_table_level_latency_counters();
+                               split_status::type meta_split_status);
 
     void parent_send_notify_cancel_request();
+
+    void init_table_level_latency_counters();
 
 private:
     friend class ::dsn::replication::replication_checker;

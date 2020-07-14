@@ -91,16 +91,20 @@ void primary_context::cleanup(bool clean_pending_mutations)
     // clean up checkpoint
     CLEANUP_TASK_ALWAYS(checkpoint_task)
 
+    membership.ballot = 0;
+
+    clear_split_context();
+
+    stopping_split.clear();
+}
+
+void primary_context::clear_split_context()
+{
     // clean up register child in split
     CLEANUP_TASK_ALWAYS(register_child_task)
 
-    membership.ballot = 0;
-
     caught_up_children.clear();
-
     sync_send_write_request = false;
-
-    stopping_split.clear();
 }
 
 bool primary_context::is_cleaned()

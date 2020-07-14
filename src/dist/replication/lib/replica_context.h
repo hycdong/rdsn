@@ -73,6 +73,8 @@ public:
 
     void do_cleanup_pending_mutations(bool clean_pending_mutations = true);
 
+    void clear_split_context();
+
 public:
     // membership mgr, including learners
     partition_configuration membership;

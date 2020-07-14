@@ -197,7 +197,7 @@ void replica::on_group_check(const group_check_request &request,
         }
         // TODO(heyuchen): consider
         if (request.__isset.child_gpid) { // secondary create child replica
-            on_add_child(request);
+            parent_start_split(request);
         }
         if (request.app.partition_count ==
             _app_info.partition_count * 2) { // secondary update partition count

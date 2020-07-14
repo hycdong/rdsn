@@ -17,7 +17,7 @@ namespace replication {
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::check_partition_count(
     const int32_t meta_partition_count,
-    split_status::type partition_split_status) // on primary parent partition
+    split_status::type meta_split_status) // on primary parent partition
 {
     if (meta_partition_count == _app_info.partition_count) {
         return;
@@ -30,76 +30,66 @@ void replica::check_partition_count(
 
     dcheck_eq_replica(_app_info.partition_count * 2, meta_partition_count);
 
-    ddebug_replica("request split_status = {}, local split_status = {}",
-                   enum_to_string(partition_split_status),
-                   enum_to_string(_split_status));
+    ddebug_replica("app({}) partition count changed, local({}) VS meta({}), split_status local({}) "
+                   "VS meta({})",
+                   _app_info.app_name,
+                   _app_info.partition_count,
+                   meta_partition_count,
+                   enum_to_string(_split_status),
+                   enum_to_string(meta_split_status));
 
-    // TODO(heyuchen): consider where to reset partition_version
+    if (meta_split_status == split_status::SPLITTING) {
+        if (!_primary_states.learners.empty() ||
+            _primary_states.membership.secondaries.size() + 1 <
+                _primary_states.membership.max_replica_count) {
+            dwarn_replica(
+                "there are {} learners or not have enough secondaries(count is {}), wait for "
+                "next round",
+                _primary_states.learners.size(),
+                _primary_states.membership.secondaries.size());
+            return;
+        }
 
-    if (partition_split_status == split_status::SPLITTING) {
-        try_to_start_split(meta_partition_count);
-    } else if (partition_split_status == split_status::NOT_SPLIT) {
-        update_local_partition_count(meta_partition_count);
+        group_check_request add_child_request;
+        add_child_request.app = _app_info;
+        add_child_request.child_gpid = gpid(
+            get_gpid().get_app_id(), get_gpid().get_partition_index() + _app_info.partition_count);
+        _primary_states.get_replica_config(status(), add_child_request.config);
+        parent_start_split(add_child_request);
         broadcast_group_check();
-        _primary_states.sync_send_write_request = false;
-        parent_cleanup_split_context();
-    } else {
-        const std::string type =
-            partition_split_status == split_status::PAUSED ? "pause" : "cancel";
-        ddebug_replica("start to {} partition split", type);
+        return;
+    }
+
+    if (meta_split_status == split_status::PAUSED ||
+        meta_split_status == split_status::CANCELING) {
         _stub->split_replica_error_handler(_child_gpid,
                                            std::bind(&replica::child_handle_split_error,
                                                      std::placeholders::_1,
                                                      "stop partition split"));
-        _split_status = partition_split_status;
+        _partition_version = _app_info.partition_count - 1;
+        _split_status = meta_split_status;
+        _primary_states.clear_split_context();
         broadcast_group_check();
-        // TODO(heyuchen): add it
-        // _partition_version = _app_info.partition_count - 1;
-    }
-}
-
-// ThreadPool: THREAD_POOL_REPLICATION
-void replica::try_to_start_split(const int32_t meta_partition_count) // on primary parent partition
-{
-    if (_split_status == split_status::SPLITTING) {
-        dwarn_replica("partition is already splitting, ignore this request");
         return;
     }
 
-    if (!_primary_states.learners.empty() ||
-        _primary_states.membership.secondaries.size() + 1 <
-            _primary_states.membership.max_replica_count) {
-        dwarn_replica("there are {} learners or not have enough secondaries(count is {}), wait for "
-                      "next round",
-                      _primary_states.learners.size(),
-                      _primary_states.membership.secondaries.size());
-        return;
-    }
+    // when primary replica register child succeed, but replica server crashed
+    // meta server will consider this parent partition not_splitting, but parent group partition is
+    // not updated
+    dassert_replica(_split_status == split_status::NOT_SPLIT || _split_status == split_status::SPLITTING,
+                    "wrong split_status({})",
+                    enum_to_string(_split_status));
 
-    ddebug_replica("app({}) partition count changed, local({}) VS meta({}), start partition split",
-                   _app_info.app_name,
-                   _app_info.partition_count,
-                   meta_partition_count);
-
-    _primary_states.caught_up_children.clear();
-    _primary_states.sync_send_write_request = false;
-    _partition_version = _app_info.partition_count - 1;
-
-    group_check_request add_child_request;
-    add_child_request.app = _app_info;
-    add_child_request.child_gpid =
-        gpid(get_gpid().get_app_id(), get_gpid().get_partition_index() + _app_info.partition_count);
-    _primary_states.get_replica_config(status(), add_child_request.config);
-
-    on_add_child(add_child_request);
-    // secondaries create child through group check
+    update_local_partition_count(meta_partition_count);
+    _primary_states.clear_split_context();
+    parent_cleanup_split_context();
     broadcast_group_check();
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica::on_add_child(const group_check_request &request) // on parent partition
+void replica::parent_start_split(const group_check_request &request) // on parent partition
 {
-    FAIL_POINT_INJECT_F("replica_on_add_child", [](dsn::string_view) {});
+    FAIL_POINT_INJECT_F("replica_parent_start_split", [](dsn::string_view) {});
 
     if (status() != partition_status::PS_PRIMARY && status() != partition_status::PS_SECONDARY &&
         (status() != partition_status::PS_INACTIVE || !_inactive_is_transient)) {
@@ -122,6 +112,17 @@ void replica::on_add_child(const group_check_request &request) // on parent part
         return;
     }
 
+    if (_split_status == split_status::PAUSED || _split_status == split_status::CANCELING) {
+        derror_replica("partition split is paused or canceling, but meta server crashed, clean up "
+                       "before restart partition split");
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "cleanup out-dated child partition"));
+        parent_cleanup_split_context();
+        return;
+    }
+
     gpid child_gpid = request.child_gpid;
     if (child_gpid.get_partition_index() < _app_info.partition_count) {
         dwarn_replica(
@@ -130,6 +131,12 @@ void replica::on_add_child(const group_check_request &request) // on parent part
             _app_info.partition_count);
         return;
     }
+
+    if (status() == partition_status::PS_PRIMARY) {
+        _primary_states.caught_up_children.clear();
+        _primary_states.sync_send_write_request = false;
+    }
+    _partition_version = _app_info.partition_count - 1;
 
     _split_status = split_status::SPLITTING;
     _child_gpid = child_gpid;

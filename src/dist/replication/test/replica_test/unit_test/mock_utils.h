@@ -146,6 +146,7 @@ public:
     }
     bool is_splitting() { return (_split_status == split_status::SPLITTING); }
     void set_split_status(split_status::type status) { _split_status = status; }
+    split_status::type get_split_status() { return _split_status; }
 
 private:
     decree _max_gced_decree{invalid_decree - 1};

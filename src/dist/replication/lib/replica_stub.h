@@ -227,7 +227,7 @@ private:
     void on_node_query_reply(error_code err, dsn::message_ex *request, dsn::message_ex *response);
     void on_node_query_reply_scatter(replica_stub_ptr this_,
                                      const configuration_update_request &config,
-                                     split_status::type partition_split_status);
+                                     split_status::type meta_split_status);
     void on_node_query_reply_scatter2(replica_stub_ptr this_, gpid id);
     void remove_replica_on_meta_server(const app_info &info, const partition_configuration &config);
     ::dsn::task_ptr begin_open_replica(const app_info &app,
