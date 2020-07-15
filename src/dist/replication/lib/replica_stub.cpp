@@ -1357,14 +1357,12 @@ void replica_stub::on_node_query_reply(error_code err,
             }
 
             rs.erase(pid);
-            tasking::enqueue(LPC_QUERY_NODE_CONFIGURATION_SCATTER,
-                             &_tracker,
-                             std::bind(&replica_stub::on_node_query_reply_scatter,
-                                       this,
-                                       this,
-                                       *it,
-                                       meta_split_status),
-                             it->config.pid.thread_hash());
+            tasking::enqueue(
+                LPC_QUERY_NODE_CONFIGURATION_SCATTER,
+                &_tracker,
+                std::bind(
+                    &replica_stub::on_node_query_reply_scatter, this, this, *it, meta_split_status),
+                it->config.pid.thread_hash());
         }
 
         // for rps not exist on meta_servers

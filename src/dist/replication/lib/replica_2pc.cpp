@@ -67,7 +67,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
     }
 
     if (_partition_version == -1) {
-        derror("%s: current partition is not available coz during partition split", name());
+        derror_replica("current partition is not available because during partition split");
         response_client_write(request, ERR_OBJECT_NOT_FOUND);
         return;
     }
@@ -75,8 +75,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
     auto msg = (dsn::message_ex *)request;
     auto partition_hash = msg->header->client.partition_hash;
     if ((_partition_version & partition_hash) != get_gpid().get_partition_index()) {
-        derror("%s: receive request with wrong hash value, partition_version=%d, hash=%" PRId64,
-               name(),
+        derror_replica("receive request with wrong hash value, partition_version={}, hash={}",
                _partition_version.load(),
                partition_hash);
         response_client_write(request, ERR_PARENT_PARTITION_MISUSED);
@@ -140,7 +139,8 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
 
     // check whether mutation should send to its child replica
     if (_primary_states.sync_send_write_request) {
-        ddebug("%s: mutation %s should sync to child", name(), mu->name());
+        // TODO(heyuchen): for debug, remove it
+        ddebug_replica("mutation({}) should sync to child({})", mu->name(), _child_gpid);
         mu->set_is_sync_to_child(true);
     }
 
@@ -695,35 +695,26 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
     const std::vector<dsn::message_ex *> &prepare_requests = mu->prepare_requests();
     dassert(!prepare_requests.empty(), "mutation = %s", mu->name());
 
-    if (err == ERR_OK) {
-        if (mu->is_ready_for_commit()) {
-            for (auto &request : prepare_requests) {
-                reply(request, resp);
-            }
-            dinfo("%s: mutation %s ack_prepare_message, err = %s",
-                  name(),
-                  mu->name(),
-                  err.to_string());
-        } else {
-            // wait child replica ack prepare when mutation should be sync to child
+    if(err == ERR_OK && mu->is_ready_for_commit()){
+        // during partition split sync-learn, parent secondary should wait for child ack prepare
+        // for normal cases, mutation is always ready for commit
+        for (auto &request : prepare_requests) {
+            reply(request, resp);
         }
-    } else {
-        // when prepare failed during partition split, both parent and child will try to ack to
-        // primary parent, we should strict prepare only ack once
+        return;
+    }
+
+    if(err != ERR_OK){
+        // when prepare failed during partition split sync-learn, both parent and child will try to reply to
+        // primary parent, we should strict that only ack once
         if (mu->is_acked()) {
-            dwarn("%s: mutation %s has been ack_prepare_message, err = %s",
-                  name(),
-                  mu->name(),
-                  err.to_string());
+            dwarn_replica("mutation({}) has been ack_prepare_message, error({})", mu->name(), err);
         } else {
             for (auto &request : prepare_requests) {
                 reply(request, resp);
             }
             mu->set_is_acked();
-            dwarn("%s: mutation %s ack_prepare_message, err = %s",
-                  name(),
-                  mu->name(),
-                  err.to_string());
+            dwarn_replica("mutation({}) ack_prepare_message, error({})", mu->name(), err);
         }
     }
 }
@@ -749,18 +740,16 @@ void replica::cleanup_preparing_mutations(bool wait)
     }
 }
 
-void replica::copy_mutation(mutation_ptr &mu)
+void replica::copy_mutation(mutation_ptr &mu) // on parent
 {
-    dassert(_child_gpid.get_app_id() > 0, "%s child_gpid is invalid", name());
+    dassert_replica(_child_gpid.get_app_id() > 0, "child_gpid({}) is invalid", _child_gpid);
 
-    task_code code = LPC_PARTITION_SPLIT;
-    if (!mu->is_split() && mu->is_sync_to_child()) {
-        code = LPC_PARTITION_SPLIT;
+    if (mu->is_sync_to_child() && !mu->is_split()) {
         mu->set_is_split();
     }
 
     mutation_ptr new_mu = mutation::copy_no_reply(mu);
-    // TODO(heyuchen): consider error hanlding
+    // TODO(heyuchen): consider error hanlding, should call on_copy_mutation_reply ?
     error_code ec = _stub->split_replica_exec(
         LPC_PARTITION_SPLIT,
         _child_gpid,
@@ -770,10 +759,81 @@ void replica::copy_mutation(mutation_ptr &mu)
     }
 }
 
-void replica::ack_parent(error_code ec, mutation_ptr &mu)
+void replica::on_copy_mutation(mutation_ptr &mu) // on child
+{
+    if (status() != partition_status::PS_PARTITION_SPLIT) {
+        dwarn_replica(
+            "wrong status({}), ignore this mutation({})", enum_to_string(status()), mu->name());
+        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
+            r->parent_cleanup_split_context();
+            r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
+        });
+        return;
+    }
+
+    if (!_split_states.is_prepare_list_copied) {
+        // TODO(heyuchen): for debug, remove it
+        dwarn_replica("prepare list has not been copied, ignore this mutation({})", mu->name());
+        return;
+    }
+
+    if (mu->data.header.ballot > get_ballot()) {
+        derror_replica("ballot changed, mutation ballot({}) vs local ballot({}), ignore copy this "
+                       "mutation({})",
+                       mu->data.header.ballot,
+                       get_ballot(),
+                       mu->name());
+        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
+            r->parent_cleanup_split_context();
+            r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
+        });
+        child_handle_split_error("on_copy_mutation failed because ballot changed");
+        return;
+    }
+
+    // TODO(hyc): consider this condition
+    if (mu->data.header.decree <= _prepare_list->last_committed_decree()) {
+        dwarn_replica("mu decree {} VS plist last_committed_decree {}, ignore this mutation({})",
+                      name(),
+                      mu->data.header.decree,
+                      _prepare_list->last_committed_decree(),
+                      mu->name());
+        return;
+    }
+
+    // TODO(hyc): consider this debug log
+    // TODO(heyuchen): for debug, remove it
+    if (mu->is_sync_to_child()) {
+        ddebug_replica("hyc: status({}) start to sync copy mutation {}", enum_to_string(status()), mu->name());
+    }
+
+    mu->data.header.pid = get_gpid();
+    _prepare_list->prepare(mu, partition_status::PS_SECONDARY);
+
+    if (!mu->is_sync_to_child()) { // child async copy mutation
+        if (!mu->is_logged()) {
+            mu->set_logged();
+        }
+        mu->log_task() = _stub->_log->append(
+            mu, LPC_WRITE_REPLICATION_LOG, &_tracker, nullptr, get_gpid().thread_hash());
+        _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
+    } else { // child sync copy mutation
+        mu->log_task() = _stub->_log->append(mu,
+                                             LPC_WRITE_REPLICATION_LOG,
+                                             &_tracker,
+                                             std::bind(&replica::on_append_log_completed,
+                                                       this,
+                                                       mu,
+                                                       std::placeholders::_1,
+                                                       std::placeholders::_2),
+                                             get_gpid().thread_hash());
+    }
+    // _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
+}
+
+void replica::ack_parent(error_code ec, mutation_ptr &mu) // on child
 {
     if (mu->is_sync_to_child()) {
-        // TODO(heyuchen): consider it
         _stub->split_replica_exec(LPC_PARTITION_SPLIT,
                                   _split_states.parent_gpid,
                                   std::bind(&replica::on_copy_mutation_reply,
@@ -781,51 +841,41 @@ void replica::ack_parent(error_code ec, mutation_ptr &mu)
                                             ec,
                                             mu->data.header.ballot,
                                             mu->data.header.decree));
-    } else {
-        derror_f("{} failed to ack parent, mutation is {}, sync_to_child is {}",
-                 name(),
-                 mu->name(),
-                 mu->is_sync_to_child());
     }
 }
 
-void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d)
+void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d) // on parent
 {
     _checker.only_one_thread_access();
 
-    // 1. check mutation
     auto mu = _prepare_list->get_mutation_by_decree(d);
     if (mu == nullptr) {
-        derror_f("{} failed to get mutation in prepare list, decree is {}", name(), d);
+        derror_replica("failed to get mutation in prepare list, decree = {}", d);
         return;
     }
 
-    // 2. check ballot
     if (mu->data.header.ballot != b) {
-        dwarn_f("{} ballot not match, local ballot is {}, child ballot is {}",
-                name(),
-                mu->data.header.ballot,
-                b);
+        derror_replica("ballot not match, mutation ballot({}) vs child mutation ballot({})",
+                       mu->data.header.ballot,
+                       b);
         return;
     }
-
-    ddebug_f("{} copy mutation {} completed, error is {}", name(), mu->name(), ec.to_string());
 
     // set child prepare mutation flag
     if (ec == ERR_OK) {
+        // TODO(heyuchen): for debug, remove it
+        ddebug_replica("hyc: status({}) child copy mutation({}) completed, error={}", enum_to_string(status()), mu->name(), ec);
         mu->clear_split();
     } else {
-        dwarn_f("{} handle child({}.{}) copy mutation:{}, ballot is {}, decree is {}, error is {}",
-                name(),
-                _child_gpid.get_app_id(),
-                _child_gpid.get_partition_index(),
+        derror_replica("child({}) copy mutation({}) failed, ballot={}, decree={}, error={}",
+                _child_gpid,
                 mu->name(),
                 b,
                 d,
-                ec.to_string());
+                ec);
     }
 
-    // 3. handle child ack
+    // handle child ack
     if (mu->data.header.ballot >= get_ballot() && status() != partition_status::PS_INACTIVE) {
         switch (status()) {
         case partition_status::PS_PRIMARY:

@@ -132,7 +132,7 @@ void replica::broadcast_group_check()
                addr.to_string(),
                enum_to_string(it->second));
 
-        ddebug_replica("hyc stopping_split count = {}", _primary_states.stopping_split.size());
+        // ddebug_replica("hyc stopping_split count = {}", _primary_states.stopping_split.size());
 
         dsn::task_ptr callback_task =
             rpc::call(addr,

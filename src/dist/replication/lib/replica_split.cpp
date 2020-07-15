@@ -60,13 +60,14 @@ void replica::check_partition_count(
         return;
     }
 
-    if (meta_split_status == split_status::PAUSED ||
-        meta_split_status == split_status::CANCELING) {
+    if (meta_split_status == split_status::PAUSED || meta_split_status == split_status::CANCELING) {
         _stub->split_replica_error_handler(_child_gpid,
                                            std::bind(&replica::child_handle_split_error,
                                                      std::placeholders::_1,
                                                      "stop partition split"));
-        _partition_version = _app_info.partition_count - 1;
+        // TODO(heyuchen): for debug, remove it
+        ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), _app_info.partition_count-1);
+        _partition_version.store(_app_info.partition_count - 1);
         _split_status = meta_split_status;
         _primary_states.clear_split_context();
         broadcast_group_check();
@@ -76,7 +77,8 @@ void replica::check_partition_count(
     // when primary replica register child succeed, but replica server crashed
     // meta server will consider this parent partition not_splitting, but parent group partition is
     // not updated
-    dassert_replica(_split_status == split_status::NOT_SPLIT || _split_status == split_status::SPLITTING,
+    dassert_replica(_split_status == split_status::NOT_SPLIT ||
+                        _split_status == split_status::SPLITTING,
                     "wrong split_status({})",
                     enum_to_string(_split_status));
 
@@ -136,7 +138,9 @@ void replica::parent_start_split(const group_check_request &request) // on paren
         _primary_states.caught_up_children.clear();
         _primary_states.sync_send_write_request = false;
     }
-    _partition_version = _app_info.partition_count - 1;
+    // TODO(heyuchen): for debug, remove it
+    ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), _app_info.partition_count-1);
+    _partition_version.store(_app_info.partition_count - 1);
 
     _split_status = split_status::SPLITTING;
     _child_gpid = child_gpid;
@@ -881,6 +885,8 @@ bool replica::update_local_partition_count(int32_t new_partition_count) // on al
 
     _app_info = info;
     _app->set_partition_version(_app_info.partition_count - 1);
+    // TODO(heyuchen): for debug, remove it
+    ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), _app_info.partition_count-1);
     _partition_version.store(_app_info.partition_count - 1);
 
     ddebug_replica("update partition_count to {}, partition_version = {}",
@@ -1012,6 +1018,8 @@ void replica::register_child_on_meta(ballot b) // on primary parent
     // reject client request
     update_local_configuration_with_no_ballot_change(partition_status::PS_INACTIVE);
     set_inactive_state_transient(true);
+    // TODO(heyuchen): for debug, remove it
+    ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), -1);
     _partition_version = -1;
 
     parent_send_register_request(request);
@@ -1141,100 +1149,6 @@ void replica::child_partition_active(const partition_configuration &config) // o
     _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
     _primary_states.last_prepare_decree_on_new_primary = _prepare_list->max_decree();
     update_configuration(config);
-}
-
-///
-/// child replica copy mutations of parent
-///
-
-void replica::on_copy_mutation(mutation_ptr &mu) // on child
-{
-    // 1. check status - partition_split
-    if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} not during partition split or ballot is not match, status is {}, current "
-                "ballot is {}, local ballot of "
-                "mutation is {}, ignore copy mutation {}",
-                name(),
-                enum_to_string(status()),
-                get_ballot(),
-                mu->data.header.ballot,
-                mu->name());
-
-        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
-            r->parent_cleanup_split_context();
-            r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
-        });
-
-        return;
-    }
-
-    // 2. check status - finish copy prepare list
-    if (!_split_states.is_prepare_list_copied) {
-        // TODO(hyc): 0115 - fix init bug
-        dwarn_f("{} not copy prepare list from parent, ignore mutation {}", name(), mu->name());
-        // TODO(hyc): 0219 - try to remove child_temp_mutation_list
-        //        dwarn_f("{} not copy prepare list from parent, cache mutation {}", name(),
-        //        mu->name());
-        //        _split_states.child_temp_mutation_list.emplace_back(mu);
-        return;
-    }
-
-    // 3. ballot not match
-    if (mu->data.header.ballot > get_ballot()) {
-        dwarn_f("{} local ballot is smaller than request ballot, local ballot is {}, ballot of "
-                "mutation is {}, ignore copy mutation {}",
-                name(),
-                get_ballot(),
-                mu->data.header.ballot,
-                mu->name());
-        _stub->split_replica_error_handler(_split_states.parent_gpid, [mu](replica_ptr r) {
-            r->parent_cleanup_split_context();
-            r->on_copy_mutation_reply(ERR_OK, mu->data.header.ballot, mu->data.header.decree);
-        });
-        child_handle_split_error("on_copy_mutation coz ballot changed");
-        return;
-    }
-
-    // TODO(hyc): consider
-    if (mu->data.header.decree <= _prepare_list->last_committed_decree()) {
-        dwarn_f("{}: mu decree {} VS plist last_committed_decree {}, ignore this mutation",
-                name(),
-                mu->data.header.decree,
-                _prepare_list->last_committed_decree());
-        return;
-    }
-
-    if (mu->is_sync_to_child()) {
-        ddebug_f("{} start to sync copy mutation {}", name(), mu->name());
-    } else {
-        dinfo_f("{} start to copy mutation {} asynchronously", name(), mu->name());
-    }
-
-    // 4. prepare mu as secondary
-    mu->data.header.pid = get_gpid();
-    _prepare_list->prepare(mu, partition_status::PS_SECONDARY);
-
-    if (!mu->is_sync_to_child()) {
-        // 5. child async copy mutation
-        if (!mu->is_logged()) {
-            mu->set_logged();
-        }
-        //        _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
-        mu->log_task() = _stub->_log->append(
-            mu, LPC_WRITE_REPLICATION_LOG, &_tracker, nullptr, get_gpid().thread_hash());
-    } else {
-        // 6. child sync copy mutation
-        mu->log_task() = _stub->_log->append(mu,
-                                             LPC_WRITE_REPLICATION_LOG,
-                                             &_tracker,
-                                             std::bind(&replica::on_append_log_completed,
-                                                       this,
-                                                       mu,
-                                                       std::placeholders::_1,
-                                                       std::placeholders::_2),
-                                             get_gpid().thread_hash());
-    }
-    _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION

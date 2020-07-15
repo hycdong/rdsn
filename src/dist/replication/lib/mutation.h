@@ -122,7 +122,7 @@ public:
     bool is_full() const { return _appro_data_bytes >= 1024 * 1024; }
     int appro_data_bytes() const { return _appro_data_bytes; }
 
-    // used during partition split when parent send mutations to child synchronously
+    // Used during partition split when parent send mutations to child synchronously
     // _is_split = 1 when child start to prepare this mutation
     // _is_split = 0 means child finish prepare or not during partition split
     // _is_ack is used to ensure secondary send prepare ack to primary only once when prepare failed
