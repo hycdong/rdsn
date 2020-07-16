@@ -599,17 +599,19 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                             "partition node {} not exist on remote storage, may half create before",
                             partition_path);
                         init_app_partition_node(app, partition_id, nullptr);
-                    } else {
+                    } else if (partition_id >= app->partition_count / 2) {
                         dwarn_f(
                             "partition node {} not exist on remote storage, may half split before",
                             partition_path);
                         zauto_write_lock l(_lock);
-                        app->helpers->split_states.status[partition_id] = split_status::SPLITTING;
+                        app->helpers->split_states.status[partition_id - app->partition_count / 2] =
+                            split_status::SPLITTING;
                         app->helpers->split_states.splitting_count++;
                         app->partitions[partition_id].ballot = invalid_ballot;
                         app->partitions[partition_id].pid = gpid(app->app_id, partition_id);
                         process_one_partition(app);
                     }
+                    // TODO(heyuchen): consider it
                 } else {
                     derror("get partition node failed, reason(%s)", ec.to_string());
                     err = ec;
@@ -643,7 +645,7 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                                     app->get_logname());
                         }
                     }
-
+                    app->helpers->split_states.splitting_count = 0;
                     for (int i = 0; i < app->partition_count; i++) {
                         std::string partition_path =
                             app_path + "/" + boost::lexical_cast<std::string>(i);
