@@ -76,8 +76,8 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
     auto partition_hash = msg->header->client.partition_hash;
     if ((_partition_version & partition_hash) != get_gpid().get_partition_index()) {
         derror_replica("receive request with wrong hash value, partition_version={}, hash={}",
-               _partition_version.load(),
-               partition_hash);
+                       _partition_version.load(),
+                       partition_hash);
         response_client_write(request, ERR_PARENT_PARTITION_MISUSED);
         return;
     }
@@ -695,7 +695,7 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
     const std::vector<dsn::message_ex *> &prepare_requests = mu->prepare_requests();
     dassert(!prepare_requests.empty(), "mutation = %s", mu->name());
 
-    if(err == ERR_OK && mu->is_ready_for_commit()){
+    if (err == ERR_OK && mu->is_ready_for_commit()) {
         // during partition split sync-learn, parent secondary should wait for child ack prepare
         // for normal cases, mutation is always ready for commit
         for (auto &request : prepare_requests) {
@@ -704,8 +704,9 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
         return;
     }
 
-    if(err != ERR_OK){
-        // when prepare failed during partition split sync-learn, both parent and child will try to reply to
+    if (err != ERR_OK) {
+        // when prepare failed during partition split sync-learn, both parent and child will try to
+        // reply to
         // primary parent, we should strict that only ack once
         if (mu->is_acked()) {
             dwarn_replica("mutation({}) has been ack_prepare_message, error({})", mu->name(), err);
@@ -804,7 +805,8 @@ void replica::on_copy_mutation(mutation_ptr &mu) // on child
     // TODO(hyc): consider this debug log
     // TODO(heyuchen): for debug, remove it
     if (mu->is_sync_to_child()) {
-        ddebug_replica("hyc: status({}) start to sync copy mutation {}", enum_to_string(status()), mu->name());
+        ddebug_replica(
+            "hyc: status({}) start to sync copy mutation {}", enum_to_string(status()), mu->name());
     }
 
     mu->data.header.pid = get_gpid();
@@ -864,15 +866,18 @@ void replica::on_copy_mutation_reply(error_code ec, ballot b, decree d) // on pa
     // set child prepare mutation flag
     if (ec == ERR_OK) {
         // TODO(heyuchen): for debug, remove it
-        ddebug_replica("hyc: status({}) child copy mutation({}) completed, error={}", enum_to_string(status()), mu->name(), ec);
+        ddebug_replica("hyc: status({}) child copy mutation({}) completed, error={}",
+                       enum_to_string(status()),
+                       mu->name(),
+                       ec);
         mu->clear_split();
     } else {
         derror_replica("child({}) copy mutation({}) failed, ballot={}, decree={}, error={}",
-                _child_gpid,
-                mu->name(),
-                b,
-                d,
-                ec);
+                       _child_gpid,
+                       mu->name(),
+                       b,
+                       d,
+                       ec);
     }
 
     // handle child ack

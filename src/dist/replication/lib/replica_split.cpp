@@ -66,7 +66,9 @@ void replica::check_partition_count(
                                                      std::placeholders::_1,
                                                      "stop partition split"));
         // TODO(heyuchen): for debug, remove it
-        ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), _app_info.partition_count-1);
+        ddebug_replica("hyc: partition_version from {} to {}",
+                       _partition_version.load(),
+                       _app_info.partition_count - 1);
         _partition_version.store(_app_info.partition_count - 1);
         _split_status = meta_split_status;
         _primary_states.clear_split_context();
@@ -139,7 +141,9 @@ void replica::parent_start_split(const group_check_request &request) // on paren
         _primary_states.sync_send_write_request = false;
     }
     // TODO(heyuchen): for debug, remove it
-    ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), _app_info.partition_count-1);
+    ddebug_replica("hyc: partition_version from {} to {}",
+                   _partition_version.load(),
+                   _app_info.partition_count - 1);
     _partition_version.store(_app_info.partition_count - 1);
 
     _split_status = split_status::SPLITTING;
@@ -886,7 +890,9 @@ bool replica::update_local_partition_count(int32_t new_partition_count) // on al
     _app_info = info;
     _app->set_partition_version(_app_info.partition_count - 1);
     // TODO(heyuchen): for debug, remove it
-    ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), _app_info.partition_count-1);
+    ddebug_replica("hyc: partition_version from {} to {}",
+                   _partition_version.load(),
+                   _app_info.partition_count - 1);
     _partition_version.store(_app_info.partition_count - 1);
 
     ddebug_replica("update partition_count to {}, partition_version = {}",
