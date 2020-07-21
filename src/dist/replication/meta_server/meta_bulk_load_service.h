@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "dist/replication/meta_server/meta_service.h"
-#include "dist/replication/meta_server/server_state.h"
+#include "meta_service.h"
+#include "server_state.h"
 
 namespace dsn {
 namespace replication {
@@ -345,8 +345,6 @@ private:
     {
         return (_bulk_load_app_id.find(app_id) != _bulk_load_app_id.end());
     }
-
-    mss::meta_storage *get_sync_bulk_load_storage() const { return _sync_bulk_load_storage.get(); }
 
 private:
     friend class bulk_load_service_test;
