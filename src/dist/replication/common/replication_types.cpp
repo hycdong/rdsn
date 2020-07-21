@@ -16286,7 +16286,11 @@ void query_bulk_load_response::__set_bulk_load_states(
     this->bulk_load_states = val;
 }
 
-void query_bulk_load_response::__set_hint_msg(const std::string &val) { this->hint_msg = val; }
+void query_bulk_load_response::__set_hint_msg(const std::string &val)
+{
+    this->hint_msg = val;
+    __isset.hint_msg = true;
+}
 
 uint32_t query_bulk_load_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
@@ -16475,10 +16479,11 @@ uint32_t query_bulk_load_response::write(::apache::thrift::protocol::TProtocol *
     }
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 7);
-    xfer += oprot->writeString(this->hint_msg);
-    xfer += oprot->writeFieldEnd();
-
+    if (this->__isset.hint_msg) {
+        xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 7);
+        xfer += oprot->writeString(this->hint_msg);
+        xfer += oprot->writeFieldEnd();
+    }
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -16560,7 +16565,8 @@ void query_bulk_load_response::printTo(std::ostream &out) const
     out << ", "
         << "bulk_load_states=" << to_string(bulk_load_states);
     out << ", "
-        << "hint_msg=" << to_string(hint_msg);
+        << "hint_msg=";
+    (__isset.hint_msg ? (out << to_string(hint_msg)) : (out << "<null>"));
     out << ")";
 }
 

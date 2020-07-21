@@ -352,7 +352,7 @@ TEST_F(bulk_load_service_test, query_bulk_load_status_with_wrong_state)
 TEST_F(bulk_load_service_test, query_bulk_load_status_success)
 {
     create_app(APP_NAME);
-    std::shared_ptr<app_state> app = find_app(APP_NAME);
+    auto app = find_app(APP_NAME);
     app->is_bulk_loading = true;
     ASSERT_EQ(query_bulk_load(APP_NAME), ERR_OK);
 }

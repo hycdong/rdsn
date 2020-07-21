@@ -7009,7 +7009,9 @@ public:
             return false;
         if (!(bulk_load_states == rhs.bulk_load_states))
             return false;
-        if (!(hint_msg == rhs.hint_msg))
+        if (__isset.hint_msg != rhs.__isset.hint_msg)
+            return false;
+        else if (__isset.hint_msg && !(hint_msg == rhs.hint_msg))
             return false;
         return true;
     }
