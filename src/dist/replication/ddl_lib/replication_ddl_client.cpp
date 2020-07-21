@@ -1561,6 +1561,16 @@ replication_ddl_client::start_bulk_load(const std::string &app_name,
     return call_rpc_sync(start_bulk_load_rpc(std::move(req), RPC_CM_START_BULK_LOAD));
 }
 
+error_with<control_bulk_load_response>
+replication_ddl_client::control_bulk_load(const std::string &app_name,
+                                          const bulk_load_control_type::type control_type)
+{
+    auto req = make_unique<control_bulk_load_request>();
+    req->app_name = app_name;
+    req->type = control_type;
+    return call_rpc_sync(control_bulk_load_rpc(std::move(req), RPC_CM_CONTROL_BULK_LOAD));
+}
+
 error_with<query_bulk_load_response>
 replication_ddl_client::query_bulk_load(const std::string &app_name)
 {
@@ -1568,16 +1578,6 @@ replication_ddl_client::query_bulk_load(const std::string &app_name)
     auto req = make_unique<query_bulk_load_request>();
     req->app_name = app_name;
     return call_rpc_sync(query_bulk_load_rpc(std::move(req), RPC_CM_QUERY_BULK_LOAD_STATUS));
-}
-
-error_with<control_bulk_load_response>
-replication_ddl_client::control_bulk_load(const std::string &app_name,
-                                          bulk_load_control_type::type control_type)
-{
-    auto req = make_unique<control_bulk_load_request>();
-    req->app_name = app_name;
-    req->type = control_type;
-    return call_rpc_sync(control_bulk_load_rpc(std::move(req), RPC_CM_CONTROL_BULK_LOAD));
 }
 
 } // namespace replication
