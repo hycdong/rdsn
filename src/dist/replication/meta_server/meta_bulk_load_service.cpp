@@ -1539,13 +1539,13 @@ void bulk_load_service::do_continue_app_bulk_load(
     const std::unordered_map<int32_t, partition_bulk_load_info> &pinfo_map,
     const std::unordered_set<int32_t> &different_status_pidx_set)
 {
-    int32_t app_id = ainfo.app_id;
-    int32_t partition_count = ainfo.partition_count;
-    bulk_load_status::type app_status = ainfo.status;
+    const int32_t app_id = ainfo.app_id;
+    const int32_t partition_count = ainfo.partition_count;
+    const auto app_status = ainfo.status;
+    const int32_t different_count = different_status_pidx_set.size();
+    const int32_t same_count = pinfo_map.size() - different_count;
+    const int32_t invalid_count = partition_count - pinfo_map.size();
 
-    int32_t different_count = different_status_pidx_set.size();
-    int32_t same_count = pinfo_map.size() - different_count;
-    int32_t invalid_count = partition_count - pinfo_map.size();
     ddebug_f(
         "app({}) continue bulk load, app_id = {}, partition_count = {}, status = {}, there are {} "
         "partitions have bulk_load_info, {} partitions have same status with app, {} "
@@ -1558,24 +1558,29 @@ void bulk_load_service::do_continue_app_bulk_load(
         same_count,
         different_count);
 
-    int in_progress_partition_count = partition_count;
+    // _apps_in_progress_count is used for updating app bulk load, when _apps_in_progress_count = 0
+    // means app bulk load status can transfer to next stage, for example, when app status is
+    // downloaded, and _apps_in_progress_count = 0, app status can turn to ingesting
+    // see more in function `update_partition_status_on_remote_storage_reply`
+    int32_t in_progress_partition_count = partition_count;
     if (app_status == bulk_load_status::BLS_DOWNLOADING) {
         if (invalid_count > 0) {
-            // creating missing partition first, so the in_progress_count should be invalid_count
+            // create missing partition, so the in_progress_count should be invalid_count
             in_progress_partition_count = invalid_count;
         } else if (different_count > 0) {
             // it is hard to distinguish that bulk load is normal downloading or rollback to
-            // downloading before meta server crash,
-            // we consider it is rollback to downloading for convenience, update partition with
-            // different status to downloading, in_progress_count should be different_count
+            // downloading before meta server crash, when app status is downloading, we consider
+            // bulk load as rolling back to downloading for convenience, for partitions whose status
+            // is not downloading, update them to downloading, so the in_progress_count should be
+            // different_count
             in_progress_partition_count = different_count;
         }
     } else if (app_status == bulk_load_status::BLS_DOWNLOADED ||
                app_status == bulk_load_status::BLS_INGESTING ||
                app_status == bulk_load_status::BLS_SUCCEED) {
         // for app status is downloaded, when all partitions turn to ingesting, app partition will
-        // turn to ingesting
-        // so the in_progress_count should be same_count, ingesting and succeed are same
+        // turn to ingesting, so the in_progress_count should be same_count, ingesting and succeed
+        // are same
         in_progress_partition_count = same_count;
     } // for other cases, in_progress_count should be partition_count
     {
@@ -1598,7 +1603,7 @@ void bulk_load_service::do_continue_app_bulk_load(
         return;
     }
 
-    // update all partition status to `app_status`
+    // update all partition status to app_status
     if ((app_status == bulk_load_status::BLS_FAILED ||
          app_status == bulk_load_status::BLS_CANCELED ||
          app_status == bulk_load_status::BLS_PAUSING ||
@@ -1636,8 +1641,8 @@ void bulk_load_service::create_missing_partition_dir(const std::string &app_name
         get_partition_bulk_load_path(pid),
         std::move(value),
         [app_name, pid, partition_count, pinfo, this]() {
-            auto app_id = pid.get_app_id();
-            auto send_request = false;
+            const int32_t app_id = pid.get_app_id();
+            bool send_request = false;
             ddebug_f("app({}) create partition({}) bulk_load_info", app_name, pid);
             {
                 zauto_write_lock l(_lock);
