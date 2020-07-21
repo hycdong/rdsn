@@ -97,7 +97,7 @@ public:
     // - app is_bulk_loading = true, app_bulk_load_info not existed, set is_bulk_loading=false
     // - app is_bulk_loading = false, app_bulk_load_info existed, remove useless app bulk load on
     // remote storage
-    void check_app_bulk_load_consistency(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
+    void check_app_bulk_load_states(std::shared_ptr<app_state> app, bool is_app_bulk_loading);
 
 private:
     // Called by `on_start_bulk_load`, check request params
