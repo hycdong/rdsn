@@ -1389,6 +1389,7 @@ void bulk_load_service::try_to_continue_app_bulk_load(
         return;
     }
 
+    // check app bulk load info
     if (!validate_app(app->app_id, app->partition_count, ainfo, pinfo_map.size())) {
         remove_bulk_load_dir_on_remote_storage(std::move(app), true);
         return;
@@ -1402,6 +1403,7 @@ void bulk_load_service::try_to_continue_app_bulk_load(
         }
     }
 
+    // check partition bulk load info
     if (!validate_partition(ainfo, pinfo_map, different_status_pidx_set.size())) {
         remove_bulk_load_dir_on_remote_storage(std::move(app), true);
         return;
@@ -1420,7 +1422,7 @@ void bulk_load_service::try_to_continue_app_bulk_load(
 /*static*/ bool bulk_load_service::validate_app(int32_t app_id,
                                                 int32_t partition_count,
                                                 const app_bulk_load_info &ainfo,
-                                                int32_t pinfo_size)
+                                                int32_t pinfo_count)
 {
     // app id and partition from `app_bulk_load_info` is inconsistent with current app_info
     if (app_id != ainfo.app_id || partition_count != ainfo.partition_count) {
@@ -1434,28 +1436,28 @@ void bulk_load_service::try_to_continue_app_bulk_load(
         return false;
     }
 
-    // partition_bulk_load_info_size should not be greater than partition_count
-    if (partition_count < pinfo_size) {
+    // partition_bulk_load_info count should not be greater than partition_count
+    if (partition_count < pinfo_count) {
         derror_f("app({}) has invalid count, app partition_count = {}, remote "
                  "partition_bulk_load_info count = {}",
                  ainfo.app_name,
                  partition_count,
-                 pinfo_size);
+                 pinfo_count);
         return false;
     }
 
-    // partition_bulk_load_info_size is not equal to partition_count can only be happended when app
+    // partition_bulk_load_info count is not equal to partition_count can only be happended when app
     // status is downloading, consider the following condition:
     // when starting bulk load, meta server will create app_bulk_load_dir and
     // partition_bulk_load_dir on remote storage
     // however, meta server crash when create app directory and part of partition directory
     // when meta server recover, partition directory count is less than partition_count
-    if (pinfo_size != partition_count && ainfo.status != bulk_load_status::BLS_DOWNLOADING) {
+    if (pinfo_count != partition_count && ainfo.status != bulk_load_status::BLS_DOWNLOADING) {
         derror_f("app({}) bulk_load_status = {}, but there are {} partitions lack "
                  "partition_bulk_load dir",
                  ainfo.app_name,
                  dsn::enum_to_string(ainfo.status),
-                 partition_count - pinfo_size);
+                 partition_count - pinfo_count);
         return false;
     }
 
@@ -1492,11 +1494,11 @@ void bulk_load_service::try_to_continue_app_bulk_load(
     case bulk_load_status::BLS_INGESTING: {
         // if app status is downloaded, valid partition status is downloaded or ingesting
         // if app status is ingesting, valid partition status is ingesting or succeed
-        const auto valid_status = (app_status == bulk_load_status::BLS_DOWNLOADED)
-                                      ? bulk_load_status::BLS_INGESTING
-                                      : bulk_load_status::BLS_SUCCEED;
+        const auto other_valid_status = (app_status == bulk_load_status::BLS_DOWNLOADED)
+                                            ? bulk_load_status::BLS_INGESTING
+                                            : bulk_load_status::BLS_SUCCEED;
         for (const auto &kv : pinfo_map) {
-            if (kv.second.status != app_status && kv.second.status != valid_status) {
+            if (kv.second.status != app_status && kv.second.status != other_valid_status) {
                 derror_f("app({}) bulk_load_status = {}, but partition[{}] bulk_load_status = {}, "
                          "only {} and {} is valid",
                          ainfo.app_name,
@@ -1504,7 +1506,7 @@ void bulk_load_service::try_to_continue_app_bulk_load(
                          kv.first,
                          dsn::enum_to_string(kv.second.status),
                          dsn::enum_to_string(app_status),
-                         dsn::enum_to_string(valid_status));
+                         dsn::enum_to_string(other_valid_status));
                 is_valid = false;
                 break;
             }
@@ -1512,8 +1514,8 @@ void bulk_load_service::try_to_continue_app_bulk_load(
     } break;
     case bulk_load_status::BLS_SUCCEED:
     case bulk_load_status::BLS_PAUSED:
-        // if app status is succeed and paused, partition status should not be different from app
-        // status
+        // if app status is succeed or paused, all partitions' status should not be different from
+        // app's
         if (different_status_count > 0) {
             derror_f("app({}) bulk_load_status = {}, {} partitions status is different from app, "
                      "this is invalid",

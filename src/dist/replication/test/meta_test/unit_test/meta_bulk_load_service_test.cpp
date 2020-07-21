@@ -38,148 +38,6 @@ namespace replication {
 class bulk_load_service_test : public meta_test_base
 {
 public:
-    /// Used for bulk_load_failover_test
-    /// mock bulk_load information on remote stroage
-
-    void initialize_meta_server_with_mock_bulk_load(
-        const std::unordered_set<int32_t> &app_id_set,
-        std::unordered_map<app_id, app_bulk_load_info> &app_bulk_load_info_map,
-        std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
-            &partition_bulk_load_info_map,
-        std::vector<app_info> &app_list)
-    {
-        // initialize meta service
-        auto meta_svc = new fake_receiver_meta_service();
-        meta_svc->remote_storage_initialize();
-
-        // initialize server_state
-        auto state = meta_svc->_state;
-        state->initialize(meta_svc, meta_svc->_cluster_root + "/apps");
-        _app_root = state->_apps_root;
-        meta_svc->_started = true;
-        _ms.reset(meta_svc);
-
-        // initialize bulk load service
-        _ms->_bulk_load_svc = make_unique<bulk_load_service>(
-            _ms.get(), meta_options::concat_path_unix_style(_ms->_cluster_root, "bulk_load"));
-        mock_bulk_load_on_remote_storage(
-            app_id_set, app_bulk_load_info_map, partition_bulk_load_info_map);
-
-        // mock app
-        for (auto &info : app_list) {
-            mock_app_on_remote_stroage(info);
-        }
-        state->initialize_data_structure();
-
-        _ms->set_function_level(meta_function_level::fl_steady);
-        _ms->_failure_detector.reset(new meta_server_failure_detector(_ms.get()));
-        _ss = _ms->_state;
-    }
-
-    void mock_bulk_load_on_remote_storage(
-        const std::unordered_set<int32_t> &app_id_set,
-        std::unordered_map<app_id, app_bulk_load_info> &app_bulk_load_info_map,
-        std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
-            &partition_bulk_load_info_map)
-    {
-        std::string path = bulk_svc()._bulk_load_root;
-        blob value = blob();
-        // create bulk_load_root
-        _ms->get_meta_storage()->create_node(
-            std::move(path),
-            std::move(value),
-            [this, &app_id_set, &app_bulk_load_info_map, &partition_bulk_load_info_map]() {
-                for (const auto id : app_id_set) {
-                    mock_app_bulk_load_info_on_remote_stroage(app_bulk_load_info_map[id],
-                                                              partition_bulk_load_info_map[id]);
-                }
-            });
-        wait_all();
-    }
-
-    void mock_app_bulk_load_info_on_remote_stroage(
-        const app_bulk_load_info &ainfo,
-        const std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map)
-    {
-        std::string app_path = bulk_svc().get_app_bulk_load_path(ainfo.app_id);
-        blob value = dsn::json::json_forwarder<app_bulk_load_info>::encode(ainfo);
-        // create app_bulk_load_info
-        _ms->get_meta_storage()->create_node(
-            std::move(app_path),
-            std::move(value),
-            [this, app_path, &ainfo, &partition_bulk_load_info_map]() {
-                ddebug_f("create app({}) app_id={} bulk load dir({}), bulk_load_status={}",
-                         ainfo.app_name,
-                         ainfo.app_id,
-                         app_path,
-                         dsn::enum_to_string(ainfo.status));
-                for (auto iter = partition_bulk_load_info_map.begin();
-                     iter != partition_bulk_load_info_map.end();
-                     ++iter) {
-                    gpid pid = gpid(ainfo.app_id, iter->first);
-                    mock_partition_bulk_load_info_on_remote_stroage(pid, iter->second);
-                }
-            });
-    }
-
-    void mock_partition_bulk_load_info_on_remote_stroage(gpid &pid,
-                                                         const partition_bulk_load_info &pinfo)
-    {
-        std::string partition_path = bulk_svc().get_partition_bulk_load_path(pid);
-        blob value = dsn::json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
-        _ms->get_meta_storage()->create_node(
-            std::move(partition_path), std::move(value), [this, partition_path, pid, &pinfo]() {
-                ddebug_f("create partition[{}] bulk load dir({}), bulk_load_status={}",
-                         pid,
-                         partition_path,
-                         dsn::enum_to_string(pinfo.status));
-            });
-    }
-
-    void mock_app_on_remote_stroage(const app_info &info)
-    {
-        static const char *lock_state = "lock";
-        static const char *unlock_state = "unlock";
-        std::string path = _app_root;
-
-        _ms->get_meta_storage()->create_node(
-            std::move(path), blob(lock_state, 0, strlen(lock_state)), [this]() {
-                ddebug_f("create app root {}", _app_root);
-            });
-        wait_all();
-
-        blob value = dsn::json::json_forwarder<app_info>::encode(info);
-        _ms->get_meta_storage()->create_node(
-            _app_root + "/" + boost::lexical_cast<std::string>(info.app_id),
-            std::move(value),
-            [this, &info]() {
-                ddebug_f("create app({}) app_id={}, dir succeed", info.app_name, info.app_id);
-                for (int i = 0; i < info.partition_count; ++i) {
-                    partition_configuration config;
-                    config.max_replica_count = 3;
-                    config.pid = gpid(info.app_id, i);
-                    config.ballot = BALLOT;
-                    blob v = dsn::json::json_forwarder<partition_configuration>::encode(config);
-                    _ms->get_meta_storage()->create_node(
-                        _app_root + "/" + boost::lexical_cast<std::string>(info.app_id) + "/" +
-                            boost::lexical_cast<std::string>(i),
-                        std::move(v),
-                        [info, i, this]() {
-                            ddebug_f("create app({}), partition({}.{}) dir succeed",
-                                     info.app_name,
-                                     info.app_id,
-                                     i);
-                        });
-                }
-            });
-        wait_all();
-
-        std::string app_root = _app_root;
-        _ms->get_meta_storage()->set_data(
-            std::move(app_root), blob(unlock_state, 0, strlen(unlock_state)), []() {});
-        wait_all();
-    }
-
     /// bulk load functions
 
     start_bulk_load_response start_bulk_load(const std::string &app_name)
@@ -298,6 +156,158 @@ public:
     bool need_update_metadata(gpid pid)
     {
         return bulk_svc().is_partition_metadata_not_updated(pid);
+    }
+
+    /// Used for bulk_load_failover_test
+    /// mock bulk_load information on remote stroage
+
+    void initialize_meta_server_with_mock_bulk_load(
+        const std::unordered_set<int32_t> &app_id_set,
+        const std::unordered_map<app_id, app_bulk_load_info> &app_bulk_load_info_map,
+        const std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
+            &partition_bulk_load_info_map,
+        const std::vector<app_info> &app_list)
+    {
+        // initialize meta service
+        auto meta_svc = new fake_receiver_meta_service();
+        meta_svc->remote_storage_initialize();
+
+        // initialize server_state
+        auto state = meta_svc->_state;
+        state->initialize(meta_svc, meta_svc->_cluster_root + "/apps");
+        _app_root = state->_apps_root;
+        meta_svc->_started = true;
+        _ms.reset(meta_svc);
+
+        // initialize bulk load service
+        _ms->_bulk_load_svc = make_unique<bulk_load_service>(
+            _ms.get(), meta_options::concat_path_unix_style(_ms->_cluster_root, "bulk_load"));
+        mock_bulk_load_on_remote_storage(
+            app_id_set, app_bulk_load_info_map, partition_bulk_load_info_map);
+
+        // mock app
+        for (auto &info : app_list) {
+            mock_app_on_remote_stroage(info);
+        }
+        state->initialize_data_structure();
+
+        _ms->set_function_level(meta_function_level::fl_steady);
+        _ms->_failure_detector.reset(new meta_server_failure_detector(_ms.get()));
+        _ss = _ms->_state;
+    }
+
+    void mock_bulk_load_on_remote_storage(
+        const std::unordered_set<int32_t> &app_id_set,
+        const std::unordered_map<app_id, app_bulk_load_info> &app_bulk_load_info_map,
+        const std::unordered_map<app_id, std::unordered_map<int32_t, partition_bulk_load_info>>
+            &partition_bulk_load_info_map)
+    {
+        std::string path = bulk_svc()._bulk_load_root;
+        blob value = blob();
+        std::unordered_map<int32_t, partition_bulk_load_info> pinfo_map;
+        // create bulk_load_root
+        _ms->get_meta_storage()->create_node(
+            std::move(path),
+            std::move(value),
+            [this,
+             &app_id_set,
+             &app_bulk_load_info_map,
+             &partition_bulk_load_info_map,
+             &pinfo_map]() {
+                for (const auto app_id : app_id_set) {
+                    auto app_iter = app_bulk_load_info_map.find(app_id);
+                    auto partition_iter = partition_bulk_load_info_map.find(app_id);
+                    if (app_iter != app_bulk_load_info_map.end()) {
+                        mock_app_bulk_load_info_on_remote_stroage(
+                            app_iter->second,
+                            partition_iter == partition_bulk_load_info_map.end()
+                                ? pinfo_map
+                                : partition_iter->second);
+                    }
+                }
+            });
+        wait_all();
+    }
+
+    void mock_app_bulk_load_info_on_remote_stroage(
+        const app_bulk_load_info &ainfo,
+        const std::unordered_map<int32_t, partition_bulk_load_info> &partition_bulk_load_info_map)
+    {
+        std::string app_path = bulk_svc().get_app_bulk_load_path(ainfo.app_id);
+        blob value = json::json_forwarder<app_bulk_load_info>::encode(ainfo);
+        // create app_bulk_load_info
+        _ms->get_meta_storage()->create_node(
+            std::move(app_path),
+            std::move(value),
+            [this, app_path, &ainfo, &partition_bulk_load_info_map]() {
+                ddebug_f("create app({}) app_id={} bulk load dir({}), bulk_load_status={}",
+                         ainfo.app_name,
+                         ainfo.app_id,
+                         app_path,
+                         dsn::enum_to_string(ainfo.status));
+                for (const auto kv : partition_bulk_load_info_map) {
+                    mock_partition_bulk_load_info_on_remote_stroage(gpid(ainfo.app_id, kv.first),
+                                                                    kv.second);
+                }
+            });
+    }
+
+    void mock_partition_bulk_load_info_on_remote_stroage(const gpid &pid,
+                                                         const partition_bulk_load_info &pinfo)
+    {
+        std::string partition_path = bulk_svc().get_partition_bulk_load_path(pid);
+        blob value = json::json_forwarder<partition_bulk_load_info>::encode(pinfo);
+        _ms->get_meta_storage()->create_node(
+            std::move(partition_path), std::move(value), [this, partition_path, pid, &pinfo]() {
+                ddebug_f("create partition[{}] bulk load dir({}), bulk_load_status={}",
+                         pid,
+                         partition_path,
+                         dsn::enum_to_string(pinfo.status));
+            });
+    }
+
+    void mock_app_on_remote_stroage(const app_info &info)
+    {
+        static const char *lock_state = "lock";
+        static const char *unlock_state = "unlock";
+        std::string path = _app_root;
+
+        _ms->get_meta_storage()->create_node(
+            std::move(path), blob(lock_state, 0, strlen(lock_state)), [this]() {
+                ddebug_f("create app root {}", _app_root);
+            });
+        wait_all();
+
+        blob value = json::json_forwarder<app_info>::encode(info);
+        _ms->get_meta_storage()->create_node(
+            _app_root + "/" + boost::lexical_cast<std::string>(info.app_id),
+            std::move(value),
+            [this, &info]() {
+                ddebug_f("create app({}) app_id={}, dir succeed", info.app_name, info.app_id);
+                for (int i = 0; i < info.partition_count; ++i) {
+                    partition_configuration config;
+                    config.max_replica_count = 3;
+                    config.pid = gpid(info.app_id, i);
+                    config.ballot = BALLOT;
+                    blob v = json::json_forwarder<partition_configuration>::encode(config);
+                    _ms->get_meta_storage()->create_node(
+                        _app_root + "/" + boost::lexical_cast<std::string>(info.app_id) + "/" +
+                            boost::lexical_cast<std::string>(i),
+                        std::move(v),
+                        [info, i, this]() {
+                            ddebug_f("create app({}), partition({}.{}) dir succeed",
+                                     info.app_name,
+                                     info.app_id,
+                                     i);
+                        });
+                }
+            });
+        wait_all();
+
+        std::string app_root = _app_root;
+        _ms->get_meta_storage()->set_data(
+            std::move(app_root), blob(unlock_state, 0, strlen(unlock_state)), []() {});
+        wait_all();
     }
 
     bool app_bulk_load_states_reset(int32_t app_id)
