@@ -102,6 +102,14 @@ void replica::broadcast_group_check()
         request->last_committed_decree = last_committed_decree();
         request->__set_confirmed_decree(_duplication_mgr->min_confirmed_decree());
 
+        // TODO(heyuchen):
+        // primary split_status:
+        // 1 - splitting: parse splitting
+        // 2 - paused/canceling : paused/canceling
+        // 3 - not_splitting:
+        //     - meta: splitting, local: paused/canceling
+        //     - primary split succeed
+        //     - primary split failed
         if (_split_status != split_status::NOT_SPLIT) {
             request->__set_primary_split_status(_split_status);
             if (_split_status == split_status::SPLITTING) {
@@ -217,6 +225,15 @@ void replica::on_group_check(const group_check_request &request,
                            request.primary_split_status == split_status::CANCELING ? "cancel"
                                                                                    : "pause");
         }
+        // TODO(heyuchen): consider
+        if (!request.__isset.primary_split_status &&
+            (_split_status == split_status::PAUSED || _split_status == split_status::CANCELING)) {
+            _stub->split_replica_error_handler(_child_gpid,
+                                               std::bind(&replica::child_handle_split_error,
+                                                         std::placeholders::_1,
+                                                         "stop partition split"));
+            parent_cleanup_split_context();
+        }
         break;
     case partition_status::PS_POTENTIAL_SECONDARY:
         init_learn(request.config.learner_signature);
@@ -268,6 +285,7 @@ void replica::on_group_check_reply(error_code err,
                 req->config.status == partition_status::PS_POTENTIAL_SECONDARY) {
                 handle_learning_succeeded_on_primary(req->node, resp->learner_signature);
             }
+            // TODO(heyuchen): handle stop split
             if (req->primary_split_status == split_status::PAUSED &&
                 _primary_states.stopping_split.size() == 0 &&
                 _split_status == split_status::PAUSED) {
