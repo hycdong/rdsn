@@ -1353,7 +1353,8 @@ typedef struct _group_check_request__isset
           last_committed_decree(false),
           confirmed_decree(false),
           child_gpid(false),
-          primary_split_status(false)
+          primary_split_status(false),
+          meta_split_status(false)
     {
     }
     bool app : 1;
@@ -1363,6 +1364,7 @@ typedef struct _group_check_request__isset
     bool confirmed_decree : 1;
     bool child_gpid : 1;
     bool primary_split_status : 1;
+    bool meta_split_status : 1;
 } _group_check_request__isset;
 
 class group_check_request
@@ -1373,7 +1375,10 @@ public:
     group_check_request &operator=(const group_check_request &);
     group_check_request &operator=(group_check_request &&);
     group_check_request()
-        : last_committed_decree(0), confirmed_decree(0), primary_split_status((split_status::type)0)
+        : last_committed_decree(0),
+          confirmed_decree(0),
+          primary_split_status((split_status::type)0),
+          meta_split_status((split_status::type)0)
     {
     }
 
@@ -1385,6 +1390,7 @@ public:
     int64_t confirmed_decree;
     ::dsn::gpid child_gpid;
     split_status::type primary_split_status;
+    split_status::type meta_split_status;
 
     _group_check_request__isset __isset;
 
@@ -1401,6 +1407,8 @@ public:
     void __set_child_gpid(const ::dsn::gpid &val);
 
     void __set_primary_split_status(const split_status::type val);
+
+    void __set_meta_split_status(const split_status::type val);
 
     bool operator==(const group_check_request &rhs) const
     {
@@ -1424,6 +1432,10 @@ public:
             return false;
         else if (__isset.primary_split_status &&
                  !(primary_split_status == rhs.primary_split_status))
+            return false;
+        if (__isset.meta_split_status != rhs.__isset.meta_split_status)
+            return false;
+        else if (__isset.meta_split_status && !(meta_split_status == rhs.meta_split_status))
             return false;
         return true;
     }
@@ -1454,7 +1466,8 @@ typedef struct _group_check_response__isset
           last_committed_decree_in_prepare_list(false),
           learner_status_(true),
           learner_signature(false),
-          node(false)
+          node(false),
+          secondary_split_status(false)
     {
     }
     bool pid : 1;
@@ -1464,6 +1477,7 @@ typedef struct _group_check_response__isset
     bool learner_status_ : 1;
     bool learner_signature : 1;
     bool node : 1;
+    bool secondary_split_status : 1;
 } _group_check_response__isset;
 
 class group_check_response
@@ -1477,7 +1491,8 @@ public:
         : last_committed_decree_in_app(0),
           last_committed_decree_in_prepare_list(0),
           learner_status_((learner_status::type)0),
-          learner_signature(0)
+          learner_signature(0),
+          secondary_split_status((split_status::type)0)
     {
         learner_status_ = (learner_status::type)0;
     }
@@ -1490,6 +1505,7 @@ public:
     learner_status::type learner_status_;
     int64_t learner_signature;
     ::dsn::rpc_address node;
+    split_status::type secondary_split_status;
 
     _group_check_response__isset __isset;
 
@@ -1507,6 +1523,8 @@ public:
 
     void __set_node(const ::dsn::rpc_address &val);
 
+    void __set_secondary_split_status(const split_status::type val);
+
     bool operator==(const group_check_response &rhs) const
     {
         if (!(pid == rhs.pid))
@@ -1522,6 +1540,11 @@ public:
         if (!(learner_signature == rhs.learner_signature))
             return false;
         if (!(node == rhs.node))
+            return false;
+        if (__isset.secondary_split_status != rhs.__isset.secondary_split_status)
+            return false;
+        else if (__isset.secondary_split_status &&
+                 !(secondary_split_status == rhs.secondary_split_status))
             return false;
         return true;
     }

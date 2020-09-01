@@ -289,7 +289,7 @@ private:
     /////////////////////////////////////////////////////////////////
     // group check
     void init_group_check();
-    void broadcast_group_check();
+    void broadcast_group_check(split_status::type meta_split_status = split_status::NOT_SPLIT);
     void on_group_check_reply(error_code err,
                               const std::shared_ptr<group_check_request> &req,
                               const std::shared_ptr<group_check_response> &resp);
@@ -460,7 +460,20 @@ private:
     void check_partition_count(const int32_t meta_partition_count,
                                split_status::type meta_split_status);
 
+    // TODO(heyuchen): add comments
     void parent_send_notify_cancel_request();
+
+
+    void primary_parent_handle_paused();
+
+    void secondary_parent_handle_paused();
+
+    void primary_parent_handle_cancel();
+
+    void secondary_parent_handle_cancel();
+
+
+
 
     void init_table_level_latency_counters();
 

@@ -56,26 +56,22 @@ void replica::check_partition_count(
             get_gpid().get_app_id(), get_gpid().get_partition_index() + _app_info.partition_count);
         _primary_states.get_replica_config(status(), add_child_request.config);
         parent_start_split(add_child_request);
-        broadcast_group_check();
+        broadcast_group_check(meta_split_status);
         return;
     }
 
-    if (meta_split_status == split_status::PAUSED || meta_split_status == split_status::CANCELING) {
-        _stub->split_replica_error_handler(_child_gpid,
-                                           std::bind(&replica::child_handle_split_error,
-                                                     std::placeholders::_1,
-                                                     "stop partition split"));
-        // TODO(heyuchen): for debug, remove it
-        ddebug_replica("hyc: partition_version from {} to {}",
-                       _partition_version.load(),
-                       _app_info.partition_count - 1);
-        _partition_version.store(_app_info.partition_count - 1);
-        _split_status = meta_split_status;
-        _primary_states.clear_split_context();
-        broadcast_group_check();
+    if (meta_split_status == split_status::PAUSED) {
+        primary_parent_handle_paused();
         return;
     }
 
+    if (meta_split_status == split_status::CANCELING) {
+        primary_parent_handle_cancel();
+        return;
+    }
+
+    // TODO(heyuchen):
+    // meta_split_status == split_status::NOT_SPLIT
     // when primary replica register child succeed, but replica server crashed
     // meta server will consider this parent partition not_splitting, but parent group partition is
     // not updated
@@ -87,8 +83,156 @@ void replica::check_partition_count(
     update_local_partition_count(meta_partition_count);
     _primary_states.clear_split_context();
     parent_cleanup_split_context();
-    broadcast_group_check();
+    broadcast_group_check(meta_split_status);
 }
+
+// TODO(heyuchen): ing
+void replica::primary_parent_handle_paused()
+{
+    if(_split_status == split_status::CANCELING){
+        dassert_replica(false, "invalid split status");
+    }
+
+    if(_split_status == split_status::NOT_SPLIT){
+        if(_primary_states.secondary_split_status.size() + 1 == _primary_states.membership.max_replica_count){
+            bool finish_pause = true;
+            for(const auto &kv : _primary_states.secondary_split_status){
+                finish_pause &= (kv.second == split_status::NOT_SPLIT);
+            }
+            if(finish_pause){
+                ddebug_replica("hyc: group has already paused split, ignore meta pause split request");
+                return;
+            }
+        }
+        _partition_version.store(_app_info.partition_count - 1);
+        // TODO(heyuchen): consider if update not_split -> paused
+        // _split_status = meta_split_status;
+        _primary_states.clear_split_context();
+        broadcast_group_check(split_status::PAUSED);
+    }
+
+    if(_split_status == split_status::SPLITTING){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "pause partition split"));
+        _partition_version.store(_app_info.partition_count - 1);
+        _split_status = split_status::PAUSED;
+        _primary_states.clear_split_context();
+        broadcast_group_check(split_status::PAUSED);
+    }
+
+    if(_split_status == split_status::PAUSED){
+        broadcast_group_check(split_status::PAUSED);
+    }
+}
+
+// TODO(heyuchen): ing
+void replica::secondary_parent_handle_paused()
+{
+    if(_split_status == split_status::CANCELING){
+        dassert_replica(false, "invalid split status");
+    }
+
+    if(_split_status == split_status::NOT_SPLIT){
+        // TODO(heyuchen): consider it
+        _partition_version.store(_app_info.partition_count - 1);
+    }
+
+    if(_split_status == split_status::SPLITTING){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "pause partition split"));
+        parent_cleanup_split_context();
+        _partition_version.store(_app_info.partition_count - 1);
+    }
+
+    if(_split_status == split_status::PAUSED){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "pause partition split"));
+        parent_cleanup_split_context();
+        _partition_version.store(_app_info.partition_count - 1);
+    }
+}
+
+// TODO(heyuchen): ing
+void replica::primary_parent_handle_cancel()
+{
+    if(_split_status == split_status::NOT_SPLIT){
+        _partition_version.store(_app_info.partition_count - 1);
+        _split_status = split_status::CANCELING;
+        _primary_states.clear_split_context();
+        broadcast_group_check(split_status::CANCELING);
+    }
+
+    if(_split_status == split_status::SPLITTING){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "cancel partition split"));
+        _partition_version.store(_app_info.partition_count - 1);
+        _split_status = split_status::CANCELING;
+        _primary_states.clear_split_context();
+        broadcast_group_check(split_status::CANCELING);
+    }
+
+    if(_split_status == split_status::PAUSED){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "cancel partition split"));
+        _partition_version.store(_app_info.partition_count - 1);
+        _split_status = split_status::CANCELING;
+        _primary_states.clear_split_context();
+        broadcast_group_check(split_status::CANCELING);
+    }
+
+    if(_split_status == split_status::CANCELING){
+        _partition_version.store(_app_info.partition_count - 1);
+        _primary_states.clear_split_context();
+        broadcast_group_check(split_status::CANCELING);
+    }
+}
+
+// TODO(heyuchen): ing
+void replica::secondary_parent_handle_cancel()
+{
+    if(_split_status == split_status::NOT_SPLIT){
+        // TODO(heyuchen): consider it
+        _partition_version.store(_app_info.partition_count - 1);
+    }
+
+    if(_split_status == split_status::SPLITTING){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "cancel partition split"));
+        parent_cleanup_split_context();
+        _partition_version.store(_app_info.partition_count - 1);
+    }
+
+    if(_split_status == split_status::PAUSED){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "cancel partition split"));
+        parent_cleanup_split_context();
+        _partition_version.store(_app_info.partition_count - 1);
+    }
+
+    if(_split_status == split_status::CANCELING){
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "cancel partition split"));
+        parent_cleanup_split_context();
+        _partition_version.store(_app_info.partition_count - 1);
+    }
+}
+
 
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::parent_start_split(const group_check_request &request) // on parent partition
@@ -137,8 +281,10 @@ void replica::parent_start_split(const group_check_request &request) // on paren
     }
 
     if (status() == partition_status::PS_PRIMARY) {
-        _primary_states.caught_up_children.clear();
-        _primary_states.sync_send_write_request = false;
+//        _primary_states.caught_up_children.clear();
+//        _primary_states.sync_send_write_request = false;
+         _primary_states.clear_split_context();
+          _primary_states.secondary_split_status.clear();
     }
     // TODO(heyuchen): for debug, remove it
     ddebug_replica("hyc: partition_version from {} to {}",
@@ -1139,6 +1285,7 @@ void replica::on_register_child_on_meta_reply(
 
     // update primary parent group partition_count
     update_local_partition_count(_app_info.partition_count * 2);
+    // TODO(heyuchen): consider this param
     broadcast_group_check();
 
     parent_cleanup_split_context();

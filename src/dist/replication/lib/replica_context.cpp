@@ -95,7 +95,7 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     clear_split_context();
 
-    stopping_split.clear();
+    secondary_split_status.clear();
 }
 
 void primary_context::clear_split_context()

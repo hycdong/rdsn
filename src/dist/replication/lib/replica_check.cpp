@@ -67,7 +67,7 @@ void replica::init_group_check()
                                get_gpid().thread_hash());
 }
 
-void replica::broadcast_group_check()
+void replica::broadcast_group_check(split_status::type meta_split_status)
 {
     FAIL_POINT_INJECT_F("replica_broadcast_group_check", [](dsn::string_view) {});
 
@@ -103,13 +103,7 @@ void replica::broadcast_group_check()
         request->__set_confirmed_decree(_duplication_mgr->min_confirmed_decree());
 
         // TODO(heyuchen):
-        // primary split_status:
-        // 1 - splitting: parse splitting
-        // 2 - paused/canceling : paused/canceling
-        // 3 - not_splitting:
-        //     - meta: splitting, local: paused/canceling
-        //     - primary split succeed
-        //     - primary split failed
+        // refactor, remove primary split_status
         if (_split_status != split_status::NOT_SPLIT) {
             request->__set_primary_split_status(_split_status);
             if (_split_status == split_status::SPLITTING) {
@@ -122,9 +116,13 @@ void replica::broadcast_group_check()
                                    _child_gpid);
                     parent_cleanup_split_context();
                 }
-            } else if (_split_status == split_status::PAUSED ||
-                       _split_status == split_status::CANCELING) {
-                _primary_states.stopping_split.insert(addr);
+            }
+        }
+
+        // TODO(heyuchen): new add
+        if(request->config.status == partition_status::PS_SECONDARY){
+            if(meta_split_status == split_status::PAUSED || meta_split_status == split_status::CANCELING){
+                request->__set_meta_split_status(meta_split_status);
             }
         }
 
@@ -212,28 +210,21 @@ void replica::on_group_check(const group_check_request &request,
             update_local_partition_count(request.app.partition_count);
             parent_cleanup_split_context();
         }
-        // TODO(heyuchen): consider
-        if (request.__isset.primary_split_status &&
-            (request.primary_split_status == split_status::PAUSED ||
-             request.primary_split_status == split_status::CANCELING)) {
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "stop partition split"));
-            parent_cleanup_split_context();
-            ddebug_replica("hyc secondary {} split succeed",
-                           request.primary_split_status == split_status::CANCELING ? "cancel"
-                                                                                   : "pause");
+
+        // TODO(heyuchen): new add
+        if(request.__isset.meta_split_status && request.meta_split_status == split_status::PAUSED){
+            secondary_parent_handle_paused();
+            ddebug_replica("hyc secondary pause split succeed");
+            response.__set_secondary_split_status(_split_status);
         }
-        // TODO(heyuchen): consider
-        if (!request.__isset.primary_split_status &&
-            (_split_status == split_status::PAUSED || _split_status == split_status::CANCELING)) {
-            _stub->split_replica_error_handler(_child_gpid,
-                                               std::bind(&replica::child_handle_split_error,
-                                                         std::placeholders::_1,
-                                                         "stop partition split"));
-            parent_cleanup_split_context();
+
+        // TODO(heyuchen): new add
+        if(request.__isset.meta_split_status && request.meta_split_status == split_status::CANCELING){
+            secondary_parent_handle_cancel();
+            ddebug_replica("hyc secondary cancel split succeed");
+            response.__set_secondary_split_status(_split_status);
         }
+
         break;
     case partition_status::PS_POTENTIAL_SECONDARY:
         init_learn(request.config.learner_signature);
@@ -271,12 +262,6 @@ void replica::on_group_check_reply(error_code err,
     auto r = _primary_states.group_check_pending_replies.erase(req->node);
     dassert(r == 1, "invalid node address, address = %s", req->node.to_string());
 
-    // TODO(heyuchen): add comment
-    if (req->primary_split_status == split_status::PAUSED ||
-        req->primary_split_status == split_status::CANCELING) {
-        _primary_states.stopping_split.erase(req->node);
-    }
-
     if (err != ERR_OK) {
         handle_remote_failure(req->config.status, req->node, err, "group check");
     } else {
@@ -285,20 +270,39 @@ void replica::on_group_check_reply(error_code err,
                 req->config.status == partition_status::PS_POTENTIAL_SECONDARY) {
                 handle_learning_succeeded_on_primary(req->node, resp->learner_signature);
             }
-            // TODO(heyuchen): handle stop split
-            if (req->primary_split_status == split_status::PAUSED &&
-                _primary_states.stopping_split.size() == 0 &&
-                _split_status == split_status::PAUSED) {
-                ddebug_replica("hyc all pause split succeed");
-                parent_cleanup_split_context();
+
+            // TODO(heyuchen): new add
+            if(resp->__isset.secondary_split_status){
+                _primary_states.secondary_split_status[req->node] = resp->secondary_split_status;
             }
-            if (req->primary_split_status == split_status::CANCELING &&
-                _primary_states.stopping_split.size() == 0 &&
-                _split_status == split_status::CANCELING) {
-                ddebug_replica("hyc all cancel split succeed");
-                parent_cleanup_split_context();
-                parent_send_notify_cancel_request();
+
+            if(req->__isset.meta_split_status && req->meta_split_status == split_status::PAUSED){
+                if(_primary_states.secondary_split_status.size() + 1 == _primary_states.membership.max_replica_count){
+                    bool finish_pause = true;
+                    for(const auto &kv : _primary_states.secondary_split_status){
+                        finish_pause &= (kv.second == split_status::NOT_SPLIT);
+                    }
+                    if(finish_pause){
+                        ddebug_replica("hyc: group has paused split succeed");
+                        parent_cleanup_split_context();
+                    }
+                }
             }
+
+            if(req->__isset.meta_split_status && req->meta_split_status == split_status::CANCELING){
+                if(_primary_states.secondary_split_status.size() + 1 == _primary_states.membership.max_replica_count){
+                    bool finish_cancel = true;
+                    for(const auto &kv : _primary_states.secondary_split_status){
+                        finish_cancel &= (kv.second == split_status::NOT_SPLIT);
+                    }
+                    if(finish_cancel){
+                        ddebug_replica("hyc all cancel split succeed");
+                        parent_cleanup_split_context();
+                        parent_send_notify_cancel_request();
+                    }
+                }
+            }
+
         } else {
             handle_remote_failure(req->config.status, req->node, resp->err, "group check");
         }

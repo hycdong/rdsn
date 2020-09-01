@@ -126,7 +126,7 @@ public:
     dsn::task_ptr register_child_task;
 
     // TODO(heyuchen):
-    std::unordered_set<dsn::rpc_address> stopping_split;
+    std::unordered_map<dsn::rpc_address, split_status::type> secondary_split_status;
 };
 
 class secondary_context

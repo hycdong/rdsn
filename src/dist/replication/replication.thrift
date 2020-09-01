@@ -183,7 +183,10 @@ struct group_check_request
 
     // Used to deliver child gpid during partition split
     6:optional dsn.gpid     child_gpid;
+    // TODO(heyuchen): remove this filed
     7:optional split_status primary_split_status;
+
+    8:optional split_status meta_split_status;
 }
 
 struct group_check_response
@@ -195,6 +198,9 @@ struct group_check_response
     5:learner_status      learner_status_ = learner_status.LearningInvalid;
     6:i64                 learner_signature;
     7:dsn.rpc_address     node;
+
+    // Used for partition split
+    8:optional split_status secondary_split_status;
 }
 
 /////////////////// meta server messages ////////////////////
