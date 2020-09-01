@@ -17,7 +17,7 @@ meta_split_service::meta_split_service(meta_service *meta_srv)
     _state = meta_srv->get_server_state();
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::start_partition_split(start_split_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -65,7 +65,7 @@ void meta_split_service::start_partition_split(start_split_rpc rpc)
     do_start_partition_split(std::move(app), std::move(rpc));
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app,
                                                   start_split_rpc rpc)
 {
@@ -105,7 +105,7 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
         _state->get_app_path(*app), std::move(value), on_write_storage_complete);
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -191,7 +191,7 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     parent_context.pending_sync_task = add_child_on_remote_storage(rpc, true);
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 dsn::task_ptr meta_split_service::add_child_on_remote_storage(register_child_rpc rpc,
                                                               bool create_new)
 {
@@ -223,7 +223,7 @@ dsn::task_ptr meta_split_service::add_child_on_remote_storage(register_child_rpc
     }
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
                                                               register_child_rpc rpc,
                                                               bool create_new)
@@ -283,7 +283,7 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
     parent_context.stage = config_status::not_pending;
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::query_partition_split(query_split_rpc rpc)
 {
     const std::string &app_name = rpc.request().app_name;
@@ -315,7 +315,7 @@ void meta_split_service::query_partition_split(query_split_rpc rpc)
              response.status.size());
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::control_partition_split(control_split_rpc rpc)
 {
     const auto &req = rpc.request();
@@ -365,7 +365,7 @@ void meta_split_service::control_partition_split(control_split_rpc rpc)
     }
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::pause_partition_split(std::shared_ptr<app_state> app,
                                                control_split_rpc rpc)
 {
@@ -412,7 +412,7 @@ void meta_split_service::pause_partition_split(std::shared_ptr<app_state> app,
     response.err = ERR_OK;
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::restart_partition_split(std::shared_ptr<app_state> app,
                                                  control_split_rpc rpc)
 {
@@ -457,7 +457,7 @@ void meta_split_service::restart_partition_split(std::shared_ptr<app_state> app,
     response.err = ERR_OK;
 }
 
-// ThreadPool: THREAD_POOL_META_SERVER
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::cancel_partition_split(std::shared_ptr<app_state> app,
                                                 control_split_rpc rpc)
 {

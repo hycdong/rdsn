@@ -529,6 +529,8 @@ TEST_F(meta_split_service_test, on_config_sync_test)
     drop_app("not_splitting_app");
 }
 
+// TODO(heyuchen): notify cancel split tests
+
 class meta_split_service_failover_test : public meta_split_service_test
 {
 public:

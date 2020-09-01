@@ -824,6 +824,8 @@ bool replica::update_local_configuration(const replica_configuration &config,
 
             set_backup_context_cancel();
             clear_cold_backup_state();
+
+            // TODO(heyuchen): consider cleanup split context
         }
         switch (config.status) {
         case partition_status::PS_PRIMARY:

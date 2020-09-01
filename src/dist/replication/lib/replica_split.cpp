@@ -189,20 +189,18 @@ void replica::child_init_replica(gpid parent_gpid,
     _config.primary = primary_address;
     _config.status = partition_status::PS_PARTITION_SPLIT;
 
-    // initialize split states
+    // initialize split context
     _split_states.parent_gpid = parent_gpid;
     _split_states.is_prepare_list_copied = false;
     _split_states.is_caught_up = false;
-
-    _split_states.splitting_start_ts_ns = dsn_now_ns();
-    _stub->_counter_replicas_splitting_recent_start_count->increment();
-
     _split_states.check_state_task =
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          tracker(),
                          std::bind(&replica::child_check_split_context, this),
                          get_gpid().thread_hash(),
                          std::chrono::seconds(3));
+    _split_states.splitting_start_ts_ns = dsn_now_ns();
+    _stub->_counter_replicas_splitting_recent_start_count->increment();
 
     ddebug_replica(
         "child initialize succeed, init_ballot={}, parent_gpid={}", init_ballot, parent_gpid);
@@ -216,14 +214,13 @@ void replica::child_init_replica(gpid parent_gpid,
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica::child_check_split_context() // on child partition
 {
     FAIL_POINT_INJECT_F("replica_child_check_split_context", [](dsn::string_view) {});
 
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_f("{} status is not PS_PARTITION_SPLIT during check_child_state, but {}",
-                name(),
-                enum_to_string(status()));
+        dwarn_replica("wrong status({})", enum_to_string(status()));
         _split_states.check_state_task = nullptr;
         return;
     }
@@ -236,7 +233,6 @@ void replica::child_check_split_context() // on child partition
         child_handle_split_error("check_child_state failed because parent gpid is invalid");
         return;
     }
-
     _split_states.check_state_task =
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          tracker(),
@@ -274,8 +270,6 @@ bool replica::parent_check_states() // on parent partition
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::parent_prepare_states(const std::string &dir) // on parent partition
 {
-    FAIL_POINT_INJECT_F("replica_parent_prepare_states", [](dsn::string_view) {});
-
     if (!parent_check_states()) {
         return;
     }
@@ -667,25 +661,22 @@ void replica::child_notify_catch_up() // on child partition
 void replica::parent_handle_child_catch_up(const notify_catch_up_request &request,
                                            notify_cacth_up_response &response) // on primary parent
 {
-    if (status() != partition_status::PS_PRIMARY) {
-        derror_replica("wrong status({})", enum_to_string(status()));
-        response.err = ERR_INVALID_STATE;
-        return;
-    }
-
-    if (request.child_ballot != get_ballot()) {
-        derror_replica("receive out-date request, request ballot ({}) VS local ballot({})",
-                       request.child_ballot,
-                       get_ballot());
-        response.err = ERR_INVALID_STATE;
-        return;
-    }
-
-    if (request.child_gpid != _child_gpid) {
+    if (status() != partition_status::PS_PRIMARY || _split_status != split_status::SPLITTING) {
         derror_replica(
-            "receive wrong child request, request child_gpid({}) VS local child_gpid({})",
-            request.child_gpid,
-            _child_gpid);
+            "wrong partition status or wrong split status, partition_status={}, split_status={}",
+            enum_to_string(status()),
+            enum_to_string(_split_status));
+        response.err = ERR_INVALID_STATE;
+        return;
+    }
+
+    if (request.child_ballot != get_ballot() || request.child_gpid != _child_gpid) {
+        derror_replica("receive out-date request, request ballot ({}) VS local ballot({}), request "
+                       "child_gpid({}) VS local child_gpid({})",
+                       request.child_ballot,
+                       get_ballot(),
+                       request.child_gpid,
+                       _child_gpid);
         response.err = ERR_INVALID_STATE;
         return;
     }
@@ -765,23 +756,16 @@ void replica::parent_check_sync_point_commit(decree sync_point) // on primary pa
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica::update_child_group_partition_count(int new_partition_count) // on primary parent
 {
-    if (status() != partition_status::PS_PRIMARY) {
-        derror_replica("wrong status({})", enum_to_string(status()));
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica::child_handle_split_error,
-                      std::placeholders::_1,
-                      "update_child_group_partition_count failed, primary changed"));
-        parent_cleanup_split_context();
-        return;
-    }
-
-    if (_split_status != split_status::SPLITTING) {
-        derror_replica("can not update group partition count because current state is out-dated, "
-                       "_child_gpid({}), _child_init_ballot = {}, local ballot = {}",
-                       _child_gpid,
-                       _child_init_ballot,
-                       get_ballot());
+    if (status() != partition_status::PS_PRIMARY || _split_status != split_status::SPLITTING) {
+        derror_replica(
+            "wrong partition status or wrong split status, partition_status={}, split_status={}",
+            enum_to_string(status()),
+            enum_to_string(_split_status));
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "update_child_group_partition_count failed, "
+                                                     "wrong partition status or split status"));
         // TODO(heyuchen): consdier cleanup other states
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
@@ -868,6 +852,7 @@ void replica::on_update_child_group_partition_count(
     response.err = flag ? ERR_OK : ERR_FILE_OPERATION_FAILED;
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 bool replica::update_local_partition_count(int32_t new_partition_count) // on all partitions
 {
     // update _app_info and partition_version
@@ -910,13 +895,19 @@ void replica::on_update_child_group_partition_count_reply(
 {
     _checker.only_one_thread_access();
 
-    if (status() != partition_status::PS_PRIMARY) {
-        derror_replica("wrong status({})", enum_to_string(status()));
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica::child_handle_split_error,
-                      std::placeholders::_1,
-                      "on_update_child_group_partition_count_reply failed, primary changed"));
+    if (status() != partition_status::PS_PRIMARY || _split_status != split_status::SPLITTING) {
+        derror_replica(
+            "wrong partition status or wrong split status, partition_status={}, split_status={}",
+            enum_to_string(status()),
+            enum_to_string(_split_status));
+        _stub->split_replica_error_handler(_child_gpid,
+                                           std::bind(&replica::child_handle_split_error,
+                                                     std::placeholders::_1,
+                                                     "on_update_child_group_partition_count_reply "
+                                                     "failed, wrong partition status or split "
+                                                     "status"));
+        // TODO(heyuchen): consdier cleanup other states
+        _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
     }
@@ -929,6 +920,8 @@ void replica::on_update_child_group_partition_count_reply(
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "on_update_child_group_partition_count_reply failed, ballot changed"));
+        // TODO(heyuchen): consdier cleanup other states
+        _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
     }
@@ -960,6 +953,8 @@ void replica::on_update_child_group_partition_count_reply(
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "on_update_child_group_partition_count_reply error"));
+        // TODO(heyuchen): consdier cleanup other states
+        _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
     }
@@ -987,12 +982,18 @@ void replica::register_child_on_meta(ballot b) // on primary parent
 {
     FAIL_POINT_INJECT_F("replica_register_child_on_meta", [](dsn::string_view) {});
 
-    if (status() != partition_status::PS_PRIMARY) {
-        derror_replica("wrong status({})", enum_to_string(status()));
-        _stub->split_replica_error_handler(_child_gpid,
-                                           std::bind(&replica::child_handle_split_error,
-                                                     std::placeholders::_1,
-                                                     "register child failed, primary changed"));
+    if (status() != partition_status::PS_PRIMARY || _split_status != split_status::SPLITTING) {
+        derror_replica(
+            "wrong partition status or wrong split status, partition_status={}, split_status={}",
+            enum_to_string(status()),
+            enum_to_string(_split_status));
+        _stub->split_replica_error_handler(
+            _child_gpid,
+            std::bind(&replica::child_handle_split_error,
+                      std::placeholders::_1,
+                      "register child failed, wrong partition status or split status"));
+        // TODO(heyuchen): consdier cleanup other states
+        _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
     }
