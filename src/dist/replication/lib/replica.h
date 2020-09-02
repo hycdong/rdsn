@@ -463,17 +463,9 @@ private:
     // TODO(heyuchen): add comments
     void parent_send_notify_cancel_request();
 
+    void parent_pause_split();
 
-    void primary_parent_handle_paused();
-
-    void secondary_parent_handle_paused();
-
-    void primary_parent_handle_cancel();
-
-    void secondary_parent_handle_cancel();
-
-
-
+    void parent_cancel_split();
 
     void init_table_level_latency_counters();
 

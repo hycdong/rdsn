@@ -120,8 +120,9 @@ void replica::broadcast_group_check(split_status::type meta_split_status)
         }
 
         // TODO(heyuchen): new add
-        if(request->config.status == partition_status::PS_SECONDARY){
-            if(meta_split_status == split_status::PAUSED || meta_split_status == split_status::CANCELING){
+        if (request->config.status == partition_status::PS_SECONDARY) {
+            if (meta_split_status == split_status::PAUSED ||
+                meta_split_status == split_status::CANCELING) {
                 request->__set_meta_split_status(meta_split_status);
             }
         }
@@ -212,15 +213,17 @@ void replica::on_group_check(const group_check_request &request,
         }
 
         // TODO(heyuchen): new add
-        if(request.__isset.meta_split_status && request.meta_split_status == split_status::PAUSED){
-            secondary_parent_handle_paused();
+        if (request.__isset.meta_split_status &&
+            request.meta_split_status == split_status::PAUSED) {
+            parent_pause_split();
             ddebug_replica("hyc secondary pause split succeed");
             response.__set_secondary_split_status(_split_status);
         }
 
         // TODO(heyuchen): new add
-        if(request.__isset.meta_split_status && request.meta_split_status == split_status::CANCELING){
-            secondary_parent_handle_cancel();
+        if (request.__isset.meta_split_status &&
+            request.meta_split_status == split_status::CANCELING) {
+            parent_cancel_split();
             ddebug_replica("hyc secondary cancel split succeed");
             response.__set_secondary_split_status(_split_status);
         }
@@ -272,32 +275,33 @@ void replica::on_group_check_reply(error_code err,
             }
 
             // TODO(heyuchen): new add
-            if(resp->__isset.secondary_split_status){
+            if (resp->__isset.secondary_split_status) {
                 _primary_states.secondary_split_status[req->node] = resp->secondary_split_status;
             }
 
-            if(req->__isset.meta_split_status && req->meta_split_status == split_status::PAUSED){
-                if(_primary_states.secondary_split_status.size() + 1 == _primary_states.membership.max_replica_count){
+            if (req->__isset.meta_split_status && req->meta_split_status == split_status::PAUSED) {
+                if (_primary_states.secondary_split_status.size() + 1 ==
+                    _primary_states.membership.max_replica_count) {
                     bool finish_pause = true;
-                    for(const auto &kv : _primary_states.secondary_split_status){
+                    for (const auto &kv : _primary_states.secondary_split_status) {
                         finish_pause &= (kv.second == split_status::NOT_SPLIT);
                     }
-                    if(finish_pause){
+                    if (finish_pause) {
                         ddebug_replica("hyc: group has paused split succeed");
-                        parent_cleanup_split_context();
                     }
                 }
             }
 
-            if(req->__isset.meta_split_status && req->meta_split_status == split_status::CANCELING){
-                if(_primary_states.secondary_split_status.size() + 1 == _primary_states.membership.max_replica_count){
+            if (req->__isset.meta_split_status &&
+                req->meta_split_status == split_status::CANCELING) {
+                if (_primary_states.secondary_split_status.size() + 1 ==
+                    _primary_states.membership.max_replica_count) {
                     bool finish_cancel = true;
-                    for(const auto &kv : _primary_states.secondary_split_status){
+                    for (const auto &kv : _primary_states.secondary_split_status) {
                         finish_cancel &= (kv.second == split_status::NOT_SPLIT);
                     }
-                    if(finish_cancel){
+                    if (finish_cancel) {
                         ddebug_replica("hyc all cancel split succeed");
-                        parent_cleanup_split_context();
                         parent_send_notify_cancel_request();
                     }
                 }
