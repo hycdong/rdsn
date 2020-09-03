@@ -102,6 +102,7 @@ void primary_context::clear_split_context()
 {
     // clean up register child in split
     CLEANUP_TASK_ALWAYS(register_child_task)
+    CLEANUP_TASK_ALWAYS(query_child_task)
 
     caught_up_children.clear();
     sync_send_write_request = false;
@@ -111,7 +112,7 @@ bool primary_context::is_cleaned()
 {
     return nullptr == group_check_task && nullptr == reconfiguration_task &&
            nullptr == checkpoint_task && group_check_pending_replies.empty() &&
-           nullptr == register_child_task;
+           nullptr == register_child_task && nullptr == query_child_task;
 }
 
 void primary_context::do_cleanup_pending_mutations(bool clean_pending_mutations)

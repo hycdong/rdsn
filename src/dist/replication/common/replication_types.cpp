@@ -15496,6 +15496,299 @@ void register_child_response::printTo(std::ostream &out) const
     out << ")";
 }
 
+query_child_state_request::~query_child_state_request() throw() {}
+
+void query_child_state_request::__set_app_name(const std::string &val) { this->app_name = val; }
+
+void query_child_state_request::__set_pid(const ::dsn::gpid &val) { this->pid = val; }
+
+void query_child_state_request::__set_partition_count(const int32_t val)
+{
+    this->partition_count = val;
+}
+
+uint32_t query_child_state_request::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->app_name);
+                this->__isset.app_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->pid.read(iprot);
+                this->__isset.pid = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->partition_count);
+                this->__isset.partition_count = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t query_child_state_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("query_child_state_request");
+
+    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("pid", ::apache::thrift::protocol::T_STRUCT, 2);
+    xfer += this->pid.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("partition_count", ::apache::thrift::protocol::T_I32, 3);
+    xfer += oprot->writeI32(this->partition_count);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(query_child_state_request &a, query_child_state_request &b)
+{
+    using ::std::swap;
+    swap(a.app_name, b.app_name);
+    swap(a.pid, b.pid);
+    swap(a.partition_count, b.partition_count);
+    swap(a.__isset, b.__isset);
+}
+
+query_child_state_request::query_child_state_request(const query_child_state_request &other676)
+{
+    app_name = other676.app_name;
+    pid = other676.pid;
+    partition_count = other676.partition_count;
+    __isset = other676.__isset;
+}
+query_child_state_request::query_child_state_request(query_child_state_request &&other677)
+{
+    app_name = std::move(other677.app_name);
+    pid = std::move(other677.pid);
+    partition_count = std::move(other677.partition_count);
+    __isset = std::move(other677.__isset);
+}
+query_child_state_request &query_child_state_request::
+operator=(const query_child_state_request &other678)
+{
+    app_name = other678.app_name;
+    pid = other678.pid;
+    partition_count = other678.partition_count;
+    __isset = other678.__isset;
+    return *this;
+}
+query_child_state_request &query_child_state_request::
+operator=(query_child_state_request &&other679)
+{
+    app_name = std::move(other679.app_name);
+    pid = std::move(other679.pid);
+    partition_count = std::move(other679.partition_count);
+    __isset = std::move(other679.__isset);
+    return *this;
+}
+void query_child_state_request::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "query_child_state_request(";
+    out << "app_name=" << to_string(app_name);
+    out << ", "
+        << "pid=" << to_string(pid);
+    out << ", "
+        << "partition_count=" << to_string(partition_count);
+    out << ")";
+}
+
+query_child_state_response::~query_child_state_response() throw() {}
+
+void query_child_state_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
+
+void query_child_state_response::__set_partition_count(const int32_t val)
+{
+    this->partition_count = val;
+    __isset.partition_count = true;
+}
+
+void query_child_state_response::__set_child_config(const ::dsn::partition_configuration &val)
+{
+    this->child_config = val;
+    __isset.child_config = true;
+}
+
+uint32_t query_child_state_response::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->err.read(iprot);
+                this->__isset.err = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->partition_count);
+                this->__isset.partition_count = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->child_config.read(iprot);
+                this->__isset.child_config = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t query_child_state_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("query_child_state_response");
+
+    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->err.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    if (this->__isset.partition_count) {
+        xfer += oprot->writeFieldBegin("partition_count", ::apache::thrift::protocol::T_I32, 2);
+        xfer += oprot->writeI32(this->partition_count);
+        xfer += oprot->writeFieldEnd();
+    }
+    if (this->__isset.child_config) {
+        xfer += oprot->writeFieldBegin("child_config", ::apache::thrift::protocol::T_STRUCT, 3);
+        xfer += this->child_config.write(oprot);
+        xfer += oprot->writeFieldEnd();
+    }
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(query_child_state_response &a, query_child_state_response &b)
+{
+    using ::std::swap;
+    swap(a.err, b.err);
+    swap(a.partition_count, b.partition_count);
+    swap(a.child_config, b.child_config);
+    swap(a.__isset, b.__isset);
+}
+
+query_child_state_response::query_child_state_response(const query_child_state_response &other680)
+{
+    err = other680.err;
+    partition_count = other680.partition_count;
+    child_config = other680.child_config;
+    __isset = other680.__isset;
+}
+query_child_state_response::query_child_state_response(query_child_state_response &&other681)
+{
+    err = std::move(other681.err);
+    partition_count = std::move(other681.partition_count);
+    child_config = std::move(other681.child_config);
+    __isset = std::move(other681.__isset);
+}
+query_child_state_response &query_child_state_response::
+operator=(const query_child_state_response &other682)
+{
+    err = other682.err;
+    partition_count = other682.partition_count;
+    child_config = other682.child_config;
+    __isset = other682.__isset;
+    return *this;
+}
+query_child_state_response &query_child_state_response::
+operator=(query_child_state_response &&other683)
+{
+    err = std::move(other683.err);
+    partition_count = std::move(other683.partition_count);
+    child_config = std::move(other683.child_config);
+    __isset = std::move(other683.__isset);
+    return *this;
+}
+void query_child_state_response::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "query_child_state_response(";
+    out << "err=" << to_string(err);
+    out << ", "
+        << "partition_count=";
+    (__isset.partition_count ? (out << to_string(partition_count)) : (out << "<null>"));
+    out << ", "
+        << "child_config=";
+    (__isset.child_config ? (out << to_string(child_config)) : (out << "<null>"));
+    out << ")";
+}
+
 notify_cancel_split_request::~notify_cancel_split_request() throw() {}
 
 void notify_cancel_split_request::__set_parent_gpid(const ::dsn::gpid &val)
@@ -15583,32 +15876,32 @@ void swap(notify_cancel_split_request &a, notify_cancel_split_request &b)
 }
 
 notify_cancel_split_request::notify_cancel_split_request(
-    const notify_cancel_split_request &other676)
+    const notify_cancel_split_request &other684)
 {
-    parent_gpid = other676.parent_gpid;
-    partition_count = other676.partition_count;
-    __isset = other676.__isset;
+    parent_gpid = other684.parent_gpid;
+    partition_count = other684.partition_count;
+    __isset = other684.__isset;
 }
-notify_cancel_split_request::notify_cancel_split_request(notify_cancel_split_request &&other677)
+notify_cancel_split_request::notify_cancel_split_request(notify_cancel_split_request &&other685)
 {
-    parent_gpid = std::move(other677.parent_gpid);
-    partition_count = std::move(other677.partition_count);
-    __isset = std::move(other677.__isset);
+    parent_gpid = std::move(other685.parent_gpid);
+    partition_count = std::move(other685.partition_count);
+    __isset = std::move(other685.__isset);
 }
 notify_cancel_split_request &notify_cancel_split_request::
-operator=(const notify_cancel_split_request &other678)
+operator=(const notify_cancel_split_request &other686)
 {
-    parent_gpid = other678.parent_gpid;
-    partition_count = other678.partition_count;
-    __isset = other678.__isset;
+    parent_gpid = other686.parent_gpid;
+    partition_count = other686.partition_count;
+    __isset = other686.__isset;
     return *this;
 }
 notify_cancel_split_request &notify_cancel_split_request::
-operator=(notify_cancel_split_request &&other679)
+operator=(notify_cancel_split_request &&other687)
 {
-    parent_gpid = std::move(other679.parent_gpid);
-    partition_count = std::move(other679.partition_count);
-    __isset = std::move(other679.__isset);
+    parent_gpid = std::move(other687.parent_gpid);
+    partition_count = std::move(other687.partition_count);
+    __isset = std::move(other687.__isset);
     return *this;
 }
 void notify_cancel_split_request::printTo(std::ostream &out) const
@@ -15687,28 +15980,28 @@ void swap(notify_cancel_split_response &a, notify_cancel_split_response &b)
 }
 
 notify_cancel_split_response::notify_cancel_split_response(
-    const notify_cancel_split_response &other680)
+    const notify_cancel_split_response &other688)
 {
-    err = other680.err;
-    __isset = other680.__isset;
+    err = other688.err;
+    __isset = other688.__isset;
 }
-notify_cancel_split_response::notify_cancel_split_response(notify_cancel_split_response &&other681)
+notify_cancel_split_response::notify_cancel_split_response(notify_cancel_split_response &&other689)
 {
-    err = std::move(other681.err);
-    __isset = std::move(other681.__isset);
+    err = std::move(other689.err);
+    __isset = std::move(other689.__isset);
 }
 notify_cancel_split_response &notify_cancel_split_response::
-operator=(const notify_cancel_split_response &other682)
+operator=(const notify_cancel_split_response &other690)
 {
-    err = other682.err;
-    __isset = other682.__isset;
+    err = other690.err;
+    __isset = other690.__isset;
     return *this;
 }
 notify_cancel_split_response &notify_cancel_split_response::
-operator=(notify_cancel_split_response &&other683)
+operator=(notify_cancel_split_response &&other691)
 {
-    err = std::move(other683.err);
-    __isset = std::move(other683.__isset);
+    err = std::move(other691.err);
+    __isset = std::move(other691.__isset);
     return *this;
 }
 void notify_cancel_split_response::printTo(std::ostream &out) const

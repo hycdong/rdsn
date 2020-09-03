@@ -75,6 +75,8 @@ private:
         return str;
     }
 
+    void query_child_state(query_child_state_rpc rpc);
+
 private:
     friend class meta_service;
     friend class meta_split_service_test;

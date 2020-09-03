@@ -187,6 +187,8 @@ private:
     void on_control_partition_split(control_split_rpc rpc);
     void on_notify_cancel_split(notify_cancel_split_rpc rpc);
 
+    void on_query_child_state(query_child_state_rpc rpc);
+
     // common routines
     // ret:
     //   1. the meta is leader

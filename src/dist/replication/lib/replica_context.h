@@ -125,6 +125,9 @@ public:
     // primary parent register child on meta_server task
     dsn::task_ptr register_child_task;
 
+    // TODO(heyuchen): add comment
+    dsn::task_ptr query_child_task;
+
     // TODO(heyuchen):
     std::unordered_map<dsn::rpc_address, split_status::type> secondary_split_status;
 };

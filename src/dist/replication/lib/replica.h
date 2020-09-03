@@ -467,6 +467,12 @@ private:
 
     void parent_cancel_split();
 
+    void query_child_state();
+
+    void on_query_child_state_reply(error_code ec,
+                                    const query_child_state_request &request,
+                                    const query_child_state_response &response);
+
     void init_table_level_latency_counters();
 
 private:

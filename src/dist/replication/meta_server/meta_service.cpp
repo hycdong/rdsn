@@ -1000,5 +1000,20 @@ void meta_service::on_notify_cancel_split(notify_cancel_split_rpc rpc)
                      server_state::sStateHash);
 }
 
+void meta_service::on_query_child_state(query_child_state_rpc rpc)
+{
+    auto &response = rpc.response();
+    RPC_CHECK_STATUS(rpc.dsn_request(), rpc.response());
+    if (!_split_svc) {
+        derror("meta doesn't support split service");
+        response.err = ERR_SERVICE_NOT_ACTIVE;
+        return;
+    }
+    tasking::enqueue(LPC_META_STATE_NORMAL,
+                     tracker(),
+                     [this, rpc]() { _split_svc->query_child_state(std::move(rpc)); },
+                     server_state::sStateHash);
+}
+
 } // namespace replication
 } // namespace dsn

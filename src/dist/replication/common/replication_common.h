@@ -41,6 +41,7 @@ typedef rpc_holder<control_split_request, control_split_response> control_split_
 typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
 typedef rpc_holder<notify_cancel_split_request, notify_cancel_split_response>
     notify_cancel_split_rpc;
+typedef rpc_holder<query_child_state_request, query_child_state_response> query_child_state_rpc;
 
 class replication_options
 {

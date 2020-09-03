@@ -954,6 +954,23 @@ struct register_child_response
     4:dsn.layer2.partition_configuration    child_config;
 }
 
+// primary parent -> meta server, query child state on meta server
+struct query_child_state_request
+{
+    1:string    app_name
+    2:dsn.gpid  pid;
+    3:i32       partition_count;
+}
+
+struct query_child_state_response
+{
+    // Possible errors:
+    // - ERR_INVALID_STATE: app is not splitting or partition split has been canceled
+    1:dsn.error_code                                err;
+    2:optional i32                                  partition_count;
+    3:optional dsn.layer2.partition_configuration   child_config;
+}
+
 // replica -> meta to report cancel split succeed
 struct notify_cancel_split_request
 {
