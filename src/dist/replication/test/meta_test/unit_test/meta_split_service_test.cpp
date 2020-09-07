@@ -147,6 +147,15 @@ public:
         }
     }
 
+    void clear_app_partition_split_context()
+    {
+        app->partition_count = PARTITION_COUNT;
+        app->partitions.resize(app->partition_count);
+        app->helpers->contexts.resize(app->partition_count);
+        app->helpers->split_states.splitting_count = 0;
+        app->helpers->split_states.status.clear();
+    }
+
     void mock_child_registered()
     {
         app->partitions[CHILD_INDEX].ballot = PARENT_BALLOT;
@@ -166,14 +175,14 @@ public:
         }
     }
 
-    bool check_split_status(split_status::type status, int32_t parent_index = -1)
+    bool check_split_status(split_status::type expected_status, int32_t parent_index = -1)
     {
         auto app = find_app(NAME);
         if (parent_index != -1) {
-            return (app->helpers->split_states.status[parent_index] == status);
+            return (app->helpers->split_states.status[parent_index] == expected_status);
         } else {
             for (const auto kv : app->helpers->split_states.status) {
-                if (kv.second != status) {
+                if (kv.second != expected_status) {
                     return false;
                 }
             }
@@ -326,84 +335,137 @@ TEST_F(meta_split_service_test, query_split_succeed)
     ASSERT_EQ(resp.status.size(), PARTITION_COUNT);
 }
 
-// pause split unit tests
-TEST_F(meta_split_service_test, pause_split_test)
+/// control split unit tests
+// pause/restart single partition split unit tests
+TEST_F(meta_split_service_test, pause_or_restart_single_partition_test)
+{
+    // Test case:
+    // - pause with wrong pidx
+    // - pause with partition is not splitting
+    // - pause with partition split_status = pausing
+    // - pause with partition split_status = paused
+    // - pause with partition split_status = canceling
+    // - pause with partition split_status = splitting
+    // - restart with partition is not splitting
+    // - restart with partition split_status = pausing
+    // - restart with partition split_status = paused
+    // - restart with partition split_status = canceling
+    // - restart with partition split_status = splitting
+    struct control_single_partition_test
+    {
+        int32_t pidx;
+        split_status::type cur_status;
+        split_control_type::type control_type;
+        error_code expected_err;
+        split_status::type expected_status;
+    } tests[] = {{NEW_PARTITION_COUNT,
+                  split_status::SPLITTING,
+                  split_control_type::PSC_PAUSE,
+                  ERR_INVALID_PARAMETERS,
+                  split_status::SPLITTING},
+                 {PARENT_INDEX,
+                  split_status::NOT_SPLIT,
+                  split_control_type::PSC_PAUSE,
+                  ERR_CHILD_REGISTERED,
+                  split_status::NOT_SPLIT},
+                 {PARENT_INDEX,
+                  split_status::PAUSING,
+                  split_control_type::PSC_PAUSE,
+                  ERR_OK,
+                  split_status::PAUSING},
+                 {PARENT_INDEX,
+                  split_status::PAUSED,
+                  split_control_type::PSC_PAUSE,
+                  ERR_OK,
+                  split_status::PAUSED},
+                 {PARENT_INDEX,
+                  split_status::CANCELING,
+                  split_control_type::PSC_PAUSE,
+                  ERR_INVALID_STATE,
+                  split_status::CANCELING},
+                 {PARENT_INDEX,
+                  split_status::SPLITTING,
+                  split_control_type::PSC_PAUSE,
+                  ERR_OK,
+                  split_status::PAUSING},
+                 {PARENT_INDEX,
+                  split_status::NOT_SPLIT,
+                  split_control_type::PSC_RESTART,
+                  ERR_INVALID_STATE,
+                  split_status::NOT_SPLIT},
+                 {PARENT_INDEX,
+                  split_status::PAUSING,
+                  split_control_type::PSC_RESTART,
+                  ERR_INVALID_STATE,
+                  split_status::PAUSING},
+                 {PARENT_INDEX,
+                  split_status::PAUSED,
+                  split_control_type::PSC_RESTART,
+                  ERR_OK,
+                  split_status::SPLITTING},
+                 {PARENT_INDEX,
+                  split_status::CANCELING,
+                  split_control_type::PSC_RESTART,
+                  ERR_INVALID_STATE,
+                  split_status::CANCELING},
+                 {PARENT_INDEX,
+                  split_status::SPLITTING,
+                  split_control_type::PSC_RESTART,
+                  ERR_OK,
+                  split_status::SPLITTING}};
+
+    for (auto test : tests) {
+        mock_app_partition_split_context();
+        if (test.cur_status == split_status::NOT_SPLIT) {
+            mock_child_registered();
+        } else {
+            mock_split_states(test.cur_status, PARENT_INDEX);
+        }
+        ASSERT_EQ(control_partition_split(NAME, test.control_type, test.pidx, PARTITION_COUNT),
+                  test.expected_err);
+        if (test.expected_err == ERR_OK) {
+            ASSERT_TRUE(check_split_status(test.expected_status, test.pidx));
+        }
+        clear_app_partition_split_context();
+    }
+}
+
+TEST_F(meta_split_service_test, pause_or_restart_multi_partitions_test)
 {
     // Test case:
     // - app not existed
     // - app is not splitting
-    // - pause singe partition whose child registered
-    // - pause singe partition who has already paused
-    // - pause singe partition succeed
-    // - pause all splitting partitions succeed
-    struct pause_test
-    {
-        std::string app_name;
-        int32_t parent_pidx;
-        bool mock_app_splitting;
-        bool mock_child_registered;
-        bool mock_parent_paused;
-        error_code expected_err;
-        bool check_status;
-    } tests[] = {
-        {"table_not_exist", -1, false, false, false, ERR_APP_NOT_EXIST, false},
-        {NAME, PARENT_INDEX, false, false, false, ERR_INVALID_STATE, false},
-        {NAME, PARENT_INDEX, true, true, false, ERR_CHILD_REGISTERED, false},
-        {NAME, PARENT_INDEX, true, false, true, ERR_OK, false},
-        {NAME, PARENT_INDEX, true, false, false, ERR_OK, true},
-        {NAME, -1, true, false, false, ERR_OK, true},
-    };
-
-    for (auto test : tests) {
-        if (test.mock_app_splitting) {
-            mock_app_partition_split_context();
-        }
-        if (test.mock_child_registered) {
-            mock_child_registered();
-        }
-        if (test.mock_parent_paused) {
-            mock_split_states(split_status::PAUSED, test.parent_pidx);
-        }
-        ASSERT_EQ(pause_partition_split(test.app_name, test.parent_pidx), test.expected_err);
-        if (test.check_status) {
-            ASSERT_TRUE(check_split_status(split_status::PAUSED, test.parent_pidx));
-        }
-    }
-}
-
-// restart split unit tests
-TEST_F(meta_split_service_test, restart_split_test)
-{
-    // Test case:
-    // - invalid parent index
-    // - restart singe partition whose child registered
-    // - restart singe partition succeed
+    // - pausing all splitting partitions succeed
     // - restart all paused partitions succeed
-    struct restart_test
+    struct control_multi_partitions_test
     {
-        int32_t parent_pidx;
-        bool mock_child_registered;
-        bool mock_parent_paused;
+        bool mock_split_context;
+        std::string app_name;
+        split_control_type::type control_type;
         error_code expected_err;
-        bool check_status;
-    } tests[] = {
-        {NEW_PARTITION_COUNT, false, false, ERR_INVALID_PARAMETERS, false},
-        {PARENT_INDEX, true, false, ERR_INVALID_STATE, false},
-        {PARENT_INDEX, false, true, ERR_OK, true},
-        {-1, true, true, ERR_OK, true},
-    };
+    } tests[] = {{false, "table_not_exist", split_control_type::PSC_PAUSE, ERR_APP_NOT_EXIST},
+                 {false, NAME, split_control_type::PSC_RESTART, ERR_INVALID_STATE},
+                 {true, NAME, split_control_type::PSC_PAUSE, ERR_OK},
+                 {true, NAME, split_control_type::PSC_RESTART, ERR_OK}};
 
     for (auto test : tests) {
-        mock_app_partition_split_context();
-        if (test.mock_child_registered) {
-            mock_child_registered();
+        if (test.mock_split_context) {
+            mock_app_partition_split_context();
+            if (test.control_type == split_control_type::PSC_RESTART) {
+                mock_split_states(split_status::PAUSED, -1);
+            }
         }
-        if (test.mock_parent_paused) {
-            mock_split_states(split_status::PAUSED, test.parent_pidx);
+        error_code ec =
+            control_partition_split(test.app_name, test.control_type, -1, PARTITION_COUNT);
+        ASSERT_EQ(ec, test.expected_err);
+        if (test.expected_err == ERR_OK) {
+            split_status::type expected_status = test.control_type == split_control_type::PSC_PAUSE
+                                                     ? split_status::PAUSING
+                                                     : split_status::SPLITTING;
+            ASSERT_TRUE(check_split_status(expected_status, -1));
         }
-        ASSERT_EQ(restart_partition_split(NAME, test.parent_pidx), test.expected_err);
-        if (test.check_status) {
-            ASSERT_TRUE(check_split_status(split_status::SPLITTING, test.parent_pidx));
+        if (test.mock_split_context) {
+            clear_app_partition_split_context();
         }
     }
 }
@@ -435,7 +497,9 @@ TEST_F(meta_split_service_test, cancel_split_test)
             auto app = find_app(NAME);
             ASSERT_EQ(app->partition_count, NEW_PARTITION_COUNT);
             ASSERT_EQ(app->helpers->split_states.splitting_count, PARTITION_COUNT);
+            check_split_status(split_status::CANCELING, -1);
         }
+        clear_app_partition_split_context();
     }
 }
 

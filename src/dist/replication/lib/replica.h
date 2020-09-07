@@ -461,7 +461,7 @@ private:
                                split_status::type meta_split_status);
 
     // TODO(heyuchen): add comments
-    void parent_send_notify_cancel_request();
+    void parent_send_notify_stop_request(split_status::type meta_split_status);
 
     void parent_pause_split();
 

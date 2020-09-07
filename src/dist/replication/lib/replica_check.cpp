@@ -121,7 +121,7 @@ void replica::broadcast_group_check(split_status::type meta_split_status)
 
         // TODO(heyuchen): new add
         if (request->config.status == partition_status::PS_SECONDARY) {
-            if (meta_split_status == split_status::PAUSED ||
+            if (meta_split_status == split_status::PAUSING ||
                 meta_split_status == split_status::CANCELING) {
                 request->__set_meta_split_status(meta_split_status);
             }
@@ -214,7 +214,7 @@ void replica::on_group_check(const group_check_request &request,
 
         // TODO(heyuchen): new add
         if (request.__isset.meta_split_status &&
-            request.meta_split_status == split_status::PAUSED) {
+            request.meta_split_status == split_status::PAUSING) {
             parent_pause_split();
             ddebug_replica("hyc secondary pause split succeed");
             response.__set_secondary_split_status(_split_status);
@@ -279,7 +279,7 @@ void replica::on_group_check_reply(error_code err,
                 _primary_states.secondary_split_status[req->node] = resp->secondary_split_status;
             }
 
-            if (req->__isset.meta_split_status && req->meta_split_status == split_status::PAUSED) {
+            if (req->__isset.meta_split_status && req->meta_split_status == split_status::PAUSING) {
                 if (_primary_states.secondary_split_status.size() + 1 ==
                     _primary_states.membership.max_replica_count) {
                     bool finish_pause = true;
@@ -287,7 +287,8 @@ void replica::on_group_check_reply(error_code err,
                         finish_pause &= (kv.second == split_status::NOT_SPLIT);
                     }
                     if (finish_pause) {
-                        ddebug_replica("hyc: group has paused split succeed");
+                        ddebug_replica("hyc: all pause split succeed");
+                        parent_send_notify_stop_request(req->meta_split_status);
                     }
                 }
             }
@@ -302,7 +303,7 @@ void replica::on_group_check_reply(error_code err,
                     }
                     if (finish_cancel) {
                         ddebug_replica("hyc all cancel split succeed");
-                        parent_send_notify_cancel_request();
+                        parent_send_notify_stop_request(req->meta_split_status);
                     }
                 }
             }

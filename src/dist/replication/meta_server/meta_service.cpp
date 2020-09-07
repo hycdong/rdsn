@@ -384,7 +384,7 @@ void meta_service::register_rpc_handlers()
                                          "control_partition_split",
                                          &meta_service::on_control_partition_split);
     register_rpc_handler_with_rpc_holder(
-        RPC_CM_NOTIFY_CANCEL_SPLIT, "notify_cancel_split", &meta_service::on_notify_cancel_split);
+        RPC_CM_NOTIFY_STOP_SPLIT, "notify_stop_split", &meta_service::on_notify_stop_split);
 }
 
 int meta_service::check_leader(dsn::message_ex *req, dsn::rpc_address *forward_address)
@@ -985,7 +985,7 @@ void meta_service::on_query_partition_split(query_split_rpc rpc)
                      server_state::sStateHash);
 }
 
-void meta_service::on_notify_cancel_split(notify_cancel_split_rpc rpc)
+void meta_service::on_notify_stop_split(notify_stop_split_rpc rpc)
 {
     auto &response = rpc.response();
     RPC_CHECK_STATUS(rpc.dsn_request(), rpc.response());
@@ -996,7 +996,7 @@ void meta_service::on_notify_cancel_split(notify_cancel_split_rpc rpc)
     }
     tasking::enqueue(LPC_META_STATE_NORMAL,
                      tracker(),
-                     [this, rpc]() { _split_svc->notify_cancel_split(std::move(rpc)); },
+                     [this, rpc]() { _split_svc->notify_stop_split(std::move(rpc)); },
                      server_state::sStateHash);
 }
 

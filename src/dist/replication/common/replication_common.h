@@ -39,8 +39,7 @@ typedef rpc_holder<start_partition_split_request, start_partition_split_response
 typedef rpc_holder<query_split_request, query_split_response> query_split_rpc;
 typedef rpc_holder<control_split_request, control_split_response> control_split_rpc;
 typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
-typedef rpc_holder<notify_cancel_split_request, notify_cancel_split_response>
-    notify_cancel_split_rpc;
+typedef rpc_holder<notify_stop_split_request, notify_stop_split_response> notify_stop_split_rpc;
 typedef rpc_holder<query_child_state_request, query_child_state_response> query_child_state_rpc;
 
 class replication_options

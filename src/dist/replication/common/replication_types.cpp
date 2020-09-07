@@ -67,11 +67,12 @@ const std::map<int, const char *> _learner_status_VALUES_TO_NAMES(
 
 int _ksplit_statusValues[] = {split_status::NOT_SPLIT,
                               split_status::SPLITTING,
+                              split_status::PAUSING,
                               split_status::PAUSED,
                               split_status::CANCELING};
-const char *_ksplit_statusNames[] = {"NOT_SPLIT", "SPLITTING", "PAUSED", "CANCELING"};
+const char *_ksplit_statusNames[] = {"NOT_SPLIT", "SPLITTING", "PAUSING", "PAUSED", "CANCELING"};
 const std::map<int, const char *> _split_status_VALUES_TO_NAMES(
-    ::apache::thrift::TEnumIterator(4, _ksplit_statusValues, _ksplit_statusNames),
+    ::apache::thrift::TEnumIterator(5, _ksplit_statusValues, _ksplit_statusNames),
     ::apache::thrift::TEnumIterator(-1, NULL, NULL));
 
 int _kconfig_typeValues[] = {config_type::CT_INVALID,
@@ -15789,19 +15790,26 @@ void query_child_state_response::printTo(std::ostream &out) const
     out << ")";
 }
 
-notify_cancel_split_request::~notify_cancel_split_request() throw() {}
+notify_stop_split_request::~notify_stop_split_request() throw() {}
 
-void notify_cancel_split_request::__set_parent_gpid(const ::dsn::gpid &val)
+void notify_stop_split_request::__set_app_name(const std::string &val) { this->app_name = val; }
+
+void notify_stop_split_request::__set_parent_gpid(const ::dsn::gpid &val)
 {
     this->parent_gpid = val;
 }
 
-void notify_cancel_split_request::__set_partition_count(const int32_t val)
+void notify_stop_split_request::__set_meta_split_status(const split_status::type val)
+{
+    this->meta_split_status = val;
+}
+
+void notify_stop_split_request::__set_partition_count(const int32_t val)
 {
     this->partition_count = val;
 }
 
-uint32_t notify_cancel_split_request::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t notify_stop_split_request::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -15821,6 +15829,14 @@ uint32_t notify_cancel_split_request::read(::apache::thrift::protocol::TProtocol
         }
         switch (fid) {
         case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->app_name);
+                this->__isset.app_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
             if (ftype == ::apache::thrift::protocol::T_STRUCT) {
                 xfer += this->parent_gpid.read(iprot);
                 this->__isset.parent_gpid = true;
@@ -15828,7 +15844,17 @@ uint32_t notify_cancel_split_request::read(::apache::thrift::protocol::TProtocol
                 xfer += iprot->skip(ftype);
             }
             break;
-        case 2:
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                int32_t ecast684;
+                xfer += iprot->readI32(ecast684);
+                this->meta_split_status = (split_status::type)ecast684;
+                this->__isset.meta_split_status = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 4:
             if (ftype == ::apache::thrift::protocol::T_I32) {
                 xfer += iprot->readI32(this->partition_count);
                 this->__isset.partition_count = true;
@@ -15848,17 +15874,25 @@ uint32_t notify_cancel_split_request::read(::apache::thrift::protocol::TProtocol
     return xfer;
 }
 
-uint32_t notify_cancel_split_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t notify_stop_split_request::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("notify_cancel_split_request");
+    xfer += oprot->writeStructBegin("notify_stop_split_request");
 
-    xfer += oprot->writeFieldBegin("parent_gpid", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("parent_gpid", ::apache::thrift::protocol::T_STRUCT, 2);
     xfer += this->parent_gpid.write(oprot);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("partition_count", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeFieldBegin("meta_split_status", ::apache::thrift::protocol::T_I32, 3);
+    xfer += oprot->writeI32((int32_t)this->meta_split_status);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("partition_count", ::apache::thrift::protocol::T_I32, 4);
     xfer += oprot->writeI32(this->partition_count);
     xfer += oprot->writeFieldEnd();
 
@@ -15867,58 +15901,71 @@ uint32_t notify_cancel_split_request::write(::apache::thrift::protocol::TProtoco
     return xfer;
 }
 
-void swap(notify_cancel_split_request &a, notify_cancel_split_request &b)
+void swap(notify_stop_split_request &a, notify_stop_split_request &b)
 {
     using ::std::swap;
+    swap(a.app_name, b.app_name);
     swap(a.parent_gpid, b.parent_gpid);
+    swap(a.meta_split_status, b.meta_split_status);
     swap(a.partition_count, b.partition_count);
     swap(a.__isset, b.__isset);
 }
 
-notify_cancel_split_request::notify_cancel_split_request(
-    const notify_cancel_split_request &other684)
+notify_stop_split_request::notify_stop_split_request(const notify_stop_split_request &other685)
 {
-    parent_gpid = other684.parent_gpid;
-    partition_count = other684.partition_count;
-    __isset = other684.__isset;
+    app_name = other685.app_name;
+    parent_gpid = other685.parent_gpid;
+    meta_split_status = other685.meta_split_status;
+    partition_count = other685.partition_count;
+    __isset = other685.__isset;
 }
-notify_cancel_split_request::notify_cancel_split_request(notify_cancel_split_request &&other685)
+notify_stop_split_request::notify_stop_split_request(notify_stop_split_request &&other686)
 {
-    parent_gpid = std::move(other685.parent_gpid);
-    partition_count = std::move(other685.partition_count);
-    __isset = std::move(other685.__isset);
+    app_name = std::move(other686.app_name);
+    parent_gpid = std::move(other686.parent_gpid);
+    meta_split_status = std::move(other686.meta_split_status);
+    partition_count = std::move(other686.partition_count);
+    __isset = std::move(other686.__isset);
 }
-notify_cancel_split_request &notify_cancel_split_request::
-operator=(const notify_cancel_split_request &other686)
+notify_stop_split_request &notify_stop_split_request::
+operator=(const notify_stop_split_request &other687)
 {
-    parent_gpid = other686.parent_gpid;
-    partition_count = other686.partition_count;
-    __isset = other686.__isset;
+    app_name = other687.app_name;
+    parent_gpid = other687.parent_gpid;
+    meta_split_status = other687.meta_split_status;
+    partition_count = other687.partition_count;
+    __isset = other687.__isset;
     return *this;
 }
-notify_cancel_split_request &notify_cancel_split_request::
-operator=(notify_cancel_split_request &&other687)
+notify_stop_split_request &notify_stop_split_request::
+operator=(notify_stop_split_request &&other688)
 {
-    parent_gpid = std::move(other687.parent_gpid);
-    partition_count = std::move(other687.partition_count);
-    __isset = std::move(other687.__isset);
+    app_name = std::move(other688.app_name);
+    parent_gpid = std::move(other688.parent_gpid);
+    meta_split_status = std::move(other688.meta_split_status);
+    partition_count = std::move(other688.partition_count);
+    __isset = std::move(other688.__isset);
     return *this;
 }
-void notify_cancel_split_request::printTo(std::ostream &out) const
+void notify_stop_split_request::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "notify_cancel_split_request(";
-    out << "parent_gpid=" << to_string(parent_gpid);
+    out << "notify_stop_split_request(";
+    out << "app_name=" << to_string(app_name);
+    out << ", "
+        << "parent_gpid=" << to_string(parent_gpid);
+    out << ", "
+        << "meta_split_status=" << to_string(meta_split_status);
     out << ", "
         << "partition_count=" << to_string(partition_count);
     out << ")";
 }
 
-notify_cancel_split_response::~notify_cancel_split_response() throw() {}
+notify_stop_split_response::~notify_stop_split_response() throw() {}
 
-void notify_cancel_split_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
+void notify_stop_split_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
 
-uint32_t notify_cancel_split_response::read(::apache::thrift::protocol::TProtocol *iprot)
+uint32_t notify_stop_split_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
 
     apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -15957,11 +16004,11 @@ uint32_t notify_cancel_split_response::read(::apache::thrift::protocol::TProtoco
     return xfer;
 }
 
-uint32_t notify_cancel_split_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+uint32_t notify_stop_split_response::write(::apache::thrift::protocol::TProtocol *oprot) const
 {
     uint32_t xfer = 0;
     apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("notify_cancel_split_response");
+    xfer += oprot->writeStructBegin("notify_stop_split_response");
 
     xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
     xfer += this->err.write(oprot);
@@ -15972,42 +16019,41 @@ uint32_t notify_cancel_split_response::write(::apache::thrift::protocol::TProtoc
     return xfer;
 }
 
-void swap(notify_cancel_split_response &a, notify_cancel_split_response &b)
+void swap(notify_stop_split_response &a, notify_stop_split_response &b)
 {
     using ::std::swap;
     swap(a.err, b.err);
     swap(a.__isset, b.__isset);
 }
 
-notify_cancel_split_response::notify_cancel_split_response(
-    const notify_cancel_split_response &other688)
+notify_stop_split_response::notify_stop_split_response(const notify_stop_split_response &other689)
 {
-    err = other688.err;
-    __isset = other688.__isset;
+    err = other689.err;
+    __isset = other689.__isset;
 }
-notify_cancel_split_response::notify_cancel_split_response(notify_cancel_split_response &&other689)
+notify_stop_split_response::notify_stop_split_response(notify_stop_split_response &&other690)
 {
-    err = std::move(other689.err);
-    __isset = std::move(other689.__isset);
+    err = std::move(other690.err);
+    __isset = std::move(other690.__isset);
 }
-notify_cancel_split_response &notify_cancel_split_response::
-operator=(const notify_cancel_split_response &other690)
+notify_stop_split_response &notify_stop_split_response::
+operator=(const notify_stop_split_response &other691)
 {
-    err = other690.err;
-    __isset = other690.__isset;
+    err = other691.err;
+    __isset = other691.__isset;
     return *this;
 }
-notify_cancel_split_response &notify_cancel_split_response::
-operator=(notify_cancel_split_response &&other691)
+notify_stop_split_response &notify_stop_split_response::
+operator=(notify_stop_split_response &&other692)
 {
-    err = std::move(other691.err);
-    __isset = std::move(other691.__isset);
+    err = std::move(other692.err);
+    __isset = std::move(other692.__isset);
     return *this;
 }
-void notify_cancel_split_response::printTo(std::ostream &out) const
+void notify_stop_split_response::printTo(std::ostream &out) const
 {
     using ::apache::thrift::to_string;
-    out << "notify_cancel_split_response(";
+    out << "notify_stop_split_response(";
     out << "err=" << to_string(err);
     out << ")";
 }

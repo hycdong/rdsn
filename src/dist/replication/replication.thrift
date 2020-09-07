@@ -165,6 +165,7 @@ enum split_status
 {
     NOT_SPLIT,
     SPLITTING,
+    PAUSING,
     PAUSED,
     CANCELING
 }
@@ -971,18 +972,19 @@ struct query_child_state_response
     3:optional dsn.layer2.partition_configuration   child_config;
 }
 
-// replica -> meta to report cancel split succeed
-struct notify_cancel_split_request
+// primary -> meta to report pause or cancel split succeed
+struct notify_stop_split_request
 {
-    1:dsn.gpid  parent_gpid;
-    2:i32       partition_count;
+    1:string        app_name;
+    2:dsn.gpid      parent_gpid;
+    3:split_status  meta_split_status;
+    4:i32           partition_count;
 }
 
-struct notify_cancel_split_response
+struct notify_stop_split_response
 {
     // Possible errors:
     // - ERR_INVALID_VERSION: request is out-dated
-    // - ERR_INVALID_STATE: parent is not canceling
     1:dsn.error_code    err;
 }
 

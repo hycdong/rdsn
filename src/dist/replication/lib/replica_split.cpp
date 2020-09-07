@@ -30,6 +30,11 @@ void replica::check_partition_count(
 
     dcheck_eq_replica(_app_info.partition_count * 2, meta_partition_count);
 
+    if (meta_split_status == split_status::PAUSED) {
+        dwarn_replica("split has been paused, ignore it");
+        return;
+    }
+
     ddebug_replica("app({}) partition count changed, local({}) VS meta({}), split_status local({}) "
                    "VS meta({})",
                    _app_info.app_name,
@@ -60,7 +65,7 @@ void replica::check_partition_count(
         return;
     }
 
-    if (meta_split_status == split_status::PAUSED) {
+    if (meta_split_status == split_status::PAUSING) {
         parent_pause_split();
         return;
     }
@@ -178,7 +183,7 @@ void replica::parent_pause_split()
         parent_cleanup_split_context();
         if (status() == partition_status::PS_PRIMARY) {
             _primary_states.clear_split_context();
-            broadcast_group_check(split_status::PAUSED);
+            broadcast_group_check(split_status::PAUSING);
         }
         return;
     }
@@ -188,20 +193,21 @@ void replica::parent_pause_split()
         return;
     }
 
-    if (_primary_states.secondary_split_status.size() + 1 ==
-        _primary_states.membership.max_replica_count) {
-        bool finish_pause = true;
-        for (const auto &kv : _primary_states.secondary_split_status) {
-            finish_pause &= (kv.second == split_status::NOT_SPLIT);
-        }
-        if (finish_pause) {
-            ddebug_replica("hyc: group has already paused split, ignore meta pause split request");
-            return;
-        }
-    }
+    //    if (_primary_states.secondary_split_status.size() + 1 ==
+    //        _primary_states.membership.max_replica_count) {
+    //        bool finish_pause = true;
+    //        for (const auto &kv : _primary_states.secondary_split_status) {
+    //            finish_pause &= (kv.second == split_status::NOT_SPLIT);
+    //        }
+    //        if (finish_pause) {
+    //            ddebug_replica("hyc: group has already paused split, ignore meta pause split
+    //            request");
+    //            return;
+    //        }
+    //    }
     _partition_version.store(_app_info.partition_count - 1);
     _primary_states.clear_split_context();
-    broadcast_group_check(split_status::PAUSED);
+    broadcast_group_check(split_status::PAUSING);
 }
 
 void replica::parent_cancel_split()
@@ -256,6 +262,7 @@ void replica::parent_start_split(const group_check_request &request) // on paren
         return;
     }
 
+    // TODO(heyuchen): remove it
     if (_split_status == split_status::PAUSED || _split_status == split_status::CANCELING) {
         derror_replica("partition split is paused or canceling, but meta server crashed, clean up "
                        "before restart partition split");
@@ -1338,29 +1345,26 @@ void replica::child_handle_async_learn_error() // on child partition
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica::parent_send_notify_cancel_request() // on primary parent
+void replica::parent_send_notify_stop_request(
+    split_status::type meta_split_status) // on primary parent
 {
-    FAIL_POINT_INJECT_F("replica_parent_send_notify_cancel_request", [](dsn::string_view) {});
+    FAIL_POINT_INJECT_F("replica_parent_send_notify_stop_request", [](dsn::string_view) {});
 
     rpc_address meta_address(_stub->_failure_detector->get_servers());
-    std::unique_ptr<notify_cancel_split_request> req = make_unique<notify_cancel_split_request>();
+    std::unique_ptr<notify_stop_split_request> req = make_unique<notify_stop_split_request>();
+    req->app_name = _app_info.app_name;
     req->parent_gpid = get_gpid();
+    req->meta_split_status = meta_split_status;
     req->partition_count = _app_info.partition_count;
 
-    notify_cancel_split_rpc rpc(
-        std::move(req), RPC_CM_NOTIFY_CANCEL_SPLIT, 0_ms, 0, get_gpid().thread_hash());
+    notify_stop_split_rpc rpc(
+        std::move(req), RPC_CM_NOTIFY_STOP_SPLIT, 0_ms, 0, get_gpid().thread_hash());
     rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
-        if (ec != ERR_OK) {
-            dwarn_replica("notify cancel split failed, error = {}, wait and retry", ec);
-            tasking::enqueue(LPC_PARTITION_SPLIT,
-                             tracker(),
-                             std::bind(&replica::parent_send_notify_cancel_request, this),
-                             get_gpid().thread_hash(),
-                             std::chrono::seconds(1));
-        }
-        error_code err = rpc.response().err;
+        error_code err = ec == ERR_OK ? rpc.response().err : ec;
+        const std::string type =
+            rpc.request().meta_split_status == split_status::PAUSING ? "pause" : "cancel";
         if (err != ERR_OK) {
-            dwarn_replica("notify cancel split failed, error = {}, ignore out-dated reuqest", err);
+            dwarn_replica("notify {} split failed, error = {}, wait for next round", type, err);
         }
     });
 }
