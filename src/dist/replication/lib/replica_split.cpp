@@ -1175,25 +1175,6 @@ void replica::check_partition_count(
     //   in this case, child partition ballot is invalid_ballot
     // As a result, primary should send query_child_state rpc to meta server
     query_child_state();
-
-    // TODO(heyuchen):
-    // meta_split_status == split_status::NOT_SPLIT
-    // when primary replica register child succeed, but replica server crashed
-    // meta server will consider this parent partition not_splitting, but parent group partition is
-    // not updated
-    //    dassert_replica(_split_status == split_status::NOT_SPLIT ||
-    //                        _split_status == split_status::SPLITTING,
-    //                    "wrong split_status({})",
-    //                    enum_to_string(_split_status));
-    // TODO(heyuchen): add query child rpc
-    // two cases:
-    // 1. primary replica register child succeed, but replica server crashed
-    // primary won't update partition count
-    // 2. after cancel, partitionA succeed, but partition count remain new partition count
-    //    update_local_partition_count(meta_partition_count);
-    //    _primary_states.clear_split_context();
-    //    parent_cleanup_split_context();
-    //    broadcast_group_check(meta_split_status);
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION

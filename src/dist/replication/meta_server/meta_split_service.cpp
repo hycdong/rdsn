@@ -625,7 +625,6 @@ void meta_split_service::query_child_state(query_child_state_rpc rpc)
     int32_t child_pidx = parent_pid.get_partition_index() + request.partition_count;
     if (app->partitions[child_pidx].ballot == invalid_ballot) {
         response.err = ERR_INVALID_STATE;
-        // TODO(heyuchen):
         derror_f("app({}) parent partition({}) split has been canceled", app_name, parent_pid);
         return;
     }
