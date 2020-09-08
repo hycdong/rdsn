@@ -463,9 +463,13 @@ private:
     // TODO(heyuchen): add comments
     void parent_send_notify_stop_request(split_status::type meta_split_status);
 
-    void parent_pause_split();
+    void parent_stop_split(split_status::type meta_split_status);
 
-    void parent_cancel_split();
+    void secondary_parent_handle_split(const group_check_request &request,
+                                       /*out*/ group_check_response &response);
+
+    void primary_parent_handle_stop_split(const std::shared_ptr<group_check_request> &req,
+                                          const std::shared_ptr<group_check_response> &resp);
 
     void query_child_state();
 

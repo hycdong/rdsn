@@ -1358,7 +1358,6 @@ typedef struct _group_check_request__isset
           last_committed_decree(false),
           confirmed_decree(false),
           child_gpid(false),
-          primary_split_status(false),
           meta_split_status(false)
     {
     }
@@ -1368,7 +1367,6 @@ typedef struct _group_check_request__isset
     bool last_committed_decree : 1;
     bool confirmed_decree : 1;
     bool child_gpid : 1;
-    bool primary_split_status : 1;
     bool meta_split_status : 1;
 } _group_check_request__isset;
 
@@ -1380,10 +1378,7 @@ public:
     group_check_request &operator=(const group_check_request &);
     group_check_request &operator=(group_check_request &&);
     group_check_request()
-        : last_committed_decree(0),
-          confirmed_decree(0),
-          primary_split_status((split_status::type)0),
-          meta_split_status((split_status::type)0)
+        : last_committed_decree(0), confirmed_decree(0), meta_split_status((split_status::type)0)
     {
     }
 
@@ -1394,7 +1389,6 @@ public:
     int64_t last_committed_decree;
     int64_t confirmed_decree;
     ::dsn::gpid child_gpid;
-    split_status::type primary_split_status;
     split_status::type meta_split_status;
 
     _group_check_request__isset __isset;
@@ -1410,8 +1404,6 @@ public:
     void __set_confirmed_decree(const int64_t val);
 
     void __set_child_gpid(const ::dsn::gpid &val);
-
-    void __set_primary_split_status(const split_status::type val);
 
     void __set_meta_split_status(const split_status::type val);
 
@@ -1432,11 +1424,6 @@ public:
         if (__isset.child_gpid != rhs.__isset.child_gpid)
             return false;
         else if (__isset.child_gpid && !(child_gpid == rhs.child_gpid))
-            return false;
-        if (__isset.primary_split_status != rhs.__isset.primary_split_status)
-            return false;
-        else if (__isset.primary_split_status &&
-                 !(primary_split_status == rhs.primary_split_status))
             return false;
         if (__isset.meta_split_status != rhs.__isset.meta_split_status)
             return false;

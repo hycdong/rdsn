@@ -184,10 +184,7 @@ struct group_check_request
 
     // Used to deliver child gpid during partition split
     6:optional dsn.gpid     child_gpid;
-    // TODO(heyuchen): remove this filed
-    7:optional split_status primary_split_status;
-
-    8:optional split_status meta_split_status;
+    7:optional split_status meta_split_status;
 }
 
 struct group_check_response
