@@ -515,6 +515,7 @@ void meta_split_service::cancel_partition_split(std::shared_ptr<app_state> app,
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::notify_stop_split(notify_stop_split_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -574,6 +575,7 @@ void meta_split_service::notify_stop_split(notify_stop_split_rpc rpc)
     }
 }
 
+// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::do_cancel_partition_split(std::shared_ptr<app_state> app,
                                                    notify_stop_split_rpc rpc)
 {

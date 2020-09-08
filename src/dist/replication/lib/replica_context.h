@@ -125,7 +125,7 @@ public:
     // primary parent register child on meta_server task
     dsn::task_ptr register_child_task;
 
-    // TODO(heyuchen): add comment
+    // TODO(heyuchen): add comment and consider its cleanup
     dsn::task_ptr query_child_task;
 
     // TODO(heyuchen):

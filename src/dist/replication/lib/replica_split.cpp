@@ -1310,19 +1310,17 @@ void replica::parent_send_notify_stop_request(
     });
 }
 
-void replica::query_child_state()
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::query_child_state() // on primary parent
 {
-    FAIL_POINT_INJECT_F("replica_query_child_state", [](dsn::string_view) {});
-
-    dcheck_eq_replica(status(), partition_status::PS_PRIMARY);
     auto request = make_unique<query_child_state_request>();
     request->app_name = _app_info.app_name;
     request->pid = get_gpid();
     request->partition_count = _app_info.partition_count;
 
-    ddebug_replica("send query child partition state request to meta server");
-
     rpc_address meta_address(_stub->_failure_detector->get_servers());
+    ddebug_replica("send query child partition state request to meta server({})",
+                   meta_address.to_string());
     query_child_state_rpc rpc(
         std::move(request), RPC_CM_QUERY_CHILD_STATE, 0_ms, 0, get_gpid().thread_hash());
     _primary_states.query_child_task =
@@ -1331,9 +1329,11 @@ void replica::query_child_state()
         });
 }
 
-void replica::on_query_child_state_reply(error_code ec,
-                                         const query_child_state_request &request,
-                                         const query_child_state_response &response)
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::on_query_child_state_reply(
+    error_code ec,
+    const query_child_state_request &request,
+    const query_child_state_response &response) // on primary parent
 {
     if (ec != ERR_OK) {
         dwarn_replica("query child partition state failed, error = {}, retry it later", ec);
@@ -1350,11 +1350,11 @@ void replica::on_query_child_state_reply(error_code ec,
         dwarn_replica("app({}) partition({}) split has been canceled, ignore it",
                       request.app_name,
                       request.pid);
+        return;
     }
 
     ddebug_replica("query child partition succeed, child partition[{}] has already been ready",
                    response.child_config.pid);
-
     _stub->split_replica_exec(
         LPC_PARTITION_SPLIT,
         response.child_config.pid,

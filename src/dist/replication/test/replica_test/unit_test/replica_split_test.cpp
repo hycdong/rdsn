@@ -206,6 +206,28 @@ public:
         _parent->tracker()->wait_outstanding_tasks();
     }
 
+    void test_query_child_state_reply()
+    {
+        query_child_state_request req;
+        req.app_name = APP_NAME;
+        req.partition_count = OLD_PARTITION_COUNT;
+        req.pid = PARENT_GPID;
+
+        partition_configuration child_config;
+        child_config.pid = CHILD_GPID;
+        child_config.ballot = INIT_BALLOT + 1;
+        child_config.last_committed_decree = 0;
+
+        query_child_state_response resp;
+        resp.err = ERR_OK;
+        resp.__set_partition_count(NEW_PARTITION_COUNT);
+        resp.__set_child_config(child_config);
+
+        _parent->on_query_child_state_reply(ERR_OK, req, resp);
+        _parent->tracker()->wait_outstanding_tasks();
+        _child->tracker()->wait_outstanding_tasks();
+    }
+
     group_check_response test_secondary_parent_handle_split(split_status::type meta_split_status,
                                                             split_status::type local_split_status)
     {
@@ -770,8 +792,6 @@ TEST_F(replica_split_test, primary_handle_split_test)
     // - meta canceling with local not_split
     // - meta canceling with local splitting
     // - meta paused with local not_split
-    // TODO(heyuchen): update name
-    // - meta not_split with local not_split(See query_child_tests)
     // - meta not_split with local splitting(See query_child_tests)
     struct check_partition_count_test
     {
@@ -863,33 +883,19 @@ TEST_F(replica_split_test, secondary_handle_split_test)
     }
 }
 
-// Test cases:
-// - meta not_splitting with local not_split - query_child
-// - meta not_splitting with local splitting - query_child
+TEST_F(replica_split_test, query_child_state_reply_test)
+{
+    fail::cfg("replica_init_group_check", "return()");
+    fail::cfg("replica_broadcast_group_check", "return()");
+    generate_child(partition_status::PS_PARTITION_SPLIT);
+    mock_primary_parent_split_context(true, true);
+    set_partition_version(_parent, -1);
 
-// TEST_F(replica_split_test, not_splitting_with_replica_splitting)
-//{
-//    fail::cfg("replica_broadcast_group_check", "return()");
-//    generate_child(partition_status::PS_PARTITION_SPLIT);
-//    mock_primary_parent_split_context(true, true);
-//    set_partition_version(_parent, -1);
-
-//    test_check_partition_count(split_status::NOT_SPLIT, split_status::SPLITTING);
-//    ASSERT_EQ(_parent->get_split_status(), split_status::NOT_SPLIT);
-//    ASSERT_EQ(get_partition_version(_parent), NEW_PARTITION_COUNT - 1);
-//    ASSERT_TRUE(primary_parent_cleanup());
-//}
-
-// TEST_F(replica_split_test, not_splitting_with_replica_not_splitting)
-//{
-//    fail::cfg("replica_broadcast_group_check", "return()");
-//    set_partition_version(_parent, OLD_PARTITION_COUNT - 1);
-
-//    test_check_partition_count(split_status::NOT_SPLIT, split_status::NOT_SPLIT);
-//    ASSERT_EQ(_parent->get_split_status(), split_status::NOT_SPLIT);
-//    ASSERT_EQ(get_partition_version(_parent), NEW_PARTITION_COUNT - 1);
-//    ASSERT_TRUE(primary_parent_cleanup());
-//}
+    test_query_child_state_reply();
+    ASSERT_EQ(_parent->get_split_status(), split_status::NOT_SPLIT);
+    ASSERT_EQ(get_partition_version(_parent), NEW_PARTITION_COUNT - 1);
+    ASSERT_TRUE(primary_parent_cleanup());
+}
 
 } // namespace replication
 } // namespace dsn
