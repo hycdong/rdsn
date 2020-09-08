@@ -389,25 +389,37 @@ TEST_F(meta_split_service_test, register_child_test)
 }
 
 // query split unit tests
-TEST_F(meta_split_service_test, query_split_with_not_existed_app)
+TEST_F(meta_split_service_test, query_split_test)
 {
-    auto resp = query_partition_split("table_not_exist");
-    ASSERT_EQ(resp.err, ERR_APP_NOT_EXIST);
-}
+    // Test case:
+    // - app not existed
+    // - app not splitting
+    // - query split succeed
+    struct query_test
+    {
+        std::string app_name;
+        bool mock_splitting;
+        error_code expected_err;
+    } tests[] = {
+        {"table_not_exist", false, ERR_APP_NOT_EXIST},
+        {NAME, false, ERR_INVALID_STATE},
+        {NAME, true, ERR_OK},
+    };
 
-TEST_F(meta_split_service_test, query_split_with_app_not_splitting)
-{
-    auto resp = query_partition_split(NAME);
-    ASSERT_EQ(resp.err, ERR_INVALID_STATE);
-}
-
-TEST_F(meta_split_service_test, query_split_succeed)
-{
-    mock_app_partition_split_context();
-    auto resp = query_partition_split(NAME);
-    ASSERT_EQ(resp.err, ERR_OK);
-    ASSERT_EQ(resp.new_partition_count, NEW_PARTITION_COUNT);
-    ASSERT_EQ(resp.status.size(), PARTITION_COUNT);
+    for (auto test : tests) {
+        if (test.mock_splitting) {
+            mock_app_partition_split_context();
+        }
+        auto resp = query_partition_split(test.app_name);
+        ASSERT_EQ(resp.err, test.expected_err);
+        if (resp.err == ERR_OK) {
+            ASSERT_EQ(resp.new_partition_count, NEW_PARTITION_COUNT);
+            ASSERT_EQ(resp.status.size(), PARTITION_COUNT);
+        }
+        if (test.mock_splitting) {
+            clear_app_partition_split_context();
+        }
+    }
 }
 
 /// control split unit tests
