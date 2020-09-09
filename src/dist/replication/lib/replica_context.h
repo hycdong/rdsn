@@ -130,9 +130,9 @@ public:
     // Called by `check_partition_count`, see more in `replica_split.cpp`
     dsn::task_ptr query_child_task;
 
-    // Used for stop partition split
-    // TODO(heyuchen): consider update it to set of rpc_address
-    std::unordered_map<dsn::rpc_address, split_status::type> secondary_split_status;
+    // Used partition split
+    // secondary replica address who has paused or canceled split
+    std::unordered_set<rpc_address> split_stopped_secondary;
 };
 
 class secondary_context

@@ -231,6 +231,39 @@ public:
         return resp;
     }
 
+    void test_primary_parent_handle_stop_split(split_status::type meta_split_status,
+                                               bool lack_of_secondary,
+                                               bool will_all_stop)
+    {
+        _parent->set_partition_status(partition_status::PS_PRIMARY);
+        _parent->_primary_states.statuses[PRIMARY] = partition_status::PS_PRIMARY;
+        _parent->_primary_states.statuses[SECONDARY] = partition_status::PS_SECONDARY;
+        _parent->_primary_states.statuses[SECONDARY2] =
+            lack_of_secondary ? partition_status::PS_POTENTIAL_SECONDARY
+                              : partition_status::PS_SECONDARY;
+        _parent->_primary_states.sync_send_write_request = true;
+        _parent->_primary_states.split_stopped_secondary.clear();
+        mock_parent_primary_configuration(lack_of_secondary);
+
+        std::shared_ptr<group_check_request> req = std::make_shared<group_check_request>();
+        std::shared_ptr<group_check_response> resp = std::make_shared<group_check_response>();
+        req->node = SECONDARY;
+        if (meta_split_status != split_status::NOT_SPLIT) {
+            req->__set_meta_split_status(meta_split_status);
+        }
+
+        if (meta_split_status == split_status::PAUSING ||
+            meta_split_status == split_status::CANCELING) {
+            resp->__set_is_split_stopped(true);
+            if (will_all_stop) {
+                _parent->_primary_states.split_stopped_secondary.insert(SECONDARY2);
+            }
+        }
+
+        _parent->primary_parent_handle_stop_split(req, resp);
+        _parent->tracker()->wait_outstanding_tasks();
+    }
+
     void test_on_query_child_state_reply()
     {
         _parent->_partition_version.store(-1);
@@ -399,6 +432,10 @@ public:
     {
         return _parent->_primary_states.sync_send_write_request;
     }
+    int32_t parent_stopped_split_size()
+    {
+        return _parent->_primary_states.split_stopped_secondary.size();
+    }
     bool is_parent_not_in_split()
     {
         return _parent->_child_gpid.get_app_id() == 0 && _parent->_child_init_ballot == 0 &&
@@ -409,7 +446,7 @@ public:
         auto context = _parent->_primary_states;
         return context.caught_up_children.size() == 0 && context.register_child_task == nullptr &&
                context.sync_send_write_request == false && context.query_child_task == nullptr &&
-               is_parent_not_in_split();
+               context.split_stopped_secondary.size() == 0 && is_parent_not_in_split();
     }
 
 public:
@@ -809,7 +846,7 @@ TEST_F(replica_split_test, primary_handle_split_test)
             _child->tracker()->wait_outstanding_tasks();
             ASSERT_EQ(_child->status(), partition_status::PS_ERROR);
         }
-        ASSERT_TRUE(primary_parent_not_in_split());
+        ASSERT_FALSE(parent_sync_send_write_request());
 
         TearDown();
     }
@@ -853,8 +890,8 @@ TEST_F(replica_split_test, secondary_handle_split_test)
         ASSERT_EQ(get_partition_version(_parent), test.expected_partition_version);
         if (test.meta_split_status == split_status::PAUSING ||
             test.meta_split_status == split_status::CANCELING) {
-            ASSERT_TRUE(resp.__isset.secondary_split_status);
-            ASSERT_EQ(resp.secondary_split_status, split_status::NOT_SPLIT);
+            ASSERT_TRUE(resp.__isset.is_split_stopped);
+            ASSERT_TRUE(resp.is_split_stopped);
             if (test.local_split_status == split_status::SPLITTING) {
                 _child->tracker()->wait_outstanding_tasks();
                 ASSERT_EQ(_child->status(), partition_status::PS_ERROR);
@@ -862,6 +899,38 @@ TEST_F(replica_split_test, secondary_handle_split_test)
         }
 
         TearDown();
+    }
+}
+
+TEST_F(replica_split_test, primary_parent_handle_stop_test)
+{
+    // Test cases:
+    // - not_splitting request
+    // - splitting request
+    // - pausing request with lack of secondary
+    // - canceling request with not all secondary
+    // - group all paused
+    // - group all canceled
+    struct primary_parent_handle_stop_test
+    {
+        split_status::type meta_split_status;
+        bool lack_of_secondary;
+        bool will_all_stop;
+        int32_t expected_size;
+        bool expected_all_stopped;
+    } tests[]{{split_status::NOT_SPLIT, false, false, 0, false},
+              {split_status::SPLITTING, false, false, 0, false},
+              {split_status::PAUSING, true, false, 1, false},
+              {split_status::CANCELING, false, false, 1, false},
+              {split_status::PAUSING, false, true, 0, true},
+              {split_status::CANCELING, false, true, 0, true}};
+
+    for (auto test : tests) {
+        fail::cfg("replica_parent_send_notify_stop_request", "return()");
+        test_primary_parent_handle_stop_split(
+            test.meta_split_status, test.lack_of_secondary, test.will_all_stop);
+        ASSERT_EQ(parent_stopped_split_size(), test.expected_size);
+        ASSERT_EQ(primary_parent_not_in_split(), test.expected_all_stopped);
     }
 }
 

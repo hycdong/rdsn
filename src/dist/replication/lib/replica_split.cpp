@@ -49,7 +49,6 @@ void replica::parent_start_split(const group_check_request &request) // on paren
 
     if (status() == partition_status::PS_PRIMARY) {
         _primary_states.cleanup_split_context();
-        _primary_states.secondary_split_status.clear();
     }
     _partition_version.store(_app_info.partition_count - 1);
 
@@ -1182,30 +1181,7 @@ void replica::secondary_parent_handle_split(
     if (request.meta_split_status == split_status::PAUSING ||
         request.meta_split_status == split_status::CANCELING) { // secondary pause or cancel split
         parent_stop_split(request.meta_split_status);
-        response.__set_secondary_split_status(_split_status);
-    }
-}
-
-// ThreadPool: THREAD_POOL_REPLICATION
-void replica::primary_parent_handle_stop_split(
-    const std::shared_ptr<group_check_request> &req,
-    const std::shared_ptr<group_check_response> &resp) // on primary parent partition
-{
-    if (resp->__isset.secondary_split_status) {
-        _primary_states.secondary_split_status[req->node] = resp->secondary_split_status;
-    }
-    if (req->__isset.meta_split_status && (req->meta_split_status == split_status::PAUSING ||
-                                           req->meta_split_status == split_status::CANCELING)) {
-        if (_primary_states.secondary_split_status.size() + 1 ==
-            _primary_states.membership.max_replica_count) {
-            bool all_stopped = true;
-            for (const auto &kv : _primary_states.secondary_split_status) {
-                all_stopped &= (kv.second == split_status::NOT_SPLIT);
-            }
-            if (all_stopped) {
-                parent_send_notify_stop_request(req->meta_split_status);
-            }
-        }
+        response.__set_is_split_stopped(true);
     }
 }
 
@@ -1232,7 +1208,7 @@ void replica::parent_stop_split(split_status::type meta_split_status) // on pare
     _partition_version.store(_app_info.partition_count - 1);
 
     if (status() == partition_status::PS_PRIMARY) {
-        _primary_states.cleanup_split_context();
+        _primary_states.sync_send_write_request = false;
         broadcast_group_check(meta_split_status);
     }
     ddebug_replica(
@@ -1241,6 +1217,36 @@ void replica::parent_stop_split(split_status::type meta_split_status) // on pare
         enum_to_string(status()),
         enum_to_string(old_status),
         get_gpid().get_partition_index() + _app_info.partition_count);
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica::primary_parent_handle_stop_split(
+    const std::shared_ptr<group_check_request> &req,
+    const std::shared_ptr<group_check_response> &resp) // on primary parent partition
+{
+    if (!req->__isset.meta_split_status || (req->meta_split_status != split_status::PAUSING &&
+                                            req->meta_split_status != split_status::CANCELING)) {
+        // partition is not executing split or not stopping split
+        return;
+    }
+
+    if (!resp->__isset.is_split_stopped || !resp->is_split_stopped) {
+        return;
+    }
+
+    _primary_states.split_stopped_secondary.insert(req->node);
+    int count = 0;
+    for (auto &iter : _primary_states.statuses) {
+        if (iter.second == partition_status::PS_SECONDARY &&
+            _primary_states.split_stopped_secondary.find(iter.first) !=
+                _primary_states.split_stopped_secondary.end()) {
+            ++count;
+        }
+    }
+    if (count == _primary_states.membership.max_replica_count - 1) {
+        _primary_states.cleanup_split_context();
+        parent_send_notify_stop_request(req->meta_split_status);
+    }
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION

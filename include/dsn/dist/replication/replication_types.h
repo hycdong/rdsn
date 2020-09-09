@@ -1459,7 +1459,7 @@ typedef struct _group_check_response__isset
           learner_status_(true),
           learner_signature(false),
           node(false),
-          secondary_split_status(false)
+          is_split_stopped(false)
     {
     }
     bool pid : 1;
@@ -1469,7 +1469,7 @@ typedef struct _group_check_response__isset
     bool learner_status_ : 1;
     bool learner_signature : 1;
     bool node : 1;
-    bool secondary_split_status : 1;
+    bool is_split_stopped : 1;
 } _group_check_response__isset;
 
 class group_check_response
@@ -1484,7 +1484,7 @@ public:
           last_committed_decree_in_prepare_list(0),
           learner_status_((learner_status::type)0),
           learner_signature(0),
-          secondary_split_status((split_status::type)0)
+          is_split_stopped(0)
     {
         learner_status_ = (learner_status::type)0;
     }
@@ -1497,7 +1497,7 @@ public:
     learner_status::type learner_status_;
     int64_t learner_signature;
     ::dsn::rpc_address node;
-    split_status::type secondary_split_status;
+    bool is_split_stopped;
 
     _group_check_response__isset __isset;
 
@@ -1515,7 +1515,7 @@ public:
 
     void __set_node(const ::dsn::rpc_address &val);
 
-    void __set_secondary_split_status(const split_status::type val);
+    void __set_is_split_stopped(const bool val);
 
     bool operator==(const group_check_response &rhs) const
     {
@@ -1533,10 +1533,9 @@ public:
             return false;
         if (!(node == rhs.node))
             return false;
-        if (__isset.secondary_split_status != rhs.__isset.secondary_split_status)
+        if (__isset.is_split_stopped != rhs.__isset.is_split_stopped)
             return false;
-        else if (__isset.secondary_split_status &&
-                 !(secondary_split_status == rhs.secondary_split_status))
+        else if (__isset.is_split_stopped && !(is_split_stopped == rhs.is_split_stopped))
             return false;
         return true;
     }

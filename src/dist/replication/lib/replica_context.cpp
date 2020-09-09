@@ -94,8 +94,6 @@ void primary_context::cleanup(bool clean_pending_mutations)
     membership.ballot = 0;
 
     cleanup_split_context();
-
-    secondary_split_status.clear();
 }
 
 void primary_context::cleanup_split_context()
@@ -106,6 +104,7 @@ void primary_context::cleanup_split_context()
 
     caught_up_children.clear();
     sync_send_write_request = false;
+    split_stopped_secondary.clear();
 }
 
 bool primary_context::is_cleaned()
