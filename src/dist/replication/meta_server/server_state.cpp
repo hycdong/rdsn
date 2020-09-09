@@ -611,7 +611,6 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                         app->partitions[partition_id].pid = gpid(app->app_id, partition_id);
                         process_one_partition(app);
                     }
-                    // TODO(heyuchen): consider it
                 } else {
                     derror("get partition node failed, reason(%s)", ec.to_string());
                     err = ec;

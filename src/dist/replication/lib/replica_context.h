@@ -73,7 +73,7 @@ public:
 
     void do_cleanup_pending_mutations(bool clean_pending_mutations = true);
 
-    void clear_split_context();
+    void cleanup_split_context();
 
 public:
     // membership mgr, including learners
@@ -125,10 +125,13 @@ public:
     // primary parent register child on meta_server task
     dsn::task_ptr register_child_task;
 
-    // TODO(heyuchen): add comment and consider its cleanup
+    // Used for partition split
+    // primary parent query child on meta_server task
+    // Called by `check_partition_count`, see more in `replica_split.cpp`
     dsn::task_ptr query_child_task;
 
-    // TODO(heyuchen):
+    // Used for stop partition split
+    // TODO(heyuchen): consider update it to set of rpc_address
     std::unordered_map<dsn::rpc_address, split_status::type> secondary_split_status;
 };
 

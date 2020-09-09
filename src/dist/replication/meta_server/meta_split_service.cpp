@@ -94,7 +94,6 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
         response.err = ERR_OK;
     };
 
-    // TODO(heuychen): consider init_partition_count
     if (app->init_partition_count <= 0) {
         app->init_partition_count = app->partition_count;
     }

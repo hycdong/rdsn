@@ -48,13 +48,9 @@ void replica::parent_start_split(const group_check_request &request) // on paren
     }
 
     if (status() == partition_status::PS_PRIMARY) {
-        _primary_states.clear_split_context();
+        _primary_states.cleanup_split_context();
         _primary_states.secondary_split_status.clear();
     }
-    // TODO(heyuchen): for debug, remove it
-    ddebug_replica("hyc: partition_version from {} to {}",
-                   _partition_version.load(),
-                   _app_info.partition_count - 1);
     _partition_version.store(_app_info.partition_count - 1);
 
     _split_status = split_status::SPLITTING;
@@ -677,7 +673,6 @@ void replica::update_child_group_partition_count(int new_partition_count) // on 
                                                      std::placeholders::_1,
                                                      "update_child_group_partition_count failed, "
                                                      "wrong partition status or split status"));
-        // TODO(heyuchen): consdier cleanup other states
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
@@ -695,7 +690,6 @@ void replica::update_child_group_partition_count(int new_partition_count) // on 
                 &replica::child_handle_split_error,
                 std::placeholders::_1,
                 "update_child_group_partition_count failed, have learner or lack of secondary"));
-        // TODO(heyuchen): consdier cleanup other states
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
@@ -773,6 +767,7 @@ bool replica::update_local_partition_count(int32_t new_partition_count) // on al
     if (info.init_partition_count < 1) {
         info.init_partition_count = info.partition_count;
     }
+    auto old_partition_count = info.partition_count;
     info.partition_count = new_partition_count;
 
     replica_app_info new_info((app_info *)&info);
@@ -780,20 +775,15 @@ bool replica::update_local_partition_count(int32_t new_partition_count) // on al
     auto err = new_info.store(info_path.c_str());
     if (err != ERR_OK) {
         derror_replica("failed to save app_info to {}, error = {}", info_path, err);
+        info.partition_count = old_partition_count;
         return false;
     }
+    ddebug_replica(
+        "update partition_count from {} to {}", old_partition_count, _app_info.partition_count);
 
     _app_info = info;
     _app->set_partition_version(_app_info.partition_count - 1);
-    // TODO(heyuchen): for debug, remove it
-    ddebug_replica("hyc: partition_version from {} to {}",
-                   _partition_version.load(),
-                   _app_info.partition_count - 1);
     _partition_version.store(_app_info.partition_count - 1);
-
-    ddebug_replica("update partition_count to {}, partition_version = {}",
-                   _app_info.partition_count,
-                   _partition_version.load());
     return true;
 }
 
@@ -817,7 +807,6 @@ void replica::on_update_child_group_partition_count_reply(
                                                      "on_update_child_group_partition_count_reply "
                                                      "failed, wrong partition status or split "
                                                      "status"));
-        // TODO(heyuchen): consdier cleanup other states
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
@@ -831,7 +820,6 @@ void replica::on_update_child_group_partition_count_reply(
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "on_update_child_group_partition_count_reply failed, ballot changed"));
-        // TODO(heyuchen): consdier cleanup other states
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
@@ -864,7 +852,6 @@ void replica::on_update_child_group_partition_count_reply(
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "on_update_child_group_partition_count_reply error"));
-        // TODO(heyuchen): consdier cleanup other states
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
@@ -903,7 +890,6 @@ void replica::register_child_on_meta(ballot b) // on primary parent
             std::bind(&replica::child_handle_split_error,
                       std::placeholders::_1,
                       "register child failed, wrong partition status or split status"));
-        // TODO(heyuchen): consdier cleanup other states
         _primary_states.sync_send_write_request = false;
         parent_cleanup_split_context();
         return;
@@ -936,9 +922,8 @@ void replica::register_child_on_meta(ballot b) // on primary parent
     // reject client request
     update_local_configuration_with_no_ballot_change(partition_status::PS_INACTIVE);
     set_inactive_state_transient(true);
-    // TODO(heyuchen): for debug, remove it
-    ddebug_replica("hyc: partition_version from {} to {}", _partition_version.load(), -1);
-    _partition_version = -1;
+    int32_t old_partition_version = _partition_version.exchange(-1);
+    ddebug_replica("update partition version from {} to {}", old_partition_version, -1);
 
     parent_send_register_request(request);
 }
@@ -975,12 +960,10 @@ void replica::on_register_child_on_meta_reply(
 {
     _checker.only_one_thread_access();
 
-    // TODO(heyuchen): consider it
     // primary parent is under reconfiguration, whose status should be PS_INACTIVE
     if (partition_status::PS_INACTIVE != status() || !_stub->is_connected()) {
         derror_replica("status wrong or stub is not connected, status = {}",
                        enum_to_string(status()));
-        // TODO(heyuchen): consider other status
         _primary_states.register_child_task = nullptr;
         return;
     }
@@ -1050,7 +1033,6 @@ void replica::on_register_child_on_meta_reply(
 
     // update primary parent group partition_count
     update_local_partition_count(_app_info.partition_count * 2);
-    // TODO(heyuchen): consider this param
     broadcast_group_check();
 
     parent_cleanup_split_context();
@@ -1121,7 +1103,6 @@ void replica::check_partition_count(
     }
 
     dcheck_eq_replica(_app_info.partition_count * 2, meta_partition_count);
-
     if (meta_split_status == split_status::PAUSED) {
         dwarn_replica("split has been paused, ignore it");
         return;
@@ -1163,15 +1144,14 @@ void replica::check_partition_count(
         return;
     }
 
-    // TODO(heyuchen): new add
-    // meta_split_status == split_status::NOT_SPLIT and meta partition_count = replica
-    // paritition_count * 2
+    // meta_split_status == split_status::NOT_SPLIT
+    // meta partition_count = replica paritition_count * 2
     // There will be two cases:
-    // - case1. when primary replica register child succeed, but replica server crashed
+    // - case1. when primary replica register child succeed, but replica server crashed.
     //   meta server will consider this parent partition not splitting, but parent group
     //   partition_count is not updated
     //   in this case, child has been registered on meta server
-    // - case2. when this parent partition is canceled, but other partitions is still canceling
+    // - case2. when this parent partition is canceled, but other partitions is still canceling.
     //   in this case, child partition ballot is invalid_ballot
     // As a result, primary should send query_child_state rpc to meta server
     query_child_state();
@@ -1252,7 +1232,7 @@ void replica::parent_stop_split(split_status::type meta_split_status) // on pare
     _partition_version.store(_app_info.partition_count - 1);
 
     if (status() == partition_status::PS_PRIMARY) {
-        _primary_states.clear_split_context();
+        _primary_states.cleanup_split_context();
         broadcast_group_check(meta_split_status);
     }
     ddebug_replica(
@@ -1341,7 +1321,7 @@ void replica::on_query_child_state_reply(
         response.child_config.pid,
         std::bind(&replica::child_partition_active, std::placeholders::_1, response.child_config));
     update_local_partition_count(response.partition_count);
-    _primary_states.clear_split_context();
+    _primary_states.cleanup_split_context();
     parent_cleanup_split_context();
     broadcast_group_check();
 }

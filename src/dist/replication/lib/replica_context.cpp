@@ -93,12 +93,12 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     membership.ballot = 0;
 
-    clear_split_context();
+    cleanup_split_context();
 
     secondary_split_status.clear();
 }
 
-void primary_context::clear_split_context()
+void primary_context::cleanup_split_context()
 {
     // clean up register child in split
     CLEANUP_TASK_ALWAYS(register_child_task)

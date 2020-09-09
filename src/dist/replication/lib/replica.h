@@ -457,22 +457,26 @@ private:
     void child_handle_async_learn_error();
 
     // called by `on_config_sync` in `replica_config.cpp`
+    // primary parent check whether should start or stop split
     void check_partition_count(const int32_t meta_partition_count,
                                split_status::type meta_split_status);
 
-    // TODO(heyuchen): add comments
-    void parent_send_notify_stop_request(split_status::type meta_split_status);
-
-    void parent_stop_split(split_status::type meta_split_status);
-
+    // called by `on_group_check` in `replica_check.cpp`
+    // secondary parent check whether should start or stop split
     void secondary_parent_handle_split(const group_check_request &request,
                                        /*out*/ group_check_response &response);
 
+    // parent partition pause or cancel split
+    void parent_stop_split(split_status::type meta_split_status);
+
+    // called by `on_group_check_reply` in `replica_check.cpp`
+    // if group all replica pause/cancel split, send notify request to meta server
     void primary_parent_handle_stop_split(const std::shared_ptr<group_check_request> &req,
                                           const std::shared_ptr<group_check_response> &resp);
+    void parent_send_notify_stop_request(split_status::type meta_split_status);
 
+    // called by `check_partition_count`, query child state on meta server
     void query_child_state();
-
     void on_query_child_state_reply(error_code ec,
                                     const query_child_state_request &request,
                                     const query_child_state_response &response);
