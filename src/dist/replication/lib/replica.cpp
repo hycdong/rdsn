@@ -29,6 +29,7 @@
 #include "mutation_log.h"
 #include "replica_stub.h"
 #include "duplication/replica_duplicator_manager.h"
+#include "partition_split/replica_split_manager.h"
 
 #include <dsn/cpp/json_helper.h>
 #include <dsn/dist/replication/replication_app_base.h>
@@ -65,7 +66,7 @@ replica::replica(
     _options = &stub->options();
     init_state();
     _config.pid = gpid;
-    _partition_version = app.partition_count - 1;
+    _split_mgr = make_unique<replica_split_manager>(this);
 
     std::string counter_str = fmt::format("private.log.size(MB)@{}", gpid);
     _counter_private_log_size.init_app_counter(
@@ -147,7 +148,7 @@ replica::~replica(void)
 
 void replica::on_client_read(dsn::message_ex *request)
 {
-    if (_partition_version == -1) {
+    if (_split_mgr->_partition_version == -1) {
         derror("%s: current partition is not available coz during partition split", name());
         response_client_read(request, ERR_OBJECT_NOT_FOUND);
         return;
@@ -155,10 +156,10 @@ void replica::on_client_read(dsn::message_ex *request)
 
     auto msg = (dsn::message_ex *)request;
     auto partition_hash = msg->header->client.partition_hash;
-    if ((_partition_version & partition_hash) != get_gpid().get_partition_index()) {
+    if ((_split_mgr->_partition_version & partition_hash) != get_gpid().get_partition_index()) {
         derror("%s: receive request with wrong hash value, partition_version=%d, hash=%" PRId64,
                name(),
-               _partition_version.load(),
+               _split_mgr->_partition_version.load(),
                partition_hash);
         response_client_read(request, ERR_PARENT_PARTITION_MISUSED);
         return;
@@ -437,6 +438,8 @@ void replica::close()
     // duplication_impl may have ongoing tasks.
     // release it before release replica.
     _duplication_mgr.reset();
+
+    _split_mgr.reset();
 
     ddebug("%s: replica closed, time_used = %" PRIu64 "ms", name(), dsn_now_ms() - start_time);
 }

@@ -132,8 +132,6 @@ public:
     /// helper functions
     void set_replica_config(replica_configuration &config) { _config = config; }
     void set_partition_status(partition_status::type status) { _config.status = status; }
-    void set_child_gpid(gpid pid) { _child_gpid = pid; }
-    void set_init_child_ballot(ballot b) { _child_init_ballot = b; }
     void set_last_committed_decree(decree d) { _prepare_list->reset(d); }
     prepare_list *get_plist() { return _prepare_list; }
     void prepare_list_truncate(decree d) { _prepare_list->truncate(d); }
@@ -144,9 +142,6 @@ public:
     {
         _primary_states.membership = pconfig;
     }
-    bool is_splitting() { return (_split_status == split_status::SPLITTING); }
-    void set_split_status(split_status::type status) { _split_status = status; }
-    split_status::type get_split_status() { return _split_status; }
 
 private:
     decree _max_gced_decree{invalid_decree - 1};

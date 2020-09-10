@@ -39,6 +39,7 @@
 #include "replica_stub.h"
 
 #include "dist/replication/lib/duplication/replica_duplicator_manager.h"
+#include "partition_split/replica_split_manager.h"
 
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/dist/replication/replication_app_base.h>
@@ -105,8 +106,8 @@ void replica::broadcast_group_check(split_status::type meta_split_status)
         if (request->config.status == partition_status::PS_SECONDARY &&
             meta_split_status != split_status::NOT_SPLIT) {
             request->__set_meta_split_status(meta_split_status);
-            if (_child_gpid.get_app_id() > 0) {
-                request->__set_child_gpid(_child_gpid);
+            if (_split_mgr->_child_gpid.get_app_id() > 0) {
+                request->__set_child_gpid(_split_mgr->_child_gpid);
             }
         }
 
@@ -183,7 +184,7 @@ void replica::on_group_check(const group_check_request &request,
         if (request.last_committed_decree > last_committed_decree()) {
             _prepare_list->commit(request.last_committed_decree, COMMIT_TO_DECREE_HARD);
         }
-        secondary_parent_handle_split(request, response);
+        _split_mgr->secondary_parent_handle_split(request, response);
         break;
     case partition_status::PS_POTENTIAL_SECONDARY:
         init_learn(request.config.learner_signature);
@@ -229,7 +230,7 @@ void replica::on_group_check_reply(error_code err,
                 req->config.status == partition_status::PS_POTENTIAL_SECONDARY) {
                 handle_learning_succeeded_on_primary(req->node, resp->learner_signature);
             }
-            primary_parent_handle_stop_split(req, resp);
+            _split_mgr->primary_parent_handle_stop_split(req, resp);
         } else {
             handle_remote_failure(req->config.status, req->node, resp->err, "group check");
         }

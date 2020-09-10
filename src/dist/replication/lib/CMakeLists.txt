@@ -9,9 +9,11 @@ set(DUPLICATION_SRC
         duplication/mutation_batch.cpp
 )
 
+set(SPLIT_SRC partition_split/replica_split_manager.cpp)
+
 # Source files under CURRENT project directory will be automatically included.
 # You can manually set MY_PROJ_SRC to include source files under other directories.
-set(MY_PROJ_SRC ${DUPLICATION_SRC})
+set(MY_PROJ_SRC ${DUPLICATION_SRC} ${SPLIT_SRC})
 
 # Search mode for source files under CURRENT project directory?
 # "GLOB_RECURSE" for recursive search
@@ -36,3 +38,4 @@ set(MY_BINPLACES "")
 dsn_add_shared_library()
 
 add_subdirectory(duplication/test)
+add_subdirectory(partition_split/test)

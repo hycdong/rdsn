@@ -59,6 +59,7 @@ namespace test {
 class test_checker;
 }
 class cold_backup_context;
+class replica_split_manager;
 
 typedef std::unordered_map<gpid, replica_ptr> replicas;
 typedef std::function<void(
@@ -193,7 +194,7 @@ public:
     replica_ptr
     create_child_replica_if_not_found(gpid child_pid, app_info *app, const std::string &parent_dir);
 
-    typedef std::function<void(::dsn::replication::replica *rep)> local_execution;
+    typedef std::function<void(replica_split_manager *split_mgr)> local_execution;
 
     // This function is used for partition split, caller(replica)
     // parent/child may want child/parent to execute function during partition split
@@ -292,6 +293,7 @@ private:
     friend class duplication_test_base;
     friend class replica_test;
     friend class replica_disk_test;
+    friend class replica_split_manager;
 
     typedef std::unordered_map<gpid, ::dsn::task_ptr> opening_replicas;
     typedef std::unordered_map<gpid, std::tuple<task_ptr, replica_ptr, app_info, replica_info>>

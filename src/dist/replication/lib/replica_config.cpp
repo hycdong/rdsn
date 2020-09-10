@@ -43,6 +43,9 @@
 #include <dsn/utility/string_conv.h>
 #include <dsn/dist/replication/replica_envs.h>
 
+#include "partition_split/replica_split_manager.h"
+#include <dsn/utility/fail_point.h>
+
 namespace dsn {
 namespace replication {
 
@@ -591,7 +594,7 @@ bool replica::update_configuration(const partition_configuration &config)
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
         _primary_states.caught_up_children.clear();
-        parent_cleanup_split_context();
+        _split_mgr->parent_cleanup_split_context();
         // parent_cleanup_split_context();
         //        _partition_version = -1;
         // query_child_state();
@@ -630,6 +633,13 @@ bool replica::is_same_ballot_status_change_allowed(partition_status::type olds,
 bool replica::update_local_configuration(const replica_configuration &config,
                                          bool same_ballot /* = false*/)
 {
+    FAIL_POINT_INJECT_F("replica_update_local_configuration", [=](dsn::string_view) -> bool {
+        auto old_status = status();
+        _config = config;
+        ddebug_replica("update status from {} to {}", enum_to_string(old_status), status());
+        return true;
+    });
+
     // TODO(hyc): delete this commends
     // this function is called by:
     // 1. config sync from meta, local status -> meta status
@@ -1042,12 +1052,12 @@ void replica::on_config_sync(const app_info &info,
         if (nullptr != _primary_states.reconfiguration_task) {
             // already under reconfiguration, skip configuration sync
         } else {
-            check_partition_count(info.partition_count, meta_split_status);
+            _split_mgr->check_partition_count(info.partition_count, meta_split_status);
         }
     } else {
         if (_is_initializing) {
             // TODO(hyc): consider
-            check_partition_count(info.partition_count, meta_split_status);
+            _split_mgr->check_partition_count(info.partition_count, meta_split_status);
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&
@@ -1110,6 +1120,11 @@ void replica::replay_prepare_list()
 
         init_prepare(mu, true);
     }
+}
+
+error_code replica::update_init_info_ballot_and_decree()
+{
+    return _app->update_init_info_ballot_and_decree(this);
 }
 
 } // namespace replication
