@@ -148,19 +148,19 @@ replica::~replica(void)
 
 void replica::on_client_read(dsn::message_ex *request)
 {
-    if (_split_mgr->_partition_version == -1) {
-        derror("%s: current partition is not available coz during partition split", name());
+    if (_split_mgr->get_partition_version() == -1) {
+        derror_replica("current partition is not available because of partition split");
         response_client_read(request, ERR_OBJECT_NOT_FOUND);
         return;
     }
 
     auto msg = (dsn::message_ex *)request;
     auto partition_hash = msg->header->client.partition_hash;
-    if ((_split_mgr->_partition_version & partition_hash) != get_gpid().get_partition_index()) {
-        derror("%s: receive request with wrong hash value, partition_version=%d, hash=%" PRId64,
-               name(),
-               _split_mgr->_partition_version.load(),
-               partition_hash);
+    if ((_split_mgr->get_partition_version() & partition_hash) !=
+        get_gpid().get_partition_index()) {
+        derror_replica("receive request with wrong hash value, partition_version = {}, hash = {}",
+                       _split_mgr->get_partition_version(),
+                       partition_hash);
         response_client_read(request, ERR_PARENT_PARTITION_MISUSED);
         return;
     }

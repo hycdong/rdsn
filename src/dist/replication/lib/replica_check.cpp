@@ -106,8 +106,8 @@ void replica::broadcast_group_check(split_status::type meta_split_status)
         if (request->config.status == partition_status::PS_SECONDARY &&
             meta_split_status != split_status::NOT_SPLIT) {
             request->__set_meta_split_status(meta_split_status);
-            if (_split_mgr->_child_gpid.get_app_id() > 0) {
-                request->__set_child_gpid(_split_mgr->_child_gpid);
+            if (_split_mgr->is_splitting()) {
+                request->__set_child_gpid(_split_mgr->get_child_gpid());
             }
         }
 

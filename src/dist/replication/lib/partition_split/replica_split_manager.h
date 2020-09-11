@@ -31,6 +31,12 @@ public:
     ~replica_split_manager();
 
     int32_t get_partition_version() const { return _partition_version.load(); }
+    gpid get_child_gpid() const { return _child_gpid; }
+    bool is_splitting() const
+    {
+        return _child_gpid.get_app_id() > 0 && _child_init_ballot > 0 &&
+               _split_status == split_status::SPLITTING;
+    }
 
 private:
     // parent partition create child
@@ -167,7 +173,6 @@ private:
     partition_status::type status() const { return _replica->status(); }
     ballot get_ballot() const { return _replica->get_ballot(); }
     decree last_committed_decree() const { return _replica->last_committed_decree(); }
-
     task_tracker *tracker() { return _replica->tracker(); }
 
 private:
@@ -178,7 +183,6 @@ private:
     friend class replica_stub;
     friend class replica_split_test;
 
-    // partition split
     // _child_gpid = gpid({app_id},{pidx}+{old_partition_count}) for parent partition
     // _child_gpid.app_id = 0 for parent partition not in partition split and child partition
     dsn::gpid _child_gpid{0, 0};

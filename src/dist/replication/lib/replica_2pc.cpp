@@ -68,19 +68,20 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
         return;
     }
 
-    if (_split_mgr->_partition_version == -1) {
-        derror_replica("current partition is not available because during partition split");
-        response_client_write(request, ERR_OBJECT_NOT_FOUND);
+    if (_split_mgr->get_partition_version() == -1) {
+        derror_replica("current partition is not available because of partition split");
+        response_client_read(request, ERR_OBJECT_NOT_FOUND);
         return;
     }
 
     auto msg = (dsn::message_ex *)request;
     auto partition_hash = msg->header->client.partition_hash;
-    if ((_split_mgr->_partition_version & partition_hash) != get_gpid().get_partition_index()) {
-        derror_replica("receive request with wrong hash value, partition_version={}, hash={}",
-                       _split_mgr->_partition_version.load(),
+    if ((_split_mgr->get_partition_version() & partition_hash) !=
+        get_gpid().get_partition_index()) {
+        derror_replica("receive request with wrong hash value, partition_version = {}, hash = {}",
+                       _split_mgr->get_partition_version(),
                        partition_hash);
-        response_client_write(request, ERR_PARENT_PARTITION_MISUSED);
+        response_client_read(request, ERR_PARENT_PARTITION_MISUSED);
         return;
     }
 
@@ -143,7 +144,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     if (_primary_states.sync_send_write_request) {
         // TODO(heyuchen): for debug, remove it
         ddebug_replica(
-            "mutation({}) should sync to child({})", mu->name(), _split_mgr->_child_gpid);
+            "mutation({}) should sync to child({})", mu->name(), _split_mgr->get_child_gpid());
         mu->set_is_sync_to_child(true);
     }
 
@@ -198,8 +199,7 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation)
     }
     mu->set_left_potential_secondary_ack_count(count);
 
-    if (_split_mgr->_split_status == split_status::SPLITTING &&
-        _split_mgr->_child_gpid.get_app_id() > 0) {
+    if (_split_mgr->is_splitting()) {
         _split_mgr->copy_mutation(mu);
     }
 
@@ -446,8 +446,7 @@ void replica::on_prepare(dsn::message_ex *request)
     }
 
     // prepare in child replica
-    if (_split_mgr->_split_status == split_status::SPLITTING &&
-        _split_mgr->_child_gpid.get_app_id() > 0) {
+    if (_split_mgr->is_splitting()) {
         _split_mgr->copy_mutation(mu);
     }
 
