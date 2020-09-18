@@ -973,14 +973,15 @@ void replica_split_manager::parent_send_register_request(
     FAIL_POINT_INJECT_F("replica_parent_send_register_request", [](dsn::string_view) {});
 
     dcheck_eq_replica(status(), partition_status::PS_INACTIVE);
-    ddebug_replica(
-        "send register child({}) request to meta_server, current ballot = {}, child ballot = {}",
-        request.child_config.pid,
-        request.parent_config.ballot,
-        request.child_config.ballot);
 
     rpc_address meta_address(_stub->_failure_detector->get_servers());
     std::unique_ptr<register_child_request> req = make_unique<register_child_request>(request);
+    ddebug_replica("send register child({}) request to meta_server({}), current ballot = {}, child "
+                   "ballot = {}",
+                   request.child_config.pid,
+                   meta_address.to_string(),
+                   request.parent_config.ballot,
+                   request.child_config.ballot);
 
     register_child_rpc rpc(
         std::move(req), RPC_CM_REGISTER_CHILD_REPLICA, 0_ms, 0, get_gpid().thread_hash());
@@ -1006,7 +1007,7 @@ void replica_split_manager::on_register_child_on_meta_reply(
         return;
     }
 
-    error_code err = ec == ERR_OK ? response.err : ec;
+    error_code err = (ec == ERR_OK) ? response.err : ec;
     if (err == ERR_INVALID_STATE || err == ERR_INVALID_VERSION || err == ERR_CHILD_REGISTERED) {
         if (err == ERR_CHILD_REGISTERED) {
             derror_replica(
@@ -1049,7 +1050,7 @@ void replica_split_manager::on_register_child_on_meta_reply(
 
     ddebug_replica("register child({}) succeed, response parent ballot = {}, local ballot = "
                    "{}, local status = {}",
-                   response.child_config.pid,
+                   request.child_config.pid,
                    response.parent_config.ballot,
                    get_ballot(),
                    enum_to_string(status()));

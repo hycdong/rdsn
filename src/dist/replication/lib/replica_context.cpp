@@ -1311,7 +1311,7 @@ bool partition_split_context::cleanup(bool force)
         CLEANUP_TASK(check_state_task, force)
     }
 
-    CLEANUP_TASK(async_learn_task, force)
+    CLEANUP_TASK(async_learn_task, true)
 
     splitting_start_ts_ns = 0;
     splitting_start_async_learn_ts_ns = 0;

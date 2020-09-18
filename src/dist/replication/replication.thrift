@@ -890,6 +890,10 @@ struct query_split_request
 
 struct query_split_response
 {
+    // Possible errors:
+    // - ERR_APP_NOT_EXIST: app not exist
+    // - ERR_APP_DROPPED: app has been dropped
+    // - ERR_INVALID_STATE: app or partition is not splitting
     1:dsn.error_code    err;
     2:string            hint_msg;
     3:i32               new_partition_count;
