@@ -57,6 +57,7 @@ class server_load_balancer;
 class replication_checker;
 class meta_duplication_service;
 class meta_split_service;
+class bulk_load_service;
 namespace test {
 class test_checker;
 }
@@ -66,6 +67,8 @@ DEFINE_TASK_CODE(LPC_DEFAULT_CALLBACK, TASK_PRIORITY_COMMON, dsn::THREAD_POOL_DE
 typedef rpc_holder<configuration_update_app_env_request, configuration_update_app_env_response>
     app_env_rpc;
 typedef rpc_holder<ddd_diagnose_request, ddd_diagnose_response> ddd_diagnose_rpc;
+typedef rpc_holder<configuration_query_by_index_request, configuration_query_by_index_response>
+    configuration_query_by_index_rpc;
 
 class meta_service : public serverlet<meta_service>
 {
@@ -94,6 +97,7 @@ public:
         }
         return level;
     }
+    void set_function_level(meta_function_level::type level) { _function_level.store(level); }
 
     template <typename TResponse>
     void reply_data(dsn::message_ex *request, const TResponse &data)
@@ -135,7 +139,7 @@ private:
     // client => meta server
     // query partition configuration
     void on_query_configuration_by_node(dsn::message_ex *req);
-    void on_query_configuration_by_index(dsn::message_ex *req);
+    void on_query_configuration_by_index(configuration_query_by_index_rpc rpc);
 
     // partition server => meta server
     void on_config_sync(dsn::message_ex *req);
@@ -189,6 +193,9 @@ private:
 
     void on_query_child_state(query_child_state_rpc rpc);
 
+    // bulk load
+    void on_start_bulk_load(start_bulk_load_rpc rpc);
+
     // common routines
     // ret:
     //   1. the meta is leader
@@ -203,6 +210,7 @@ private:
     friend class replication_checker;
     friend class test::test_checker;
     friend class meta_service_test_app;
+    friend class bulk_load_service_test;
 
     replication_options _opts;
     meta_options _meta_opts;
@@ -228,6 +236,8 @@ private:
     std::unique_ptr<meta_duplication_service> _dup_svc;
 
     std::unique_ptr<meta_split_service> _split_svc;
+
+    std::unique_ptr<bulk_load_service> _bulk_load_svc;
 
     // handle all the block filesystems for current meta service
     // (in other words, current service node)

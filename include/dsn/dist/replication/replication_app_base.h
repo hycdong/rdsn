@@ -233,7 +233,10 @@ public:
     // and write request, partition_version = -1.
     //
     // Thread-safe.
-    virtual void set_partition_version(int32_t partition_version) {}
+    virtual void set_partition_version(int32_t partition_version){};
+
+    // dump the write request some info to string, it may need overload
+    virtual std::string dump_write_request(dsn::message_ex *request) { return "write request"; };
 
 public:
     //

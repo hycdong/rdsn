@@ -173,6 +173,11 @@ public:
 
     dsn::error_code ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &ddd_partitions);
 
+    void query_disk_info(
+        const std::vector<dsn::rpc_address> &targets,
+        const std::string &app_name,
+        /*out*/ std::map<dsn::rpc_address, error_with<query_disk_info_response>> &resps);
+
     // partition split
     error_with<start_partition_split_response> start_partition_split(const std::string &app_name,
                                                                      int partition_count);
@@ -184,11 +189,6 @@ public:
                             split_control_type::type control_type,
                             const int32_t parent_pidx,
                             const int32_t old_partition_count = 0);
-
-    void query_disk_info(
-        const std::vector<dsn::rpc_address> &targets,
-        const std::string &app_name,
-        /*out*/ std::map<dsn::rpc_address, error_with<query_disk_info_response>> &resps);
 
 private:
     bool static valid_app_char(int c);

@@ -37,6 +37,7 @@
 #include <dsn/tool-api/command_manager.h>
 #include <algorithm> // for std::remove_if
 #include <cctype>    // for ::isspace
+#include <dsn/dist/fmt_logging.h>
 
 #include "meta_service.h"
 #include "server_state.h"
@@ -44,6 +45,7 @@
 #include "server_load_balancer.h"
 #include "duplication/meta_duplication_service.h"
 #include "meta_split_service.h"
+#include "meta_bulk_load_service.h"
 
 namespace dsn {
 namespace replication {
@@ -239,6 +241,13 @@ void meta_service::start_service()
                          nullptr,
                          std::bind(&backup_service::start, _backup_handler.get()));
     }
+
+    if (_bulk_load_svc) {
+        ddebug("start bulk load service");
+        tasking::enqueue(LPC_META_STATE_NORMAL, tracker(), [this]() {
+            _bulk_load_svc->initialize_bulk_load_service();
+        });
+    }
 }
 
 // the start function is executed in threadpool default
@@ -301,6 +310,9 @@ error_code meta_service::start()
             [](backup_service *bs) { return std::make_shared<policy_context>(bs); });
     }
 
+    _bulk_load_svc = make_unique<bulk_load_service>(
+        this, meta_options::concat_path_unix_style(_cluster_root, "bulk_load"));
+
     // initialize the server_state
     _state->initialize(this, meta_options::concat_path_unix_style(_cluster_root, "apps"));
     while ((err = _state->initialize_data_structure()) != ERR_OK) {
@@ -334,9 +346,9 @@ void meta_service::register_rpc_handlers()
                          "query_configuration_by_node",
                          &meta_service::on_query_configuration_by_node);
     register_rpc_handler(RPC_CM_CONFIG_SYNC, "config_sync", &meta_service::on_config_sync);
-    register_rpc_handler(RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX,
-                         "query_configuration_by_index",
-                         &meta_service::on_query_configuration_by_index);
+    register_rpc_handler_with_rpc_holder(RPC_CM_QUERY_PARTITION_CONFIG_BY_INDEX,
+                                         "query_configuration_by_index",
+                                         &meta_service::on_query_configuration_by_index);
     register_rpc_handler(RPC_CM_UPDATE_PARTITION_CONFIGURATION,
                          "update_configuration",
                          &meta_service::on_update_configuration);
@@ -385,6 +397,8 @@ void meta_service::register_rpc_handlers()
                                          &meta_service::on_control_partition_split);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_NOTIFY_STOP_SPLIT, "notify_stop_split", &meta_service::on_notify_stop_split);
+    register_rpc_handler_with_rpc_holder(
+        RPC_CM_START_BULK_LOAD, "start_bulk_load", &meta_service::on_start_bulk_load);
 }
 
 int meta_service::check_leader(dsn::message_ex *req, dsn::rpc_address *forward_address)
@@ -563,17 +577,19 @@ void meta_service::on_query_configuration_by_node(dsn::message_ex *msg)
     reply(msg, response);
 }
 
-void meta_service::on_query_configuration_by_index(dsn::message_ex *msg)
+void meta_service::on_query_configuration_by_index(configuration_query_by_index_rpc rpc)
 {
-    configuration_query_by_index_response response;
+    configuration_query_by_index_response &response = rpc.response();
 
     // here we do not use RPC_CHECK_STATUS macro, but specially handle it
     // to response forward address.
     dinfo("rpc %s called", __FUNCTION__);
     rpc_address forward_address;
-    int result = check_leader(msg, &forward_address);
-    if (result == 0)
+    int result = check_leader(rpc.dsn_request(), &forward_address);
+    if (result == 0) {
+        rpc.disable_auto_reply();
         return;
+    }
     if (result == -1 || !_started) {
         if (result == -1) {
             response.err = ERR_FORWARD_TO_OTHERS;
@@ -588,14 +604,16 @@ void meta_service::on_query_configuration_by_index(dsn::message_ex *msg)
             response.err = ERR_SERVICE_NOT_ACTIVE;
         }
         ddebug("reject request with %s", response.err.to_string());
-        reply(msg, response);
         return;
     }
 
-    configuration_query_by_index_request request;
-    dsn::unmarshall(msg, request);
-    _state->query_configuration_by_index(request, response);
-    reply(msg, response);
+    _state->query_configuration_by_index(rpc.request(), response);
+    if (ERR_OK == response.err) {
+        ddebug_f("client {} queried an available app {} with appid {}",
+                 rpc.dsn_request()->header->from_address.to_string(),
+                 rpc.request().app_name,
+                 response.app_id);
+    }
 }
 
 // partition sever => meta sever
@@ -1013,6 +1031,22 @@ void meta_service::on_query_child_state(query_child_state_rpc rpc)
                      tracker(),
                      [this, rpc]() { _split_svc->query_child_state(std::move(rpc)); },
                      server_state::sStateHash);
+}
+
+void meta_service::on_start_bulk_load(start_bulk_load_rpc rpc)
+{
+    auto &response = rpc.response();
+    RPC_CHECK_STATUS(rpc.dsn_request(), response);
+
+    if (!_bulk_load_svc) {
+        derror("meta doesn't support bulk load");
+        response.err = ERR_SERVICE_NOT_ACTIVE;
+    } else {
+        tasking::enqueue(LPC_META_STATE_NORMAL,
+                         tracker(),
+                         [this, rpc]() { _bulk_load_svc->on_start_bulk_load(std::move(rpc)); },
+                         server_state::sStateHash);
+    }
 }
 
 } // namespace replication

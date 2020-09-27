@@ -91,6 +91,9 @@ void primary_context::cleanup(bool clean_pending_mutations)
     // clean up checkpoint
     CLEANUP_TASK_ALWAYS(checkpoint_task)
 
+    // clean up register child task
+    CLEANUP_TASK_ALWAYS(register_child_task)
+
     membership.ballot = 0;
 
     cleanup_split_context();

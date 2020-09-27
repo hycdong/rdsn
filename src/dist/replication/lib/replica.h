@@ -63,7 +63,9 @@ class replication_app_base;
 class replica_stub;
 class replication_checker;
 class replica_duplicator_manager;
+class replica_backup_manager;
 class replica_split_manager;
+
 namespace test {
 class test_checker;
 }
@@ -178,6 +180,11 @@ public:
     //
     replica_duplicator_manager *get_duplication_manager() const { return _duplication_mgr.get(); }
     bool is_duplicating() const { return _duplicating; }
+
+    //
+    // Backup
+    //
+    replica_backup_manager *get_backup_manager() const { return _backup_mgr.get(); }
 
     //
     // Partition Split
@@ -320,8 +327,6 @@ private:
 
     /////////////////////////////////////////////////////////////////
     // cold backup
-    void clear_backup_checkpoint(const std::string &policy_name);
-    void background_clear_backup_checkpoint(const std::string &policy_name);
     void generate_backup_checkpoint(cold_backup_context_ptr backup_context);
     void trigger_async_checkpoint_for_backup(cold_backup_context_ptr backup_context);
     void wait_async_checkpoint_for_backup(cold_backup_context_ptr backup_context);
@@ -331,8 +336,6 @@ private:
     void set_backup_context_cancel();
     void set_backup_context_pause();
     void clear_cold_backup_state();
-
-    void collect_backup_info();
 
     /////////////////////////////////////////////////////////////////
     // replica restore from backup
@@ -361,6 +364,22 @@ private:
 
     void init_table_level_latency_counters();
 
+    /////////////////////////////////////////////////////////////////
+    // replica bulk load
+    void on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response);
+    void broadcast_group_bulk_load(const bulk_load_request &meta_req);
+
+    error_code do_bulk_load(const std::string &app_name,
+                            bulk_load_status::type meta_status,
+                            const std::string &cluster_name,
+                            const std::string &provider_name);
+
+    void report_bulk_load_states_to_meta(bulk_load_status::type remote_status,
+                                         bool report_metadata,
+                                         /*out*/ bulk_load_response &response);
+
+    bulk_load_status::type get_bulk_load_status() { return _bulk_load_context._status; }
+
 private:
     friend class ::dsn::replication::replication_checker;
     friend class ::dsn::replication::test::test_checker;
@@ -372,6 +391,9 @@ private:
     friend class replica_duplicator_manager;
     friend class load_mutation;
     friend class replica_split_test;
+    friend class replica_test;
+    friend class replica_backup_manager;
+    friend class replica_bulk_load_test;
     friend class replica_split_manager;
 
     // replica configuration, updated by update_local_configuration ONLY
@@ -420,9 +442,9 @@ private:
     // policy_name --> cold_backup_context
     std::map<std::string, cold_backup_context_ptr> _cold_backup_contexts;
     partition_split_context _split_states;
+    bulk_load_context _bulk_load_context;
 
     // timer task that running in replication-thread
-    dsn::task_ptr _collect_info_timer;
     std::atomic<uint64_t> _cold_backup_running_count;
     std::atomic<uint64_t> _cold_backup_max_duration_time_ms;
     std::atomic<uint64_t> _cold_backup_max_upload_file_size;
@@ -448,6 +470,9 @@ private:
     // duplication
     std::unique_ptr<replica_duplicator_manager> _duplication_mgr;
     bool _duplicating{false};
+
+    // backup
+    std::unique_ptr<replica_backup_manager> _backup_mgr;
 
     // partition split
     std::unique_ptr<replica_split_manager> _split_mgr;

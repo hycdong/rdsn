@@ -44,6 +44,8 @@ class configuration_query_by_index_response;
 
 class app_info;
 
+class thrift_request_meta_v1;
+
 typedef struct _partition_configuration__isset
 {
     _partition_configuration__isset()
@@ -291,7 +293,8 @@ typedef struct _app_info__isset
           create_second(false),
           drop_second(false),
           duplicating(false),
-          init_partition_count(true)
+          init_partition_count(true),
+          is_bulk_loading(true)
     {
     }
     bool status : 1;
@@ -307,6 +310,7 @@ typedef struct _app_info__isset
     bool drop_second : 1;
     bool duplicating : 1;
     bool init_partition_count : 1;
+    bool is_bulk_loading : 1;
 } _app_info__isset;
 
 class app_info
@@ -328,7 +332,8 @@ public:
           create_second(0),
           drop_second(0),
           duplicating(0),
-          init_partition_count(-1)
+          init_partition_count(-1),
+          is_bulk_loading(false)
     {
         status = (app_status::type)0;
     }
@@ -347,6 +352,7 @@ public:
     int64_t drop_second;
     bool duplicating;
     int32_t init_partition_count;
+    bool is_bulk_loading;
 
     _app_info__isset __isset;
 
@@ -375,6 +381,8 @@ public:
     void __set_duplicating(const bool val);
 
     void __set_init_partition_count(const int32_t val);
+
+    void __set_is_bulk_loading(const bool val);
 
     bool operator==(const app_info &rhs) const
     {
@@ -406,6 +414,10 @@ public:
             return false;
         if (!(init_partition_count == rhs.init_partition_count))
             return false;
+        if (__isset.is_bulk_loading != rhs.__isset.is_bulk_loading)
+            return false;
+        else if (__isset.is_bulk_loading && !(is_bulk_loading == rhs.is_bulk_loading))
+            return false;
         return true;
     }
     bool operator!=(const app_info &rhs) const { return !(*this == rhs); }
@@ -421,6 +433,101 @@ public:
 void swap(app_info &a, app_info &b);
 
 inline std::ostream &operator<<(std::ostream &out, const app_info &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _thrift_request_meta_v1__isset
+{
+    _thrift_request_meta_v1__isset()
+        : app_id(false),
+          partition_index(false),
+          client_timeout(false),
+          client_partition_hash(false),
+          is_backup_request(false)
+    {
+    }
+    bool app_id : 1;
+    bool partition_index : 1;
+    bool client_timeout : 1;
+    bool client_partition_hash : 1;
+    bool is_backup_request : 1;
+} _thrift_request_meta_v1__isset;
+
+class thrift_request_meta_v1
+{
+public:
+    thrift_request_meta_v1(const thrift_request_meta_v1 &);
+    thrift_request_meta_v1(thrift_request_meta_v1 &&);
+    thrift_request_meta_v1 &operator=(const thrift_request_meta_v1 &);
+    thrift_request_meta_v1 &operator=(thrift_request_meta_v1 &&);
+    thrift_request_meta_v1()
+        : app_id(0),
+          partition_index(0),
+          client_timeout(0),
+          client_partition_hash(0),
+          is_backup_request(0)
+    {
+    }
+
+    virtual ~thrift_request_meta_v1() throw();
+    int32_t app_id;
+    int32_t partition_index;
+    int32_t client_timeout;
+    int64_t client_partition_hash;
+    bool is_backup_request;
+
+    _thrift_request_meta_v1__isset __isset;
+
+    void __set_app_id(const int32_t val);
+
+    void __set_partition_index(const int32_t val);
+
+    void __set_client_timeout(const int32_t val);
+
+    void __set_client_partition_hash(const int64_t val);
+
+    void __set_is_backup_request(const bool val);
+
+    bool operator==(const thrift_request_meta_v1 &rhs) const
+    {
+        if (__isset.app_id != rhs.__isset.app_id)
+            return false;
+        else if (__isset.app_id && !(app_id == rhs.app_id))
+            return false;
+        if (__isset.partition_index != rhs.__isset.partition_index)
+            return false;
+        else if (__isset.partition_index && !(partition_index == rhs.partition_index))
+            return false;
+        if (__isset.client_timeout != rhs.__isset.client_timeout)
+            return false;
+        else if (__isset.client_timeout && !(client_timeout == rhs.client_timeout))
+            return false;
+        if (__isset.client_partition_hash != rhs.__isset.client_partition_hash)
+            return false;
+        else if (__isset.client_partition_hash &&
+                 !(client_partition_hash == rhs.client_partition_hash))
+            return false;
+        if (__isset.is_backup_request != rhs.__isset.is_backup_request)
+            return false;
+        else if (__isset.is_backup_request && !(is_backup_request == rhs.is_backup_request))
+            return false;
+        return true;
+    }
+    bool operator!=(const thrift_request_meta_v1 &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const thrift_request_meta_v1 &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(thrift_request_meta_v1 &a, thrift_request_meta_v1 &b);
+
+inline std::ostream &operator<<(std::ostream &out, const thrift_request_meta_v1 &obj)
 {
     obj.printTo(out);
     return out;

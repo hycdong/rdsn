@@ -685,7 +685,6 @@ dsn::error_code replication_ddl_client::list_app(const std::string &app_name,
     }
     tp_params.add_row_name_and_data("detailed", detailed);
     mtp.add(std::move(tp_params));
-
     int32_t app_id = 0;
     int32_t partition_count = 0;
     int32_t max_replica_count = 0;

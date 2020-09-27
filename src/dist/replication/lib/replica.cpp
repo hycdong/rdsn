@@ -29,6 +29,7 @@
 #include "mutation_log.h"
 #include "replica_stub.h"
 #include "duplication/replica_duplicator_manager.h"
+#include "backup/replica_backup_manager.h"
 #include "partition_split/replica_split_manager.h"
 
 #include <dsn/cpp/json_helper.h>
@@ -37,6 +38,7 @@
 #include <dsn/utility/rand.h>
 #include <dsn/utility/string_conv.h>
 #include <dsn/utility/strings.h>
+#include <dsn/tool-api/rpc_message.h>
 
 namespace dsn {
 namespace replication {
@@ -44,7 +46,7 @@ namespace replication {
 replica::replica(
     replica_stub *stub, gpid gpid, const app_info &app, const char *dir, bool need_restore)
     : serverlet<replica>("replica"),
-      replica_base(gpid, fmt::format("{}@{}", gpid, stub->_primary_address_str)),
+      replica_base(gpid, fmt::format("{}@{}", gpid, stub->_primary_address_str), app.app_name),
       _app_info(app),
       _primary_states(
           gpid, stub->options().staleness_for_commit, stub->options().batch_write_disabled),
@@ -57,7 +59,8 @@ replica::replica(
       _restore_progress(0),
       _restore_status(ERR_OK),
       _duplication_mgr(new replica_duplicator_manager(this)),
-      _duplicating(app.duplicating)
+      _duplicating(app.duplicating),
+      _backup_mgr(new replica_backup_manager(this))
 {
     dassert(_app_info.app_type != "", "");
     dassert(stub != nullptr, "");
@@ -86,6 +89,10 @@ replica::replica(
 
     // init table level latency perf counters
     init_table_level_latency_counters();
+
+    counter_str = fmt::format("backup_request_qps@{}", _app_info.app_name);
+    _counter_backup_request_qps.init_app_counter(
+        "eon.replica", counter_str.c_str(), COUNTER_TYPE_RATE, counter_str.c_str());
 
     if (need_restore) {
         // add an extra env for restore
@@ -171,15 +178,15 @@ void replica::on_client_read(dsn::message_ex *request)
         return;
     }
 
-    if (status() != partition_status::PS_PRIMARY ||
+    if (!request->is_backup_request()) {
+        // only backup request is allowed to read from a stale replica
 
-        // a small window where the state is not the latest yet
-        last_committed_decree() < _primary_states.last_prepare_decree_on_new_primary) {
         if (status() != partition_status::PS_PRIMARY) {
             response_client_read(request, ERR_INVALID_STATE);
             return;
         }
 
+        // a small window where the state is not the latest yet
         if (last_committed_decree() < _primary_states.last_prepare_decree_on_new_primary) {
             derror_replica("last_committed_decree(%" PRId64
                            ") < last_prepare_decree_on_new_primary(%" PRId64 ")",
@@ -188,6 +195,8 @@ void replica::on_client_read(dsn::message_ex *request)
             response_client_read(request, ERR_INVALID_STATE);
             return;
         }
+    } else {
+        _counter_backup_request_qps->increment();
     }
 
     uint64_t start_time_ns = dsn_now_ns();
@@ -387,11 +396,6 @@ void replica::close()
         _checkpoint_timer = nullptr;
     }
 
-    if (_collect_info_timer != nullptr) {
-        _collect_info_timer->cancel(true);
-        _collect_info_timer = nullptr;
-    }
-
     if (_app != nullptr) {
         _app->cancel_background_work(true);
     }
@@ -438,6 +442,8 @@ void replica::close()
     // duplication_impl may have ongoing tasks.
     // release it before release replica.
     _duplication_mgr.reset();
+
+    _backup_mgr.reset();
 
     _split_mgr.reset();
 

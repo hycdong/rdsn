@@ -35,6 +35,9 @@ namespace replication {
 typedef std::unordered_map<::dsn::rpc_address, partition_status::type> node_statuses;
 typedef std::unordered_map<::dsn::rpc_address, dsn::task_ptr> node_tasks;
 
+typedef rpc_holder<start_bulk_load_request, start_bulk_load_response> start_bulk_load_rpc;
+typedef rpc_holder<bulk_load_request, bulk_load_response> bulk_load_rpc;
+
 typedef rpc_holder<start_partition_split_request, start_partition_split_response> start_split_rpc;
 typedef rpc_holder<query_split_request, query_split_response> query_split_rpc;
 typedef rpc_holder<control_split_request, control_split_response> control_split_rpc;
@@ -121,6 +124,8 @@ public:
     int32_t max_concurrent_uploading_file_count;
     int32_t cold_backup_checkpoint_reserve_minutes;
 
+    std::string bulk_load_provider_root;
+
 public:
     replication_options();
     void initialize();
@@ -129,6 +134,8 @@ public:
 private:
     void sanity_check();
 };
+
+typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
 
 extern const char *partition_status_to_string(partition_status::type status);
 
@@ -154,6 +161,13 @@ public:
     static const std::string APP_ID;
     static const std::string BACKUP_ID;
     static const std::string SKIP_BAD_PARTITION;
+};
+
+class bulk_load_constant
+{
+public:
+    static const std::string BULK_LOAD_INFO;
+    // TODO(heyuchen): add more constant in further pr
 };
 
 namespace cold_backup {

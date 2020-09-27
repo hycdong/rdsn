@@ -107,6 +107,8 @@ public:
     void on_query_app_info(const query_app_info_request &req,
                            /*out*/ query_app_info_response &resp);
     void on_cold_backup(const backup_request &request, /*out*/ backup_response &response);
+    void on_clear_cold_backup(const backup_clear_request &request);
+    void on_bulk_load(const bulk_load_request &request, /*out*/ bulk_load_response &response);
 
     //
     //    messages from peers (primary or secondary)
@@ -408,7 +410,6 @@ private:
     //               if we need to duplicate to multiple clusters someday.
     perf_counter_wrapper _counter_dup_confirmed_rate;
     perf_counter_wrapper _counter_dup_pending_mutations_count;
-    perf_counter_wrapper _counter_dup_time_lag;
 
     perf_counter_wrapper _counter_cold_backup_running_count;
     perf_counter_wrapper _counter_cold_backup_recent_start_count;

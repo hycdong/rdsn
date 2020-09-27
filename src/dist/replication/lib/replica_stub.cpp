@@ -38,7 +38,9 @@
 #include "mutation_log.h"
 #include "mutation.h"
 #include "duplication/duplication_sync_timer.h"
+#include "dist/replication/lib/backup/replica_backup_manager.h"
 #include "partition_split/replica_split_manager.h"
+
 #include <dsn/cpp/json_helper.h>
 #include <dsn/utility/filesystem.h>
 #include <dsn/utility/rand.h>
@@ -242,11 +244,6 @@ void replica_stub::install_perf_counters()
         "dup.pending_mutations_count",
         COUNTER_TYPE_VOLATILE_NUMBER,
         "number of mutations pending for duplication");
-    _counter_dup_time_lag.init_app_counter(
-        "eon.replica_stub",
-        "dup.time_lag(ms)",
-        COUNTER_TYPE_NUMBER_PERCENTILES,
-        "time (in ms) lag between master and slave in the duplication");
 
     // <- Cold Backup Metrics ->
 
@@ -1065,6 +1062,18 @@ void replica_stub::on_cold_backup(const backup_request &request, /*out*/ backup_
                request.policy.policy_name.c_str(),
                request.backup_id);
         response.err = ERR_OBJECT_NOT_FOUND;
+    }
+}
+
+void replica_stub::on_clear_cold_backup(const backup_clear_request &request)
+{
+    ddebug_f("receive clear cold backup request: backup({}.{})",
+             request.pid.to_string(),
+             request.policy_name.c_str());
+
+    replica_ptr rep = get_replica(request.pid);
+    if (rep != nullptr) {
+        rep->get_backup_manager()->on_clear_cold_backup(request);
     }
 }
 
@@ -2131,13 +2140,16 @@ void replica_stub::open_service()
         RPC_REPLICA_COPY_LAST_CHECKPOINT, "copy_checkpoint", &replica_stub::on_copy_checkpoint);
     register_rpc_handler(RPC_QUERY_DISK_INFO, "query_disk_info", &replica_stub::on_query_disk_info);
     register_rpc_handler(RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
-    register_rpc_handler(RPC_COLD_BACKUP, "ColdBackup", &replica_stub::on_cold_backup);
+    register_rpc_handler(RPC_COLD_BACKUP, "cold_backup", &replica_stub::on_cold_backup);
+    register_rpc_handler(
+        RPC_CLEAR_COLD_BACKUP, "clear_cold_backup", &replica_stub::on_clear_cold_backup);
     register_rpc_handler_with_rpc_holder(RPC_SPLIT_NOTIFY_CATCH_UP,
                                          "child_notify_catch_up",
                                          &replica_stub::on_notify_primary_split_catch_up);
     register_rpc_handler_with_rpc_holder(RPC_SPLIT_UPDATE_CHILD_PARTITION_COUNT,
                                          "update_child_group_partition_count",
                                          &replica_stub::on_update_child_group_partition_count);
+    register_rpc_handler(RPC_BULK_LOAD, "bulk_load", &replica_stub::on_bulk_load);
 
     _kill_partition_command = ::dsn::command_manager::instance().register_app_command(
         {"kill_partition"},
@@ -2737,6 +2749,18 @@ void replica_stub::update_disk_holding_replicas()
                 }
             }
         }
+    }
+}
+
+void replica_stub::on_bulk_load(const bulk_load_request &request, bulk_load_response &response)
+{
+    ddebug_f("[{}@{}]: receive bulk load request", request.pid, _primary_address_str);
+    replica_ptr rep = get_replica(request.pid);
+    if (rep != nullptr) {
+        rep->on_bulk_load(request, response);
+    } else {
+        derror_f("replica({}) is not existed", request.pid);
+        response.err = ERR_OBJECT_NOT_FOUND;
     }
 }
 

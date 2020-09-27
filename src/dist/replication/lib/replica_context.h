@@ -238,14 +238,6 @@ enum cold_backup_status
 };
 const char *cold_backup_status_to_string(cold_backup_status status);
 
-struct file_meta
-{
-    std::string name;
-    int64_t size;
-    std::string md5;
-    DEFINE_JSON_SERIALIZATION(name, size, md5)
-};
-
 struct cold_backup_metadata
 {
     int64_t checkpoint_decree;
@@ -416,7 +408,7 @@ public:
     bool is_ready_for_check() const { return _status.load() == ColdBackupChecking; }
 
     // check if it is ready for checkpointing.
-    bool is_ready_for_checkpoint() const { return _status.load() == ColdBackupCheckpointing; }
+    bool is_checkpointing() const { return _status.load() == ColdBackupCheckpointing; }
 
     // check if it is ready for uploading.
     bool is_ready_for_upload() const { return _status.load() == ColdBackupUploading; }
@@ -590,6 +582,17 @@ public:
 
     // child replica async learn parent states
     dsn::task_ptr async_learn_task;
+};
+
+class bulk_load_context
+{
+public:
+    // TODO(heyuchen): add public functions
+private:
+    friend class replica;
+    friend class replica_bulk_load_test;
+
+    bulk_load_status::type _status{bulk_load_status::BLS_INVALID};
 };
 
 //---------------inline impl----------------------------------------------------------------
