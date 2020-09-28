@@ -1048,6 +1048,21 @@ void replica_split_manager::on_register_child_on_meta_reply(
         return;
     }
 
+    if (response.parent_config.ballot < get_ballot()) {
+        dwarn_replica(
+            "register child({}) failed, parent ballot from response is {}, local ballot is {}",
+            request.child_config.pid,
+            response.parent_config.ballot,
+            get_ballot());
+        _replica->_primary_states.register_child_task = tasking::enqueue(
+            LPC_PARTITION_SPLIT,
+            tracker(),
+            std::bind(&replica_split_manager::parent_send_register_request, this, request),
+            get_gpid().thread_hash(),
+            std::chrono::seconds(1));
+        return;
+    }
+
     ddebug_replica("register child({}) succeed, response parent ballot = {}, local ballot = "
                    "{}, local status = {}",
                    request.child_config.pid,
