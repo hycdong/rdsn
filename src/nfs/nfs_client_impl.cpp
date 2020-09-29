@@ -558,6 +558,7 @@ void nfs_client_impl::handle_completion(const user_request_ptr &req, error_code 
 
 void nfs_client_impl::register_cli_commands()
 {
+
     static std::once_flag flag;
     std::call_once(flag, [&]() {
         dsn::command_manager::instance().register_command(

@@ -30,6 +30,7 @@
 #include "replica_stub.h"
 #include "bulk_load/replica_bulk_loader.h"
 #include "split/replica_split_manager.h"
+
 #include <dsn/dist/replication/replication_app_base.h>
 #include <dsn/dist/fmt_logging.h>
 
@@ -317,7 +318,6 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
     replica_configuration rconfig;
     _primary_states.get_replica_config(status, rconfig, learn_signature);
     rconfig.__set_pop_all(pop_all_committed_mutations);
-
     if (status == partition_status::PS_SECONDARY && _primary_states.sync_send_write_request) {
         rconfig.split_sync_to_child = true;
     }
