@@ -81,6 +81,15 @@ ENUM_REG(replication::bulk_load_status::BLS_PAUSED)
 ENUM_REG(replication::bulk_load_status::BLS_CANCELED)
 ENUM_END2(replication::bulk_load_status::type, bulk_load_status)
 
+ENUM_BEGIN2(replication::ingestion_status::type,
+            ingestion_status,
+            replication::ingestion_status::IS_INVALID)
+ENUM_REG(replication::ingestion_status::IS_INVALID)
+ENUM_REG(replication::ingestion_status::IS_RUNNING)
+ENUM_REG(replication::ingestion_status::IS_SUCCEED)
+ENUM_REG(replication::ingestion_status::IS_FAILED)
+ENUM_END2(replication::ingestion_status::type, ingestion_status)
+
 ENUM_BEGIN2(replication::split_status::type, split_status, replication::split_status::NOT_SPLIT)
 ENUM_REG(replication::split_status::NOT_SPLIT)
 ENUM_REG(replication::split_status::SPLITTING)
