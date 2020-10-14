@@ -32,274 +32,12 @@ public:
         mock_app_info();
         _parent_replica = stub->generate_replica(
             _app_info, PARENT_GPID, partition_status::PS_PRIMARY, INIT_BALLOT);
-        _parent = make_unique<replica_split_manager>(_parent_replica.get());
+        _parent_split_mgr = make_unique<replica_split_manager>(_parent_replica.get());
         fail::setup();
         fail::cfg("replica_update_local_configuration", "return()");
     }
 
     ~replica_split_test() { fail::teardown(); }
-
-    /// test functions
-
-    void test_parent_start_split(ballot b, gpid req_child_gpid, split_status::type status)
-    {
-        parent_set_split_status(status);
-
-        group_check_request req;
-        req.config.ballot = b;
-        req.config.status = partition_status::PS_PRIMARY;
-        req.__set_child_gpid(req_child_gpid);
-
-        _parent->parent_start_split(req);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_child_init_replica()
-    {
-        _child_replica = stub->generate_replica(
-            _app_info, CHILD_GPID, partition_status::PS_INACTIVE, INIT_BALLOT);
-        _child = make_unique<replica_split_manager>(_child_replica.get());
-        _child->child_init_replica(PARENT_GPID, PRIMARY, INIT_BALLOT);
-        // check_state_task will cost 3 seconds, cancel it immediatly
-        bool finished = false;
-        _child_replica->_split_states.check_state_task->cancel(false, &finished);
-        if (finished) {
-            _child_replica->_split_states.check_state_task = nullptr;
-        }
-        _child_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    bool test_parent_check_states()
-    {
-        bool flag = _parent->parent_check_states();
-        _parent_replica->tracker()->wait_outstanding_tasks();
-        return flag;
-    }
-
-    void test_child_copy_prepare_list()
-    {
-        mock_child_async_learn_states(_parent_replica, false, DECREE);
-        std::shared_ptr<prepare_list> plist =
-            std::make_shared<prepare_list>(_parent_replica, *_parent_replica->_prepare_list);
-        _child->child_copy_prepare_list(_mock_learn_state,
-                                        _mutation_list,
-                                        _private_log_files,
-                                        TOTAL_FILE_SIZE,
-                                        std::move(plist));
-        _child_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_child_learn_states()
-    {
-        mock_child_async_learn_states(_child_replica, true, DECREE);
-        _child->child_learn_states(
-            _mock_learn_state, _mutation_list, _private_log_files, TOTAL_FILE_SIZE, DECREE);
-        _child_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_child_apply_private_logs()
-    {
-        mock_child_async_learn_states(_child_replica, true, 0);
-        _child->child_apply_private_logs(
-            _private_log_files, _mutation_list, TOTAL_FILE_SIZE, DECREE);
-        _child->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_child_catch_up_states(decree local_decree, decree goal_decree, decree min_decree)
-    {
-        mock_child_async_learn_states(_child_replica, true, 0);
-        _child_replica->set_app_last_committed_decree(local_decree);
-        if (local_decree < goal_decree) {
-            // set prepare_list's start_decree = {min_decree}
-            _child_replica->prepare_list_truncate(min_decree);
-            // set prepare_list's last_committed_decree = {goal_decree}
-            _child_replica->prepare_list_commit_hard(goal_decree);
-        }
-        _child->child_catch_up_states();
-        _child->tracker()->wait_outstanding_tasks();
-    }
-
-    error_code test_parent_handle_child_catch_up(ballot child_ballot)
-    {
-        _parent->_child_gpid = CHILD_GPID;
-
-        notify_catch_up_request req;
-        req.child_gpid = CHILD_GPID;
-        req.parent_gpid = PARENT_GPID;
-        req.child_ballot = child_ballot;
-        req.child_address = PRIMARY;
-
-        notify_cacth_up_response resp;
-        _parent->parent_handle_child_catch_up(req, resp);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-        return resp.err;
-    }
-
-    void test_update_child_group_partition_count()
-    {
-        _parent->update_child_group_partition_count(NEW_PARTITION_COUNT);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-        _child_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    error_code test_on_update_child_group_partition_count(ballot b)
-    {
-        update_child_group_partition_count_request req;
-        mock_update_child_partition_count_request(req, b);
-
-        update_child_group_partition_count_response resp;
-        _child->on_update_child_group_partition_count(req, resp);
-        _child_replica->tracker()->wait_outstanding_tasks();
-        return resp.err;
-    }
-
-    error_code test_on_update_child_group_partition_count_reply(error_code resp_err)
-    {
-        update_child_group_partition_count_request req;
-        mock_update_child_partition_count_request(req, INIT_BALLOT);
-        update_child_group_partition_count_response resp;
-        resp.err = resp_err;
-        auto not_replied_addresses = std::make_shared<std::unordered_set<rpc_address>>();
-        not_replied_addresses->insert(PRIMARY);
-
-        _parent->on_update_child_group_partition_count_reply(
-            ERR_OK, req, resp, not_replied_addresses);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-        _child_replica->tracker()->wait_outstanding_tasks();
-        return resp.err;
-    }
-
-    void test_register_child_on_meta()
-    {
-        parent_set_split_status(split_status::SPLITTING);
-        _parent->register_child_on_meta(INIT_BALLOT);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_on_register_child_reply(partition_status::type status, dsn::error_code resp_err)
-    {
-        stub->set_state_connected();
-        stub->set_rpc_address(PRIMARY);
-        mock_parent_split_context(status);
-        _parent_replica->_primary_states.sync_send_write_request = true;
-        _parent->_partition_version = -1;
-        _parent_replica->_inactive_is_transient = true;
-
-        register_child_request req;
-        req.app = _app_info;
-        req.parent_config.pid = PARENT_GPID;
-        req.parent_config.ballot = INIT_BALLOT;
-        req.parent_config.last_committed_decree = DECREE;
-        req.parent_config.primary = PRIMARY;
-        req.child_config.pid = CHILD_GPID;
-        req.child_config.ballot = INIT_BALLOT + 1;
-        req.child_config.last_committed_decree = 0;
-        req.primary_address = PRIMARY;
-
-        register_child_response resp;
-        resp.err = resp_err;
-        resp.app = req.app;
-        resp.app.partition_count *= 2;
-        resp.parent_config = req.parent_config;
-        resp.child_config = req.child_config;
-
-        _parent->on_register_child_on_meta_reply(ERR_OK, req, resp);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-        _child_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_check_partition_count(split_status::type meta_split_status,
-                                    split_status::type local_split_status,
-                                    int32_t old_partition_version)
-    {
-        parent_set_split_status(local_split_status);
-        _parent->_partition_version.store(old_partition_version);
-        _parent->check_partition_count(NEW_PARTITION_COUNT, meta_split_status);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    group_check_response test_secondary_parent_handle_split(split_status::type meta_split_status,
-                                                            split_status::type local_split_status)
-    {
-        _parent_replica->set_partition_status(partition_status::PS_SECONDARY);
-        parent_set_split_status(local_split_status);
-
-        group_check_request req;
-        req.app = _parent_replica->_app_info;
-        req.config.ballot = INIT_BALLOT;
-        req.config.status = partition_status::PS_SECONDARY;
-        req.node = SECONDARY;
-        if (meta_split_status == split_status::PAUSING ||
-            meta_split_status == split_status::CANCELING) {
-            req.__set_meta_split_status(meta_split_status);
-        }
-        if (meta_split_status == split_status::NOT_SPLIT) {
-            req.app.partition_count *= 2;
-        }
-
-        group_check_response resp;
-        _parent->secondary_parent_handle_split(req, resp);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-
-        return resp;
-    }
-
-    void test_primary_parent_handle_stop_split(split_status::type meta_split_status,
-                                               bool lack_of_secondary,
-                                               bool will_all_stop)
-    {
-        _parent_replica->set_partition_status(partition_status::PS_PRIMARY);
-        _parent_replica->_primary_states.statuses[PRIMARY] = partition_status::PS_PRIMARY;
-        _parent_replica->_primary_states.statuses[SECONDARY] = partition_status::PS_SECONDARY;
-        _parent_replica->_primary_states.statuses[SECONDARY2] =
-            lack_of_secondary ? partition_status::PS_POTENTIAL_SECONDARY
-                              : partition_status::PS_SECONDARY;
-        _parent_replica->_primary_states.sync_send_write_request = true;
-        _parent_replica->_primary_states.split_stopped_secondary.clear();
-        mock_parent_primary_configuration(lack_of_secondary);
-
-        std::shared_ptr<group_check_request> req = std::make_shared<group_check_request>();
-        std::shared_ptr<group_check_response> resp = std::make_shared<group_check_response>();
-        req->node = SECONDARY;
-        if (meta_split_status != split_status::NOT_SPLIT) {
-            req->__set_meta_split_status(meta_split_status);
-        }
-
-        if (meta_split_status == split_status::PAUSING ||
-            meta_split_status == split_status::CANCELING) {
-            resp->__set_is_split_stopped(true);
-            if (will_all_stop) {
-                _parent_replica->_primary_states.split_stopped_secondary.insert(SECONDARY2);
-            }
-        }
-
-        _parent->primary_parent_handle_stop_split(req, resp);
-        _parent_replica->tracker()->wait_outstanding_tasks();
-    }
-
-    void test_on_query_child_state_reply()
-    {
-        _parent->_partition_version.store(-1);
-
-        query_child_state_request req;
-        req.app_name = APP_NAME;
-        req.partition_count = OLD_PARTITION_COUNT;
-        req.pid = PARENT_GPID;
-
-        partition_configuration child_config;
-        child_config.pid = CHILD_GPID;
-        child_config.ballot = INIT_BALLOT + 1;
-        child_config.last_committed_decree = 0;
-
-        query_child_state_response resp;
-        resp.err = ERR_OK;
-        resp.__set_partition_count(NEW_PARTITION_COUNT);
-        resp.__set_child_config(child_config);
-
-        _parent->on_query_child_state_reply(ERR_OK, req, resp);
-        _parent->tracker()->wait_outstanding_tasks();
-        _child->tracker()->wait_outstanding_tasks();
-    }
 
     /// mock functions
     void mock_app_info()
@@ -316,7 +54,7 @@ public:
     {
         _child_replica = stub->generate_replica(
             _app_info, CHILD_GPID, partition_status::PS_PARTITION_SPLIT, INIT_BALLOT);
-        _child = make_unique<replica_split_manager>(_child_replica.get());
+        _child_split_mgr = make_unique<replica_split_manager>(_child_replica.get());
     }
 
     void generate_child(bool is_prepare_list_copied, bool is_caught_up)
@@ -338,8 +76,8 @@ public:
     void mock_parent_split_context(partition_status::type status)
     {
         parent_set_split_status(split_status::SPLITTING);
-        _parent->_child_gpid = CHILD_GPID;
-        _parent->_child_init_ballot = INIT_BALLOT;
+        _parent_split_mgr->_child_gpid = CHILD_GPID;
+        _parent_split_mgr->_child_init_ballot = INIT_BALLOT;
         _parent_replica->set_partition_status(status);
     }
 
@@ -426,6 +164,268 @@ public:
         req.new_partition_count = NEW_PARTITION_COUNT;
     }
 
+    /// test functions
+
+    void test_parent_start_split(ballot b, gpid req_child_gpid, split_status::type status)
+    {
+        parent_set_split_status(status);
+
+        group_check_request req;
+        req.config.ballot = b;
+        req.config.status = partition_status::PS_PRIMARY;
+        req.__set_child_gpid(req_child_gpid);
+
+        _parent_split_mgr->parent_start_split(req);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_child_init_replica()
+    {
+        _child_replica = stub->generate_replica(
+            _app_info, CHILD_GPID, partition_status::PS_INACTIVE, INIT_BALLOT);
+        _child_split_mgr = make_unique<replica_split_manager>(_child_replica.get());
+        _child_split_mgr->child_init_replica(PARENT_GPID, PRIMARY, INIT_BALLOT);
+        // check_state_task will cost 3 seconds, cancel it immediatly
+        bool finished = false;
+        _child_replica->_split_states.check_state_task->cancel(false, &finished);
+        if (finished) {
+            _child_replica->_split_states.check_state_task = nullptr;
+        }
+        _child_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    bool test_parent_check_states()
+    {
+        bool flag = _parent_split_mgr->parent_check_states();
+        _parent_replica->tracker()->wait_outstanding_tasks();
+        return flag;
+    }
+
+    void test_child_copy_prepare_list()
+    {
+        mock_child_async_learn_states(_parent_replica, false, DECREE);
+        std::shared_ptr<prepare_list> plist =
+            std::make_shared<prepare_list>(_parent_replica, *_parent_replica->_prepare_list);
+        _child_split_mgr->child_copy_prepare_list(_mock_learn_state,
+                                                  _mutation_list,
+                                                  _private_log_files,
+                                                  TOTAL_FILE_SIZE,
+                                                  std::move(plist));
+        _child_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_child_learn_states()
+    {
+        mock_child_async_learn_states(_child_replica, true, DECREE);
+        _child_split_mgr->child_learn_states(
+            _mock_learn_state, _mutation_list, _private_log_files, TOTAL_FILE_SIZE, DECREE);
+        _child_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_child_apply_private_logs()
+    {
+        mock_child_async_learn_states(_child_replica, true, 0);
+        _child_split_mgr->child_apply_private_logs(
+            _private_log_files, _mutation_list, TOTAL_FILE_SIZE, DECREE);
+        _child_split_mgr->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_child_catch_up_states(decree local_decree, decree goal_decree, decree min_decree)
+    {
+        mock_child_async_learn_states(_child_replica, true, 0);
+        _child_replica->set_app_last_committed_decree(local_decree);
+        if (local_decree < goal_decree) {
+            // set prepare_list's start_decree = {min_decree}
+            _child_replica->prepare_list_truncate(min_decree);
+            // set prepare_list's last_committed_decree = {goal_decree}
+            _child_replica->prepare_list_commit_hard(goal_decree);
+        }
+        _child_split_mgr->child_catch_up_states();
+        _child_split_mgr->tracker()->wait_outstanding_tasks();
+    }
+
+    error_code test_parent_handle_child_catch_up(ballot child_ballot)
+    {
+        _parent_split_mgr->_child_gpid = CHILD_GPID;
+
+        notify_catch_up_request req;
+        req.child_gpid = CHILD_GPID;
+        req.parent_gpid = PARENT_GPID;
+        req.child_ballot = child_ballot;
+        req.child_address = PRIMARY;
+
+        notify_cacth_up_response resp;
+        _parent_split_mgr->parent_handle_child_catch_up(req, resp);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+        return resp.err;
+    }
+
+    void test_update_child_group_partition_count()
+    {
+        _parent_split_mgr->update_child_group_partition_count(NEW_PARTITION_COUNT);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+        _child_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    error_code test_on_update_child_group_partition_count(ballot b)
+    {
+        update_child_group_partition_count_request req;
+        mock_update_child_partition_count_request(req, b);
+
+        update_child_group_partition_count_response resp;
+        _child_split_mgr->on_update_child_group_partition_count(req, resp);
+        _child_replica->tracker()->wait_outstanding_tasks();
+        return resp.err;
+    }
+
+    error_code test_on_update_child_group_partition_count_reply(error_code resp_err)
+    {
+        update_child_group_partition_count_request req;
+        mock_update_child_partition_count_request(req, INIT_BALLOT);
+        update_child_group_partition_count_response resp;
+        resp.err = resp_err;
+        auto not_replied_addresses = std::make_shared<std::unordered_set<rpc_address>>();
+        not_replied_addresses->insert(PRIMARY);
+
+        _parent_split_mgr->on_update_child_group_partition_count_reply(
+            ERR_OK, req, resp, not_replied_addresses);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+        _child_replica->tracker()->wait_outstanding_tasks();
+        return resp.err;
+    }
+
+    void test_register_child_on_meta()
+    {
+        parent_set_split_status(split_status::SPLITTING);
+        _parent_split_mgr->register_child_on_meta(INIT_BALLOT);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_on_register_child_reply(partition_status::type status, dsn::error_code resp_err)
+    {
+        stub->set_state_connected();
+        stub->set_rpc_address(PRIMARY);
+        mock_parent_split_context(status);
+        _parent_replica->_primary_states.sync_send_write_request = true;
+        _parent_split_mgr->_partition_version = -1;
+        _parent_replica->_inactive_is_transient = true;
+
+        register_child_request req;
+        req.app = _app_info;
+        req.parent_config.pid = PARENT_GPID;
+        req.parent_config.ballot = INIT_BALLOT;
+        req.parent_config.last_committed_decree = DECREE;
+        req.parent_config.primary = PRIMARY;
+        req.child_config.pid = CHILD_GPID;
+        req.child_config.ballot = INIT_BALLOT + 1;
+        req.child_config.last_committed_decree = 0;
+        req.primary_address = PRIMARY;
+
+        register_child_response resp;
+        resp.err = resp_err;
+        resp.app = req.app;
+        resp.app.partition_count *= 2;
+        resp.parent_config = req.parent_config;
+        resp.child_config = req.child_config;
+
+        _parent_split_mgr->on_register_child_on_meta_reply(ERR_OK, req, resp);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+        _child_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_check_partition_count(split_status::type meta_split_status,
+                                    split_status::type local_split_status,
+                                    int32_t old_partition_version)
+    {
+        parent_set_split_status(local_split_status);
+        _parent_split_mgr->_partition_version.store(old_partition_version);
+        _parent_split_mgr->check_partition_count(NEW_PARTITION_COUNT, meta_split_status);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    group_check_response test_secondary_parent_handle_split(split_status::type meta_split_status,
+                                                            split_status::type local_split_status)
+    {
+        _parent_replica->set_partition_status(partition_status::PS_SECONDARY);
+        parent_set_split_status(local_split_status);
+
+        group_check_request req;
+        req.app = _parent_replica->_app_info;
+        req.config.ballot = INIT_BALLOT;
+        req.config.status = partition_status::PS_SECONDARY;
+        req.node = SECONDARY;
+        if (meta_split_status == split_status::PAUSING ||
+            meta_split_status == split_status::CANCELING) {
+            req.__set_meta_split_status(meta_split_status);
+        }
+        if (meta_split_status == split_status::NOT_SPLIT) {
+            req.app.partition_count *= 2;
+        }
+
+        group_check_response resp;
+        _parent_split_mgr->secondary_parent_handle_split(req, resp);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+
+        return resp;
+    }
+
+    void test_primary_parent_handle_stop_split(split_status::type meta_split_status,
+                                               bool lack_of_secondary,
+                                               bool will_all_stop)
+    {
+        _parent_replica->set_partition_status(partition_status::PS_PRIMARY);
+        _parent_replica->_primary_states.statuses[PRIMARY] = partition_status::PS_PRIMARY;
+        _parent_replica->_primary_states.statuses[SECONDARY] = partition_status::PS_SECONDARY;
+        _parent_replica->_primary_states.statuses[SECONDARY2] =
+            lack_of_secondary ? partition_status::PS_POTENTIAL_SECONDARY
+                              : partition_status::PS_SECONDARY;
+        _parent_replica->_primary_states.sync_send_write_request = true;
+        _parent_replica->_primary_states.split_stopped_secondary.clear();
+        mock_parent_primary_configuration(lack_of_secondary);
+
+        std::shared_ptr<group_check_request> req = std::make_shared<group_check_request>();
+        std::shared_ptr<group_check_response> resp = std::make_shared<group_check_response>();
+        req->node = SECONDARY;
+        if (meta_split_status != split_status::NOT_SPLIT) {
+            req->__set_meta_split_status(meta_split_status);
+        }
+
+        if (meta_split_status == split_status::PAUSING ||
+            meta_split_status == split_status::CANCELING) {
+            resp->__set_is_split_stopped(true);
+            if (will_all_stop) {
+                _parent_replica->_primary_states.split_stopped_secondary.insert(SECONDARY2);
+            }
+        }
+
+        _parent_split_mgr->primary_parent_handle_stop_split(req, resp);
+        _parent_replica->tracker()->wait_outstanding_tasks();
+    }
+
+    void test_on_query_child_state_reply()
+    {
+        _parent_split_mgr->_partition_version.store(-1);
+
+        query_child_state_request req;
+        req.app_name = APP_NAME;
+        req.partition_count = OLD_PARTITION_COUNT;
+        req.pid = PARENT_GPID;
+
+        partition_configuration child_config;
+        child_config.pid = CHILD_GPID;
+        child_config.ballot = INIT_BALLOT + 1;
+        child_config.last_committed_decree = 0;
+
+        query_child_state_response resp;
+        resp.err = ERR_OK;
+        resp.__set_partition_count(NEW_PARTITION_COUNT);
+        resp.__set_child_config(child_config);
+
+        _parent_split_mgr->on_query_child_state_reply(ERR_OK, req, resp);
+        _parent_split_mgr->tracker()->wait_outstanding_tasks();
+        _child_split_mgr->tracker()->wait_outstanding_tasks();
+    }
+
     /// helper functions
     void cleanup_prepare_list(mock_replica_ptr rep) { rep->_prepare_list->reset(0); }
     void cleanup_child_split_context()
@@ -434,7 +434,10 @@ public:
         _child_replica->tracker()->wait_outstanding_tasks();
     }
 
-    void parent_set_split_status(split_status::type status) { _parent->_split_status = status; }
+    void parent_set_split_status(split_status::type status)
+    {
+        _parent_split_mgr->_split_status = status;
+    }
 
     int32_t child_get_prepare_list_count() { return _child_replica->get_plist()->count(); }
     bool child_is_prepare_list_copied()
@@ -443,7 +446,7 @@ public:
     }
     bool child_is_caught_up() { return _child_replica->_split_states.is_caught_up; }
 
-    split_status::type parent_get_split_status() { return _parent->_split_status; }
+    split_status::type parent_get_split_status() { return _parent_split_mgr->_split_status; }
     bool parent_sync_send_write_request()
     {
         return _parent_replica->_primary_states.sync_send_write_request;
@@ -454,8 +457,9 @@ public:
     }
     bool is_parent_not_in_split()
     {
-        return _parent->_child_gpid.get_app_id() == 0 && _parent->_child_init_ballot == 0 &&
-               _parent->_split_status == split_status::NOT_SPLIT;
+        return _parent_split_mgr->_child_gpid.get_app_id() == 0 &&
+               _parent_split_mgr->_child_init_ballot == 0 &&
+               _parent_split_mgr->_split_status == split_status::NOT_SPLIT;
     }
     bool primary_parent_not_in_split()
     {
@@ -482,8 +486,8 @@ public:
 
     mock_replica_ptr _parent_replica;
     mock_replica_ptr _child_replica;
-    std::unique_ptr<replica_split_manager> _parent;
-    std::unique_ptr<replica_split_manager> _child;
+    std::unique_ptr<replica_split_manager> _parent_split_mgr;
+    std::unique_ptr<replica_split_manager> _child_split_mgr;
 
     app_info _app_info;
     learn_state _mock_learn_state;
@@ -520,7 +524,7 @@ TEST_F(replica_split_test, parent_start_split_tests)
         test_parent_start_split(test.req_ballot, test.req_child_gpid, test.local_split_status);
         ASSERT_EQ(parent_get_split_status(), test.expected_split_status);
         if (test.start_split_succeed) {
-            ASSERT_EQ(_parent->get_partition_version(), OLD_PARTITION_COUNT - 1);
+            ASSERT_EQ(_parent_split_mgr->get_partition_version(), OLD_PARTITION_COUNT - 1);
             stub->get_replica(CHILD_GPID)->tracker()->wait_outstanding_tasks();
             ASSERT_EQ(stub->get_replica(CHILD_GPID)->status(), partition_status::PS_INACTIVE);
         }
@@ -728,9 +732,9 @@ TEST_F(replica_split_test, child_update_partition_count_test)
                  {INIT_BALLOT, true, ERR_OK, NEW_PARTITION_COUNT - 1}};
     for (auto test : tests) {
         mock_child_split_context(true, test.caught_up);
-        ASSERT_EQ(_child->get_partition_version(), OLD_PARTITION_COUNT - 1);
+        ASSERT_EQ(_child_split_mgr->get_partition_version(), OLD_PARTITION_COUNT - 1);
         ASSERT_EQ(test_on_update_child_group_partition_count(test.req_ballot), test.expected_err);
-        ASSERT_EQ(_child->get_partition_version(), test.expected_partition_version);
+        ASSERT_EQ(_child_split_mgr->get_partition_version(), test.expected_partition_version);
     }
 }
 
@@ -774,7 +778,7 @@ TEST_F(replica_split_test, register_child_test)
     fail::cfg("replica_parent_send_register_request", "return()");
     test_register_child_on_meta();
     ASSERT_EQ(_parent_replica->status(), partition_status::PS_INACTIVE);
-    ASSERT_EQ(_parent->get_partition_version(), -1);
+    ASSERT_EQ(_parent_split_mgr->get_partition_version(), -1);
 }
 
 // register_child_reply tests
@@ -804,7 +808,8 @@ TEST_F(replica_split_test, register_child_reply_test)
         ASSERT_EQ(_parent_replica->status(), partition_status::PS_PRIMARY);
         if (test.parent_partition_status == partition_status::PS_INACTIVE) {
             ASSERT_TRUE(primary_parent_not_in_split());
-            ASSERT_EQ(_parent->get_partition_version(), test.expected_parent_partition_version);
+            ASSERT_EQ(_parent_split_mgr->get_partition_version(),
+                      test.expected_parent_partition_version);
         }
     }
 }
@@ -845,7 +850,7 @@ TEST_F(replica_split_test, primary_handle_split_test)
         }
         test_check_partition_count(
             test.meta_split_status, test.local_split_status, test.old_partition_version);
-        ASSERT_EQ(_parent->get_partition_version(), OLD_PARTITION_COUNT - 1);
+        ASSERT_EQ(_parent_split_mgr->get_partition_version(), OLD_PARTITION_COUNT - 1);
         ASSERT_FALSE(parent_sync_send_write_request());
         if (test.local_split_status == split_status::SPLITTING) {
             _child_replica->tracker()->wait_outstanding_tasks();
@@ -887,7 +892,7 @@ TEST_F(replica_split_test, secondary_handle_split_test)
             test_secondary_parent_handle_split(test.meta_split_status, test.local_split_status);
         ASSERT_EQ(resp.err, ERR_OK);
         ASSERT_TRUE(is_parent_not_in_split());
-        ASSERT_EQ(_parent->get_partition_version(), test.expected_partition_version);
+        ASSERT_EQ(_parent_split_mgr->get_partition_version(), test.expected_partition_version);
         if (test.meta_split_status == split_status::PAUSING ||
             test.meta_split_status == split_status::CANCELING) {
             ASSERT_TRUE(resp.__isset.is_split_stopped);
@@ -940,7 +945,7 @@ TEST_F(replica_split_test, query_child_state_reply_test)
     mock_primary_parent_split_context(true);
 
     test_on_query_child_state_reply();
-    ASSERT_EQ(_parent->get_partition_version(), NEW_PARTITION_COUNT - 1);
+    ASSERT_EQ(_parent_split_mgr->get_partition_version(), NEW_PARTITION_COUNT - 1);
     ASSERT_TRUE(primary_parent_not_in_split());
 }
 
