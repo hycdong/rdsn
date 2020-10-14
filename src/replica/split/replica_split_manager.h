@@ -185,7 +185,7 @@ private:
 
     // _child_gpid = gpid({app_id},{pidx}+{old_partition_count}) for parent partition
     // _child_gpid.app_id = 0 for parent partition not in partition split and child partition
-    dsn::gpid _child_gpid{0, 0};
+    gpid _child_gpid{0, 0};
     // ballot when starting partition split and split will stop if ballot changed
     // _child_init_ballot = 0 if partition not in partition split
     ballot _child_init_ballot{0};
