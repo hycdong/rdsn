@@ -37,6 +37,7 @@ void meta_split_service::start_partition_split(start_split_rpc rpc)
             return;
         }
 
+        // new_partition_count != old_partition_count*2
         if (request.new_partition_count != app->partition_count * 2) {
             response.err = ERR_INVALID_PARAMETERS;
             derror_f("wrong partition count: app({}), partition count({}), new_partition_count({})",
@@ -50,15 +51,15 @@ void meta_split_service::start_partition_split(start_split_rpc rpc)
 
         if (app->helpers->split_states.splitting_count > 0) {
             response.err = ERR_BUSY;
-            derror_f("app({}) has already executing partition split",
-                     request.app_name,
-                     request.new_partition_count);
-            response.hint_msg = "app is already executing partition split";
+            auto err_msg =
+                fmt::format("app({}) is already executing partition split", request.app_name);
+            derror_f("{}", err_msg);
+            response.hint_msg = err_msg;
             return;
         }
     }
 
-    ddebug_f("app({}) start to partition split, new_partition_count = {}",
+    ddebug_f("app({}) start to partition split, new_partition_count={}",
              request.app_name,
              request.new_partition_count);
 
@@ -70,7 +71,7 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
                                                   start_split_rpc rpc)
 {
     auto on_write_storage_complete = [app, rpc, this]() {
-        ddebug_f("app({}) update partition_count on remote storage, new_partition_count = {}",
+        ddebug_f("app({}) update partition count on remote storage, new partition_count = {}",
                  app->app_name,
                  app->partition_count * 2);
 
@@ -82,10 +83,10 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
 
         for (int i = 0; i < app->partition_count; ++i) {
             app->helpers->contexts[i].config_owner = &app->partitions[i];
-            if (i >= app->partition_count / 2) {
+            if (i >= app->partition_count / 2) { // child partitions
                 app->partitions[i].ballot = invalid_ballot;
                 app->partitions[i].pid = gpid(app->app_id, i);
-            } else {
+            } else { // parent partitions
                 app->helpers->split_states.status[i] = split_status::SPLITTING;
             }
         }
@@ -121,7 +122,7 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     const gpid &child_gpid = request.child_config.pid;
     const auto &parent_config = app->partitions[parent_gpid.get_partition_index()];
     if (request.parent_config.ballot != parent_config.ballot) {
-        derror_f("app({}) partition({}) register child({}) failed, request is out-dated, request "
+        derror_f("app({}) partition({}) register child({}) failed, request is outdated, request "
                  "parent ballot = {}, local parent ballot = {}",
                  app_name,
                  parent_gpid,
@@ -229,13 +230,12 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
 {
     const auto &request = rpc.request();
     auto &response = rpc.response();
+    const std::string &app_name = request.app.app_name;
 
     zauto_write_lock(app_lock());
-    std::shared_ptr<app_state> app = _state->get_app(request.app.app_id);
-    dassert_f(app != nullptr, "app is not existed, id({})", request.app.app_id);
-    dassert_f(app->status == app_status::AS_AVAILABLE || app->status == app_status::AS_DROPPING,
-              "app is not available now, id({})",
-              request.app.app_id);
+    std::shared_ptr<app_state> app = _state->get_app(app_name);
+    dassert_f(app != nullptr, "app({}) is not existed", app_name);
+    dassert_f(app->is_stateful, "app({}) is stateless currently", app_name);
 
     const gpid &parent_gpid = request.parent_config.pid;
     const gpid &child_gpid = request.child_config.pid;
@@ -256,8 +256,9 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
                              std::chrono::seconds(delay));
         return;
     }
-    dassert_f(ec == ERR_OK, "we can't handle this right now, err = {}", ec.to_string());
-    ddebug_f("partition({}) resgiter child({}) on remote storage succeed", parent_gpid, child_gpid);
+    dassert_f(ec == ERR_OK, "we can't handle this right now, err = {}", ec);
+
+    ddebug_f("parent({}) resgiter child({}) on remote storage succeed", parent_gpid, child_gpid);
 
     // update local child partition configuration
     std::shared_ptr<configuration_update_request> update_child_request =

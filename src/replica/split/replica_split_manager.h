@@ -39,7 +39,7 @@ public:
     }
 
 private:
-    // parent partition create child
+    // parent partition start split
     void parent_start_split(const group_check_request &request);
 
     // child replica initialize config and state info
@@ -183,6 +183,8 @@ private:
     friend class replica_stub;
     friend class replica_split_test;
 
+    split_status::type _split_status{split_status::NOT_SPLIT};
+
     // _child_gpid = gpid({app_id},{pidx}+{old_partition_count}) for parent partition
     // _child_gpid.app_id = 0 for parent partition not in partition split and child partition
     gpid _child_gpid{0, 0};
@@ -192,8 +194,6 @@ private:
     // in normal cases, _partition_version = partition_count-1
     // when replica reject client read write request, partition_version = -1
     std::atomic<int32_t> _partition_version;
-
-    split_status::type _split_status{split_status::NOT_SPLIT};
 };
 
 } // namespace replication

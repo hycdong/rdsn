@@ -93,12 +93,12 @@ public:
         parent_config.ballot = req_parent_ballot;
         parent_config.last_committed_decree = 5;
         parent_config.max_replica_count = 3;
-        parent_config.pid = dsn::gpid(app->app_id, parent_index);
+        parent_config.pid = gpid(app->app_id, parent_index);
 
         partition_configuration child_config;
         child_config.ballot = PARENT_BALLOT + 1;
         child_config.last_committed_decree = 5;
-        child_config.pid = dsn::gpid(app->app_id, parent_index + PARTITION_COUNT);
+        child_config.pid = gpid(app->app_id, parent_index + PARTITION_COUNT);
 
         // mock node state
         node_state node;
@@ -173,7 +173,7 @@ public:
         app->helpers->split_states.splitting_count = app->partition_count / 2;
         for (int i = 0; i < app->partition_count; ++i) {
             app->helpers->contexts[i].config_owner = &app->partitions[i];
-            app->partitions[i].pid = dsn::gpid(app->app_id, i);
+            app->partitions[i].pid = gpid(app->app_id, i);
             if (i >= app->partition_count / 2) {
                 app->partitions[i].ballot = invalid_ballot;
             } else {

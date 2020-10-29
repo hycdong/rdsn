@@ -180,9 +180,11 @@ bool replica_split_manager::parent_check_states() // on parent partition
         _child_gpid.get_app_id() == 0 ||
         (status() != partition_status::PS_PRIMARY && status() != partition_status::PS_SECONDARY &&
          (status() != partition_status::PS_INACTIVE || !_replica->_inactive_is_transient))) {
-        dwarn_replica("parent wrong states: status({}), init_ballot({}) VS current_ballot({}), "
+        dwarn_replica("parent wrong states: status({}), split_status({}), init_ballot({}) VS "
+                      "current_ballot({}), "
                       "child_gpid({})",
                       enum_to_string(status()),
+                      enum_to_string(_split_status),
                       _child_init_ballot,
                       get_ballot(),
                       _child_gpid);
@@ -241,14 +243,12 @@ void replica_split_manager::parent_prepare_states(const std::string &dir) // on 
     dcheck_eq(last_committed_decree(), checkpoint_decree);
     dcheck_gt(mutation_list.size(), 0);
     dcheck_gt(files.size(), 0);
-
-    ddebug_replica(
-        "prepare state succeed: {} mutations, {} private log files, total file size = {}, "
-        "last_committed_decree = {}",
-        mutation_list.size(),
-        files.size(),
-        total_file_size,
-        last_committed_decree());
+    ddebug_replica("prepare state succeed: {} mutations, {} private log files, total file size = "
+                   "{}, last_committed_decree = {}",
+                   mutation_list.size(),
+                   files.size(),
+                   total_file_size,
+                   last_committed_decree());
 
     ec = _stub->split_replica_exec(LPC_PARTITION_SPLIT,
                                    _child_gpid,
@@ -980,15 +980,14 @@ void replica_split_manager::parent_send_register_request(
     FAIL_POINT_INJECT_F("replica_parent_send_register_request", [](dsn::string_view) {});
 
     dcheck_eq_replica(status(), partition_status::PS_INACTIVE);
+    ddebug_replica(
+        "send register child({}) request to meta_server, current ballot = {}, child ballot = {}",
+        request.child_config.pid,
+        request.parent_config.ballot,
+        request.child_config.ballot);
 
     rpc_address meta_address(_stub->_failure_detector->get_servers());
     std::unique_ptr<register_child_request> req = make_unique<register_child_request>(request);
-    ddebug_replica("send register child({}) request to meta_server({}), current ballot = {}, child "
-                   "ballot = {}",
-                   request.child_config.pid,
-                   meta_address.to_string(),
-                   request.parent_config.ballot,
-                   request.child_config.ballot);
 
     register_child_rpc rpc(std::move(req),
                            RPC_CM_REGISTER_CHILD_REPLICA,
