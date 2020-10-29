@@ -2862,7 +2862,7 @@ void replica_stub::on_update_child_group_partition_count(update_child_group_part
 {
     const update_child_group_partition_count_request &request = rpc.request();
     update_child_group_partition_count_response &response = rpc.response();
-    replica_ptr replica = get_replica(request.pid);
+    replica_ptr replica = get_replica(request.child_pid);
     if (replica != nullptr) {
         replica->get_split_manager()->on_update_child_group_partition_count(request, response);
     } else {

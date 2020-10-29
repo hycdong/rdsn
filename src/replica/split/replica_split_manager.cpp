@@ -730,7 +730,7 @@ void replica_split_manager::update_child_group_partition_count(
     for (const auto &kv : _replica->_primary_states.statuses) {
         not_replied_addresses->insert(kv.first);
     }
-    for (auto &iter : _replica->_primary_states.statuses) {
+    for (const auto &iter : _replica->_primary_states.statuses) {
         parent_send_update_partition_count_request(
             iter.first, new_partition_count, not_replied_addresses);
     }
@@ -749,7 +749,7 @@ void replica_split_manager::parent_send_update_partition_count_request(
     auto request = make_unique<update_child_group_partition_count_request>();
     request->new_partition_count = new_partition_count;
     request->target_address = address;
-    request->pid = _child_gpid;
+    request->child_pid = _child_gpid;
     request->ballot = get_ballot();
 
     ddebug_replica(
@@ -774,7 +774,7 @@ void replica_split_manager::on_update_child_group_partition_count(
 {
     if (request.ballot != get_ballot() || !_replica->_split_states.is_caught_up) {
         derror_replica(
-            "receive out-dated update child group_partition_count_request, request ballot={}, "
+            "receive outdated update child group_partition_count_request, request ballot={}, "
             "local ballot={}, caught_up={}",
             request.ballot,
             get_ballot(),
@@ -785,27 +785,27 @@ void replica_split_manager::on_update_child_group_partition_count(
 
     if (_replica->_app_info.partition_count == request.new_partition_count &&
         _partition_version.load() == request.new_partition_count - 1) {
-        dwarn_replica(
-            "receive repeated update child group_partition_count_request, partition_count = {}",
-            request.new_partition_count);
+        dwarn_replica("receive repeated update child group_partition_count_request, "
+                      "partition_count = {}, ignore it",
+                      request.new_partition_count);
         response.err = ERR_OK;
         return;
     }
 
     dcheck_eq_replica(_replica->_app_info.partition_count * 2, request.new_partition_count);
-    bool flag = update_local_partition_count(request.new_partition_count);
-    response.err = flag ? ERR_OK : ERR_FILE_OPERATION_FAILED;
+    update_local_partition_count(request.new_partition_count);
+    response.err = ERR_OK;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-bool replica_split_manager::update_local_partition_count(
+void replica_split_manager::update_local_partition_count(
     int32_t new_partition_count) // on all partitions
 {
     // update _app_info and partition_version
     auto info = _replica->_app_info;
     // if app has not been split before, init_partition_count = -1
     // we should set init_partition_count to old_partition_count
-    if (info.init_partition_count < 1) {
+    if (info.init_partition_count < 0) {
         info.init_partition_count = info.partition_count;
     }
     auto old_partition_count = info.partition_count;
@@ -815,9 +815,9 @@ bool replica_split_manager::update_local_partition_count(
     std::string info_path = utils::filesystem::path_combine(_replica->_dir, ".app-info");
     auto err = new_info.store(info_path.c_str());
     if (err != ERR_OK) {
-        derror_replica("failed to save app_info to {}, error = {}", info_path, err);
         info.partition_count = old_partition_count;
-        return false;
+        dassert_replica(false, "failed to save app_info to {}, error = {}", info_path, err);
+        return;
     }
 
     _replica->_app_info = info;
@@ -827,7 +827,6 @@ bool replica_split_manager::update_local_partition_count(
 
     _replica->_app->set_partition_version(_replica->_app_info.partition_count - 1);
     _partition_version.store(_replica->_app_info.partition_count - 1);
-    return true;
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -870,7 +869,7 @@ void replica_split_manager::on_update_child_group_partition_count_reply(
     }
 
     error_code error = (ec == ERR_OK) ? response.err : ec;
-    if (error == ERR_TIMEOUT || error == ERR_FILE_OPERATION_FAILED) {
+    if (error == ERR_TIMEOUT) {
         dwarn_replica("failed to update child node({}) partition_count, error = {}, wait and retry",
                       request.target_address.to_string(),
                       error);
@@ -902,13 +901,15 @@ void replica_split_manager::on_update_child_group_partition_count_reply(
         return;
     }
 
-    ddebug_replica("update child node({}) partition_count({}) succeed",
+    ddebug_replica("update node({}) child({}) partition_count({}) succeed",
                    request.target_address.to_string(),
+                   request.child_pid,
                    request.new_partition_count);
     // update group partition_count succeed
     not_replied_addresses->erase(request.target_address);
     if (not_replied_addresses->empty()) {
-        ddebug_replica("update child group partition_count, new_partition_count = {}",
+        ddebug_replica("update child({}) group partition_count, new_partition_count = {}",
+                       request.child_pid,
                        request.new_partition_count);
         register_child_on_meta(get_ballot());
     } else {
@@ -1131,12 +1132,12 @@ void replica_split_manager::child_handle_split_error(
     FAIL_POINT_INJECT_F("replica_child_handle_split_error", [](dsn::string_view) {});
 
     if (status() != partition_status::PS_ERROR) {
-        dwarn_replica("partition split failed because {}, parent={}, split_duration={}ms, "
-                      "async_learn_duration={}ms",
-                      error_msg,
-                      _replica->_split_states.parent_gpid,
-                      _replica->_split_states.total_ms(),
-                      _replica->_split_states.async_learn_ms());
+        derror_replica("partition split failed because {}, parent={}, split_duration={}ms, "
+                       "async_learn_duration={}ms",
+                       error_msg,
+                       _replica->_split_states.parent_gpid,
+                       _replica->_split_states.total_ms(),
+                       _replica->_split_states.async_learn_ms());
 
         _stub->_counter_replicas_splitting_recent_split_fail_count->increment();
         _replica->update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);

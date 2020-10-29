@@ -6521,12 +6521,12 @@ inline std::ostream &operator<<(std::ostream &out, const notify_cacth_up_respons
 typedef struct _update_child_group_partition_count_request__isset
 {
     _update_child_group_partition_count_request__isset()
-        : target_address(false), new_partition_count(false), pid(false), ballot(false)
+        : target_address(false), new_partition_count(false), child_pid(false), ballot(false)
     {
     }
     bool target_address : 1;
     bool new_partition_count : 1;
-    bool pid : 1;
+    bool child_pid : 1;
     bool ballot : 1;
 } _update_child_group_partition_count_request__isset;
 
@@ -6544,7 +6544,7 @@ public:
     virtual ~update_child_group_partition_count_request() throw();
     ::dsn::rpc_address target_address;
     int32_t new_partition_count;
-    ::dsn::gpid pid;
+    ::dsn::gpid child_pid;
     int64_t ballot;
 
     _update_child_group_partition_count_request__isset __isset;
@@ -6553,7 +6553,7 @@ public:
 
     void __set_new_partition_count(const int32_t val);
 
-    void __set_pid(const ::dsn::gpid &val);
+    void __set_child_pid(const ::dsn::gpid &val);
 
     void __set_ballot(const int64_t val);
 
@@ -6563,7 +6563,7 @@ public:
             return false;
         if (!(new_partition_count == rhs.new_partition_count))
             return false;
-        if (!(pid == rhs.pid))
+        if (!(child_pid == rhs.child_pid))
             return false;
         if (!(ballot == rhs.ballot))
             return false;

@@ -88,23 +88,25 @@ private:
 
     // primary parent update child group partition count
     void update_child_group_partition_count(int32_t new_partition_count);
+
+    void parent_send_update_partition_count_request(
+        const rpc_address &address,
+        int32_t new_partition_count,
+        std::shared_ptr<std::unordered_set<rpc_address>> &not_replied_addresses);
+
+    // child update its partition_count
     void
     on_update_child_group_partition_count(const update_child_group_partition_count_request &request,
                                           update_child_group_partition_count_response &response);
+
     void on_update_child_group_partition_count_reply(
         error_code ec,
         const update_child_group_partition_count_request &request,
         const update_child_group_partition_count_response &response,
         std::shared_ptr<std::unordered_set<rpc_address>> &not_replied_addresses);
 
-    // primary sends update partition count request to child replicas
-    void parent_send_update_partition_count_request(
-        const rpc_address &address,
-        int32_t new_partition_count,
-        std::shared_ptr<std::unordered_set<rpc_address>> &not_replied_addresses);
-
     // all replicas update partition_count in memory and disk
-    bool update_local_partition_count(int32_t new_partition_count);
+    void update_local_partition_count(int32_t new_partition_count);
 
     // primary parent register children on meta_server
     void register_child_on_meta(ballot b);

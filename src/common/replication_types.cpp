@@ -15183,9 +15183,9 @@ void update_child_group_partition_count_request::__set_new_partition_count(const
     this->new_partition_count = val;
 }
 
-void update_child_group_partition_count_request::__set_pid(const ::dsn::gpid &val)
+void update_child_group_partition_count_request::__set_child_pid(const ::dsn::gpid &val)
 {
-    this->pid = val;
+    this->child_pid = val;
 }
 
 void update_child_group_partition_count_request::__set_ballot(const int64_t val)
@@ -15231,8 +15231,8 @@ update_child_group_partition_count_request::read(::apache::thrift::protocol::TPr
             break;
         case 3:
             if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->pid.read(iprot);
-                this->__isset.pid = true;
+                xfer += this->child_pid.read(iprot);
+                this->__isset.child_pid = true;
             } else {
                 xfer += iprot->skip(ftype);
             }
@@ -15272,8 +15272,8 @@ uint32_t update_child_group_partition_count_request::write(
     xfer += oprot->writeI32(this->new_partition_count);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("pid", ::apache::thrift::protocol::T_STRUCT, 3);
-    xfer += this->pid.write(oprot);
+    xfer += oprot->writeFieldBegin("child_pid", ::apache::thrift::protocol::T_STRUCT, 3);
+    xfer += this->child_pid.write(oprot);
     xfer += oprot->writeFieldEnd();
 
     xfer += oprot->writeFieldBegin("ballot", ::apache::thrift::protocol::T_I64, 4);
@@ -15291,7 +15291,7 @@ void swap(update_child_group_partition_count_request &a,
     using ::std::swap;
     swap(a.target_address, b.target_address);
     swap(a.new_partition_count, b.new_partition_count);
-    swap(a.pid, b.pid);
+    swap(a.child_pid, b.child_pid);
     swap(a.ballot, b.ballot);
     swap(a.__isset, b.__isset);
 }
@@ -15301,7 +15301,7 @@ update_child_group_partition_count_request::update_child_group_partition_count_r
 {
     target_address = other666.target_address;
     new_partition_count = other666.new_partition_count;
-    pid = other666.pid;
+    child_pid = other666.child_pid;
     ballot = other666.ballot;
     __isset = other666.__isset;
 }
@@ -15310,7 +15310,7 @@ update_child_group_partition_count_request::update_child_group_partition_count_r
 {
     target_address = std::move(other667.target_address);
     new_partition_count = std::move(other667.new_partition_count);
-    pid = std::move(other667.pid);
+    child_pid = std::move(other667.child_pid);
     ballot = std::move(other667.ballot);
     __isset = std::move(other667.__isset);
 }
@@ -15319,7 +15319,7 @@ operator=(const update_child_group_partition_count_request &other668)
 {
     target_address = other668.target_address;
     new_partition_count = other668.new_partition_count;
-    pid = other668.pid;
+    child_pid = other668.child_pid;
     ballot = other668.ballot;
     __isset = other668.__isset;
     return *this;
@@ -15329,7 +15329,7 @@ operator=(update_child_group_partition_count_request &&other669)
 {
     target_address = std::move(other669.target_address);
     new_partition_count = std::move(other669.new_partition_count);
-    pid = std::move(other669.pid);
+    child_pid = std::move(other669.child_pid);
     ballot = std::move(other669.ballot);
     __isset = std::move(other669.__isset);
     return *this;
@@ -15342,7 +15342,7 @@ void update_child_group_partition_count_request::printTo(std::ostream &out) cons
     out << ", "
         << "new_partition_count=" << to_string(new_partition_count);
     out << ", "
-        << "pid=" << to_string(pid);
+        << "child_pid=" << to_string(child_pid);
     out << ", "
         << "ballot=" << to_string(ballot);
     out << ")";

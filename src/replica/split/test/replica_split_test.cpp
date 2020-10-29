@@ -158,7 +158,7 @@ public:
     void mock_update_child_partition_count_request(update_child_group_partition_count_request &req,
                                                    ballot b)
     {
-        req.pid = CHILD_GPID;
+        req.child_pid = CHILD_GPID;
         req.ballot = b;
         req.target_address = PRIMARY;
         req.new_partition_count = NEW_PARTITION_COUNT;
