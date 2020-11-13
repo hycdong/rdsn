@@ -59,12 +59,19 @@ public:
                                    std::placeholders::_1,
                                    std::placeholders::_2),
                          "ip:port/meta/backup_policy");
+        register_handler(
+            "app/start_bulk_load",
+            std::bind(&meta_http_service::start_bulk_load_handler,
+                      this,
+                      std::placeholders::_1,
+                      std::placeholders::_2),
+            "ip:port/meta/start_bulk_load?app=<app>&cluster=<cluster>&type=<type>&path=<path>");
         register_handler("app/query_bulk_load",
                          std::bind(&meta_http_service::query_bulk_load_handler,
                                    this,
                                    std::placeholders::_1,
                                    std::placeholders::_2),
-                         "ip:port/meta/query_bulk_load?app_name=temp");
+                         "ip:port/meta/query_bulk_load?name=temp");
     }
 
     std::string path() const override { return "meta"; }
@@ -76,6 +83,7 @@ public:
     void get_app_envs_handler(const http_request &req, http_response &resp);
     void query_backup_policy_handler(const http_request &req, http_response &resp);
     void query_duplication_handler(const http_request &req, http_response &resp);
+    void start_bulk_load_handler(const http_request &req, http_response &resp);
     void query_bulk_load_handler(const http_request &req, http_response &resp);
 
 private:

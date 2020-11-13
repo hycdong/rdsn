@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/http/http_server.h>
+#include <dsn/utility/fail_point.h>
 
 #include "meta/meta_http_service.h"
 #include "meta/meta_service.h"
@@ -142,6 +143,7 @@ public:
     void SetUp() override
     {
         meta_test_base::SetUp();
+        FLAGS_enable_http_server = false;
         _mhs = dsn::make_unique<meta_http_service>(_ms.get());
         create_app(APP_NAME);
     }
@@ -149,6 +151,7 @@ public:
     void TearDown() override
     {
         drop_app(APP_NAME);
+        _mhs = nullptr;
         meta_test_base::TearDown();
     }
 
@@ -159,6 +162,15 @@ public:
         req.query_args.emplace("name", app_name);
         _mhs->query_bulk_load_handler(req, resp);
         return resp.body;
+    }
+
+    http_response test_start_bulk_load(std::string req_body_json)
+    {
+        http_request req;
+        http_response resp;
+        req.body = blob::create_from_bytes(std::move(req_body_json));
+        _mhs->start_bulk_load_handler(req, resp);
+        return resp;
     }
 
     void mock_bulk_load_context(const bulk_load_status::type &status)
@@ -251,6 +263,40 @@ TEST_F(meta_bulk_load_http_test, query_bulk_load_request)
     }
 
     drop_app(NOT_BULK_LOAD);
+}
+
+TEST_F(meta_bulk_load_http_test, start_bulk_load_request)
+{
+    fail::setup();
+    fail::cfg("meta_on_start_bulk_load", "return()");
+    struct start_bulk_load_test
+    {
+        std::string request_json;
+        http_status_code expected_code;
+        std::string expected_response_json;
+    } tests[] = {
+        {"{\"app\":\"test_bulk_load\",\"cluster_name\":\"onebox\", "
+         "\"file_provider_type\":\"local_service\"}",
+         http_status_code::bad_request,
+         ""},
+        {"{\"app_name\":\"test_bulk_load\",\"cluster_name\":\"onebox\", "
+         "\"file_provider_type\":\"\"}",
+         http_status_code::bad_request,
+         ""},
+        {"{\"app_name\":\"test_bulk_load\",\"cluster_name\":\"onebox\", "
+         "\"file_provider_type\":\"local_service\"}",
+         http_status_code::ok,
+         "{\"error\":\"ERR_OK\",\"hint_msg\":\"\"}\n"},
+    };
+
+    for (const auto &test : tests) {
+        http_response resp = test_start_bulk_load(test.request_json);
+        ASSERT_EQ(resp.status_code, test.expected_code);
+        if (resp.status_code == http_status_code::ok) {
+            ASSERT_EQ(resp.body, test.expected_response_json);
+        }
+    }
+    fail::teardown();
 }
 
 } // namespace replication
