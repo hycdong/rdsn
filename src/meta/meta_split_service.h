@@ -49,20 +49,23 @@ private:
     void
     on_add_child_on_remote_storage_reply(error_code ec, register_child_rpc rpc, bool create_new);
 
+    // primary replica -> meta to query child state
+    void query_child_state(query_child_state_rpc rpc);
+
     // client -> meta to pause/restart/cancel split
     void control_partition_split(control_split_rpc rpc);
 
-    void pause_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
+    // pause/restart specific one partition
+    void do_control_single(std::shared_ptr<app_state> app, control_split_rpc rpc);
 
-    void restart_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
-
-    void cancel_partition_split(std::shared_ptr<app_state> app, control_split_rpc rpc);
+    // pause all splitting partitions/restart all paused partitions/cancel all partitions
+    void do_control_all(std::shared_ptr<app_state> app, control_split_rpc rpc);
 
     // primary replica -> meta to register child
     void notify_stop_split(notify_stop_split_rpc rpc);
     void do_cancel_partition_split(std::shared_ptr<app_state> app, notify_stop_split_rpc rpc);
 
-    const std::string control_type_str(split_control_type::type type)
+    static const std::string control_type_str(split_control_type::type type)
     {
         std::string str = "";
         if (type == split_control_type::PSC_PAUSE) {
@@ -74,8 +77,6 @@ private:
         }
         return str;
     }
-
-    void query_child_state(query_child_state_rpc rpc);
 
 private:
     friend class meta_service;

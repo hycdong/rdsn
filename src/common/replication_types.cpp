@@ -14490,7 +14490,11 @@ control_split_response::~control_split_response() throw() {}
 
 void control_split_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
 
-void control_split_response::__set_hint_msg(const std::string &val) { this->hint_msg = val; }
+void control_split_response::__set_hint_msg(const std::string &val)
+{
+    this->hint_msg = val;
+    __isset.hint_msg = true;
+}
 
 uint32_t control_split_response::read(::apache::thrift::protocol::TProtocol *iprot)
 {
@@ -14549,10 +14553,11 @@ uint32_t control_split_response::write(::apache::thrift::protocol::TProtocol *op
     xfer += this->err.write(oprot);
     xfer += oprot->writeFieldEnd();
 
-    xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 2);
-    xfer += oprot->writeString(this->hint_msg);
-    xfer += oprot->writeFieldEnd();
-
+    if (this->__isset.hint_msg) {
+        xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 2);
+        xfer += oprot->writeString(this->hint_msg);
+        xfer += oprot->writeFieldEnd();
+    }
     xfer += oprot->writeFieldStop();
     xfer += oprot->writeStructEnd();
     return xfer;
@@ -14598,7 +14603,8 @@ void control_split_response::printTo(std::ostream &out) const
     out << "control_split_response(";
     out << "err=" << to_string(err);
     out << ", "
-        << "hint_msg=" << to_string(hint_msg);
+        << "hint_msg=";
+    (__isset.hint_msg ? (out << to_string(hint_msg)) : (out << "<null>"));
     out << ")";
 }
 

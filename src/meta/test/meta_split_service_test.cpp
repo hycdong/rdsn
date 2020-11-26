@@ -52,23 +52,6 @@ public:
         return rpc.response();
     }
 
-    error_code pause_partition_split(const std::string &app_name, const int32_t pidx)
-    {
-        return control_partition_split(app_name, split_control_type::PSC_PAUSE, pidx);
-    }
-
-    error_code restart_partition_split(const std::string &app_name, const int32_t pidx)
-    {
-        return control_partition_split(app_name, split_control_type::PSC_RESTART, pidx);
-    }
-
-    error_code cancel_partition_split(const std::string &app_name,
-                                      const int32_t old_partition_count = 0)
-    {
-        return control_partition_split(
-            app_name, split_control_type::PSC_CANCEL, -1, old_partition_count);
-    }
-
     error_code control_partition_split(const std::string &app_name,
                                        split_control_type::type type,
                                        const int32_t pidx,
@@ -445,7 +428,6 @@ TEST_F(meta_split_service_test, query_split_test)
 }
 
 /// control split unit tests
-// pause/restart single partition split unit tests
 TEST_F(meta_split_service_test, pause_or_restart_single_partition_test)
 {
     // Test case:
@@ -579,7 +561,6 @@ TEST_F(meta_split_service_test, pause_or_restart_multi_partitions_test)
     }
 }
 
-// cancel split unit tests
 TEST_F(meta_split_service_test, cancel_split_test)
 {
     // Test case:
@@ -601,7 +582,10 @@ TEST_F(meta_split_service_test, cancel_split_test)
         if (test.mock_child_registered) {
             mock_child_registered();
         }
-        ASSERT_EQ(cancel_partition_split(NAME, test.old_partition_count), test.expected_err);
+
+        ASSERT_EQ(control_partition_split(
+                      NAME, split_control_type::PSC_CANCEL, -1, test.old_partition_count),
+                  test.expected_err);
         if (test.check_status) {
             auto app = find_app(NAME);
             ASSERT_EQ(app->partition_count, NEW_PARTITION_COUNT);

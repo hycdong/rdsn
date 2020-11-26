@@ -902,7 +902,7 @@ struct control_split_response
     // - ERR_INVALID_PARAMETERS: invalid parent_pidx or old_partition_count
     // - ERR_CHILD_REGISTERED: child partition has been registered, pause partition split or cancel split failed
     1:dsn.error_code    err;
-    2:string            hint_msg;
+    2:optional string   hint_msg;
 }
 
 struct query_split_request
