@@ -1,4 +1,4 @@
-// Licensed to the Apache Software Foundation (ASF) under one
+﻿// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The ASF licenses this file
@@ -151,8 +151,8 @@ private:
 
     // called by `on_group_check` in `replica_check.cpp`
     // secondary parent check whether should start or stop split
-    void secondary_parent_handle_split(const group_check_request &request,
-                                       /*out*/ group_check_response &response);
+    void trigger_secondary_parent_split(const group_check_request &request,
+                                        /*out*/ group_check_response &response);
 
     // parent partition pause or cancel split
     void parent_stop_split(split_status::type meta_split_status);
