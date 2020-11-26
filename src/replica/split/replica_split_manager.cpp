@@ -1096,6 +1096,7 @@ void replica_split_manager::on_register_child_on_meta_reply(
 
     // update primary parent group partition_count
     update_local_partition_count(_replica->_app_info.partition_count * 2);
+    _meta_split_status = split_status::NOT_SPLIT;
     _replica->broadcast_group_check();
 
     parent_cleanup_split_context();
@@ -1169,6 +1170,8 @@ void replica_split_manager::trigger_primary_parent_split(
                    enum_to_string(_split_status),
                    enum_to_string(meta_split_status));
 
+    _meta_split_status = meta_split_status;
+
     if (meta_split_status == split_status::PAUSED) {
         dwarn_replica("split has been paused, ignore it");
         return;
@@ -1193,7 +1196,7 @@ void replica_split_manager::trigger_primary_parent_split(
                  get_gpid().get_partition_index() + _replica->_app_info.partition_count);
         _replica->_primary_states.get_replica_config(status(), add_child_request.config);
         parent_start_split(add_child_request);
-        _replica->broadcast_group_check(meta_split_status);
+        _replica->broadcast_group_check();
         return;
     }
 
@@ -1271,7 +1274,7 @@ void replica_split_manager::parent_stop_split(
 
     if (status() == partition_status::PS_PRIMARY) {
         _replica->_primary_states.sync_send_write_request = false;
-        _replica->broadcast_group_check(meta_split_status);
+        _replica->broadcast_group_check();
     }
     ddebug_replica(
         "{} split succeed, status = {}, old split_status = {}, child partition_index = {}",

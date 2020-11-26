@@ -319,7 +319,7 @@ private:
     /////////////////////////////////////////////////////////////////
     // group check
     void init_group_check();
-    void broadcast_group_check(split_status::type meta_split_status = split_status::NOT_SPLIT);
+    void broadcast_group_check();
     void on_group_check_reply(error_code err,
                               const std::shared_ptr<group_check_request> &req,
                               const std::shared_ptr<group_check_response> &resp);

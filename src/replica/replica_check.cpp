@@ -68,7 +68,7 @@ void replica::init_group_check()
                                get_gpid().thread_hash());
 }
 
-void replica::broadcast_group_check(split_status::type meta_split_status)
+void replica::broadcast_group_check()
 {
     FAIL_POINT_INJECT_F("replica_broadcast_group_check", [](dsn::string_view) {});
 
@@ -104,8 +104,8 @@ void replica::broadcast_group_check(split_status::type meta_split_status)
         request->__set_confirmed_decree(_duplication_mgr->min_confirmed_decree());
         // set split context in group_check_request
         if (request->config.status == partition_status::PS_SECONDARY &&
-            meta_split_status != split_status::NOT_SPLIT) {
-            request->__set_meta_split_status(meta_split_status);
+            _split_mgr->get_meta_split_status() != split_status::NOT_SPLIT) {
+            request->__set_meta_split_status(_split_mgr->get_meta_split_status());
             if (_split_mgr->is_splitting()) {
                 request->__set_child_gpid(_split_mgr->get_child_gpid());
             }

@@ -1061,7 +1061,9 @@ void replica::on_config_sync(const app_info &info,
     } else {
         if (_is_initializing) {
             // TODO(hyc): consider
-            _split_mgr->trigger_primary_parent_split(info.partition_count, meta_split_status);
+            if (info.partition_count != _app_info.partition_count) {
+                _split_mgr->trigger_primary_parent_split(info.partition_count, meta_split_status);
+            }
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&
