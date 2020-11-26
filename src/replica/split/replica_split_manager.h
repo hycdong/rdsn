@@ -145,9 +145,9 @@ private:
     void child_handle_async_learn_error();
 
     // called by `on_config_sync` in `replica_config.cpp`
-    // primary parent check whether should start or stop split
-    void check_partition_count(const int32_t meta_partition_count,
-                               split_status::type meta_split_status);
+    // primary parent start or stop split according to meta_split_status
+    void trigger_primary_parent_split(const int32_t meta_partition_count,
+                                      split_status::type meta_split_status);
 
     // called by `on_group_check` in `replica_check.cpp`
     // secondary parent check whether should start or stop split

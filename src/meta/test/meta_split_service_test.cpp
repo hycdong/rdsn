@@ -156,13 +156,13 @@ public:
         configuration_query_by_node_rpc rpc(std::move(request), RPC_CM_CONFIG_SYNC);
         _ss->on_config_sync(rpc);
         wait_all();
-        return rpc.response().splitting_replicas.size();
-        //        configuration_query_by_node_response resp;
-        //        auto r = fake_rpc_call(
-        //            RPC_CM_CONFIG_SYNC, LPC_META_CALLBACK, _ss.get(),
-        //            &server_state::on_config_sync, req);
-        //        fake_wait_rpc(r, resp);
-        //        return resp.splitting_replicas.size();
+        int32_t splitting_count = 0;
+        for (auto p : rpc.response().partitions) {
+            if (p.__isset.meta_split_status) {
+                ++splitting_count;
+            }
+        }
+        return splitting_count;
     }
 
     void mock_app_partition_split_context()

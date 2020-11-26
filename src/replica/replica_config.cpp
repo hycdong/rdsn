@@ -1055,13 +1055,13 @@ void replica::on_config_sync(const app_info &info,
     if (status() == partition_status::PS_PRIMARY) {
         if (nullptr != _primary_states.reconfiguration_task) {
             // already under reconfiguration, skip configuration sync
-        } else {
-            _split_mgr->check_partition_count(info.partition_count, meta_split_status);
+        } else if (info.partition_count != _app_info.partition_count) {
+            _split_mgr->trigger_primary_parent_split(info.partition_count, meta_split_status);
         }
     } else {
         if (_is_initializing) {
             // TODO(hyc): consider
-            _split_mgr->check_partition_count(info.partition_count, meta_split_status);
+            _split_mgr->trigger_primary_parent_split(info.partition_count, meta_split_status);
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&

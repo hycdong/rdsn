@@ -1155,25 +1155,12 @@ void replica_split_manager::child_handle_async_learn_error() // on child partiti
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica_split_manager::check_partition_count(
+void replica_split_manager::trigger_primary_parent_split(
     const int32_t meta_partition_count,
     split_status::type meta_split_status) // on primary parent partition
 {
-    if (meta_partition_count == _replica->_app_info.partition_count) {
-        return;
-    }
-
-    if (status() != partition_status::PS_PRIMARY) {
-        dwarn_replica("wrong status({}), ignore it", enum_to_string(status()));
-        return;
-    }
-
+    dcheck_eq_replica(status(), partition_status::PS_PRIMARY);
     dcheck_eq_replica(_replica->_app_info.partition_count * 2, meta_partition_count);
-    if (meta_split_status == split_status::PAUSED) {
-        dwarn_replica("split has been paused, ignore it");
-        return;
-    }
-
     ddebug_replica("app({}) partition count changed, local({}) VS meta({}), split_status local({}) "
                    "VS meta({})",
                    _replica->_app_info.app_name,
@@ -1181,6 +1168,11 @@ void replica_split_manager::check_partition_count(
                    meta_partition_count,
                    enum_to_string(_split_status),
                    enum_to_string(meta_split_status));
+
+    if (meta_split_status == split_status::PAUSED) {
+        dwarn_replica("split has been paused, ignore it");
+        return;
+    }
 
     if (meta_split_status == split_status::SPLITTING) {
         if (!_replica->_primary_states.learners.empty() ||

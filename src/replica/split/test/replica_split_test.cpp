@@ -333,13 +333,13 @@ public:
         _child_replica->tracker()->wait_outstanding_tasks();
     }
 
-    void test_check_partition_count(split_status::type meta_split_status,
-                                    split_status::type local_split_status,
-                                    int32_t old_partition_version)
+    void test_trigger_primary_parent_split(split_status::type meta_split_status,
+                                           split_status::type local_split_status,
+                                           int32_t old_partition_version)
     {
         parent_set_split_status(local_split_status);
         _parent_split_mgr->_partition_version.store(old_partition_version);
-        _parent_split_mgr->check_partition_count(NEW_PARTITION_COUNT, meta_split_status);
+        _parent_split_mgr->trigger_primary_parent_split(NEW_PARTITION_COUNT, meta_split_status);
         _parent_replica->tracker()->wait_outstanding_tasks();
     }
 
@@ -814,7 +814,7 @@ TEST_F(replica_split_test, register_child_reply_test)
     }
 }
 
-// check_partition_count unit test
+// trigger_primary_parent_split unit test
 TEST_F(replica_split_test, primary_handle_split_test)
 {
     fail::cfg("replica_broadcast_group_check", "return()");
@@ -830,7 +830,7 @@ TEST_F(replica_split_test, primary_handle_split_test)
     // - meta canceling with local splitting
     // - meta paused with local not_split
     // - meta not_split with local splitting(See query_child_tests)
-    struct check_partition_count_test
+    struct trigger_primary_parent_split_test
     {
         bool lack_of_secondary;
         split_status::type meta_split_status;
@@ -848,7 +848,7 @@ TEST_F(replica_split_test, primary_handle_split_test)
             mock_child_split_context(true, true);
             mock_primary_parent_split_context(true);
         }
-        test_check_partition_count(
+        test_trigger_primary_parent_split(
             test.meta_split_status, test.local_split_status, test.old_partition_version);
         ASSERT_EQ(_parent_split_mgr->get_partition_version(), OLD_PARTITION_COUNT - 1);
         ASSERT_FALSE(parent_sync_send_write_request());
