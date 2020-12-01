@@ -252,12 +252,15 @@ TEST_F(meta_bulk_load_http_test, query_bulk_load_request)
     {
         std::string app_name;
         std::string expected_json;
-    } tests[] = {{APP_NAME, "{\"error\":\"ERR_OK\",\"app_status\":\"replication::bulk_load_status::"
-                            "BLS_DOWNLOADING\"}\n"},
-                 {NOT_BULK_LOAD, "{\"error\":\"ERR_INVALID_STATE\",\"app_status\":\"replication::"
-                                 "bulk_load_status::BLS_INVALID\"}\n"},
-                 {NOT_FOUND, "{\"error\":\"ERR_APP_NOT_EXIST\",\"app_status\":\"replication::bulk_"
-                             "load_status::BLS_INVALID\"}\n"}};
+    } tests[] = {{APP_NAME,
+                  "{\"error\":\"ERR_OK\",\"app_status\":\"replication::bulk_load_status::"
+                  "BLS_DOWNLOADING\"}\n"},
+                 {NOT_BULK_LOAD,
+                  "{\"error\":\"ERR_INVALID_STATE\",\"app_status\":\"replication::"
+                  "bulk_load_status::BLS_INVALID\"}\n"},
+                 {NOT_FOUND,
+                  "{\"error\":\"ERR_APP_NOT_EXIST\",\"app_status\":\"replication::bulk_"
+                  "load_status::BLS_INVALID\"}\n"}};
     for (const auto &test : tests) {
         ASSERT_EQ(test_query_bulk_load(test.app_name), test.expected_json);
     }

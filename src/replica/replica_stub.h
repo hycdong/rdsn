@@ -213,6 +213,11 @@ public:
     // TODO: (Tangyanzhao) add some comments
     void on_detect_hotkey(detect_hotkey_rpc rpc);
 
+    // query all partitions compact result by app_id
+    void
+    query_app_compact_finish(int32_t app_id,
+                             /*out*/ std::unordered_map<gpid, manual_compaction_status> &status);
+
 private:
     enum replica_node_state
     {

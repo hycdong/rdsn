@@ -7,6 +7,7 @@
 #include <dsn/c/api_layer1.h>
 #include <dsn/cpp/json_helper.h>
 #include <dsn/cpp/serialization_helper/dsn.layer2_types.h>
+#include <dsn/dist/replication/replica_envs.h>
 #include <dsn/dist/replication/replication_types.h>
 #include <dsn/dist/replication/duplication_common.h>
 #include <dsn/utility/config_api.h>
@@ -35,6 +36,22 @@ struct list_nodes_helper
         : node_address(a), node_status(s), primary_count(0), secondary_count(0)
     {
     }
+};
+
+struct manual_compaction_info
+{
+    std::string app_name;
+    std::string type;                        // periodic or once
+    int32_t target_level;                    // [-1,num_levels]
+    std::string bottommost_level_compaction; // skip or force
+    int32_t max_concurrent_running_count;    // 0 means no limit
+    std::string trigger_time;                // only used when the type is periodic
+    DEFINE_JSON_SERIALIZATION(app_name,
+                              type,
+                              target_level,
+                              bottommost_level_compaction,
+                              max_concurrent_running_count,
+                              trigger_time)
 };
 
 void meta_http_service::get_app_handler(const http_request &req, http_response &resp)
@@ -691,6 +708,129 @@ void meta_http_service::query_bulk_load_handler(const http_request &req, http_re
     dsn::utils::table_printer tp;
     tp.add_row_name_and_data("error", rpc_resp.err.to_string());
     tp.add_row_name_and_data("app_status", dsn::enum_to_string(rpc_resp.app_status));
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
+}
+
+void meta_http_service::start_compaction_handler(const http_request &req, http_response &resp)
+{
+    if (!redirect_if_not_primary(req, resp)) {
+        return;
+    }
+
+    // validate paramters
+    manual_compaction_info info;
+    bool ret = json::json_forwarder<manual_compaction_info>::decode(req.body, info);
+    if (!ret) {
+        resp.body = "invalid request structure";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.app_name.empty()) {
+        resp.body = "app_name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.type.empty() || (info.type != "once" && info.type != "periodic")) {
+        resp.body = "type should ony be once or periodic";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.target_level < -1) {
+        resp.body = "target_level should be greater than -1";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.bottommost_level_compaction.empty() || (info.bottommost_level_compaction != "skip" &&
+                                                     info.bottommost_level_compaction != "force")) {
+        resp.body = "bottommost_level_compaction should ony be skip or force";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.max_concurrent_running_count < 0) {
+        resp.body = "max_running_count should be greater than 0";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.type == "periodic" && info.trigger_time.empty()) {
+        resp.body = "trigger_time should not be empty when type is periodic";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+
+    // create configuration_update_app_env_request
+    std::vector<std::string> keys;
+    std::vector<std::string> values;
+    if (info.type == "once") {
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_ONCE_TARGET_LEVEL);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_ONCE_BOTTOMMOST_LEVEL_COMPACTION);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_ONCE_TRIGGER_TIME);
+    } else {
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_PERIODIC_TARGET_LEVEL);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_PERIODIC_BOTTOMMOST_LEVEL_COMPACTION);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_PERIODIC_TRIGGER_TIME);
+    }
+    values.emplace_back(std::to_string(info.target_level));
+    values.emplace_back(info.bottommost_level_compaction);
+    values.emplace_back(info.type == "once" ? std::to_string(dsn_now_s()) : info.trigger_time);
+    if (info.max_concurrent_running_count > 0) {
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_MAX_CONCURRENT_RUNNING_COUNT);
+        values.emplace_back(std::to_string(info.max_concurrent_running_count));
+    }
+    configuration_update_app_env_request request;
+    request.app_name = info.app_name;
+    request.op = app_env_operation::APP_ENV_OP_SET;
+    request.__set_keys(keys);
+    request.__set_values(values);
+
+    auto rpc_req = dsn::make_unique<configuration_update_app_env_request>(request);
+    update_app_env_rpc rpc(std::move(rpc_req), LPC_META_STATE_NORMAL);
+    _service->_state->set_app_envs(rpc);
+
+    auto rpc_resp = rpc.response();
+    // output as json format
+    dsn::utils::table_printer tp;
+    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
+    tp.add_row_name_and_data("hint_message", rpc_resp.hint_message);
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
+}
+
+void meta_http_service::query_compaction_handler(const http_request &req, http_response &resp)
+{
+    if (!redirect_if_not_primary(req, resp)) {
+        return;
+    }
+
+    auto it = req.query_args.find("name");
+    if (it == req.query_args.end()) {
+        resp.body = "name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+
+    std::shared_ptr<app_state> app = _service->_state->get_app(it->second);
+    if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
+        resp.body = "app not existed or dropped";
+        resp.status_code = http_status_code::bad_request;
+    }
+    std::set<dsn::rpc_address> alive_nodes = _service->_alive_set;
+    std::string alive_nodes_str;
+    for (auto iter = alive_nodes.begin(); iter != alive_nodes.end();) {
+        alive_nodes_str += (*iter).to_string();
+        if (++iter != alive_nodes.end()) {
+            alive_nodes_str += ",";
+        }
+    }
+    // output as json format
+    dsn::utils::table_printer tp;
+    tp.add_row_name_and_data("app_id", app->app_id);
+    tp.add_row_name_and_data("partition_count", app->partition_count);
+    tp.add_row_name_and_data("alive_nodes", alive_nodes_str);
     std::ostringstream out;
     tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
     resp.body = out.str();

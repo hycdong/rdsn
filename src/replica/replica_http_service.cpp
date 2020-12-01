@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 #include <fmt/format.h>
+#include <dsn/utility/output_utils.h>
 #include "replica_http_service.h"
 #include "duplication/duplication_sync_timer.h"
 
@@ -53,6 +54,39 @@ void replica_http_service::query_duplication_handler(const http_request &req, ht
     }
     resp.status_code = http_status_code::ok;
     resp.body = json.dump();
+}
+
+void replica_http_service::query_compaction_handler(const http_request &req, http_response &resp)
+{
+    auto it = req.query_args.find("app_id");
+    if (it == req.query_args.end()) {
+        resp.body = "app_id should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+
+    int32_t appid = -1;
+    if (!buf2int32(it->second, appid) || appid < 0) {
+        resp.body = fmt::format("invalid appid={}", it->second);
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+
+    std::unordered_map<gpid, manual_compaction_status> partition_compaction_status;
+    _stub->query_app_compact_finish(appid, partition_compaction_status);
+    for (const auto &kv : partition_compaction_status) {
+        ddebug_f("hyc partition[{}]: {}", kv.first, manual_compaction_status_to_string(kv.second));
+    }
+
+    dsn::utils::table_printer tp;
+    for (const auto &kv : partition_compaction_status) {
+        tp.add_row_name_and_data("gpid", kv.first.to_string());
+        tp.add_row_name_and_data("status", manual_compaction_status_to_string(kv.second));
+    }
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
 }
 
 } // namespace replication
