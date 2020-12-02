@@ -114,6 +114,8 @@ void http_server::serve(message_ex *msg)
     ret.full_url = m->buffers[2];
     ret.method = static_cast<http_method>(m->header->hdr_type);
 
+    ddebug("hyc: full_url = %s", ret.full_url.data());
+
     http_parser_url u{0};
     http_parser_parse_url(ret.full_url.data(), ret.full_url.length(), false, &u);
 
@@ -175,6 +177,7 @@ void http_server::serve(message_ex *msg)
 
     // find if there are method args (<ip>:<port>/<service>/<method>?<arg>=<val>&<arg>=<val>)
     if (!unresolved_query.empty()) {
+        ddebug("hyc: unresolved_query = %s", unresolved_query.c_str());
         std::vector<std::string> method_arg_val;
         boost::split(method_arg_val, unresolved_query, boost::is_any_of("&"));
         for (const std::string &arg_val : method_arg_val) {

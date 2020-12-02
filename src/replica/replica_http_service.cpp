@@ -65,24 +65,37 @@ void replica_http_service::query_compaction_handler(const http_request &req, htt
         return;
     }
 
-    int32_t appid = -1;
-    if (!buf2int32(it->second, appid) || appid < 0) {
-        resp.body = fmt::format("invalid appid={}", it->second);
+    int32_t app_id = -1;
+    if (!buf2int32(it->second, app_id) || app_id < 0) {
+        resp.body = fmt::format("invalid app_id={}", it->second);
         resp.status_code = http_status_code::bad_request;
         return;
     }
 
     std::unordered_map<gpid, manual_compaction_status> partition_compaction_status;
-    _stub->query_app_compact_finish(appid, partition_compaction_status);
+    _stub->query_app_compact_finish(app_id, partition_compaction_status);
+
     for (const auto &kv : partition_compaction_status) {
         ddebug_f("hyc partition[{}]: {}", kv.first, manual_compaction_status_to_string(kv.second));
     }
 
-    dsn::utils::table_printer tp;
+    int32_t running_count = 0;
+    int32_t queue_count = 0;
+    int32_t finish_count = 0;
+
     for (const auto &kv : partition_compaction_status) {
-        tp.add_row_name_and_data("gpid", kv.first.to_string());
-        tp.add_row_name_and_data("status", manual_compaction_status_to_string(kv.second));
+        if (kv.second == CompactionRunning) {
+            running_count++;
+        } else if (kv.second == CompactionQueue) {
+            queue_count++;
+        } else if (kv.second == CompactionFinish) {
+            finish_count++;
+        }
     }
+    dsn::utils::table_printer tp("status");
+    tp.add_row_name_and_data(manual_compaction_status_to_string(CompactionRunning), running_count);
+    tp.add_row_name_and_data(manual_compaction_status_to_string(CompactionQueue), queue_count);
+    tp.add_row_name_and_data(manual_compaction_status_to_string(CompactionFinish), finish_count);
     std::ostringstream out;
     tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
     resp.body = out.str();

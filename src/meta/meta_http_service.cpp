@@ -67,6 +67,7 @@ void meta_http_service::get_app_handler(const http_request &req, http_response &
             resp.status_code = http_status_code::bad_request;
             return;
         }
+        ddebug("hyc: name = %s, value = %s", p.first.c_str(), p.second.c_str());
     }
     if (!redirect_if_not_primary(req, resp))
         return;
@@ -103,6 +104,7 @@ void meta_http_service::get_app_handler(const http_request &req, http_response &
     mtp.add(std::move(tp_general));
 
     if (detailed) {
+        ddebug("hyc: haha");
         dsn::utils::table_printer tp_details("replicas");
         tp_details.add_title("pidx");
         tp_details.add_column("ballot");
