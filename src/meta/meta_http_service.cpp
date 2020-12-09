@@ -54,6 +54,13 @@ struct manual_compaction_info
                               trigger_time)
 };
 
+struct usage_scenario_info
+{
+    std::string app_name;
+    std::string scenario;   // normal or bulk_load
+    DEFINE_JSON_SERIALIZATION(app_name, scenario)
+};
+
 void meta_http_service::get_app_handler(const http_request &req, http_response &resp)
 {
     std::string app_name;
@@ -802,37 +809,53 @@ void meta_http_service::start_compaction_handler(const http_request &req, http_r
     resp.status_code = http_status_code::ok;
 }
 
-void meta_http_service::query_compaction_handler(const http_request &req, http_response &resp)
+void meta_http_service::update_scenario_handler(const http_request &req, http_response &resp)
 {
     if (!redirect_if_not_primary(req, resp)) {
         return;
     }
 
-    auto it = req.query_args.find("name");
-    if (it == req.query_args.end()) {
-        resp.body = "name should not be empty";
+    // validate paramters
+    usage_scenario_info info;
+    bool ret = json::json_forwarder<usage_scenario_info>::decode(req.body, info);
+    if (!ret) {
+        resp.body = "invalid request structure";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.app_name.empty()) {
+        resp.body = "app_name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.scenario.empty() || (info.scenario != "bulk_load" && info.scenario != "normal")) {
+        resp.body = "scenario should ony be normal or bulk_load";
         resp.status_code = http_status_code::bad_request;
         return;
     }
 
-    std::shared_ptr<app_state> app = _service->_state->get_app(it->second);
-    if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
-        resp.body = "app not existed or dropped";
-        resp.status_code = http_status_code::bad_request;
-    }
-    std::set<dsn::rpc_address> alive_nodes = _service->_alive_set;
-    std::string alive_nodes_str;
-    for (auto iter = alive_nodes.begin(); iter != alive_nodes.end();) {
-        alive_nodes_str += (*iter).to_string();
-        if (++iter != alive_nodes.end()) {
-            alive_nodes_str += ",";
-        }
-    }
+    // TODO(heyuchen): same as start manual compaction
+    // create configuration_update_app_env_request
+    std::vector<std::string> keys;
+    std::vector<std::string> values;
+    keys.emplace_back(replica_envs::ROCKSDB_USAGE_SCENARIO);
+    values.emplace_back(info.scenario);
+
+    configuration_update_app_env_request request;
+    request.app_name = info.app_name;
+    request.op = app_env_operation::APP_ENV_OP_SET;
+    request.__set_keys(keys);
+    request.__set_values(values);
+
+    auto rpc_req = dsn::make_unique<configuration_update_app_env_request>(request);
+    update_app_env_rpc rpc(std::move(rpc_req), LPC_META_STATE_NORMAL);
+    _service->_state->set_app_envs(rpc);
+
+    auto rpc_resp = rpc.response();
     // output as json format
     dsn::utils::table_printer tp;
-    tp.add_row_name_and_data("app_id", app->app_id);
-    tp.add_row_name_and_data("partition_count", app->partition_count);
-    tp.add_row_name_and_data("alive_nodes", alive_nodes_str);
+    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
+    tp.add_row_name_and_data("hint_message", rpc_resp.hint_message);
     std::ostringstream out;
     tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
     resp.body = out.str();

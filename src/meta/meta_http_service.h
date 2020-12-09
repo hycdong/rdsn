@@ -78,12 +78,12 @@ public:
                                    std::placeholders::_1,
                                    std::placeholders::_2),
                          "ip:port/meta/start_compaction");
-        register_handler("app/query_manual_compaction",
-                         std::bind(&meta_http_service::query_compaction_handler,
+        register_handler("app/usage_scenario",
+                         std::bind(&meta_http_service::update_scenario_handler,
                                    this,
                                    std::placeholders::_1,
                                    std::placeholders::_2),
-                         "ip:port/meta/query_compaction?name=temp");
+                         "ip:port/meta/app/usage_scenario");
     }
 
     std::string path() const override { return "meta"; }
@@ -98,7 +98,7 @@ public:
     void start_bulk_load_handler(const http_request &req, http_response &resp);
     void query_bulk_load_handler(const http_request &req, http_response &resp);
     void start_compaction_handler(const http_request &req, http_response &resp);
-    void query_compaction_handler(const http_request &req, http_response &resp);
+    void update_scenario_handler(const http_request &req, http_response &resp);
 
 private:
     // set redirect location if current server is not primary
