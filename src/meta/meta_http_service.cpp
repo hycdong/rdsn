@@ -1,4 +1,4 @@
-// Copyright (c) 2017-present, Xiaomi, Inc.  All rights reserved.
+﻿// Copyright (c) 2017-present, Xiaomi, Inc.  All rights reserved.
 // This source code is licensed under the Apache License Version 2.0, which
 // can be found in the LICENSE file in the root directory of this source tree.
 
@@ -7,6 +7,7 @@
 #include <dsn/c/api_layer1.h>
 #include <dsn/cpp/json_helper.h>
 #include <dsn/cpp/serialization_helper/dsn.layer2_types.h>
+#include <dsn/dist/replication/replica_envs.h>
 #include <dsn/dist/replication/replication_types.h>
 #include <dsn/dist/replication/duplication_common.h>
 #include <dsn/utility/config_api.h>
@@ -18,9 +19,13 @@
 #include "server_load_balancer.h"
 #include "server_state.h"
 #include "meta/duplication/meta_duplication_service.h"
+#include "meta/meta_bulk_load_service.h"
 
 namespace dsn {
 namespace replication {
+
+NON_MEMBER_JSON_SERIALIZATION(
+    start_bulk_load_request, app_name, cluster_name, file_provider_type, remote_root_path)
 
 struct list_nodes_helper
 {
@@ -32,6 +37,29 @@ struct list_nodes_helper
         : node_address(a), node_status(s), primary_count(0), secondary_count(0)
     {
     }
+};
+
+struct manual_compaction_info
+{
+    std::string app_name;
+    std::string type;                        // periodic or once
+    int32_t target_level;                    // [-1,num_levels]
+    std::string bottommost_level_compaction; // skip or force
+    int32_t max_concurrent_running_count;    // 0 means no limit
+    std::string trigger_time;                // only used when the type is periodic
+    DEFINE_JSON_SERIALIZATION(app_name,
+                              type,
+                              target_level,
+                              bottommost_level_compaction,
+                              max_concurrent_running_count,
+                              trigger_time)
+};
+
+struct usage_scenario_info
+{
+    std::string app_name;
+    std::string scenario; // normal or bulk_load
+    DEFINE_JSON_SERIALIZATION(app_name, scenario)
 };
 
 void meta_http_service::get_app_handler(const http_request &req, http_response &resp)
@@ -47,6 +75,7 @@ void meta_http_service::get_app_handler(const http_request &req, http_response &
             resp.status_code = http_status_code::bad_request;
             return;
         }
+        ddebug("hyc: name = %s, value = %s", p.first.c_str(), p.second.c_str());
     }
     if (!redirect_if_not_primary(req, resp))
         return;
@@ -83,6 +112,7 @@ void meta_http_service::get_app_handler(const http_request &req, http_response &
     mtp.add(std::move(tp_general));
 
     if (detailed) {
+        ddebug("hyc: haha");
         dsn::utils::table_printer tp_details("replicas");
         tp_details.add_title("pidx");
         tp_details.add_column("ballot");
@@ -608,6 +638,234 @@ void meta_http_service::query_duplication_handler(const http_request &req, http_
     }
     resp.status_code = http_status_code::ok;
     resp.body = duplication_query_response_to_string(rpc_resp);
+}
+
+void meta_http_service::start_bulk_load_handler(const http_request &req, http_response &resp)
+{
+    if (!redirect_if_not_primary(req, resp)) {
+        return;
+    }
+
+    if (_service->_bulk_load_svc == nullptr) {
+        resp.body = "bulk load is not enabled";
+        resp.status_code = http_status_code::not_found;
+        return;
+    }
+
+    start_bulk_load_request request;
+    bool ret = json::json_forwarder<start_bulk_load_request>::decode(req.body, request);
+    if (!ret) {
+        resp.body = "invalid request structure";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (request.app_name.empty()) {
+        resp.body = "app_name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (request.cluster_name.empty()) {
+        resp.body = "cluster_name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (request.file_provider_type.empty()) {
+        resp.body = "file_provider_type should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (request.remote_root_path.empty()) {
+        resp.body = "remote_root_path should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+
+    auto rpc_req = dsn::make_unique<start_bulk_load_request>(request);
+    start_bulk_load_rpc rpc(std::move(rpc_req), LPC_META_CALLBACK);
+    _service->_bulk_load_svc->on_start_bulk_load(rpc);
+
+    auto rpc_resp = rpc.response();
+    // output as json format
+    dsn::utils::table_printer tp;
+    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
+    tp.add_row_name_and_data("hint_msg", rpc_resp.hint_msg);
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
+}
+
+void meta_http_service::query_bulk_load_handler(const http_request &req, http_response &resp)
+{
+    if (!redirect_if_not_primary(req, resp)) {
+        return;
+    }
+    if (_service->_bulk_load_svc == nullptr) {
+        resp.body = "bulk load is not enabled";
+        resp.status_code = http_status_code::not_found;
+        return;
+    }
+
+    auto rpc_req = dsn::make_unique<query_bulk_load_request>();
+    auto it = req.query_args.find("name");
+    if (it == req.query_args.end()) {
+        resp.body = "name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    rpc_req->app_name = it->second;
+
+    query_bulk_load_rpc rpc(std::move(rpc_req), LPC_META_CALLBACK);
+    _service->_bulk_load_svc->on_query_bulk_load_status(rpc);
+    auto rpc_resp = rpc.response();
+
+    // output as json format
+    dsn::utils::table_printer tp;
+    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
+    tp.add_row_name_and_data("app_status", dsn::enum_to_string(rpc_resp.app_status));
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
+}
+
+void meta_http_service::start_compaction_handler(const http_request &req, http_response &resp)
+{
+    if (!redirect_if_not_primary(req, resp)) {
+        return;
+    }
+
+    // validate paramters
+    manual_compaction_info info;
+    bool ret = json::json_forwarder<manual_compaction_info>::decode(req.body, info);
+    if (!ret) {
+        resp.body = "invalid request structure";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.app_name.empty()) {
+        resp.body = "app_name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.type.empty() || (info.type != "once" && info.type != "periodic")) {
+        resp.body = "type should ony be once or periodic";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.target_level < -1) {
+        resp.body = "target_level should be greater than -1";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.bottommost_level_compaction.empty() || (info.bottommost_level_compaction != "skip" &&
+                                                     info.bottommost_level_compaction != "force")) {
+        resp.body = "bottommost_level_compaction should ony be skip or force";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.max_concurrent_running_count < 0) {
+        resp.body = "max_running_count should be greater than 0";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.type == "periodic" && info.trigger_time.empty()) {
+        resp.body = "trigger_time should not be empty when type is periodic";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+
+    // create configuration_update_app_env_request
+    std::vector<std::string> keys;
+    std::vector<std::string> values;
+    if (info.type == "once") {
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_ONCE_TARGET_LEVEL);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_ONCE_BOTTOMMOST_LEVEL_COMPACTION);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_ONCE_TRIGGER_TIME);
+    } else {
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_PERIODIC_TARGET_LEVEL);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_PERIODIC_BOTTOMMOST_LEVEL_COMPACTION);
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_PERIODIC_TRIGGER_TIME);
+    }
+    values.emplace_back(std::to_string(info.target_level));
+    values.emplace_back(info.bottommost_level_compaction);
+    values.emplace_back(info.type == "once" ? std::to_string(dsn_now_s()) : info.trigger_time);
+    if (info.max_concurrent_running_count > 0) {
+        keys.emplace_back(replica_envs::MANUAL_COMPACT_MAX_CONCURRENT_RUNNING_COUNT);
+        values.emplace_back(std::to_string(info.max_concurrent_running_count));
+    }
+    configuration_update_app_env_request request;
+    request.app_name = info.app_name;
+    request.op = app_env_operation::APP_ENV_OP_SET;
+    request.__set_keys(keys);
+    request.__set_values(values);
+
+    auto rpc_req = dsn::make_unique<configuration_update_app_env_request>(request);
+    update_app_env_rpc rpc(std::move(rpc_req), LPC_META_STATE_NORMAL);
+    _service->_state->set_app_envs(rpc);
+
+    auto rpc_resp = rpc.response();
+    // output as json format
+    dsn::utils::table_printer tp;
+    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
+    tp.add_row_name_and_data("hint_message", rpc_resp.hint_message);
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
+}
+
+void meta_http_service::update_scenario_handler(const http_request &req, http_response &resp)
+{
+    if (!redirect_if_not_primary(req, resp)) {
+        return;
+    }
+
+    // validate paramters
+    usage_scenario_info info;
+    bool ret = json::json_forwarder<usage_scenario_info>::decode(req.body, info);
+    if (!ret) {
+        resp.body = "invalid request structure";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.app_name.empty()) {
+        resp.body = "app_name should not be empty";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+    if (info.scenario.empty() || (info.scenario != "bulk_load" && info.scenario != "normal")) {
+        resp.body = "scenario should ony be normal or bulk_load";
+        resp.status_code = http_status_code::bad_request;
+        return;
+    }
+
+    // TODO(heyuchen): same as start manual compaction
+    // create configuration_update_app_env_request
+    std::vector<std::string> keys;
+    std::vector<std::string> values;
+    keys.emplace_back(replica_envs::ROCKSDB_USAGE_SCENARIO);
+    values.emplace_back(info.scenario);
+
+    configuration_update_app_env_request request;
+    request.app_name = info.app_name;
+    request.op = app_env_operation::APP_ENV_OP_SET;
+    request.__set_keys(keys);
+    request.__set_values(values);
+
+    auto rpc_req = dsn::make_unique<configuration_update_app_env_request>(request);
+    update_app_env_rpc rpc(std::move(rpc_req), LPC_META_STATE_NORMAL);
+    _service->_state->set_app_envs(rpc);
+
+    auto rpc_resp = rpc.response();
+    // output as json format
+    dsn::utils::table_printer tp;
+    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
+    tp.add_row_name_and_data("hint_message", rpc_resp.hint_message);
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
 }
 
 bool meta_http_service::redirect_if_not_primary(const http_request &req, http_response &resp)
