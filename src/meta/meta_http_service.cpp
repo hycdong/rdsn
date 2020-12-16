@@ -5,7 +5,6 @@
 #include <string>
 
 #include <dsn/c/api_layer1.h>
-#include <dsn/cpp/json_helper.h>
 #include <dsn/cpp/serialization_helper/dsn.layer2_types.h>
 #include <dsn/dist/replication/replica_envs.h>
 #include <dsn/dist/replication/replication_types.h>
@@ -39,29 +38,6 @@ struct list_nodes_helper
     }
 };
 
-struct manual_compaction_info
-{
-    std::string app_name;
-    std::string type;                        // periodic or once
-    int32_t target_level;                    // [-1,num_levels]
-    std::string bottommost_level_compaction; // skip or force
-    int32_t max_concurrent_running_count;    // 0 means no limit
-    std::string trigger_time;                // only used when the type is periodic
-    DEFINE_JSON_SERIALIZATION(app_name,
-                              type,
-                              target_level,
-                              bottommost_level_compaction,
-                              max_concurrent_running_count,
-                              trigger_time)
-};
-
-struct usage_scenario_info
-{
-    std::string app_name;
-    std::string scenario; // normal or bulk_load
-    DEFINE_JSON_SERIALIZATION(app_name, scenario)
-};
-
 void meta_http_service::get_app_handler(const http_request &req, http_response &resp)
 {
     std::string app_name;
@@ -75,7 +51,6 @@ void meta_http_service::get_app_handler(const http_request &req, http_response &
             resp.status_code = http_status_code::bad_request;
             return;
         }
-        ddebug("hyc: name = %s, value = %s", p.first.c_str(), p.second.c_str());
     }
     if (!redirect_if_not_primary(req, resp))
         return;
@@ -112,7 +87,6 @@ void meta_http_service::get_app_handler(const http_request &req, http_response &
     mtp.add(std::move(tp_general));
 
     if (detailed) {
-        ddebug("hyc: haha");
         dsn::utils::table_printer tp_details("replicas");
         tp_details.add_title("pidx");
         tp_details.add_column("ballot");
@@ -794,25 +768,7 @@ void meta_http_service::start_compaction_handler(const http_request &req, http_r
         keys.emplace_back(replica_envs::MANUAL_COMPACT_MAX_CONCURRENT_RUNNING_COUNT);
         values.emplace_back(std::to_string(info.max_concurrent_running_count));
     }
-    configuration_update_app_env_request request;
-    request.app_name = info.app_name;
-    request.op = app_env_operation::APP_ENV_OP_SET;
-    request.__set_keys(keys);
-    request.__set_values(values);
-
-    auto rpc_req = dsn::make_unique<configuration_update_app_env_request>(request);
-    update_app_env_rpc rpc(std::move(rpc_req), LPC_META_STATE_NORMAL);
-    _service->_state->set_app_envs(rpc);
-
-    auto rpc_resp = rpc.response();
-    // output as json format
-    dsn::utils::table_printer tp;
-    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
-    tp.add_row_name_and_data("hint_message", rpc_resp.hint_message);
-    std::ostringstream out;
-    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
-    resp.body = out.str();
-    resp.status_code = http_status_code::ok;
+    update_app_env_handler(info.app_name, keys, values, resp);
 }
 
 void meta_http_service::update_scenario_handler(const http_request &req, http_response &resp)
@@ -840,32 +796,12 @@ void meta_http_service::update_scenario_handler(const http_request &req, http_re
         return;
     }
 
-    // TODO(heyuchen): same as start manual compaction
     // create configuration_update_app_env_request
     std::vector<std::string> keys;
     std::vector<std::string> values;
     keys.emplace_back(replica_envs::ROCKSDB_USAGE_SCENARIO);
     values.emplace_back(info.scenario);
-
-    configuration_update_app_env_request request;
-    request.app_name = info.app_name;
-    request.op = app_env_operation::APP_ENV_OP_SET;
-    request.__set_keys(keys);
-    request.__set_values(values);
-
-    auto rpc_req = dsn::make_unique<configuration_update_app_env_request>(request);
-    update_app_env_rpc rpc(std::move(rpc_req), LPC_META_STATE_NORMAL);
-    _service->_state->set_app_envs(rpc);
-
-    auto rpc_resp = rpc.response();
-    // output as json format
-    dsn::utils::table_printer tp;
-    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
-    tp.add_row_name_and_data("hint_message", rpc_resp.hint_message);
-    std::ostringstream out;
-    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
-    resp.body = out.str();
-    resp.status_code = http_status_code::ok;
+    update_app_env_handler(info.app_name, keys, values, resp);
 }
 
 bool meta_http_service::redirect_if_not_primary(const http_request &req, http_response &resp)
@@ -889,6 +825,32 @@ bool meta_http_service::redirect_if_not_primary(const http_request &req, http_re
                         resp.location.end()); // remove final '\0'
     resp.status_code = http_status_code::temporary_redirect;
     return false;
+}
+
+void meta_http_service::update_app_env_handler(const std::string &app_name,
+                                               const std::vector<std::string> &keys,
+                                               const std::vector<std::string> &values,
+                                               http_response &resp)
+{
+    configuration_update_app_env_request request;
+    request.app_name = app_name;
+    request.op = app_env_operation::APP_ENV_OP_SET;
+    request.__set_keys(keys);
+    request.__set_values(values);
+
+    auto rpc_req = dsn::make_unique<configuration_update_app_env_request>(request);
+    update_app_env_rpc rpc(std::move(rpc_req), LPC_META_STATE_NORMAL);
+    _service->_state->set_app_envs(rpc);
+
+    auto rpc_resp = rpc.response();
+    // output as json format
+    dsn::utils::table_printer tp;
+    tp.add_row_name_and_data("error", rpc_resp.err.to_string());
+    tp.add_row_name_and_data("hint_message", rpc_resp.hint_message);
+    std::ostringstream out;
+    tp.output(out, dsn::utils::table_printer::output_format::kJsonCompact);
+    resp.body = out.str();
+    resp.status_code = http_status_code::ok;
 }
 
 } // namespace replication
