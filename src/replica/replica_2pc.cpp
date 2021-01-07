@@ -80,8 +80,8 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
 
     auto msg = (dsn::message_ex *)request;
     auto partition_hash = msg->header->client.partition_hash;
-    if ((_split_mgr->get_partition_version() & partition_hash) !=
-        get_gpid().get_partition_index()) {
+    if (_validate_partition_hash && ((_split_mgr->get_partition_version() & partition_hash) !=
+                                     get_gpid().get_partition_index())) {
         derror_replica("receive request with wrong hash value, partition_version = {}, hash = {}",
                        _split_mgr->get_partition_version(),
                        partition_hash);

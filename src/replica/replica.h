@@ -477,6 +477,7 @@ private:
 
     // partition split
     std::unique_ptr<replica_split_manager> _split_mgr;
+    bool _validate_partition_hash{false};
 
     // bulk load
     std::unique_ptr<replica_bulk_loader> _bulk_loader;

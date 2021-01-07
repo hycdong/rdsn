@@ -123,6 +123,16 @@ bool check_write_throttling(const std::string &env_value, std::string &hint_mess
     return true;
 }
 
+bool check_split_validation(const std::string &env_value, std::string &hint_message)
+{
+    bool result = false;
+    if (!dsn::buf2bool(env_value, result)) {
+        hint_message = fmt::format("invalid string {}, should be \"true\" or \"false\"", env_value);
+        return false;
+    }
+    return true;
+}
+
 bool app_env_validator::validate_app_env(const std::string &env_name,
                                          const std::string &env_value,
                                          std::string &hint_message)
@@ -153,6 +163,8 @@ void app_env_validator::register_all_validators()
          std::bind(&check_write_throttling, std::placeholders::_1, std::placeholders::_2)},
         {replica_envs::ROCKSDB_ITERATION_THRESHOLD_TIME_MS,
          std::bind(&check_rocksdb_iteration, std::placeholders::_1, std::placeholders::_2)},
+        {replica_envs::SPLIT_VALIDATE_PARTITION_HASH,
+         std::bind(&check_split_validation, std::placeholders::_1, std::placeholders::_2)},
         // TODO(zhaoliwei): not implemented
         {replica_envs::BUSINESS_INFO, nullptr},
         {replica_envs::DENY_CLIENT_WRITE, nullptr},

@@ -3,6 +3,7 @@
 // can be found in the LICENSE file in the root directory of this source tree.
 
 #include <dsn/dist/fmt_logging.h>
+#include <dsn/dist/replication/replica_envs.h>
 #include <dsn/utility/fail_point.h>
 
 #include "meta_split_service.h"
@@ -71,15 +72,17 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
                                                   start_split_rpc rpc)
 {
     auto on_write_storage_complete = [app, rpc, this]() {
-        ddebug_f("app({}) update partition count on remote storage, new partition_count = {}",
+        ddebug_f("app({}): new partition_count = {}, app_env[{}]=true",
                  app->app_name,
-                 app->partition_count * 2);
+                 app->partition_count * 2,
+                 replica_envs::SPLIT_VALIDATE_PARTITION_HASH);
 
         zauto_write_lock l(app_lock());
         app->helpers->split_states.splitting_count = app->partition_count;
         app->partition_count *= 2;
         app->helpers->contexts.resize(app->partition_count);
         app->partitions.resize(app->partition_count);
+        app->envs[replica_envs::SPLIT_VALIDATE_PARTITION_HASH] = "true";
 
         for (int i = 0; i < app->partition_count; ++i) {
             app->helpers->contexts[i].config_owner = &app->partitions[i];
@@ -100,6 +103,7 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
     }
     auto copy = *app;
     copy.partition_count *= 2;
+    copy.envs[replica_envs::SPLIT_VALIDATE_PARTITION_HASH] = "true";
     blob value = dsn::json::json_forwarder<app_info>::encode(copy);
     _meta_svc->get_meta_storage()->set_data(
         _state->get_app_path(*app), std::move(value), on_write_storage_complete);

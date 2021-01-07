@@ -571,6 +571,23 @@ void replica::update_app_envs_internal(const std::map<std::string, std::string> 
         _deny_client_write = deny_client_write;
     }
 
+    // SPLIT_VALIDATE_PARTITION_HASH
+    bool validate_partition_hash = false;
+    find = envs.find(replica_envs::SPLIT_VALIDATE_PARTITION_HASH);
+    if (find != envs.end()) {
+        if (!buf2bool(find->second, validate_partition_hash)) {
+            dwarn_replica("invalid value of env {}: \"{}\"",
+                          replica_envs::SPLIT_VALIDATE_PARTITION_HASH,
+                          find->second);
+        }
+    }
+    if (validate_partition_hash != _validate_partition_hash) {
+        ddebug_replica("switch _validate_partition_hash from {} to {}",
+                       _validate_partition_hash,
+                       validate_partition_hash);
+        _validate_partition_hash = validate_partition_hash;
+    }
+
     update_throttle_envs(envs);
 }
 
@@ -1060,10 +1077,11 @@ void replica::on_config_sync(const app_info &info,
         }
     } else {
         if (_is_initializing) {
-            // TODO(hyc): consider
-            if (info.partition_count != _app_info.partition_count) {
-                _split_mgr->trigger_primary_parent_split(info.partition_count, meta_split_status);
-            }
+            // TODO(hyc): this should be removed, because status may not be primary
+            //            if (info.partition_count != _app_info.partition_count) {
+            //                _split_mgr->trigger_primary_parent_split(info.partition_count,
+            //                meta_split_status);
+            //            }
 
             // in initializing, when replica still primary, need to inc ballot
             if (config.primary == _stub->_primary_address &&

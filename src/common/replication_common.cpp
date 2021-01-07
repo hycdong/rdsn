@@ -644,6 +644,8 @@ const std::string replica_envs::ROCKSDB_CHECKPOINT_RESERVE_TIME_SECONDS(
 const std::string replica_envs::ROCKSDB_ITERATION_THRESHOLD_TIME_MS(
     "replica.rocksdb_iteration_threshold_time_ms");
 const std::string replica_envs::BUSINESS_INFO("business.info");
+const std::string
+    replica_envs::SPLIT_VALIDATE_PARTITION_HASH("replica.split.validate_partition_hash");
 
 const std::string bulk_load_constant::BULK_LOAD_INFO("bulk_load_info");
 const int32_t bulk_load_constant::BULK_LOAD_REQUEST_INTERVAL = 10;
