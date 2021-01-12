@@ -929,12 +929,12 @@ void server_state::on_config_sync(configuration_query_by_node_rpc rpc)
         response.err = ERR_BUSY;
         response.partitions.clear();
     }
-    ddebug_f(
-        "send config sync response to {}, err({}), partitions_count({}), gc_replicas_count({}), ",
-        request.node.to_string(),
-        response.err,
-        response.partitions.size(),
-        response.gc_replicas.size());
+    ddebug_f("send config sync response to {}, err({}), partitions_count({}), "
+             "gc_replicas_count({})",
+             request.node.to_string(),
+             response.err,
+             response.partitions.size(),
+             response.gc_replicas.size());
 }
 
 bool server_state::query_configuration_by_gpid(dsn::gpid id,

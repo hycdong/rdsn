@@ -377,7 +377,7 @@ void replica::catch_up_with_private_logs(partition_status::type s)
         _split_states.async_learn_task = tasking::enqueue(
             LPC_PARTITION_SPLIT,
             tracker(),
-            std::bind(&replica_split_manager::child_catch_up_states, this->get_split_manager()),
+            std::bind(&replica_split_manager::child_catch_up_states, get_split_manager()),
             get_gpid().thread_hash());
     } else {
         _secondary_states.checkpoint_completed_task =

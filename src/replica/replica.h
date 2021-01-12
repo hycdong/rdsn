@@ -57,6 +57,9 @@
 #include "utils/throttling_controller.h"
 
 namespace dsn {
+namespace security {
+class access_controller;
+} // namespace security
 namespace replication {
 
 class replication_app_base;
@@ -65,10 +68,23 @@ class replica_duplicator_manager;
 class replica_backup_manager;
 class replica_bulk_loader;
 class replica_split_manager;
+class replica_disk_migrator;
+
+class cold_backup_context;
+typedef dsn::ref_ptr<cold_backup_context> cold_backup_context_ptr;
+class cold_backup_metadata;
 
 namespace test {
 class test_checker;
 }
+
+enum manual_compaction_status
+{
+    kFinish = 0,
+    kRunning,
+    kQueue
+};
+const char *manual_compaction_status_to_string(manual_compaction_status status);
 
 class replica : public serverlet<replica>, public ref_counter, public replica_base
 {
@@ -119,6 +135,8 @@ public:
     void update_throttle_env_internal(const std::map<std::string, std::string> &envs,
                                       const std::string &key,
                                       throttling_controller &cntl);
+    // update allowed users for access controller
+    void update_ac_allowed_users(const std::map<std::string, std::string> &envs);
 
     //
     //    messages and tools from/for meta server
@@ -186,11 +204,6 @@ public:
     //
     replica_backup_manager *get_backup_manager() const { return _backup_mgr.get(); }
 
-    //
-    // Partition Split
-    //
-    replica_split_manager *get_split_manager() const { return _split_mgr.get(); }
-
     void update_last_checkpoint_generate_time();
 
     //
@@ -203,6 +216,16 @@ public:
                    ? (dsn_now_ms() - _bulk_load_ingestion_start_time_ms)
                    : 0;
     }
+
+    //
+    // Partition Split
+    //
+    replica_split_manager *get_split_manager() const { return _split_mgr.get(); }
+
+    //
+    // Disk migrator
+    //
+    replica_disk_migrator *disk_migrator() const { return _disk_migrator.get(); }
 
     //
     // Statistics
@@ -313,7 +336,6 @@ private:
 
     bool update_configuration(const partition_configuration &config);
     bool update_local_configuration(const replica_configuration &config, bool same_ballot = false);
-
     error_code update_init_info_ballot_and_decree();
 
     /////////////////////////////////////////////////////////////////
@@ -349,7 +371,6 @@ private:
     void send_backup_request_to_secondary(const backup_request &request);
     // set all cold_backup_state cancel/pause
     void set_backup_context_cancel();
-    void set_backup_context_pause();
     void clear_cold_backup_state();
 
     /////////////////////////////////////////////////////////////////
@@ -379,9 +400,19 @@ private:
 
     void update_restore_progress(uint64_t f_size);
 
+    // Used for remote command
+    // TODO: remove this interface and only expose the http interface
+    // now this remote commend will be used by `scripts/pegasus_manual_compact.sh`
     std::string query_compact_state() const;
 
+    // Used for http interface
+    manual_compaction_status get_compact_status() const;
+
     void init_table_level_latency_counters();
+
+    void on_detect_hotkey(const detect_hotkey_request &req, /*out*/ detect_hotkey_response &resp);
+
+    uint32_t query_data_version() const;
 
 private:
     friend class ::dsn::replication::test::test_checker;
@@ -397,6 +428,9 @@ private:
     friend class replica_backup_manager;
     friend class replica_bulk_loader;
     friend class replica_split_manager;
+    friend class replica_disk_migrator;
+    friend class replica_disk_test;
+    friend class replica_disk_migrate_test;
 
     // replica configuration, updated by update_local_configuration ONLY
     replica_configuration _config;
@@ -475,15 +509,18 @@ private:
     // backup
     std::unique_ptr<replica_backup_manager> _backup_mgr;
 
-    // partition split
-    std::unique_ptr<replica_split_manager> _split_mgr;
-    bool _validate_partition_hash{false};
-
     // bulk load
     std::unique_ptr<replica_bulk_loader> _bulk_loader;
     // if replica in bulk load ingestion 2pc, will reject other write requests
     bool _is_bulk_load_ingestion{false};
     uint64_t _bulk_load_ingestion_start_time_ms{0};
+
+    // partition split
+    std::unique_ptr<replica_split_manager> _split_mgr;
+    bool _validate_partition_hash{false};
+
+    // disk migrator
+    std::unique_ptr<replica_disk_migrator> _disk_migrator;
 
     // perf counters
     perf_counter_wrapper _counter_private_log_size;
@@ -496,6 +533,8 @@ private:
     dsn::task_tracker _tracker;
     // the thread access checker
     dsn::thread_access_checker _checker;
+
+    std::unique_ptr<security::access_controller> _access_controller;
 };
 typedef dsn::ref_ptr<replica> replica_ptr;
 } // namespace replication

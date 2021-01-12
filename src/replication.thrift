@@ -168,10 +168,13 @@ struct learn_notify_response
 // partition split status
 enum split_status
 {
+    // idle state
     NOT_SPLIT,
+    // A replica is splitting into two replicas, original one called parent, new one called child
     SPLITTING,
     PAUSING,
     PAUSED,
+    // After split is successfully cancelled, the state turns into NOT_SPLIT
     CANCELING
 }
 
@@ -187,7 +190,7 @@ struct group_check_request
     // their WALs after this decree.
     5:optional i64          confirmed_decree;
 
-    // Used to deliver child gpid during partition split
+    // Used to deliver child gpid and meta_split_status during partition split
     6:optional dsn.gpid     child_gpid;
     7:optional split_status meta_split_status;
 }
@@ -470,14 +473,13 @@ struct query_replica_info_response
 
 struct disk_info
 {
-    // TODO(jiashuo1): figure out what the "tag" means and decide if it's necessary
     1:string tag;
     2:string full_dir;
     3:i64 disk_capacity_mb;
     4:i64 disk_available_mb;
-    // map<i32,i32> means map<app_id, replica_counts>
-    5:map<i32,i32> holding_primary_replica_counts;
-    6:map<i32,i32> holding_secondary_replica_counts;
+    // app_id=>set<gpid>
+    5:map<i32,set<dsn.gpid>> holding_primary_replicas;
+    6:map<i32,set<dsn.gpid>> holding_secondary_replicas;
 }
 
 // This request is sent from client to replica_server.
@@ -487,7 +489,7 @@ struct query_disk_info_request
     2:string          app_name;
 }
 
-// This response is recieved replica_server.
+// This response is from replica_server to client.
 struct query_disk_info_response
 {
     // app not existed will return "ERR_OBJECT_NOT_FOUND", otherwise "ERR_OK"
@@ -495,6 +497,29 @@ struct query_disk_info_response
     2:i64 total_capacity_mb;
     3:i64 total_available_mb;
     4:list<disk_info> disk_infos;
+}
+
+// This request is sent from client to replica_server.
+struct replica_disk_migrate_request
+{
+    1:dsn.gpid pid
+    // disk tag, for example `ssd1`. `origin_disk` and `target_disk` must be specified in the config of [replication] data_dirs.
+    2:string origin_disk;
+    3:string target_disk;
+}
+
+// This response is from replica_server to client.
+struct replica_disk_migrate_response
+{
+   // Possible error:
+   // -ERR_OK: start do replica disk migrate
+   // -ERR_BUSY: current replica migration is running
+   // -ERR_INVALID_STATE: current replica partition status isn't secondary
+   // -ERR_INVALID_PARAMETERS: origin disk is equal with target disk
+   // -ERR_OBJECT_NOT_FOUND: replica not found, origin or target disk isn't existed, origin disk doesn't exist current replica
+   // -ERR_PATH_ALREADY_EXIST: target disk has existed current replica
+   1:dsn.error_code err;
+   2:optional string hint;
 }
 
 struct query_app_info_request
@@ -939,7 +964,7 @@ struct notify_cacth_up_response
     1:dsn.error_code    err;
 }
 
-// parent primary -> child replicas to update partition count
+// primary parent -> child replicas to update partition count
 struct update_child_group_partition_count_request
 {
     1:dsn.rpc_address   target_address;
@@ -1044,9 +1069,10 @@ struct bulk_load_metadata
 // client -> meta, start bulk load
 struct start_bulk_load_request
 {
-    1:string        app_name;
-    2:string        cluster_name;
-    3:string        file_provider_type;
+    1:string    app_name;
+    2:string    cluster_name;
+    3:string    file_provider_type;
+    4:string    remote_root_path;
 }
 
 struct start_bulk_load_response
@@ -1085,6 +1111,7 @@ struct bulk_load_request
     6:i64               ballot;
     7:bulk_load_status  meta_bulk_load_status;
     8:bool              query_bulk_load_metadata;
+    9:string            remote_root_path;
 }
 
 struct bulk_load_response
@@ -1117,6 +1144,7 @@ struct group_bulk_load_request
     4:string                        provider_name;
     5:string                        cluster_name;
     6:bulk_load_status              meta_bulk_load_status;
+    7:string                        remote_root_path;
 }
 
 struct group_bulk_load_response
@@ -1195,6 +1223,42 @@ struct query_bulk_load_response
     // detailed bulk load state for each replica
     6:list<map<dsn.rpc_address, partition_bulk_load_state>> bulk_load_states;
     7:optional string                                       hint_msg;
+}
+
+enum hotkey_type
+{
+    READ,
+    WRITE
+}
+
+enum detect_action
+{
+    START,
+    STOP,
+    QUERY
+}
+
+enum disk_migration_status {
+    IDLE,
+    MOVING,
+    MOVED,
+    CLOSED
+}
+
+struct detect_hotkey_request {
+    1: hotkey_type type
+    2: detect_action action
+    3: dsn.gpid pid;
+}
+
+struct detect_hotkey_response {
+    // Possible error:
+    // - ERR_OK: start/stop hotkey detect succeed
+    // - ERR_OBJECT_NOT_FOUND: replica not found
+    // - ERR_SERVICE_ALREADY_EXIST: hotkey detection is running now
+    1: dsn.error_code err;
+    2: optional string err_hint;
+    3: optional string hotkey_result;
 }
 
 /*

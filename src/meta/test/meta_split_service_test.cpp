@@ -342,7 +342,6 @@ TEST_F(meta_split_service_test, start_split_test)
                  {NAME, PARTITION_COUNT, false, ERR_INVALID_PARAMETERS, PARTITION_COUNT},
                  {NAME, NEW_PARTITION_COUNT, true, ERR_BUSY, PARTITION_COUNT},
                  {NAME, NEW_PARTITION_COUNT, false, ERR_OK, NEW_PARTITION_COUNT}};
-
     for (auto test : tests) {
         auto app = find_app(NAME);
         app->helpers->split_states.splitting_count = test.need_mock_splitting ? PARTITION_COUNT : 0;

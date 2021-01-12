@@ -43,19 +43,6 @@ public:
                                       dsn::task_code code,
                                       const create_file_callback &cb,
                                       dsn::task_tracker *tracker) override;
-    //
-    // Attention:
-    //  delete file directly on fds, will not enter trash
-    //
-    virtual dsn::task_ptr delete_file(const delete_file_request &req,
-                                      dsn::task_code code,
-                                      const delete_file_callback &cb,
-                                      dsn::task_tracker *tracker) override;
-
-    virtual dsn::task_ptr exist(const exist_request &req,
-                                dsn::task_code code,
-                                const exist_callback &cb,
-                                dsn::task_tracker *tracker) override;
 
     //
     // Attention：
@@ -81,11 +68,6 @@ class fds_file_object : public block_file
 {
 public:
     fds_file_object(fds_service *s, const std::string &name, const std::string &fds_path);
-    fds_file_object(fds_service *s,
-                    const std::string &name,
-                    const std::string &fds_path,
-                    const std::string &md5,
-                    uint64_t size);
 
     virtual ~fds_file_object();
     virtual uint64_t get_size() override { return _size; }
@@ -111,6 +93,12 @@ public:
                                    const download_callback &cb,
                                    dsn::task_tracker *tracker) override;
 
+    // Possible errors:
+    // - ERR_FS_INTERNAL
+    // - ERR_OBJECT_NOT_FOUND
+    // - ERR_TIMEOUT
+    error_code get_file_meta();
+
 private:
     error_code get_content_in_batches(uint64_t start,
                                       int64_t length,
@@ -123,7 +111,6 @@ private:
     error_code put_content(/*in-out*/ std::istream &is,
                            /*int*/ int64_t to_transfer_bytes,
                            /*out*/ uint64_t &transfered_bytes);
-    error_code get_file_meta();
 
     fds_service *_service;
     std::string _fds_path;

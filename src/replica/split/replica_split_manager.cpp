@@ -71,6 +71,7 @@ void replica_split_manager::parent_start_split(
     if (status() == partition_status::PS_PRIMARY) {
         _replica->_primary_states.cleanup_split_context();
     }
+
     _partition_version.store(_replica->_app_info.partition_count - 1);
 
     _split_status = split_status::SPLITTING;
@@ -482,7 +483,7 @@ void replica_split_manager::child_catch_up_states() // on child partition
     FAIL_POINT_INJECT_F("replica_child_catch_up_states", [](dsn::string_view) {});
 
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        derror_replica("wrong status({})", enum_to_string(status()));
+        derror_replica("wrong status, status is {}", enum_to_string(status()));
         return;
     }
 
@@ -775,7 +776,7 @@ void replica_split_manager::on_update_child_group_partition_count(
     if (request.ballot != get_ballot() || !_replica->_split_states.is_caught_up) {
         derror_replica(
             "receive outdated update child group_partition_count_request, request ballot={}, "
-            "local ballot={}, caught_up={}",
+            "local ballot={}, is_caught_up={}",
             request.ballot,
             get_ballot(),
             _replica->_split_states.is_caught_up);
@@ -905,6 +906,7 @@ void replica_split_manager::on_update_child_group_partition_count_reply(
                    request.target_address.to_string(),
                    request.child_pid,
                    request.new_partition_count);
+
     // update group partition_count succeed
     not_replied_addresses->erase(request.target_address);
     if (not_replied_addresses->empty()) {
@@ -918,10 +920,7 @@ void replica_split_manager::on_update_child_group_partition_count_reply(
     }
 }
 
-///
-/// register child replicas on meta
-///
-
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica_split_manager::register_child_on_meta(ballot b) // on primary parent
 {
     FAIL_POINT_INJECT_F("replica_register_child_on_meta", [](dsn::string_view) {});
@@ -993,7 +992,7 @@ void replica_split_manager::parent_send_register_request(
     register_child_rpc rpc(std::move(req),
                            RPC_CM_REGISTER_CHILD_REPLICA,
                            /*never timeout*/ 0_ms,
-                           /*partition_hash*/ 0,
+                           /*partition hash*/ 0,
                            get_gpid().thread_hash());
     _replica->_primary_states.register_child_task =
         rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
@@ -1007,6 +1006,8 @@ void replica_split_manager::on_register_child_on_meta_reply(
     const register_child_request &request,
     const register_child_response &response) // on primary parent
 {
+    FAIL_POINT_INJECT_F("replica_on_register_child_on_meta_reply", [](dsn::string_view) {});
+
     _replica->_checker.only_one_thread_access();
 
     // primary parent is under reconfiguration, whose status should be PS_INACTIVE
@@ -1017,7 +1018,7 @@ void replica_split_manager::on_register_child_on_meta_reply(
         return;
     }
 
-    error_code err = (ec == ERR_OK) ? response.err : ec;
+    error_code err = ec == ERR_OK ? response.err : ec;
     if (err == ERR_INVALID_STATE || err == ERR_INVALID_VERSION || err == ERR_CHILD_REGISTERED) {
         if (err == ERR_CHILD_REGISTERED) {
             derror_replica(
@@ -1158,7 +1159,7 @@ void replica_split_manager::child_handle_async_learn_error() // on child partiti
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_split_manager::trigger_primary_parent_split(
     const int32_t meta_partition_count,
-    split_status::type meta_split_status) // on primary parent partition
+    const split_status::type meta_split_status) // on primary parent partition
 {
     dcheck_eq_replica(status(), partition_status::PS_PRIMARY);
     dcheck_eq_replica(_replica->_app_info.partition_count * 2, meta_partition_count);
@@ -1191,11 +1192,13 @@ void replica_split_manager::trigger_primary_parent_split(
 
         group_check_request add_child_request;
         add_child_request.app = _replica->_app_info;
-        add_child_request.child_gpid =
+        _replica->_primary_states.get_replica_config(status(), add_child_request.config);
+        auto child_gpid =
             gpid(get_gpid().get_app_id(),
                  get_gpid().get_partition_index() + _replica->_app_info.partition_count);
-        _replica->_primary_states.get_replica_config(status(), add_child_request.config);
+        add_child_request.__set_child_gpid(child_gpid);
         parent_start_split(add_child_request);
+        // broadcast group check request to secondaries to start split
         _replica->broadcast_group_check();
         return;
     }
@@ -1420,10 +1423,11 @@ void replica_split_manager::copy_mutation(mutation_ptr &mu) // on parent
     }
 }
 
+// ThreadPool: THREAD_POOL_REPLICATION
 void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child
 {
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_replica(
+        derror_replica(
             "wrong status({}), ignore this mutation({})", enum_to_string(status()), mu->name());
         _stub->split_replica_error_handler(
             _replica->_split_states.parent_gpid, [mu](replica_split_manager *split_mgr) {
@@ -1434,9 +1438,9 @@ void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child
         return;
     }
 
+    // It is possible for child has not copied parent prepare list, because parent and child may
+    // execute in different thread. In this case, child should ignore this mutation.
     if (!_replica->_split_states.is_prepare_list_copied) {
-        // TODO(heyuchen): for debug, remove it
-        dwarn_replica("prepare list has not been copied, ignore this mutation({})", mu->name());
         return;
     }
 
@@ -1475,13 +1479,14 @@ void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child
     mu->data.header.pid = get_gpid();
     _replica->_prepare_list->prepare(mu, partition_status::PS_SECONDARY);
 
-    if (!mu->is_sync_to_child()) { // child async copy mutation
+    if (!mu->is_sync_to_child()) { // child copy mutation asynchronously
         if (!mu->is_logged()) {
             mu->set_logged();
         }
         mu->log_task() = _stub->_log->append(
             mu, LPC_WRITE_REPLICATION_LOG, tracker(), nullptr, get_gpid().thread_hash());
-        _replica->_private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
+        _replica->_private_log->append(
+            mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr, get_gpid().thread_hash());
     } else { // child sync copy mutation
         mu->log_task() = _stub->_log->append(mu,
                                              LPC_WRITE_REPLICATION_LOG,

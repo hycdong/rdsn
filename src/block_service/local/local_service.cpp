@@ -6,9 +6,11 @@
 #include <dsn/utility/utils.h>
 #include <dsn/utility/strings.h>
 #include <dsn/utility/safe_strerror_posix.h>
+#include <dsn/dist/fmt_logging.h>
 
 #include <dsn/cpp/json_helper.h>
 #include <dsn/tool-api/task_tracker.h>
+#include <nlohmann/json.hpp>
 #include "local_service.h"
 
 static const int max_length = 2048; // max data length read from file each time
@@ -17,15 +19,27 @@ namespace dsn {
 namespace dist {
 namespace block_service {
 
-DEFINE_THREAD_POOL_CODE(THREAD_POOL_LOCAL_SERVICE)
-DEFINE_TASK_CODE(LPC_LOCAL_SERVICE_CALL, TASK_PRIORITY_COMMON, THREAD_POOL_LOCAL_SERVICE)
+DEFINE_TASK_CODE(LPC_LOCAL_SERVICE_CALL, TASK_PRIORITY_COMMON, THREAD_POOL_BLOCK_SERVICE)
 
 struct file_metadata
 {
     uint64_t size;
     std::string md5;
-    DEFINE_JSON_SERIALIZATION(size, md5)
 };
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(file_metadata, size, md5)
+
+bool file_metadata_from_json(std::ifstream &fin, file_metadata &fmeta) noexcept
+{
+    std::string data;
+    fin >> data;
+    try {
+        nlohmann::json::parse(data).get_to(fmeta);
+        return true;
+    } catch (nlohmann::json::exception &exp) {
+        dwarn_f("decode meta data from json failed: {} [{}]", exp.what(), data);
+        return false;
+    }
+}
 
 std::string local_service::get_metafile(const std::string &filepath)
 {
@@ -169,68 +183,6 @@ dsn::task_ptr local_service::create_file(const create_file_request &req,
     return tsk;
 }
 
-dsn::task_ptr local_service::delete_file(const delete_file_request &req,
-                                         dsn::task_code code,
-                                         const delete_file_callback &cb,
-                                         task_tracker *tracker)
-{
-    delete_file_future_ptr tsk(new delete_file_future(code, cb, 0));
-    tsk->set_tracker(tracker);
-
-    auto delete_file_background = [this, req, tsk]() {
-        delete_file_response resp;
-        resp.err = ERR_OK;
-        dinfo("delete file(%s)", req.file_name.c_str());
-
-        // delete the meta data file.
-        std::string meta_file = utils::filesystem::path_combine(_root, get_metafile(req.file_name));
-        if (utils::filesystem::file_exists(meta_file)) {
-            if (!utils::filesystem::remove_path(meta_file)) {
-                resp.err = ERR_FS_INTERNAL;
-            }
-        }
-
-        // if "delete meta data file ok" or "meta data file not found", then delete the real file
-        if (resp.err == ERR_OK) {
-            std::string file = utils::filesystem::path_combine(_root, req.file_name);
-            if (::dsn::utils::filesystem::file_exists(file)) {
-                if (!::dsn::utils::filesystem::remove_path(file)) {
-                    resp.err = ERR_FS_INTERNAL;
-                }
-            } else {
-                resp.err = ERR_OBJECT_NOT_FOUND;
-            }
-        }
-
-        tsk->enqueue_with(resp);
-    };
-
-    tasking::enqueue(LPC_LOCAL_SERVICE_CALL, nullptr, std::move(delete_file_background));
-    return tsk;
-}
-
-dsn::task_ptr local_service::exist(const exist_request &req,
-                                   dsn::task_code code,
-                                   const exist_callback &cb,
-                                   task_tracker *tracker)
-{
-    exist_future_ptr tsk(new exist_future(code, cb, 0));
-    tsk->set_tracker(tracker);
-    auto exist_background = [this, req, tsk]() {
-        exist_response resp;
-        std::string meta_file = utils::filesystem::path_combine(_root, get_metafile(req.path));
-        if (utils::filesystem::path_exists(meta_file)) {
-            resp.err = ERR_OK;
-        } else {
-            resp.err = ERR_OBJECT_NOT_FOUND;
-        }
-        tsk->enqueue_with(resp);
-    };
-
-    tasking::enqueue(LPC_LOCAL_SERVICE_CALL, nullptr, std::move(exist_background));
-    return tsk;
-}
-
 dsn::task_ptr local_service::remove_path(const remove_path_request &req,
                                          dsn::task_code code,
                                          const remove_path_callback &cb,
@@ -301,14 +253,9 @@ error_code local_file_object::load_metadata()
     }
     auto cleanup = dsn::defer([&is]() { is.close(); });
 
-    std::string data;
-    is >> data;
-
     file_metadata meta;
-    bool ans = dsn::json::json_forwarder<file_metadata>::decode(
-        dsn::blob(data.c_str(), 0, data.size()), meta);
+    bool ans = file_metadata_from_json(is, meta);
     if (!ans) {
-        dwarn("decode meta data from json(%s) failed", data.c_str());
         return ERR_FS_INTERNAL;
     }
     _size = meta.size;
@@ -332,7 +279,7 @@ error_code local_file_object::store_metadata()
         return ERR_FS_INTERNAL;
     }
     auto cleanup = dsn::defer([&os]() { os.close(); });
-    dsn::json::json_forwarder<file_metadata>::encode(os, meta);
+    os << nlohmann::json(meta);
 
     return ERR_OK;
 }
@@ -584,6 +531,6 @@ dsn::task_ptr local_file_object::download(const download_request &req,
 
     return tsk;
 }
-}
-}
-}
+} // namespace block_service
+} // namespace dist
+} // namespace dsn

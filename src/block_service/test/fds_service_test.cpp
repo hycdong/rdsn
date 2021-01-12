@@ -120,16 +120,16 @@ DEFINE_TASK_CODE(lpc_btest, TASK_PRIORITY_HIGH, dsn::THREAD_POOL_DEFAULT)
 
 TEST_F(FDSClientTest, test_basic_operation)
 {
-    const char *files[] = {"/fdstest1/test1/test1",
-                           "/fdstest1/test1/test2",
-                           "/fdstest1/test2/test1",
-                           "/fdstest1/test2/test2",
-                           "/fdstest2/test2",
-                           "/fdstest3",
-                           "/fds_rootfile",
+    const char *files[] = {"/fdstest/fdstest1/test1/test1",
+                           "/fdstest/fdstest1/test1/test2",
+                           "/fdstest/fdstest1/test2/test1",
+                           "/fdstest/fdstest1/test2/test2",
+                           "/fdstest/fdstest2/test2",
+                           "/fdstest/fdstest3",
+                           "/fdstest/fds_rootfile",
                            nullptr};
     // ensure prefix_path is the prefix of some file in files
-    std::string prefix_path = std::string("/fdstest1/test1");
+    std::string prefix_path = std::string("/fdstest/fdstest1/test1");
     int total_files;
 
     std::shared_ptr<fds_service> s = std::make_shared<fds_service>();
@@ -144,13 +144,11 @@ TEST_F(FDSClientTest, test_basic_operation)
     s->initialize(args);
 
     create_file_response cf_resp;
-    delete_file_response df_resp;
     ls_response l_resp;
     upload_response u_resp;
     download_response d_resp;
     read_response r_resp;
     write_response w_resp;
-    exist_response e_resp;
     remove_path_response rem_resp;
 
     auto entry_cmp = [](const ls_entry &entry1, const ls_entry &entry2) {
@@ -171,13 +169,12 @@ TEST_F(FDSClientTest, test_basic_operation)
         std::cout << "clean all old files" << std::endl;
         for (int i = 0; files[i]; ++i) {
             std::cout << "delete file " << files[i] << std::endl;
-            delete_file_response dr;
-            s->delete_file(delete_file_request{files[i]},
+            s->remove_path(remove_path_request{std::string(files[i]), true},
                            lpc_btest,
-                           [&dr](const delete_file_response &r) { dr = r; },
+                           [&rem_resp](const remove_path_response &resp) { rem_resp = resp; },
                            nullptr)
                 ->wait();
-            ASSERT_TRUE(dsn::ERR_OK == dr.err || dsn::ERR_OBJECT_NOT_FOUND == dr.err);
+            ASSERT_TRUE(dsn::ERR_OK == rem_resp.err || dsn::ERR_OBJECT_NOT_FOUND == rem_resp.err);
         }
     }
 
@@ -261,52 +258,17 @@ TEST_F(FDSClientTest, test_basic_operation)
         }
     }
 
-    // then test exist
-    {
-        std::cout << "Test file that not exist" << std::endl;
-        s->exist(exist_request{std::string("/fds_test1/file_do_not_exist")},
-                 lpc_btest,
-                 [&e_resp](const exist_response &resp) { e_resp = resp; },
-                 nullptr)
-            ->wait();
-        ASSERT_EQ(e_resp.err, ERR_OBJECT_NOT_FOUND);
-
-        std::cout << "Test file that exist" << std::endl;
-        s->exist(exist_request{std::string(files[3])},
-                 lpc_btest,
-                 [&e_resp](const exist_response &resp) { e_resp = resp; },
-                 nullptr)
-            ->wait();
-        ASSERT_EQ(e_resp.err, ERR_OK);
-
-        std::cout << "Test path not exist" << std::endl;
-        s->exist(exist_request{std::string("/fds_test1/path_do_not_exist")},
-                 lpc_btest,
-                 [&e_resp](const exist_response &resp) { e_resp = resp; },
-                 nullptr)
-            ->wait();
-        ASSERT_EQ(e_resp.err, ERR_OBJECT_NOT_FOUND);
-
-        std::cout << "Test path exist" << std::endl;
-        s->exist(exist_request{std::string(prefix_path)},
-                 lpc_btest,
-                 [&e_resp](const exist_response &resp) { e_resp = resp; },
-                 nullptr)
-            ->wait();
-        ASSERT_EQ(e_resp.err, ERR_OK);
-    }
-
     // then test list files
     {
         std::cout << "test ls files" << std::endl;
 
         // list the root
-        std::cout << "list the root" << std::endl;
+        std::cout << "list the test root" << std::endl;
         std::vector<ls_entry> root = {
             {"fdstest1", true}, {"fdstest2", true}, {"fdstest3", false}, {"fds_rootfile", false}};
         std::sort(root.begin(), root.end(), entry_cmp);
 
-        s->list_dir(ls_request{"/"},
+        s->list_dir(ls_request{"/fdstest"},
                     lpc_btest,
                     [&l_resp](const ls_response &resp) { l_resp = resp; },
                     nullptr)
@@ -427,7 +389,7 @@ TEST_F(FDSClientTest, test_basic_operation)
     // try to read a non-exist file
     {
         std::cout << "test try to read non-exist file" << std::endl;
-        s->create_file(create_file_request{"fds_hellword", true},
+        s->create_file(create_file_request{"non_exist_file", true},
                        lpc_btest,
                        [&cf_resp](const create_file_response &r) { cf_resp = r; },
                        nullptr)
@@ -547,54 +509,9 @@ TEST_F(FDSClientTest, test_basic_operation)
         ASSERT_EQ(0, memcmp(r_resp.buffer.data(), test_buffer + 5, 10));
     }
 
-    // then test delete files
-    {
-        std::cout << "test delete files" << std::endl;
-        for (int i = 0; i < total_files; ++i) {
-            std::cout << "test delete file " << files[i] << std::endl;
-            s->delete_file(delete_file_request{files[i]},
-                           lpc_btest,
-                           [&df_resp](const delete_file_response &resp) { df_resp = resp; },
-                           nullptr)
-                ->wait();
-            ASSERT_EQ(df_resp.err, dsn::ERR_OK);
-
-            s->create_file(create_file_request{files[i], false},
-                           lpc_btest,
-                           [&cf_resp](const create_file_response &resp) { cf_resp = resp; },
-                           nullptr)
-                ->wait();
-
-            ASSERT_EQ(dsn::ERR_OK, cf_resp.err);
-            ASSERT_TRUE(cf_resp.file_handle->get_md5sum().empty());
-        }
-    }
-
     // then test remove path
     {
-        // first re-upload all the files
-        for (total_files = 0; files[total_files]; ++total_files) {
-            std::cout << "create and upload: " << files[total_files] << std::endl;
-            s->create_file(create_file_request{std::string(files[total_files]), true},
-                           lpc_btest,
-                           [&cf_resp](const create_file_response &r) { cf_resp = r; },
-                           nullptr)
-                ->wait();
-            ASSERT_EQ(cf_resp.err, dsn::ERR_OK);
-
-            cf_resp.file_handle
-                ->upload(upload_request{FDSClientTest::f1.filename},
-                         lpc_btest,
-                         [&u_resp](const upload_response &r) { u_resp = r; },
-                         nullptr)
-                ->wait();
-
-            ASSERT_EQ(dsn::ERR_OK, u_resp.err);
-            ASSERT_EQ(FDSClientTest::f1.length, cf_resp.file_handle->get_size());
-            ASSERT_EQ(FDSClientTest::f1.md5, cf_resp.file_handle->get_md5sum());
-        }
-
-        // then test remove_path
+        // test remove_path
         {
             std::cout << "Test remove non-empty path with recusive = false" << std::endl;
             s->remove_path(remove_path_request{std::string(prefix_path), false},
@@ -698,12 +615,6 @@ TEST_F(FDSClientTest, test_basic_operation)
                            nullptr)
                 ->wait();
             ASSERT_EQ(rem_resp.err, ERR_OK);
-            s->exist(exist_request{std::string(prefix)},
-                     lpc_btest,
-                     [&e_resp](const exist_response &resp) { e_resp = resp; },
-                     nullptr)
-                ->wait();
-            ASSERT_EQ(e_resp.err, ERR_OBJECT_NOT_FOUND);
         }
     }
 }
@@ -774,9 +685,9 @@ TEST_F(FDSClientTest, test_concurrent_upload_download)
     {
         for (unsigned int i = 0; i < total_files; ++i) {
             _service
-                ->delete_file(delete_file_request{filenames[i]},
+                ->remove_path(remove_path_request{filenames[i], true},
                               lpc_btest,
-                              [i, &filenames](const delete_file_response &resp) {
+                              [i, &filenames](const remove_path_response &resp) {
                                   printf("file %s delete finished, err(%s)\n",
                                          filenames[i].c_str(),
                                          resp.err.to_string());
@@ -843,7 +754,7 @@ TEST_F(FDSClientTest, test_concurrent_upload_download)
         for (unsigned int i = 0; i < total_files; ++i) {
             block_file_ptr p = block_files[i];
             dsn::task_ptr t =
-                p->download(download_request{filenames[i] + ".b"},
+                p->download(download_request{filenames[i] + ".b", 0, -1},
                             lpc_btest,
                             [&filenames, &filesize, &md5, i, p](const download_response &dr) {
                                 printf("file %s download finished\n", filenames[i].c_str());
@@ -864,9 +775,9 @@ TEST_F(FDSClientTest, test_concurrent_upload_download)
     {
         for (unsigned int i = 0; i < total_files; ++i) {
             _service
-                ->delete_file(delete_file_request{filenames[i]},
+                ->remove_path(remove_path_request{filenames[i], true},
                               lpc_btest,
-                              [i, &filenames](const delete_file_response &resp) {
+                              [i, &filenames](const remove_path_response &resp) {
                                   printf("file %s delete finished, err(%s)\n",
                                          filenames[i].c_str(),
                                          resp.err.to_string());

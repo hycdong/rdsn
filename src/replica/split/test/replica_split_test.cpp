@@ -40,6 +40,7 @@ public:
     ~replica_split_test() { fail::teardown(); }
 
     /// mock functions
+
     void mock_app_info()
     {
         _app_info.app_id = APP_ID;
@@ -98,47 +99,70 @@ public:
         }
     }
 
-    void
-    mock_child_async_learn_states(mock_replica_ptr plist_rep, bool add_to_plog, decree min_decree)
+    void mock_shared_log()
     {
-        // mock_shared_log();
         mock_mutation_log_shared_ptr shared_log_mock = new mock_mutation_log_shared("./");
         stub->set_log(shared_log_mock);
+    }
 
-        // mock_private_log
-        mock_mutation_log_private_ptr private_log_mock =
-            new mock_mutation_log_private(CHILD_GPID, _child_replica);
-        _child_replica->_private_log = private_log_mock;
+    void mock_private_log(gpid pid, mock_replica_ptr rep, bool mock_log_file_flag)
+    {
+        mock_mutation_log_private_ptr private_log_mock = new mock_mutation_log_private(pid, rep);
+        if (mock_log_file_flag) {
+            mock_log_file_ptr log_file_mock = new mock_log_file("log.1.0.txt", 0);
+            log_file_mock->set_file_size(100);
+            private_log_mock->add_log_file(log_file_mock);
+        }
+        rep->_private_log = private_log_mock;
+    }
 
-        // mock_prepare_list
-        prepare_list *mock_plist =
-            new prepare_list(plist_rep, 1, MAX_COUNT, [](mutation_ptr mu) {});
+    void mock_prepare_list(mock_replica_ptr rep, bool add_to_plog)
+    {
+        _mock_plist = new prepare_list(rep, 1, MAX_COUNT, [](mutation_ptr mu) {});
         for (int i = 1; i < MAX_COUNT + 1; ++i) {
             mutation_ptr mu = new mutation();
             mu->data.header.decree = i;
             mu->data.header.ballot = INIT_BALLOT;
-            mock_plist->put(mu);
+            _mock_plist->put(mu);
             if (add_to_plog) {
-                plist_rep->_private_log->append(
-                    mu, LPC_WRITE_REPLICATION_LOG_PRIVATE, nullptr, nullptr);
+                rep->_private_log->append(mu, LPC_WRITE_REPLICATION_LOG_PRIVATE, nullptr, nullptr);
                 mu->set_logged();
             }
         }
-        plist_rep->_prepare_list = mock_plist;
+        rep->_prepare_list = _mock_plist;
+    }
 
+    void mock_parent_states()
+    {
+        mock_shared_log();
+        mock_private_log(PARENT_GPID, _parent_replica, true);
+        mock_prepare_list(_parent_replica, true);
+    }
+
+    void mock_mutation_list(decree min_decree)
+    {
+        // mock mutation list
+        for (int d = 1; d < MAX_COUNT; ++d) {
+            mutation_ptr mu = _mock_plist->get_mutation_by_decree(d);
+            if (d > min_decree) {
+                _mutation_list.push_back(mu);
+            }
+        }
+    }
+
+    void
+    mock_child_async_learn_states(mock_replica_ptr plist_rep, bool add_to_plog, decree min_decree)
+    {
+        mock_shared_log();
+        mock_private_log(CHILD_GPID, _child_replica, false);
+        mock_prepare_list(plist_rep, add_to_plog);
         // mock_learn_state
         _mock_learn_state.to_decree_included = DECREE;
         _mock_learn_state.files.push_back("fake_file_name");
         // mock parent private log files
         _private_log_files.push_back("log.1.0.txt");
-
         // mock mutation list
-        for (int d = 1; d < MAX_COUNT + 1; ++d) {
-            mutation_ptr mu = plist_rep->_prepare_list->get_mutation_by_decree(d);
-            if (d > min_decree) {
-                _mutation_list.push_back(mu);
-            }
-        }
+        mock_mutation_list(min_decree);
     }
 
     void mock_parent_primary_configuration(bool lack_of_secondary = false)
@@ -165,7 +189,6 @@ public:
     }
 
     /// test functions
-
     void test_parent_start_split(ballot b, gpid req_child_gpid, split_status::type status)
     {
         parent_set_split_status(status);
@@ -205,7 +228,7 @@ public:
     {
         mock_child_async_learn_states(_parent_replica, false, DECREE);
         std::shared_ptr<prepare_list> plist =
-            std::make_shared<prepare_list>(_parent_replica, *_parent_replica->_prepare_list);
+            std::make_shared<prepare_list>(_parent_replica, *_mock_plist);
         _child_split_mgr->child_copy_prepare_list(_mock_learn_state,
                                                   _mutation_list,
                                                   _private_log_files,
@@ -434,11 +457,6 @@ public:
         _child_replica->tracker()->wait_outstanding_tasks();
     }
 
-    void parent_set_split_status(split_status::type status)
-    {
-        _parent_split_mgr->_split_status = status;
-    }
-
     int32_t child_get_prepare_list_count() { return _child_replica->get_plist()->count(); }
     bool child_is_prepare_list_copied()
     {
@@ -447,13 +465,24 @@ public:
     bool child_is_caught_up() { return _child_replica->_split_states.is_caught_up; }
 
     split_status::type parent_get_split_status() { return _parent_split_mgr->_split_status; }
-    bool parent_sync_send_write_request()
-    {
-        return _parent_replica->_primary_states.sync_send_write_request;
-    }
+
     int32_t parent_stopped_split_size()
     {
         return _parent_replica->_primary_states.split_stopped_secondary.size();
+    }
+
+    void parent_set_split_status(split_status::type status)
+    {
+        _parent_split_mgr->_split_status = status;
+    }
+
+    primary_context get_replica_primary_context(mock_replica_ptr rep)
+    {
+        return rep->_primary_states;
+    }
+    bool parent_sync_send_write_request()
+    {
+        return _parent_replica->_primary_states.sync_send_write_request;
     }
     bool is_parent_not_in_split()
     {
@@ -490,9 +519,10 @@ public:
     std::unique_ptr<replica_split_manager> _child_split_mgr;
 
     app_info _app_info;
-    learn_state _mock_learn_state;
     std::vector<std::string> _private_log_files;
     std::vector<mutation_ptr> _mutation_list;
+    prepare_list *_mock_plist;
+    learn_state _mock_learn_state;
 };
 
 // parent_start_split tests
@@ -578,7 +608,7 @@ TEST_F(replica_split_test, copy_prepare_list_succeed)
     cleanup_child_split_context();
 }
 
-//// child_learn_states tests
+// child_learn_states tests
 TEST_F(replica_split_test, child_learn_states_tests)
 {
     generate_child();
@@ -815,7 +845,7 @@ TEST_F(replica_split_test, register_child_reply_test)
 }
 
 // trigger_primary_parent_split unit test
-TEST_F(replica_split_test, primary_handle_split_test)
+TEST_F(replica_split_test, trigger_primary_parent_split_test)
 {
     fail::cfg("replica_broadcast_group_check", "return()");
     generate_child();
@@ -830,7 +860,7 @@ TEST_F(replica_split_test, primary_handle_split_test)
     // - meta canceling with local splitting
     // - meta paused with local not_split
     // - meta not_split with local splitting(See query_child_tests)
-    struct trigger_primary_parent_split_test
+    struct primary_parent_test
     {
         bool lack_of_secondary;
         split_status::type meta_split_status;

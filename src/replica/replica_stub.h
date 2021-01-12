@@ -54,13 +54,15 @@ typedef rpc_holder<query_replica_decree_request, query_replica_decree_response>
 typedef rpc_holder<query_replica_info_request, query_replica_info_response> query_replica_info_rpc;
 typedef rpc_holder<replica_configuration, learn_response> copy_checkpoint_rpc;
 typedef rpc_holder<query_disk_info_request, query_disk_info_response> query_disk_info_rpc;
+typedef rpc_holder<replica_disk_migrate_request, replica_disk_migrate_response>
+    replica_disk_migrate_rpc;
 typedef rpc_holder<query_app_info_request, query_app_info_response> query_app_info_rpc;
-typedef rpc_holder<backup_request, backup_response> backup_rpc;
 typedef rpc_holder<notify_catch_up_request, notify_cacth_up_response> notify_catch_up_rpc;
 typedef rpc_holder<update_child_group_partition_count_request,
                    update_child_group_partition_count_response>
     update_child_group_partition_count_rpc;
 typedef rpc_holder<group_bulk_load_request, group_bulk_load_response> group_bulk_load_rpc;
+typedef rpc_holder<detect_hotkey_request, detect_hotkey_response> detect_hotkey_rpc;
 
 class mutation_log;
 namespace test {
@@ -79,6 +81,9 @@ typedef dsn::ref_ptr<replica_stub> replica_stub_ptr;
 
 class duplication_sync_timer;
 class replica_bulk_loader;
+class replica_backup_server;
+class replica_split_manager;
+
 class replica_stub : public serverlet<replica_stub>, public ref_counter
 {
 public:
@@ -109,10 +114,7 @@ public:
     void on_config_proposal(const configuration_update_request &proposal);
     void on_query_decree(query_replica_decree_rpc rpc);
     void on_query_replica_info(query_replica_info_rpc rpc);
-    void on_query_disk_info(query_disk_info_rpc rpc);
     void on_query_app_info(query_app_info_rpc rpc);
-    void on_cold_backup(backup_rpc rpc);
-    void on_clear_cold_backup(const backup_clear_request &request);
     void on_bulk_load(bulk_load_rpc rpc);
 
     //
@@ -130,15 +132,6 @@ public:
     void on_group_check(group_check_rpc rpc);
     void on_copy_checkpoint(copy_checkpoint_rpc rpc);
     void on_group_bulk_load(group_bulk_load_rpc rpc);
-
-    //
-    //    functions while executing partition split
-    //
-    // on primary, child notify itself has been caught up parent
-    void on_notify_primary_split_catch_up(notify_catch_up_rpc rpc);
-
-    // on all replica, update new partition count
-    void on_update_child_group_partition_count(update_child_group_partition_count_rpc rpc);
 
     //
     //    local messages
@@ -160,8 +153,9 @@ public:
     //
     // common routines for inquiry
     //
-    replica_ptr get_replica(gpid id);
+    replica_ptr get_replica(gpid id) const;
     replication_options &options() { return _options; }
+    const replication_options &options() const { return _options; }
     bool is_connected() const { return NS_Connected == _state; }
     virtual rpc_address get_meta_server_address() const { return _failure_detector->get_servers(); }
     rpc_address primary_address() const { return _primary_address; }
@@ -212,6 +206,23 @@ public:
 
     // This function is used for partition split error handler
     void split_replica_error_handler(gpid pid, local_execution handler);
+
+    // on primary parent partition, child notify itself has been caught up parent
+    void on_notify_primary_split_catch_up(notify_catch_up_rpc rpc);
+
+    // on child partition, update new partition count
+    void on_update_child_group_partition_count(update_child_group_partition_count_rpc rpc);
+
+    // TODO: (Tangyanzhao) add some comments
+    void on_detect_hotkey(detect_hotkey_rpc rpc);
+
+    void on_query_disk_info(query_disk_info_rpc rpc);
+    void on_disk_migrate(replica_disk_migrate_rpc rpc);
+
+    // query partitions compact status by app_id
+    void
+    query_app_compact_status(int32_t app_id,
+                             /*out*/ std::unordered_map<gpid, manual_compaction_status> &status);
 
 private:
     enum replica_node_state
@@ -280,6 +291,10 @@ private:
         return 0;
     }
 
+    void query_app_data_version(
+        int32_t app_id,
+        /*pidx => data_version*/ std::unordered_map<int32_t, uint32_t> &version_map);
+
 #ifdef DSN_ENABLE_GPERF
     // Try to release tcmalloc memory back to operating system
     void gc_tcmalloc_memory();
@@ -294,6 +309,8 @@ private:
     friend class replica_duplicator;
     friend class replica_http_service;
     friend class replica_bulk_loader;
+    friend class replica_split_manager;
+    friend class replica_disk_migrator;
 
     friend class mock_replica_stub;
     friend class duplication_sync_timer;
@@ -301,8 +318,7 @@ private:
     friend class replica_duplicator_manager_test;
     friend class duplication_test_base;
     friend class replica_test;
-    friend class replica_disk_test;
-    friend class replica_split_manager;
+    friend class replica_disk_test_base;
 
     typedef std::unordered_map<gpid, ::dsn::task_ptr> opening_replicas;
     typedef std::unordered_map<gpid, std::tuple<task_ptr, replica_ptr, app_info, replica_info>>
@@ -337,6 +353,7 @@ private:
     ::dsn::task_ptr _mem_release_timer_task;
 
     std::unique_ptr<duplication_sync_timer> _duplication_sync_timer;
+    std::unique_ptr<replica_backup_server> _backup_server;
 
     // command_handlers
     dsn_handle_t _kill_partition_command;

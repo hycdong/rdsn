@@ -26,13 +26,20 @@ class block_service_manager
 {
 public:
     block_service_manager();
-    block_filesystem *get_block_filesystem(const std::string &provider);
+    ~block_service_manager();
+    block_filesystem *get_or_create_block_filesystem(const std::string &provider);
 
     // download files from remote file system
     // \return  ERR_FILE_OPERATION_FAILED: local file system error
     // \return  ERR_FS_INTERNAL: remote file system error
     // \return  ERR_CORRUPTION: file not exist or damaged
+    // \return  ERR_PATH_ALREADY_EXIST: local file exist
     // if download file succeed, download_err = ERR_OK and set download_file_size
+    //
+    // TODO(wutao1): create block_filesystem_wrapper instead.
+    // NOTE: This function is not responsible for the correctness of the downloaded file.
+    // The file may be half-downloaded or corrupted due to disk failure.
+    // The users can compare checksums, and retry download if validation failed.
     error_code download_file(const std::string &remote_dir,
                              const std::string &local_dir,
                              const std::string &file_name,

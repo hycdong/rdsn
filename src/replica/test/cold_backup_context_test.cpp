@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "backup_block_service_mock.h"
+#include "replica/backup/cold_backup_context.h"
 
 ref_ptr<block_file_mock> current_chkpt_file = new block_file_mock("", 0, "");
 ref_ptr<block_file_mock> backup_metadata_file = new block_file_mock("", 0, "");
@@ -124,7 +125,7 @@ void replication_service_test_app::remote_chkpt_dir_exist_test()
         current_chkpt_file->set_context(dir_name);
 
         std::string parent_dir = cold_backup::get_replica_backup_path(
-            backup_root, mock_policy_info.policy_name, mock_app_name, mock_gpid, mock_backup_id);
+            backup_root, mock_app_name, mock_gpid, mock_backup_id);
 
         std::vector<ls_entry> entries;
         entries.emplace_back(ls_entry{std::string(dir_name), true});

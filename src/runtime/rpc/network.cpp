@@ -24,19 +24,27 @@
  * THE SOFTWARE.
  */
 
-#include <dsn/tool-api/network.h>
-#include <dsn/utility/factory_store.h>
 #include "message_parser_manager.h"
 #include "runtime/rpc/rpc_engine.h"
+
+#include <dsn/tool-api/network.h>
+#include <dsn/utility/factory_store.h>
+#include <dsn/utility/flags.h>
+#include <dsn/dist/fmt_logging.h>
 
 namespace dsn {
 /*static*/ join_point<void, rpc_session *>
     rpc_session::on_rpc_session_connected("rpc.session.connected");
 /*static*/ join_point<void, rpc_session *>
     rpc_session::on_rpc_session_disconnected("rpc.session.disconnected");
+/*static*/ join_point<bool, message_ex *>
+    rpc_session::on_rpc_recv_message("rpc.session.recv.message");
+/*static*/ join_point<bool, message_ex *>
+    rpc_session::on_rpc_send_message("rpc.session.send.message");
 
 rpc_session::~rpc_session()
 {
+    clear_pending_messages();
     clear_send_queue(false);
 
     {
@@ -65,7 +73,7 @@ void rpc_session::set_connected()
 
     {
         utils::auto_lock<utils::ex_lock_nr> l(_lock);
-        dassert(_connect_state == SS_CONNECTING, "session must be connecting");
+        dcheck_eq(_connect_state, SS_CONNECTING);
         _connect_state = SS_CONNECTED;
     }
 
@@ -244,8 +252,13 @@ int rpc_session::prepare_parser()
 void rpc_session::send_message(message_ex *msg)
 {
     msg->add_ref(); // released in on_send_completed
-
     msg->io_session = this;
+
+    // ignore msg if join point return false
+    if (dsn_unlikely(!on_rpc_send_message.execute(msg, true))) {
+        msg->release_ref();
+        return;
+    }
 
     dassert(_parser, "parser should not be null when send");
     _parser->prepare_on_send(msg);
@@ -256,7 +269,7 @@ void rpc_session::send_message(message_ex *msg)
         msg->dl.insert_before(&_messages);
         ++_message_count;
 
-        if (SS_CONNECTED == _connect_state && !_is_sending_next) {
+        if ((SS_CONNECTED == _connect_state) && !_is_sending_next) {
             _is_sending_next = true;
             sig = _message_sent + 1;
             unlink_message_for_send();
@@ -372,12 +385,25 @@ bool rpc_session::on_disconnected(bool is_write)
     return ret;
 }
 
+void rpc_session::on_failure(bool is_write)
+{
+    if (on_disconnected(is_write)) {
+        close();
+    }
+}
+
 bool rpc_session::on_recv_message(message_ex *msg, int delay_ms)
 {
     if (msg->header->from_address.is_invalid())
         msg->header->from_address = _remote_addr;
     msg->to_address = _net.address();
     msg->io_session = this;
+
+    // ignore msg if join point return false
+    if (dsn_unlikely(!on_rpc_recv_message.execute(msg, true))) {
+        delete msg;
+        return false;
+    }
 
     if (msg->header->context.u.is_request) {
         // ATTENTION: need to check if self connection occurred.
@@ -413,6 +439,68 @@ bool rpc_session::on_recv_message(message_ex *msg, int delay_ms)
 
     return true;
 }
+
+bool rpc_session::try_pend_message(message_ex *msg)
+{
+    // if negotiation is not succeed, we should pend msg,
+    // in order to resend it when the negotiation is succeed
+    if (dsn_unlikely(!negotiation_succeed)) {
+        utils::auto_lock<utils::ex_lock_nr> l(_lock);
+        if (!negotiation_succeed) {
+            msg->add_ref();
+            _pending_messages.push_back(msg);
+            return true;
+        }
+    }
+    return false;
+}
+
+void rpc_session::clear_pending_messages()
+{
+    utils::auto_lock<utils::ex_lock_nr> l(_lock);
+    for (auto msg : _pending_messages) {
+        msg->release_ref();
+    }
+    _pending_messages.clear();
+}
+
+void rpc_session::set_negotiation_succeed()
+{
+    std::vector<message_ex *> swapped_pending_msgs;
+    {
+        utils::auto_lock<utils::ex_lock_nr> l(_lock);
+        negotiation_succeed = true;
+
+        _pending_messages.swap(swapped_pending_msgs);
+    }
+
+    // resend the pending messages
+    for (auto msg : swapped_pending_msgs) {
+        send_message(msg);
+        msg->release_ref();
+    }
+}
+
+bool rpc_session::is_negotiation_succeed() const
+{
+    // double check. the first one don't lock the _lock.
+    // Because negotiation_succeed only transfered from false to true.
+    // So if it is true now, it will not change in the later.
+    // But if it is false now, maybe it will change soon. So we should use lock to protect it.
+    if (dsn_likely(negotiation_succeed)) {
+        return negotiation_succeed;
+    } else {
+        utils::auto_lock<utils::ex_lock_nr> l(_lock);
+        return negotiation_succeed;
+    }
+}
+
+void rpc_session::set_client_username(const std::string &user_name)
+{
+    _client_username = user_name;
+}
+
+const std::string &rpc_session::get_client_username() const { return _client_username; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 network::network(rpc_engine *srv, network *inner_provider)
@@ -720,4 +808,5 @@ void connection_oriented_network::on_client_session_disconnected(rpc_session_ptr
                scount);
     }
 }
+
 } // namespace dsn

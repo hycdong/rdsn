@@ -49,6 +49,9 @@
 #include "block_service/block_service_manager.h"
 
 namespace dsn {
+namespace security {
+class access_controller;
+} // namespace security
 namespace replication {
 
 class server_state;
@@ -202,15 +205,31 @@ private:
     int check_leader(dsn::message_ex *req, dsn::rpc_address *forward_address);
     template <typename TRpcHolder>
     int check_leader(TRpcHolder rpc, /*out*/ rpc_address *forward_address);
+    // ret:
+    //    false: check failed
+    //    true:  check succeed
     template <typename TRpcHolder>
     bool check_status(TRpcHolder rpc, /*out*/ rpc_address *forward_address = nullptr);
+    template <typename TRespType>
+    bool check_status_with_msg(message_ex *req, TRespType &response_struct);
+
     error_code remote_storage_initialize();
     bool check_freeze() const;
 
 private:
-    friend class test::test_checker;
-    friend class meta_service_test_app;
     friend class bulk_load_service_test;
+    friend class meta_backup_service_test;
+    friend class meta_backup_test_base;
+    friend class meta_duplication_service;
+    friend class meta_http_service;
+    friend class meta_http_service_test;
+    friend class meta_load_balance_test;
+    friend class meta_service_test;
+    friend class meta_service_test_app;
+    friend class meta_split_service_test;
+    friend class meta_test_base;
+    friend class policy_context_test;
+    friend class test::test_checker;
 
     replication_options _opts;
     meta_options _meta_opts;
@@ -225,15 +244,6 @@ private:
 
     std::shared_ptr<server_load_balancer> _balancer;
     std::shared_ptr<backup_service> _backup_handler;
-
-    friend class meta_test_base;
-    friend class meta_duplication_service;
-    friend class meta_http_service_test;
-    friend class meta_load_balance_test;
-    friend class meta_backup_test_base;
-    friend class meta_http_service;
-    friend class meta_service_test;
-    friend class meta_split_service_test;
 
     std::unique_ptr<meta_duplication_service> _dup_svc;
 
@@ -263,6 +273,8 @@ private:
     perf_counter_wrapper _unalive_nodes_count;
 
     dsn::task_tracker _tracker;
+
+    std::unique_ptr<security::access_controller> _access_controller;
 };
 
 } // namespace replication

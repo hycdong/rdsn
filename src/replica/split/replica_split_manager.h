@@ -1,4 +1,4 @@
-﻿// Licensed to the Apache Software Foundation (ASF) under one
+// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The ASF licenses this file
@@ -32,6 +32,8 @@ public:
 
     int32_t get_partition_version() const { return _partition_version.load(); }
     gpid get_child_gpid() const { return _child_gpid; }
+    void set_child_gpid(gpid pid) { _child_gpid = pid; }
+
     bool is_splitting() const
     {
         return _child_gpid.get_app_id() > 0 && _child_init_ballot > 0 &&
@@ -120,19 +122,6 @@ private:
     // child partition has been registered on meta_server, could be active
     void child_partition_active(const partition_configuration &config);
 
-    // parent copy mutations to child during partition split
-    void copy_mutation(mutation_ptr &mu);
-
-    // child add mutation into prepare list and private log
-    // after child copy prepare list, before child replica become active
-    void on_copy_mutation(mutation_ptr &mu);
-
-    // child replica send ack to its parent when copy mutation synchronously
-    void ack_parent(dsn::error_code ec, mutation_ptr &mu);
-
-    // parent replica handle child ack when child copy mutation synchronously
-    void on_copy_mutation_reply(dsn::error_code ec, ballot b, decree d);
-
     // return true if parent status is valid
     bool parent_check_states();
     // check if child status is valid
@@ -148,7 +137,7 @@ private:
     // called by `on_config_sync` in `replica_config.cpp`
     // primary parent start or stop split according to meta_split_status
     void trigger_primary_parent_split(const int32_t meta_partition_count,
-                                      split_status::type meta_split_status);
+                                      const split_status::type meta_split_status);
 
     // called by `on_group_check` in `replica_check.cpp`
     // secondary parent check whether should start or stop split
@@ -169,6 +158,19 @@ private:
     void on_query_child_state_reply(error_code ec,
                                     const query_child_state_request &request,
                                     const query_child_state_response &response);
+
+    // parent copy mutations to child during partition split
+    void copy_mutation(mutation_ptr &mu);
+
+    // child add mutation into prepare list and private log
+    // after child copy prepare list, before child replica become active
+    void on_copy_mutation(mutation_ptr &mu);
+
+    // when child copy mutation synchronously, child replica send ack to its parent
+    void ack_parent(dsn::error_code ec, mutation_ptr &mu);
+
+    // when child copy mutation synchronously, parent replica handle child ack
+    void on_copy_mutation_reply(dsn::error_code ec, ballot b, decree d);
 
     //
     // helper functions

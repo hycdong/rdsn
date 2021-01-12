@@ -61,6 +61,8 @@ function usage_build()
         echo "                         e.g., \"dsn_runtime_tests,dsn_meta_state_tests\","
         echo "                         if not set, then run all tests"
     fi
+
+    echo "   --enable_rocksdb_portable      build a portable rocksdb binary"
 }
 function run_build()
 {
@@ -82,6 +84,7 @@ function run_build()
     CHECK=NO
     SANITIZER=""
     TEST_MODULE=""
+    ROCKSDB_PORTABLE=OFF
     while [[ $# > 0 ]]; do
         key="$1"
         case $key in
@@ -153,6 +156,9 @@ function run_build()
                 TEST_MODULE="$2"
                 shift
                 ;;
+            --enable_rocksdb_portable)
+                ROCKSDB_PORTABLE=ON
+                ;;
             *)
                 echo "ERROR: unknown option \"$key\""
                 echo
@@ -180,7 +186,8 @@ function run_build()
         echo "Start building third-parties..."
         mkdir -p build
         pushd build
-        cmake .. -DCMAKE_C_COMPILER=$C_COMPILER -DCMAKE_CXX_COMPILER=$CXX_COMPILER -DCMAKE_BUILD_TYPE=Release
+        cmake .. -DCMAKE_C_COMPILER=$C_COMPILER -DCMAKE_CXX_COMPILER=$CXX_COMPILER -DCMAKE_BUILD_TYPE=Release \
+        -DROCKSDB_PORTABLE=${ROCKSDB_PORTABLE}
         make -j$JOB_NUM
         exit_if_fail $?
         popd
@@ -205,46 +212,6 @@ function run_build()
         ENABLE_GCOV="$ENABLE_GCOV" SANITIZER="$SANITIZER" \
         RUN_VERBOSE="$RUN_VERBOSE" TEST_MODULE="$TEST_MODULE" NO_TEST="$NO_TEST" \
         DISABLE_GPERF="$DISABLE_GPERF" $scripts_dir/build.sh
-}
-
-#####################
-## install
-#####################
-function usage_install()
-{
-    echo "Options for subcommand 'install':"
-    echo "   -h|--help         print the help info"
-    echo "   -d|--install_dir <dir>"
-    echo "                     specify the install directory,"
-    echo "                     if not set, then default is './install'"
-}
-function run_install()
-{
-    INSTALL_DIR=$DSN_ROOT
-    if [ ! -d $INSTALL_DIR ]; then
-        INSTALL_DIR=`pwd`/install
-    fi
-    while [[ $# > 0 ]]; do
-        key="$1"
-        case $key in
-            -h|--help)
-                usage_install
-                exit 0
-                ;;
-            -d|--install_dir)
-                INSTALL_DIR="$2"
-                shift
-                ;;
-            *)
-                echo "ERROR: unknown option \"$key\""
-                echo
-                usage_install
-                exit 1
-                ;;
-        esac
-        shift
-    done
-    INSTALL_DIR="$INSTALL_DIR" $scripts_dir/install.sh
 }
 
 #####################
@@ -386,9 +353,6 @@ case $cmd in
         shift
         ONLY_BUILD=YES
         run_build $* ;;
-    install)
-        shift
-        run_install $* ;;
     test)
         shift
         ONLY_BUILD=NO

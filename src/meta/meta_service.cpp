@@ -47,6 +47,7 @@
 #include "meta/duplication/meta_duplication_service.h"
 #include "meta_split_service.h"
 #include "meta_bulk_load_service.h"
+#include "runtime/security/access_controller.h"
 
 namespace dsn {
 namespace replication {
@@ -76,6 +77,8 @@ meta_service::meta_service()
         "replica server disconnect count in the recent period");
     _unalive_nodes_count.init_app_counter(
         "eon.meta_service", "unalive_nodes", COUNTER_TYPE_NUMBER, "current count of unalive nodes");
+
+    _access_controller = security::create_meta_access_controller();
 }
 
 meta_service::~meta_service()
@@ -120,6 +123,12 @@ int meta_service::check_leader(TRpcHolder rpc, rpc_address *forward_address)
 template <typename TRpcHolder>
 bool meta_service::check_status(TRpcHolder rpc, rpc_address *forward_address)
 {
+    if (!_access_controller->allowed(rpc.dsn_request())) {
+        rpc.response().err = ERR_ACL_DENY;
+        ddebug("reject request with ERR_ACL_DENY");
+        return false;
+    }
+
     int result = check_leader(rpc, forward_address);
     if (result == 0)
         return false;
@@ -132,6 +141,36 @@ bool meta_service::check_status(TRpcHolder rpc, rpc_address *forward_address)
             rpc.response().err = ERR_SERVICE_NOT_ACTIVE;
         }
         ddebug("reject request with %s", rpc.response().err.to_string());
+        return false;
+    }
+
+    return true;
+}
+
+template <typename TRespType>
+bool meta_service::check_status_with_msg(message_ex *req, TRespType &response_struct)
+{
+    if (!_access_controller->allowed(req)) {
+        ddebug("reject request with ERR_ACL_DENY");
+        response_struct.err = ERR_ACL_DENY;
+        reply(req, response_struct);
+        return false;
+    }
+
+    int result = check_leader(req, nullptr);
+    if (result == 0) {
+        return false;
+    }
+    if (result == -1 || !_started) {
+        if (result == -1) {
+            response_struct.err = ERR_FORWARD_TO_OTHERS;
+        } else if (_recovering) {
+            response_struct.err = ERR_UNDER_RECOVERY;
+        } else {
+            response_struct.err = ERR_SERVICE_NOT_ACTIVE;
+        }
+        ddebug("reject request with %s", response_struct.err.to_string());
+        reply(req, response_struct);
         return false;
     }
 
@@ -475,32 +514,13 @@ int meta_service::check_leader(dsn::message_ex *req, dsn::rpc_address *forward_a
     return 1;
 }
 
-/**
- * If your rpc interface uses rpc_holder, please don't use RPC_CHECK_STATUS.
- * Because it will cause the response to be sent repeatedly
- */
-#define RPC_CHECK_STATUS(dsn_msg, response_struct)                                                 \
-    dinfo("rpc %s called", __FUNCTION__);                                                          \
-    int result = check_leader(dsn_msg, nullptr);                                                   \
-    if (result == 0)                                                                               \
-        return;                                                                                    \
-    if (result == -1 || !_started) {                                                               \
-        if (result == -1)                                                                          \
-            response_struct.err = ERR_FORWARD_TO_OTHERS;                                           \
-        else if (_recovering)                                                                      \
-            response_struct.err = ERR_UNDER_RECOVERY;                                              \
-        else                                                                                       \
-            response_struct.err = ERR_SERVICE_NOT_ACTIVE;                                          \
-        ddebug("reject request with %s", response_struct.err.to_string());                         \
-        reply(dsn_msg, response_struct);                                                           \
-        return;                                                                                    \
-    }
-
 // table operations
 void meta_service::on_create_app(dsn::message_ex *req)
 {
     configuration_create_app_response response;
-    RPC_CHECK_STATUS(req, response);
+    if (!check_status_with_msg(req, response)) {
+        return;
+    }
 
     req->add_ref();
     tasking::enqueue(LPC_META_STATE_NORMAL,
@@ -512,7 +532,9 @@ void meta_service::on_create_app(dsn::message_ex *req)
 void meta_service::on_drop_app(dsn::message_ex *req)
 {
     configuration_drop_app_response response;
-    RPC_CHECK_STATUS(req, response);
+    if (!check_status_with_msg(req, response)) {
+        return;
+    }
 
     req->add_ref();
     tasking::enqueue(LPC_META_STATE_NORMAL,
@@ -524,7 +546,9 @@ void meta_service::on_drop_app(dsn::message_ex *req)
 void meta_service::on_recall_app(dsn::message_ex *req)
 {
     configuration_recall_app_response response;
-    RPC_CHECK_STATUS(req, response);
+    if (!check_status_with_msg(req, response)) {
+        return;
+    }
 
     req->add_ref();
     tasking::enqueue(LPC_META_STATE_NORMAL,
@@ -663,7 +687,9 @@ void meta_service::on_config_sync(configuration_query_by_node_rpc rpc)
 void meta_service::on_update_configuration(dsn::message_ex *req)
 {
     configuration_update_response response;
-    RPC_CHECK_STATUS(req, response);
+    if (!check_status_with_msg(req, response)) {
+        return;
+    }
 
     std::shared_ptr<configuration_update_request> request =
         std::make_shared<configuration_update_request>();
@@ -756,7 +782,9 @@ void meta_service::on_start_recovery(configuration_recovery_rpc rpc)
 void meta_service::on_start_restore(dsn::message_ex *req)
 {
     configuration_create_app_response response;
-    RPC_CHECK_STATUS(req, response);
+    if (!check_status_with_msg(req, response)) {
+        return;
+    }
 
     req->add_ref();
     tasking::enqueue(
@@ -766,7 +794,9 @@ void meta_service::on_start_restore(dsn::message_ex *req)
 void meta_service::on_add_backup_policy(dsn::message_ex *req)
 {
     configuration_add_backup_policy_response response;
-    RPC_CHECK_STATUS(req, response);
+    if (!check_status_with_msg(req, response)) {
+        return;
+    }
 
     if (_backup_handler == nullptr) {
         derror("meta doesn't enable backup service");

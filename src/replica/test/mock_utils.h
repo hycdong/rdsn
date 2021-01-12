@@ -59,7 +59,11 @@ public:
                                       /*output*/ int64_t *last_decree,
                                       bool flush_memtable = false) override
     {
-        *last_decree = _decree;
+        if (last_decree != nullptr) {
+            *last_decree = _decree;
+        }
+
+        utils::filesystem::create_file(fmt::format("{}/checkpoint.file", checkpoint_dir));
         return ERR_OK;
     }
     int on_request(message_ex *request) override { return 0; }
@@ -75,6 +79,8 @@ public:
 
     void set_ingestion_status(ingestion_status::type status) { _ingestion_status = status; }
     ingestion_status::type get_ingestion_status() override { return _ingestion_status; }
+
+    uint32_t query_data_version() const { return 1; }
 
 private:
     std::map<std::string, std::string> _envs;
@@ -219,8 +225,6 @@ public:
 
     void set_state_connected() { _state = replica_node_state::NS_Connected; }
 
-    void set_rpc_address(const rpc_address &address) { _primary_address = address; }
-
     rpc_address get_meta_server_address() const override { return rpc_address("127.0.0.2", 12321); }
 
     std::map<gpid, mock_replica *> mock_replicas;
@@ -274,6 +278,8 @@ public:
     {
         _bulk_load_downloading_count.store(count);
     }
+
+    void set_rpc_address(const rpc_address &address) { _primary_address = address; }
 };
 
 class mock_log_file : public log_file

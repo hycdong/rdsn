@@ -30,9 +30,13 @@
 #include "replica_stub.h"
 #include "duplication/replica_duplicator_manager.h"
 #include "backup/replica_backup_manager.h"
+#include "backup/cold_backup_context.h"
 #include "bulk_load/replica_bulk_loader.h"
 #include "split/replica_split_manager.h"
+#include "replica_disk_migrator.h"
+#include "runtime/security/access_controller.h"
 
+#include <dsn/utils/latency_tracer.h>
 #include <dsn/cpp/json_helper.h>
 #include <dsn/dist/replication/replication_app_base.h>
 #include <dsn/dist/fmt_logging.h>
@@ -72,6 +76,7 @@ replica::replica(
     _config.pid = gpid;
     _bulk_loader = make_unique<replica_bulk_loader>(this);
     _split_mgr = make_unique<replica_split_manager>(this);
+    _disk_migrator = make_unique<replica_disk_migrator>(this);
 
     std::string counter_str = fmt::format("private.log.size(MB)@{}", gpid);
     _counter_private_log_size.init_app_counter(
@@ -101,6 +106,8 @@ replica::replica(
         _extra_envs.insert(
             std::make_pair(backup_restore_constant::FORCE_RESTORE, std::string("true")));
     }
+
+    _access_controller = security::create_replica_access_controller(name());
 }
 
 void replica::update_last_checkpoint_generate_time()
@@ -157,6 +164,10 @@ replica::~replica(void)
 
 void replica::on_client_read(dsn::message_ex *request)
 {
+    if (!_access_controller->allowed(request)) {
+        response_client_read(request, ERR_ACL_DENY);
+    }
+
     if (_split_mgr->get_partition_version() == -1) {
         derror_replica("current partition is not available because of partition split");
         response_client_read(request, ERR_OBJECT_NOT_FOUND);
@@ -258,6 +269,7 @@ void replica::execute_mutation(mutation_ptr &mu)
         }
         break;
     case partition_status::PS_PRIMARY: {
+        ADD_POINT(mu->tracer);
         check_state_completeness();
         dassert(_app->last_committed_decree() + 1 == d,
                 "app commit: %" PRId64 ", mutation decree: %" PRId64 "",
@@ -332,6 +344,7 @@ void replica::execute_mutation(mutation_ptr &mu)
     }
 
     if (status() == partition_status::PS_PRIMARY) {
+        ADD_CUSTOM_POINT(mu->tracer, "completed");
         mutation_ptr next = _primary_states.write_queue.check_possible_work(
             static_cast<int>(_prepare_list->max_decree() - d));
 
@@ -460,6 +473,42 @@ std::string replica::query_compact_state() const
     return _app->query_compact_state();
 }
 
+const char *manual_compaction_status_to_string(manual_compaction_status status)
+{
+    switch (status) {
+    case kFinish:
+        return "CompactionFinish";
+    case kRunning:
+        return "CompactionRunning";
+    case kQueue:
+        return "CompactionQueue";
+    default:
+        dassert(false, "invalid status({})", status);
+        __builtin_unreachable();
+    }
+}
+
+manual_compaction_status replica::get_compact_status() const
+{
+    std::string compact_state = query_compact_state();
+    // query_compact_state will return a message like:
+    // Case1. last finish at [-]
+    // - partition is not manual compaction
+    // Case2. last finish at [timestamp], last used {time_used} ms
+    // - partition manual compaction finished
+    // Case3. last finish at [-], recent enqueue at [timestamp]
+    // - partition is in manual compaction queue
+    // Case4. last finish at [-], recent enqueue at [timestamp], recent start at [timestamp]
+    // - partition is running manual compaction
+    if (compact_state.find("recent start at") != std::string::npos) {
+        return kRunning;
+    } else if (compact_state.find("recent enqueue at") != std::string::npos) {
+        return kQueue;
+    } else {
+        return kFinish;
+    }
+}
+
 // Replicas on the server which serves for the same table will share the same perf-counter.
 // For example counter `table.level.RPC_RRDB_RRDB_MULTI_PUT.latency(ns)@test_table` is shared by
 // all the replicas for `test_table`.
@@ -485,5 +534,17 @@ void replica::init_table_level_latency_counters()
         }
     }
 }
+
+void replica::on_detect_hotkey(const detect_hotkey_request &req, detect_hotkey_response &resp)
+{
+    _app->on_detect_hotkey(req, resp);
+}
+
+uint32_t replica::query_data_version() const
+{
+    dassert_replica(_app != nullptr, "");
+    return _app->query_data_version();
+}
+
 } // namespace replication
 } // namespace dsn

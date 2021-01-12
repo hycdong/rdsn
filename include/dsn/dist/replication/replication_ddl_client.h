@@ -180,12 +180,17 @@ public:
 
     error_with<start_bulk_load_response> start_bulk_load(const std::string &app_name,
                                                          const std::string &cluster_name,
-                                                         const std::string &file_provider_type);
+                                                         const std::string &file_provider_type,
+                                                         const std::string &remote_root_path);
 
     error_with<control_bulk_load_response>
     control_bulk_load(const std::string &app_name, const bulk_load_control_type::type control_type);
 
     error_with<query_bulk_load_response> query_bulk_load(const std::string &app_name);
+
+    error_code detect_hotkey(const dsn::rpc_address &target,
+                             detect_hotkey_request &req,
+                             detect_hotkey_response &resp);
 
     // partition split
     error_with<start_partition_split_response> start_partition_split(const std::string &app_name,
@@ -254,10 +259,10 @@ private:
 
     /// Send request to multi replica server synchronously.
     template <typename TRpcHolder, typename TResponse = typename TRpcHolder::response_type>
-    void call_rpcs_async(std::map<dsn::rpc_address, TRpcHolder> &rpcs,
-                         std::map<dsn::rpc_address, error_with<TResponse>> &resps,
-                         int reply_thread_hash = 0,
-                         bool enable_retry = true)
+    void call_rpcs_sync(std::map<dsn::rpc_address, TRpcHolder> &rpcs,
+                        std::map<dsn::rpc_address, error_with<TResponse>> &resps,
+                        int reply_thread_hash = 0,
+                        bool enable_retry = true)
     {
         dsn::task_tracker tracker;
         error_code err = ERR_UNKNOWN;
@@ -279,7 +284,7 @@ private:
 
         if (enable_retry && rpcs.size() > 0) {
             std::map<dsn::rpc_address, dsn::error_with<TResponse>> retry_resps;
-            call_rpcs_async(rpcs, retry_resps, reply_thread_hash, false);
+            call_rpcs_sync(rpcs, retry_resps, reply_thread_hash, false);
             for (auto &resp : retry_resps) {
                 resps.emplace(resp.first, std::move(resp.second));
             }
@@ -290,6 +295,7 @@ private:
     dsn::rpc_address _meta_server;
     dsn::task_tracker _tracker;
 
+    typedef rpc_holder<detect_hotkey_request, detect_hotkey_response> detect_hotkey_rpc;
     typedef rpc_holder<query_disk_info_request, query_disk_info_response> query_disk_info_rpc;
 };
 } // namespace replication

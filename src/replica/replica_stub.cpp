@@ -39,8 +39,9 @@
 #include "mutation.h"
 #include "bulk_load/replica_bulk_loader.h"
 #include "duplication/duplication_sync_timer.h"
-#include "backup/replica_backup_manager.h"
+#include "backup/replica_backup_server.h"
 #include "split/replica_split_manager.h"
+#include "replica_disk_migrator.h"
 
 #include <dsn/cpp/json_helper.h>
 #include <dsn/utility/filesystem.h>
@@ -48,6 +49,7 @@
 #include <dsn/utility/string_conv.h>
 #include <dsn/tool-api/command_manager.h>
 #include <dsn/dist/replication/replication_app_base.h>
+#include <dsn/utility/enum_helper.h>
 #include <vector>
 #include <deque>
 #include <dsn/dist/fmt_logging.h>
@@ -809,6 +811,8 @@ void replica_stub::initialize_start()
         _duplication_sync_timer->start();
     }
 
+    _backup_server = dsn::make_unique<replica_backup_server>(this);
+
     // init liveness monitor
     dassert(NS_Disconnected == _state, "");
     if (_options.fd_disabled == false) {
@@ -857,7 +861,7 @@ dsn::error_code replica_stub::on_kill_replica(gpid id)
     }
 }
 
-replica_ptr replica_stub::get_replica(gpid id)
+replica_ptr replica_stub::get_replica(gpid id) const
 {
     zauto_read_lock l(_replicas_lock);
     auto it = _replicas.find(id);
@@ -1030,26 +1034,17 @@ void replica_stub::on_query_disk_info(query_disk_info_rpc rpc)
         disk_info info;
         // app_name empty means query all app replica_count
         if (req.app_name.empty()) {
-            for (const auto &holding_primary_replicas : dir_node->holding_primary_replicas) {
-                info.holding_primary_replica_counts[holding_primary_replicas.first] =
-                    static_cast<int>(holding_primary_replicas.second.size());
-            }
-
-            for (const auto &holding_secondary_replicas : dir_node->holding_secondary_replicas) {
-                info.holding_secondary_replica_counts[holding_secondary_replicas.first] =
-                    static_cast<int>(holding_secondary_replicas.second.size());
-            }
+            info.holding_primary_replicas = dir_node->holding_primary_replicas;
+            info.holding_secondary_replicas = dir_node->holding_secondary_replicas;
         } else {
             const auto &primary_iter = dir_node->holding_primary_replicas.find(app_id);
             if (primary_iter != dir_node->holding_primary_replicas.end()) {
-                info.holding_primary_replica_counts[app_id] =
-                    static_cast<int>(primary_iter->second.size());
+                info.holding_primary_replicas[app_id] = primary_iter->second;
             }
 
             const auto &secondary_iter = dir_node->holding_secondary_replicas.find(app_id);
             if (secondary_iter != dir_node->holding_secondary_replicas.end()) {
-                info.holding_secondary_replica_counts[app_id] =
-                    static_cast<int>(secondary_iter->second.size());
+                info.holding_secondary_replicas[app_id] = secondary_iter->second;
             }
         }
         info.tag = dir_node->tag;
@@ -1064,6 +1059,19 @@ void replica_stub::on_query_disk_info(query_disk_info_rpc rpc)
     resp.total_available_mb = _fs_manager._total_available_mb;
 
     resp.err = ERR_OK;
+}
+
+void replica_stub::on_disk_migrate(replica_disk_migrate_rpc rpc)
+{
+    const replica_disk_migrate_request &request = rpc.request();
+    replica_disk_migrate_response &response = rpc.response();
+
+    replica_ptr rep = get_replica(request.pid);
+    if (rep != nullptr) {
+        rep->disk_migrator()->on_migrate_replica(rpc); // THREAD_POOL_DEFAULT
+    } else {
+        response.err = ERR_OBJECT_NOT_FOUND;
+    }
 }
 
 void replica_stub::on_query_app_info(query_app_info_rpc rpc)
@@ -1098,53 +1106,6 @@ void replica_stub::on_query_app_info(query_app_info_rpc rpc)
                 visited_apps.insert(info.app_id);
             }
         }
-    }
-}
-
-void replica_stub::on_cold_backup(backup_rpc rpc)
-{
-    const backup_request &request = rpc.request();
-    backup_response &response = rpc.response();
-
-    ddebug("received cold backup request: backup{%s.%s.%" PRId64 "}",
-           request.pid.to_string(),
-           request.policy.policy_name.c_str(),
-           request.backup_id);
-    response.pid = request.pid;
-    response.policy_name = request.policy.policy_name;
-    response.backup_id = request.backup_id;
-
-    if (_options.cold_backup_root.empty()) {
-        derror("backup{%s.%s.%" PRId64
-               "}: cold_backup_root is empty, response ERR_OPERATION_DISABLED",
-               request.pid.to_string(),
-               request.policy.policy_name.c_str(),
-               request.backup_id);
-        response.err = ERR_OPERATION_DISABLED;
-        return;
-    }
-
-    replica_ptr rep = get_replica(request.pid);
-    if (rep != nullptr) {
-        rep->on_cold_backup(request, response);
-    } else {
-        derror("backup{%s.%s.%" PRId64 "}: replica not found, response ERR_OBJECT_NOT_FOUND",
-               request.pid.to_string(),
-               request.policy.policy_name.c_str(),
-               request.backup_id);
-        response.err = ERR_OBJECT_NOT_FOUND;
-    }
-}
-
-void replica_stub::on_clear_cold_backup(const backup_clear_request &request)
-{
-    ddebug_f("receive clear cold backup request: backup({}.{})",
-             request.pid.to_string(),
-             request.policy_name.c_str());
-
-    replica_ptr rep = get_replica(request.pid);
-    if (rep != nullptr) {
-        rep->get_backup_manager()->on_clear_cold_backup(request);
     }
 }
 
@@ -1721,21 +1682,16 @@ void replica_stub::on_gc()
     //
     // How to trigger memtable flush?
     //   we add a parameter `is_emergency' in dsn_app_async_checkpoint() function, when set true,
-    //   the undering
-    //   storage system should flush memtable as soon as possiable.
+    //   the undering storage system should flush memtable as soon as possiable.
     //
     // When to trigger memtable flush?
     //   1. Using `[replication].checkpoint_max_interval_hours' option, we can set max interval time
-    //   of two
-    //      adjacent checkpoints; If the time interval is arrived, then emergency checkpoint will be
-    //      triggered.
+    //   of two adjacent checkpoints; If the time interval is arrived, then emergency checkpoint
+    //   will be triggered.
     //   2. Using `[replication].log_shared_file_count_limit' option, we can set max file count of
-    //   shared log;
-    //      If the limit is exceeded, then emergency checkpoint will be triggered; Instead of
-    //      triggering all
-    //      replicas to do checkpoint, we will only trigger a few of necessary replicas which block
-    //      garbage
-    //      collection of the oldest log file.
+    //   shared log; If the limit is exceeded, then emergency checkpoint will be triggered; Instead
+    //   of triggering all replicas to do checkpoint, we will only trigger a few of necessary
+    //   replicas which block garbage collection of the oldest log file.
     //
     if (_log != nullptr) {
         replica_log_info_map gc_condition;
@@ -2216,11 +2172,9 @@ void replica_stub::open_service()
     register_rpc_handler_with_rpc_holder(
         RPC_QUERY_DISK_INFO, "query_disk_info", &replica_stub::on_query_disk_info);
     register_rpc_handler_with_rpc_holder(
-        RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
+        RPC_REPLICA_DISK_MIGRATE, "disk_migrate_replica", &replica_stub::on_disk_migrate);
     register_rpc_handler_with_rpc_holder(
-        RPC_COLD_BACKUP, "cold_backup", &replica_stub::on_cold_backup);
-    register_rpc_handler(
-        RPC_CLEAR_COLD_BACKUP, "clear_cold_backup", &replica_stub::on_clear_cold_backup);
+        RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
     register_rpc_handler_with_rpc_holder(RPC_SPLIT_NOTIFY_CATCH_UP,
                                          "child_notify_catch_up",
                                          &replica_stub::on_notify_primary_split_catch_up);
@@ -2230,6 +2184,8 @@ void replica_stub::open_service()
     register_rpc_handler_with_rpc_holder(RPC_BULK_LOAD, "bulk_load", &replica_stub::on_bulk_load);
     register_rpc_handler_with_rpc_holder(
         RPC_GROUP_BULK_LOAD, "group_bulk_load", &replica_stub::on_group_bulk_load);
+    register_rpc_handler_with_rpc_holder(
+        RPC_DETECT_HOTKEY, "detect_hotkey", &replica_stub::on_detect_hotkey);
 
     register_ctrl_command();
 }
@@ -2759,9 +2715,7 @@ void replica_stub::create_child_replica(rpc_address primary_address,
                                    init_ballot),
                          child_gpid.thread_hash());
     } else {
-        derror_f("failed to create child replica ({}) for app({}), wait for next run",
-                 child_gpid,
-                 app.app_name);
+        dwarn_f("failed to create child replica ({}), ignore it and wait next run", child_gpid);
         split_replica_error_handler(
             parent_gpid,
             std::bind(&replica_split_manager::parent_cleanup_split_context, std::placeholders::_1));
@@ -2844,8 +2798,8 @@ void replica_stub::on_notify_primary_split_catch_up(notify_catch_up_rpc rpc)
 // ThreadPool: THREAD_POOL_REPLICATION
 void replica_stub::on_update_child_group_partition_count(update_child_group_partition_count_rpc rpc)
 {
-    const update_child_group_partition_count_request &request = rpc.request();
-    update_child_group_partition_count_response &response = rpc.response();
+    const auto &request = rpc.request();
+    auto &response = rpc.response();
     replica_ptr replica = get_replica(request.child_pid);
     if (replica != nullptr) {
         replica->get_split_manager()->on_update_child_group_partition_count(request, response);
@@ -2912,6 +2866,52 @@ void replica_stub::on_group_bulk_load(group_bulk_load_rpc rpc)
     } else {
         derror_f("replica({}) is not existed", request.config.pid);
         response.err = ERR_OBJECT_NOT_FOUND;
+    }
+}
+
+void replica_stub::on_detect_hotkey(detect_hotkey_rpc rpc)
+{
+    const auto &request = rpc.request();
+    auto &response = rpc.response();
+
+    ddebug_f("[{}@{}]: received detect hotkey request, hotkey_type = {}, detect_action = {}",
+             request.pid,
+             _primary_address_str,
+             enum_to_string(request.type),
+             enum_to_string(request.action));
+
+    replica_ptr rep = get_replica(request.pid);
+    if (rep != nullptr) {
+        rep->on_detect_hotkey(request, response);
+    } else {
+        response.err = ERR_OBJECT_NOT_FOUND;
+        response.err_hint = fmt::format("not find the replica {} \n", request.pid);
+    }
+}
+
+void replica_stub::query_app_data_version(
+    int32_t app_id, /*pidx => data_version*/ std::unordered_map<int32_t, uint32_t> &version_map)
+{
+    zauto_read_lock l(_replicas_lock);
+    for (const auto &kv : _replicas) {
+        if (kv.first.get_app_id() == app_id) {
+            replica_ptr rep = kv.second;
+            if (rep != nullptr) {
+                uint32_t data_version = rep->query_data_version();
+                version_map[kv.first.get_partition_index()] = data_version;
+            }
+        }
+    }
+}
+
+void replica_stub::query_app_compact_status(
+    int32_t app_id, std::unordered_map<gpid, manual_compaction_status> &status)
+{
+    zauto_read_lock l(_replicas_lock);
+    for (auto it = _replicas.begin(); it != _replicas.end(); ++it) {
+        if (it->first.get_app_id() == app_id) {
+            status[it->first] = it->second->get_compact_status();
+        }
     }
 }
 

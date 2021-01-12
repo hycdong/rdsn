@@ -245,6 +245,42 @@ struct bulk_load_control_type
 
 extern const std::map<int, const char *> _bulk_load_control_type_VALUES_TO_NAMES;
 
+struct hotkey_type
+{
+    enum type
+    {
+        READ = 0,
+        WRITE = 1
+    };
+};
+
+extern const std::map<int, const char *> _hotkey_type_VALUES_TO_NAMES;
+
+struct detect_action
+{
+    enum type
+    {
+        START = 0,
+        STOP = 1,
+        QUERY = 2
+    };
+};
+
+extern const std::map<int, const char *> _detect_action_VALUES_TO_NAMES;
+
+struct disk_migration_status
+{
+    enum type
+    {
+        IDLE = 0,
+        MOVING = 1,
+        MOVED = 2,
+        CLOSED = 3
+    };
+};
+
+extern const std::map<int, const char *> _disk_migration_status_VALUES_TO_NAMES;
+
 class mutation_header;
 
 class mutation_update;
@@ -340,6 +376,10 @@ class disk_info;
 class query_disk_info_request;
 
 class query_disk_info_response;
+
+class replica_disk_migrate_request;
+
+class replica_disk_migrate_response;
 
 class query_app_info_request;
 
@@ -476,6 +516,10 @@ class control_bulk_load_response;
 class query_bulk_load_request;
 
 class query_bulk_load_response;
+
+class detect_hotkey_request;
+
+class detect_hotkey_response;
 
 typedef struct _mutation_header__isset
 {
@@ -3357,16 +3401,16 @@ typedef struct _disk_info__isset
           full_dir(false),
           disk_capacity_mb(false),
           disk_available_mb(false),
-          holding_primary_replica_counts(false),
-          holding_secondary_replica_counts(false)
+          holding_primary_replicas(false),
+          holding_secondary_replicas(false)
     {
     }
     bool tag : 1;
     bool full_dir : 1;
     bool disk_capacity_mb : 1;
     bool disk_available_mb : 1;
-    bool holding_primary_replica_counts : 1;
-    bool holding_secondary_replica_counts : 1;
+    bool holding_primary_replicas : 1;
+    bool holding_secondary_replicas : 1;
 } _disk_info__isset;
 
 class disk_info
@@ -3383,8 +3427,8 @@ public:
     std::string full_dir;
     int64_t disk_capacity_mb;
     int64_t disk_available_mb;
-    std::map<int32_t, int32_t> holding_primary_replica_counts;
-    std::map<int32_t, int32_t> holding_secondary_replica_counts;
+    std::map<int32_t, std::set<::dsn::gpid>> holding_primary_replicas;
+    std::map<int32_t, std::set<::dsn::gpid>> holding_secondary_replicas;
 
     _disk_info__isset __isset;
 
@@ -3396,9 +3440,9 @@ public:
 
     void __set_disk_available_mb(const int64_t val);
 
-    void __set_holding_primary_replica_counts(const std::map<int32_t, int32_t> &val);
+    void __set_holding_primary_replicas(const std::map<int32_t, std::set<::dsn::gpid>> &val);
 
-    void __set_holding_secondary_replica_counts(const std::map<int32_t, int32_t> &val);
+    void __set_holding_secondary_replicas(const std::map<int32_t, std::set<::dsn::gpid>> &val);
 
     bool operator==(const disk_info &rhs) const
     {
@@ -3410,9 +3454,9 @@ public:
             return false;
         if (!(disk_available_mb == rhs.disk_available_mb))
             return false;
-        if (!(holding_primary_replica_counts == rhs.holding_primary_replica_counts))
+        if (!(holding_primary_replicas == rhs.holding_primary_replicas))
             return false;
-        if (!(holding_secondary_replica_counts == rhs.holding_secondary_replica_counts))
+        if (!(holding_secondary_replicas == rhs.holding_secondary_replicas))
             return false;
         return true;
     }
@@ -3548,6 +3592,118 @@ public:
 void swap(query_disk_info_response &a, query_disk_info_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const query_disk_info_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _replica_disk_migrate_request__isset
+{
+    _replica_disk_migrate_request__isset() : pid(false), origin_disk(false), target_disk(false) {}
+    bool pid : 1;
+    bool origin_disk : 1;
+    bool target_disk : 1;
+} _replica_disk_migrate_request__isset;
+
+class replica_disk_migrate_request
+{
+public:
+    replica_disk_migrate_request(const replica_disk_migrate_request &);
+    replica_disk_migrate_request(replica_disk_migrate_request &&);
+    replica_disk_migrate_request &operator=(const replica_disk_migrate_request &);
+    replica_disk_migrate_request &operator=(replica_disk_migrate_request &&);
+    replica_disk_migrate_request() : origin_disk(), target_disk() {}
+
+    virtual ~replica_disk_migrate_request() throw();
+    ::dsn::gpid pid;
+    std::string origin_disk;
+    std::string target_disk;
+
+    _replica_disk_migrate_request__isset __isset;
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    void __set_origin_disk(const std::string &val);
+
+    void __set_target_disk(const std::string &val);
+
+    bool operator==(const replica_disk_migrate_request &rhs) const
+    {
+        if (!(pid == rhs.pid))
+            return false;
+        if (!(origin_disk == rhs.origin_disk))
+            return false;
+        if (!(target_disk == rhs.target_disk))
+            return false;
+        return true;
+    }
+    bool operator!=(const replica_disk_migrate_request &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const replica_disk_migrate_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(replica_disk_migrate_request &a, replica_disk_migrate_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const replica_disk_migrate_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _replica_disk_migrate_response__isset
+{
+    _replica_disk_migrate_response__isset() : err(false), hint(false) {}
+    bool err : 1;
+    bool hint : 1;
+} _replica_disk_migrate_response__isset;
+
+class replica_disk_migrate_response
+{
+public:
+    replica_disk_migrate_response(const replica_disk_migrate_response &);
+    replica_disk_migrate_response(replica_disk_migrate_response &&);
+    replica_disk_migrate_response &operator=(const replica_disk_migrate_response &);
+    replica_disk_migrate_response &operator=(replica_disk_migrate_response &&);
+    replica_disk_migrate_response() : hint() {}
+
+    virtual ~replica_disk_migrate_response() throw();
+    ::dsn::error_code err;
+    std::string hint;
+
+    _replica_disk_migrate_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_hint(const std::string &val);
+
+    bool operator==(const replica_disk_migrate_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (__isset.hint != rhs.__isset.hint)
+            return false;
+        else if (__isset.hint && !(hint == rhs.hint))
+            return false;
+        return true;
+    }
+    bool operator!=(const replica_disk_migrate_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const replica_disk_migrate_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(replica_disk_migrate_response &a, replica_disk_migrate_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const replica_disk_migrate_response &obj)
 {
     obj.printTo(out);
     return out;
@@ -7084,12 +7240,13 @@ inline std::ostream &operator<<(std::ostream &out, const bulk_load_metadata &obj
 typedef struct _start_bulk_load_request__isset
 {
     _start_bulk_load_request__isset()
-        : app_name(false), cluster_name(false), file_provider_type(false)
+        : app_name(false), cluster_name(false), file_provider_type(false), remote_root_path(false)
     {
     }
     bool app_name : 1;
     bool cluster_name : 1;
     bool file_provider_type : 1;
+    bool remote_root_path : 1;
 } _start_bulk_load_request__isset;
 
 class start_bulk_load_request
@@ -7099,12 +7256,15 @@ public:
     start_bulk_load_request(start_bulk_load_request &&);
     start_bulk_load_request &operator=(const start_bulk_load_request &);
     start_bulk_load_request &operator=(start_bulk_load_request &&);
-    start_bulk_load_request() : app_name(), cluster_name(), file_provider_type() {}
+    start_bulk_load_request() : app_name(), cluster_name(), file_provider_type(), remote_root_path()
+    {
+    }
 
     virtual ~start_bulk_load_request() throw();
     std::string app_name;
     std::string cluster_name;
     std::string file_provider_type;
+    std::string remote_root_path;
 
     _start_bulk_load_request__isset __isset;
 
@@ -7114,6 +7274,8 @@ public:
 
     void __set_file_provider_type(const std::string &val);
 
+    void __set_remote_root_path(const std::string &val);
+
     bool operator==(const start_bulk_load_request &rhs) const
     {
         if (!(app_name == rhs.app_name))
@@ -7121,6 +7283,8 @@ public:
         if (!(cluster_name == rhs.cluster_name))
             return false;
         if (!(file_provider_type == rhs.file_provider_type))
+            return false;
+        if (!(remote_root_path == rhs.remote_root_path))
             return false;
         return true;
     }
@@ -7298,7 +7462,8 @@ typedef struct _bulk_load_request__isset
           cluster_name(false),
           ballot(false),
           meta_bulk_load_status(false),
-          query_bulk_load_metadata(false)
+          query_bulk_load_metadata(false),
+          remote_root_path(false)
     {
     }
     bool pid : 1;
@@ -7309,6 +7474,7 @@ typedef struct _bulk_load_request__isset
     bool ballot : 1;
     bool meta_bulk_load_status : 1;
     bool query_bulk_load_metadata : 1;
+    bool remote_root_path : 1;
 } _bulk_load_request__isset;
 
 class bulk_load_request
@@ -7324,7 +7490,8 @@ public:
           cluster_name(),
           ballot(0),
           meta_bulk_load_status((bulk_load_status::type)0),
-          query_bulk_load_metadata(0)
+          query_bulk_load_metadata(0),
+          remote_root_path()
     {
     }
 
@@ -7337,6 +7504,7 @@ public:
     int64_t ballot;
     bulk_load_status::type meta_bulk_load_status;
     bool query_bulk_load_metadata;
+    std::string remote_root_path;
 
     _bulk_load_request__isset __isset;
 
@@ -7356,6 +7524,8 @@ public:
 
     void __set_query_bulk_load_metadata(const bool val);
 
+    void __set_remote_root_path(const std::string &val);
+
     bool operator==(const bulk_load_request &rhs) const
     {
         if (!(pid == rhs.pid))
@@ -7373,6 +7543,8 @@ public:
         if (!(meta_bulk_load_status == rhs.meta_bulk_load_status))
             return false;
         if (!(query_bulk_load_metadata == rhs.query_bulk_load_metadata))
+            return false;
+        if (!(remote_root_path == rhs.remote_root_path))
             return false;
         return true;
     }
@@ -7539,7 +7711,8 @@ typedef struct _group_bulk_load_request__isset
           config(false),
           provider_name(false),
           cluster_name(false),
-          meta_bulk_load_status(false)
+          meta_bulk_load_status(false),
+          remote_root_path(false)
     {
     }
     bool app_name : 1;
@@ -7548,6 +7721,7 @@ typedef struct _group_bulk_load_request__isset
     bool provider_name : 1;
     bool cluster_name : 1;
     bool meta_bulk_load_status : 1;
+    bool remote_root_path : 1;
 } _group_bulk_load_request__isset;
 
 class group_bulk_load_request
@@ -7561,7 +7735,8 @@ public:
         : app_name(),
           provider_name(),
           cluster_name(),
-          meta_bulk_load_status((bulk_load_status::type)0)
+          meta_bulk_load_status((bulk_load_status::type)0),
+          remote_root_path()
     {
     }
 
@@ -7572,6 +7747,7 @@ public:
     std::string provider_name;
     std::string cluster_name;
     bulk_load_status::type meta_bulk_load_status;
+    std::string remote_root_path;
 
     _group_bulk_load_request__isset __isset;
 
@@ -7587,6 +7763,8 @@ public:
 
     void __set_meta_bulk_load_status(const bulk_load_status::type val);
 
+    void __set_remote_root_path(const std::string &val);
+
     bool operator==(const group_bulk_load_request &rhs) const
     {
         if (!(app_name == rhs.app_name))
@@ -7600,6 +7778,8 @@ public:
         if (!(cluster_name == rhs.cluster_name))
             return false;
         if (!(meta_bulk_load_status == rhs.meta_bulk_load_status))
+            return false;
+        if (!(remote_root_path == rhs.remote_root_path))
             return false;
         return true;
     }
@@ -8027,6 +8207,126 @@ public:
 void swap(query_bulk_load_response &a, query_bulk_load_response &b);
 
 inline std::ostream &operator<<(std::ostream &out, const query_bulk_load_response &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _detect_hotkey_request__isset
+{
+    _detect_hotkey_request__isset() : type(false), action(false), pid(false) {}
+    bool type : 1;
+    bool action : 1;
+    bool pid : 1;
+} _detect_hotkey_request__isset;
+
+class detect_hotkey_request
+{
+public:
+    detect_hotkey_request(const detect_hotkey_request &);
+    detect_hotkey_request(detect_hotkey_request &&);
+    detect_hotkey_request &operator=(const detect_hotkey_request &);
+    detect_hotkey_request &operator=(detect_hotkey_request &&);
+    detect_hotkey_request() : type((hotkey_type::type)0), action((detect_action::type)0) {}
+
+    virtual ~detect_hotkey_request() throw();
+    hotkey_type::type type;
+    detect_action::type action;
+    ::dsn::gpid pid;
+
+    _detect_hotkey_request__isset __isset;
+
+    void __set_type(const hotkey_type::type val);
+
+    void __set_action(const detect_action::type val);
+
+    void __set_pid(const ::dsn::gpid &val);
+
+    bool operator==(const detect_hotkey_request &rhs) const
+    {
+        if (!(type == rhs.type))
+            return false;
+        if (!(action == rhs.action))
+            return false;
+        if (!(pid == rhs.pid))
+            return false;
+        return true;
+    }
+    bool operator!=(const detect_hotkey_request &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const detect_hotkey_request &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(detect_hotkey_request &a, detect_hotkey_request &b);
+
+inline std::ostream &operator<<(std::ostream &out, const detect_hotkey_request &obj)
+{
+    obj.printTo(out);
+    return out;
+}
+
+typedef struct _detect_hotkey_response__isset
+{
+    _detect_hotkey_response__isset() : err(false), err_hint(false), hotkey_result(false) {}
+    bool err : 1;
+    bool err_hint : 1;
+    bool hotkey_result : 1;
+} _detect_hotkey_response__isset;
+
+class detect_hotkey_response
+{
+public:
+    detect_hotkey_response(const detect_hotkey_response &);
+    detect_hotkey_response(detect_hotkey_response &&);
+    detect_hotkey_response &operator=(const detect_hotkey_response &);
+    detect_hotkey_response &operator=(detect_hotkey_response &&);
+    detect_hotkey_response() : err_hint(), hotkey_result() {}
+
+    virtual ~detect_hotkey_response() throw();
+    ::dsn::error_code err;
+    std::string err_hint;
+    std::string hotkey_result;
+
+    _detect_hotkey_response__isset __isset;
+
+    void __set_err(const ::dsn::error_code &val);
+
+    void __set_err_hint(const std::string &val);
+
+    void __set_hotkey_result(const std::string &val);
+
+    bool operator==(const detect_hotkey_response &rhs) const
+    {
+        if (!(err == rhs.err))
+            return false;
+        if (__isset.err_hint != rhs.__isset.err_hint)
+            return false;
+        else if (__isset.err_hint && !(err_hint == rhs.err_hint))
+            return false;
+        if (__isset.hotkey_result != rhs.__isset.hotkey_result)
+            return false;
+        else if (__isset.hotkey_result && !(hotkey_result == rhs.hotkey_result))
+            return false;
+        return true;
+    }
+    bool operator!=(const detect_hotkey_response &rhs) const { return !(*this == rhs); }
+
+    bool operator<(const detect_hotkey_response &) const;
+
+    uint32_t read(::apache::thrift::protocol::TProtocol *iprot);
+    uint32_t write(::apache::thrift::protocol::TProtocol *oprot) const;
+
+    virtual void printTo(std::ostream &out) const;
+};
+
+void swap(detect_hotkey_response &a, detect_hotkey_response &b);
+
+inline std::ostream &operator<<(std::ostream &out, const detect_hotkey_response &obj)
 {
     obj.printTo(out);
     return out;

@@ -243,6 +243,16 @@ public:
 
     virtual ingestion_status::type get_ingestion_status() { return ingestion_status::IS_INVALID; }
 
+    virtual void on_detect_hotkey(const detect_hotkey_request &req,
+                                  /*out*/ detect_hotkey_response &resp)
+    {
+        resp.err = dsn::ERR_OBJECT_NOT_FOUND;
+        resp.__set_err_hint("on_detect_hotkey implementation not found");
+    }
+
+    // query pegasus data version
+    virtual uint32_t query_data_version() const = 0;
+
 public:
     //
     // utility functions to be used by app
@@ -261,6 +271,7 @@ private:
     friend class replica;
     friend class replica_stub;
     friend class mock_replica;
+    friend class replica_disk_migrator;
 
     ::dsn::error_code open_internal(replica *r);
     ::dsn::error_code

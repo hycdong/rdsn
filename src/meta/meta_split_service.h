@@ -37,6 +37,7 @@ public:
 private:
     // client -> meta to start split
     void start_partition_split(start_split_rpc rpc);
+
     void do_start_partition_split(std::shared_ptr<app_state> app, start_split_rpc rpc);
 
     // client -> meta to query split

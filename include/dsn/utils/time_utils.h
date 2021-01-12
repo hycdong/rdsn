@@ -27,7 +27,7 @@
 
 #include <chrono>
 #include <cstdio>
-#include "string_view.h"
+#include <dsn/utility/string_view.h>
 
 namespace dsn {
 namespace utils {
@@ -39,20 +39,10 @@ static struct tm *get_localtime(uint64_t ts_ms, struct tm *tm_buf)
 }
 
 // get time string, which format is yyyy-MM-dd hh:mm:ss.SSS
-inline void time_ms_to_string(uint64_t ts_ms, char *str)
-{
-    struct tm tmp;
-    auto ret = get_localtime(ts_ms, &tmp);
-    sprintf(str,
-            "%04d-%02d-%02d %02d:%02d:%02d.%03u",
-            ret->tm_year + 1900,
-            ret->tm_mon + 1,
-            ret->tm_mday,
-            ret->tm_hour,
-            ret->tm_min,
-            ret->tm_sec,
-            static_cast<uint32_t>(ts_ms % 1000));
-}
+// NOTE: using char* as output is usually unsafe. Please use std::string as the output argument
+// as long as it's possible.
+extern void time_ms_to_string(uint64_t ts_ms, char *str);
+extern void time_ms_to_string(uint64_t ts_ms, std::string &str);
 
 // get date string with format of 'yyyy-MM-dd' from given timestamp
 inline void time_ms_to_date(uint64_t ts_ms, char *str, int len)
@@ -61,11 +51,19 @@ inline void time_ms_to_date(uint64_t ts_ms, char *str, int len)
     strftime(str, len, "%Y-%m-%d", get_localtime(ts_ms, &tmp));
 }
 
-// get date string with format of 'yyyy-MM-dd hh:mm:ss' from given timestamp
+// get date string with format of 'yyyy-MM-dd hh:mm:ss' from given timestamp(ms)
 inline void time_ms_to_date_time(uint64_t ts_ms, char *str, int len)
 {
     struct tm tmp;
     strftime(str, len, "%Y-%m-%d %H:%M:%S", get_localtime(ts_ms, &tmp));
+}
+
+// get date string with format of 'yyyy-MM-dd hh:mm:ss' from given timestamp(s)
+inline std::string time_s_to_date_time(uint64_t unix_seconds)
+{
+    char buffer[128];
+    utils::time_ms_to_date_time(unix_seconds * 1000, buffer, 128);
+    return std::string(buffer);
 }
 
 // parse hour/min/sec from the given timestamp
@@ -78,11 +76,15 @@ inline void time_ms_to_date_time(uint64_t ts_ms, int32_t &hour, int32_t &min, in
     sec = ret->tm_sec;
 }
 
+// get current physical timestamp in ns
 inline uint64_t get_current_physical_time_ns()
 {
     auto now = std::chrono::high_resolution_clock::now();
     return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
 }
+
+// get current physical timestamp in s
+inline uint64_t get_current_physical_time_s() { return get_current_physical_time_ns() * 1e-9; }
 
 // get unix timestamp of today's zero o'clock.
 // eg. `1525881600` returned when called on May 10, 2018, CST

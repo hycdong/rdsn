@@ -167,13 +167,6 @@ asio_rpc_session::asio_rpc_session(asio_network_provider &net,
     set_options();
 }
 
-void asio_rpc_session::on_failure(bool is_write)
-{
-    if (on_disconnected(is_write)) {
-        close();
-    }
-}
-
 void asio_rpc_session::close()
 {
     utils::auto_write_lock socket_guard(_socket_lock);

@@ -18,7 +18,6 @@ meta_split_service::meta_split_service(meta_service *meta_srv)
     _state = meta_srv->get_server_state();
 }
 
-// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::start_partition_split(start_split_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -67,7 +66,6 @@ void meta_split_service::start_partition_split(start_split_rpc rpc)
     do_start_partition_split(std::move(app), std::move(rpc));
 }
 
-// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app,
                                                   start_split_rpc rpc)
 {
@@ -109,7 +107,7 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
         _state->get_app_path(*app), std::move(value), on_write_storage_complete);
 }
 
-// ThreadPool: THREAD_POOL_META_STATE
+// TODO(heyuchen): refactor this function
 void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 {
     const auto &request = rpc.request();
@@ -117,7 +115,7 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     auto &response = rpc.response();
     response.err = ERR_IO_PENDING;
 
-    zauto_write_lock(app_lock());
+    zauto_write_lock l(app_lock());
     std::shared_ptr<app_state> app = _state->get_app(app_name);
     dassert_f(app != nullptr, "app({}) is not existed", app_name);
     dassert_f(app->is_stateful, "app({}) is stateless currently", app_name);
@@ -236,7 +234,7 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
     auto &response = rpc.response();
     const std::string &app_name = request.app.app_name;
 
-    zauto_write_lock(app_lock());
+    zauto_write_lock l(app_lock());
     std::shared_ptr<app_state> app = _state->get_app(app_name);
     dassert_f(app != nullptr, "app({}) is not existed", app_name);
     dassert_f(app->is_stateful, "app({}) is stateless currently", app_name);

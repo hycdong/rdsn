@@ -284,9 +284,15 @@ struct restore_state
     restore_state() : restore_status(dsn::ERR_OK), progress(0), reason() {}
 };
 
+// app partition_split states
+// when starting partition split, `splitting_count` will be equal to old_partition_count,
+// <parent_partition_index, SPLITTING> will be inserted into `status`.
+// if partition[0] finish split, `splitting_count` will decrease and <0, SPLITTING> will be removed
+// in `status`.
 struct split_state
 {
     int32_t splitting_count;
+    // partition_index -> split_status
     std::map<int32_t, split_status::type> status;
     split_state() : splitting_count(0) {}
 };

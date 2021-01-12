@@ -50,6 +50,8 @@ namespace replication {
 
 void replica::init_group_check()
 {
+    FAIL_POINT_INJECT_F("replica_init_group_check", [](dsn::string_view) {});
+
     _checker.only_one_thread_access();
 
     FAIL_POINT_INJECT_F("replica_init_group_check", [](dsn::string_view) {});
@@ -184,6 +186,7 @@ void replica::on_group_check(const group_check_request &request,
         if (request.last_committed_decree > last_committed_decree()) {
             _prepare_list->commit(request.last_committed_decree, COMMIT_TO_DECREE_HARD);
         }
+        // the group check may trigger start/finish/cancel/pause a split on the secondary.
         _split_mgr->trigger_secondary_parent_split(request, response);
         break;
     case partition_status::PS_POTENTIAL_SECONDARY:

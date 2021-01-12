@@ -191,6 +191,11 @@ protected:
 /*!
   session managements (both client and server types)
 */
+
+namespace security {
+class negotiation;
+}
+
 class rpc_client_matcher;
 class rpc_session : public ref_counter
 {
@@ -201,6 +206,8 @@ public:
     */
     static join_point<void, rpc_session *> on_rpc_session_connected;
     static join_point<void, rpc_session *> on_rpc_session_disconnected;
+    static join_point<bool, message_ex *> on_rpc_recv_message;
+    static join_point<bool, message_ex *> on_rpc_send_message;
     /*@}*/
 public:
     rpc_session(connection_oriented_network &net,
@@ -226,6 +233,19 @@ public:
     bool cancel(message_ex *request);
     bool delay_recv(int delay_ms);
     bool on_recv_message(message_ex *msg, int delay_ms);
+    /// ret value:
+    ///    true  - pend succeed
+    ///    false - pend failed
+    bool try_pend_message(message_ex *msg);
+    void clear_pending_messages();
+
+    /// interfaces for security authentication,
+    /// you can ignore them if you don't enable auth
+    void set_negotiation_succeed();
+    bool is_negotiation_succeed() const;
+
+    void set_client_username(const std::string &user_name);
+    const std::string &get_client_username() const;
 
 public:
     ///
@@ -248,6 +268,7 @@ public:
     bool unlink_message_for_send();
     virtual void send(uint64_t signature) = 0;
     void on_send_completed(uint64_t signature = 0);
+    virtual void on_failure(bool is_write = false);
 
 protected:
     ///
@@ -259,8 +280,14 @@ protected:
         SS_CONNECTED,
         SS_DISCONNECTED
     };
-    ::dsn::utils::ex_lock_nr _lock; // [
+    mutable utils::ex_lock_nr _lock; // [
     volatile session_state _connect_state;
+
+    bool negotiation_succeed = false;
+    // when the negotiation of a session isn't succeed,
+    // all messages are queued in _pending_messages.
+    // after connected, all of them are moved to "_messages"
+    std::vector<message_ex *> _pending_messages;
 
     // messages are sent in batch, firstly all messages are linked together
     // in a doubly-linked list "_messages".
@@ -304,6 +331,10 @@ private:
     rpc_client_matcher *_matcher;
 
     std::atomic_int _delay_server_receive_ms;
+
+    // _client_username is only valid if it is a server rpc_session.
+    // it represents the name of the corresponding client
+    std::string _client_username;
 };
 
 // --------- inline implementation --------------

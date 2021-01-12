@@ -41,7 +41,7 @@
 #include <dsn/utility/error_code.h>
 #include <dsn/utility/output_utils.h>
 #include <fmt/format.h>
-#include <dsn/utility/time_utils.h>
+#include <dsn/utils/time_utils.h>
 
 #include "common/replication_common.h"
 
@@ -1540,18 +1540,20 @@ void replication_ddl_client::query_disk_info(
         query_disk_info_rpcs.emplace(target,
                                      query_disk_info_rpc(std::move(request), RPC_QUERY_DISK_INFO));
     }
-    call_rpcs_async(query_disk_info_rpcs, resps);
+    call_rpcs_sync(query_disk_info_rpcs, resps);
 }
 
 error_with<start_bulk_load_response>
 replication_ddl_client::start_bulk_load(const std::string &app_name,
                                         const std::string &cluster_name,
-                                        const std::string &file_provider_type)
+                                        const std::string &file_provider_type,
+                                        const std::string &remote_root_path)
 {
     auto req = make_unique<start_bulk_load_request>();
     req->app_name = app_name;
     req->cluster_name = cluster_name;
     req->file_provider_type = file_provider_type;
+    req->remote_root_path = remote_root_path;
     return call_rpc_sync(start_bulk_load_rpc(std::move(req), RPC_CM_START_BULK_LOAD));
 }
 
@@ -1572,6 +1574,19 @@ replication_ddl_client::query_bulk_load(const std::string &app_name)
     auto req = make_unique<query_bulk_load_request>();
     req->app_name = app_name;
     return call_rpc_sync(query_bulk_load_rpc(std::move(req), RPC_CM_QUERY_BULK_LOAD_STATUS));
+}
+
+error_code replication_ddl_client::detect_hotkey(const dsn::rpc_address &target,
+                                                 detect_hotkey_request &req,
+                                                 detect_hotkey_response &resp)
+{
+    std::map<dsn::rpc_address, detect_hotkey_rpc> detect_hotkey_rpcs;
+    auto request = make_unique<detect_hotkey_request>(req);
+    detect_hotkey_rpcs.emplace(target, detect_hotkey_rpc(std::move(request), RPC_DETECT_HOTKEY));
+    std::map<dsn::rpc_address, error_with<detect_hotkey_response>> resps;
+    call_rpcs_sync(detect_hotkey_rpcs, resps);
+    resp = resps.begin()->second.get_value();
+    return resps.begin()->second.get_error().code();
 }
 
 error_with<start_partition_split_response>
