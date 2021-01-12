@@ -413,9 +413,9 @@ error_code meta_service::start()
     initialize_duplication_service();
     recover_duplication_from_meta_state();
 
-    _state->register_cli_commands();
-
     _split_svc = dsn::make_unique<meta_split_service>(this);
+
+    _state->register_cli_commands();
 
     start_service();
 
@@ -1006,7 +1006,6 @@ void meta_service::on_start_partition_split(start_split_rpc rpc)
     if (!check_status(rpc)) {
         return;
     }
-
     if (_split_svc == nullptr) {
         derror_f("meta doesn't support partition split");
         rpc.response().err = ERR_SERVICE_NOT_ACTIVE;
@@ -1023,7 +1022,6 @@ void meta_service::on_register_child_on_meta(register_child_rpc rpc)
     if (!check_status(rpc)) {
         return;
     }
-
     if (_split_svc == nullptr) {
         derror_f("meta doesn't support partition split");
         rpc.response().err = ERR_SERVICE_NOT_ACTIVE;

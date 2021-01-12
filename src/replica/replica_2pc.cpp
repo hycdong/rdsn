@@ -30,7 +30,6 @@
 #include "replica_stub.h"
 #include "bulk_load/replica_bulk_loader.h"
 #include "split/replica_split_manager.h"
-
 #include "runtime/security/access_controller.h"
 #include <dsn/utils/latency_tracer.h>
 #include <dsn/dist/replication/replication_app_base.h>

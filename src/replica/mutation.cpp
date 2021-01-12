@@ -262,6 +262,7 @@ void mutation::write_to(binary_writer &writer, dsn::message_ex * /*to*/) const
                mu->data.header.pid.get_partition_index(),
                mu->data.header.ballot,
                mu->data.header.decree);
+
     return mu;
 }
 

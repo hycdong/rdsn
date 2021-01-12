@@ -40,11 +40,9 @@ private:
 
     void do_start_partition_split(std::shared_ptr<app_state> app, start_split_rpc rpc);
 
-    // client -> meta to query split
-    void query_partition_split(query_split_rpc rpc);
-
     // primary replica -> meta to register child
     void register_child_on_meta(register_child_rpc rpc);
+
     // meta -> remote storage to update child replica config
     dsn::task_ptr add_child_on_remote_storage(register_child_rpc rpc, bool create_new);
     void
@@ -78,6 +76,9 @@ private:
         }
         return str;
     }
+
+    // client -> meta to query split
+    void query_partition_split(query_split_rpc rpc);
 
 private:
     friend class meta_service;

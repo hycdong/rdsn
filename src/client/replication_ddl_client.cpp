@@ -1516,6 +1516,12 @@ replication_ddl_client::ddd_diagnose(gpid pid, std::vector<ddd_partition_info> &
     req->pid = pid;
 
     auto resp_task = request_meta<ddd_diagnose_request>(RPC_CM_DDD_DIAGNOSE, req);
+
+    resp_task->wait();
+    if (resp_task->error() != dsn::ERR_OK) {
+        return resp_task->error();
+    }
+
     ddd_diagnose_response resp;
     dsn::unmarshall(resp_task->get_response(), resp);
     if (resp.err != dsn::ERR_OK) {

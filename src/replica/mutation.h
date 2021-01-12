@@ -182,7 +182,6 @@ private:
     uint64_t _create_ts_ns; // for profiling
     uint64_t _tid;          // trace id, unique in process
     static std::atomic<uint64_t> s_tid;
-
     bool _is_sync_to_child; // for partition split
 };
 

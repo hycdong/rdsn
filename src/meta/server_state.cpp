@@ -784,7 +784,6 @@ void server_state::on_config_sync(configuration_query_by_node_rpc rpc)
 
     bool reject_this_request = false;
     response.__isset.gc_replicas = false;
-
     ddebug("got config sync request from %s, stored_replicas_count(%d)",
            request.node.to_string(),
            (int)request.stored_replicas.size());
@@ -804,7 +803,6 @@ void server_state::on_config_sync(configuration_query_by_node_rpc rpc)
             ns->for_each_partition([&, this](const gpid &pid) {
                 std::shared_ptr<app_state> app = get_app(pid.get_app_id());
                 dassert(app != nullptr, "invalid app_id, app_id = %d", pid.get_app_id());
-
                 config_context &cc = app->helpers->contexts[pid.get_partition_index()];
                 // config sync need the newest data to keep the perfect FD,
                 // so if the syncing config is related to the node, we may need to reject this
@@ -1602,6 +1600,7 @@ void server_state::on_update_configuration_on_remote_reply(
             cc.msg->release_ref();
             cc.msg = nullptr;
         }
+
         _meta_svc->get_balancer()->reconfig({&_all_apps, &_nodes}, *config_request);
         if (config_request->type == config_type::CT_DROP_PARTITION) {
             process_one_partition(app);
