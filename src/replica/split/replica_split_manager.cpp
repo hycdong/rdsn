@@ -1460,16 +1460,16 @@ void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child
         return;
     }
 
-    // TODO(hyc): consider this condition
-    if (mu->data.header.decree <= _replica->_prepare_list->last_committed_decree()) {
-        dwarn_replica("mu decree {} VS plist last_committed_decree {}, ignore this mutation({})",
-                      mu->data.header.decree,
-                      _replica->_prepare_list->last_committed_decree(),
-                      mu->name());
-        return;
-    }
+    // TODO(heyuchen): consider this condition, test it onebox
+    //    if (mu->data.header.decree <= _replica->_prepare_list->last_committed_decree()) {
+    //        dwarn_replica("mu decree {} VS plist last_committed_decree {}, ignore this
+    //        mutation({})",
+    //                      mu->data.header.decree,
+    //                      _replica->_prepare_list->last_committed_decree(),
+    //                      mu->name());
+    //        return;
+    //    }
 
-    // TODO(hyc): consider this debug log
     // TODO(heyuchen): for debug, remove it
     if (mu->is_sync_to_child()) {
         ddebug_replica(
@@ -1503,15 +1503,17 @@ void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child
 
 void replica_split_manager::ack_parent(error_code ec, mutation_ptr &mu) // on child
 {
-    if (mu->is_sync_to_child()) {
-        _stub->split_replica_exec(LPC_PARTITION_SPLIT,
-                                  _replica->_split_states.parent_gpid,
-                                  std::bind(&replica_split_manager::on_copy_mutation_reply,
-                                            std::placeholders::_1,
-                                            ec,
-                                            mu->data.header.ballot,
-                                            mu->data.header.decree));
-    }
+    dassert_replica(mu->is_sync_to_child(), "mutation({}) should be copied synchronously");
+    // TODO(heyuchen): update it into assert, test it onebox
+    // if (mu->is_sync_to_child()) {
+    _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                              _replica->_split_states.parent_gpid,
+                              std::bind(&replica_split_manager::on_copy_mutation_reply,
+                                        std::placeholders::_1,
+                                        ec,
+                                        mu->data.header.ballot,
+                                        mu->data.header.decree));
+    //}
 }
 
 void replica_split_manager::on_copy_mutation_reply(error_code ec, ballot b, decree d) // on parent

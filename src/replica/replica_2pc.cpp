@@ -779,28 +779,55 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
     const std::vector<dsn::message_ex *> &prepare_requests = mu->prepare_requests();
     dassert(!prepare_requests.empty(), "mutation = %s", mu->name());
 
-    if (err == ERR_OK && mu->is_ready_for_commit()) {
-        // during partition split sync-learn, parent secondary should wait for child ack prepare
-        // for normal cases, mutation is always ready for commit
-        for (auto &request : prepare_requests) {
-            reply(request, resp);
+    // TODO(heyuchen): update it while test sync-learn, has been tested onebox
+    //    if (err == ERR_OK && mu->is_ready_for_commit()) {
+    //        // during partition split sync-learn, parent secondary should wait for child ack
+    //        prepare
+    //        // for normal cases, mutation is always ready for commit
+    //        for (auto &request : prepare_requests) {
+    //            reply(request, resp);
+    //        }
+    //        return;
+    //    }
+
+    //    if (err != ERR_OK) {
+    //        // when prepare failed during partition split sync-learn, both parent and child will
+    //        try to
+    //        // reply to
+    //        // primary parent, we should strict that only ack once
+    //        if (mu->is_acked()) {
+    //            dwarn_replica("mutation({}) has been ack_prepare_message, error({})", mu->name(),
+    //            err);
+    //        } else {
+    //            for (auto &request : prepare_requests) {
+    //                reply(request, resp);
+    //            }
+    //            mu->set_is_acked();
+    //            dwarn_replica("mutation({}) ack_prepare_message, error({})", mu->name(), err);
+    //        }
+    //    }
+    if (err == ERR_OK) {
+        if (!mu->is_split()) {
+            dinfo_replica("mutation {} ack_prepare_message, err = {}", mu->name(), err);
+            for (auto &request : prepare_requests) {
+                reply(request, resp);
+            }
         }
         return;
     }
 
-    if (err != ERR_OK) {
-        // when prepare failed during partition split sync-learn, both parent and child will try to
-        // reply to
-        // primary parent, we should strict that only ack once
-        if (mu->is_acked()) {
-            dwarn_replica("mutation({}) has been ack_prepare_message, error({})", mu->name(), err);
-        } else {
-            for (auto &request : prepare_requests) {
-                reply(request, resp);
-            }
-            mu->set_is_acked();
-            dwarn_replica("mutation({}) ack_prepare_message, error({})", mu->name(), err);
-        }
+    // only happened when prepare failed during partition split child copy mutation synchronously
+    if (mu->is_acked()) {
+        dwarn_replica("mutation {} has been ack_prepare_message, err = {}", mu->name(), err);
+        return;
+    }
+
+    dwarn_replica("mutation {} ack_prepare_message, err = {}", mu->name(), err);
+    if (mu->is_sync_to_child()) {
+        mu->set_is_acked();
+    }
+    for (auto &request : prepare_requests) {
+        reply(request, resp);
     }
 }
 
