@@ -483,7 +483,7 @@ void meta_service::register_rpc_handlers()
     register_rpc_handler_with_rpc_holder(
         RPC_CM_NOTIFY_STOP_SPLIT, "notify_stop_split", &meta_service::on_notify_stop_split);
     register_rpc_handler_with_rpc_holder(
-        RPC_CM_NOTIFY_STOP_SPLIT, "notify_stop_split", &meta_service::on_notify_stop_split);
+        RPC_CM_QUERY_CHILD_STATE, "query_child_state", &meta_service::on_query_child_state);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_START_BULK_LOAD, "start_bulk_load", &meta_service::on_start_bulk_load);
     register_rpc_handler_with_rpc_holder(
