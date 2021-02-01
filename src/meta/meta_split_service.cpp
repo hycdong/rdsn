@@ -193,14 +193,12 @@ void meta_split_service::register_child_on_meta(register_child_rpc rpc)
     parent_context.pending_sync_task = add_child_on_remote_storage(rpc, true);
 }
 
-// ThreadPool: THREAD_POOL_META_STATE
 dsn::task_ptr meta_split_service::add_child_on_remote_storage(register_child_rpc rpc,
                                                               bool create_new)
 {
     const auto &request = rpc.request();
     const std::string &partition_path = _state->get_partition_path(request.child_config.pid);
     blob value = dsn::json::json_forwarder<partition_configuration>::encode(request.child_config);
-
     if (create_new) {
         return _meta_svc->get_remote_storage()->create_node(
             partition_path,
@@ -317,7 +315,6 @@ void meta_split_service::query_partition_split(query_split_rpc rpc)
              response.status.size());
 }
 
-// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::control_partition_split(control_split_rpc rpc)
 {
     const auto &req = rpc.request();

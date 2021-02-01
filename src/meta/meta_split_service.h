@@ -49,7 +49,10 @@ private:
     // pause all splitting partitions or restart all paused partitions or cancel all partitions
     void do_control_all(std::shared_ptr<app_state> app, control_split_rpc rpc);
 
-    // primary replica -> meta to register child
+    // client -> meta to query split
+    void query_partition_split(query_split_rpc rpc);
+
+    // primary parent -> meta server to register child
     void register_child_on_meta(register_child_rpc rpc);
 
     // meta -> remote storage to update child replica config
@@ -76,9 +79,6 @@ private:
         }
         return str;
     }
-
-    // client -> meta to query split
-    void query_partition_split(query_split_rpc rpc);
 
 private:
     friend class meta_service;

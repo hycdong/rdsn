@@ -465,7 +465,6 @@ public:
     bool child_is_caught_up() { return _child_replica->_split_states.is_caught_up; }
 
     split_status::type parent_get_split_status() { return _parent_split_mgr->_split_status; }
-
     void parent_set_split_status(split_status::type status)
     {
         _parent_split_mgr->_split_status = status;
@@ -872,7 +871,7 @@ TEST_F(replica_split_test, trigger_primary_parent_split_test)
               {false, split_status::CANCELING, -1, split_status::SPLITTING},
               {false, split_status::PAUSED, OLD_PARTITION_COUNT - 1, split_status::NOT_SPLIT}};
 
-    for (auto test : tests) {
+    for (const auto &test : tests) {
         mock_parent_primary_configuration(test.lack_of_secondary);
         if (test.old_split_status == split_status::SPLITTING) {
             mock_child_split_context(true, true);

@@ -599,6 +599,7 @@ void replica_split_manager::parent_handle_child_catch_up(
             "wrong partition status or wrong split status, partition_status={}, split_status={}",
             enum_to_string(status()),
             enum_to_string(_split_status));
+
         response.err = ERR_INVALID_STATE;
         return;
     }
@@ -672,6 +673,7 @@ void replica_split_manager::parent_check_sync_point_commit(decree sync_point) //
         parent_cleanup_split_context();
         return;
     }
+
     ddebug_replica("sync_point = {}, app last_committed_decree = {}",
                    sync_point,
                    _replica->_app->last_committed_decree());
@@ -987,12 +989,12 @@ void replica_split_manager::parent_send_register_request(
 
     rpc_address meta_address(_stub->_failure_detector->get_servers());
     std::unique_ptr<register_child_request> req = make_unique<register_child_request>(request);
-
     register_child_rpc rpc(std::move(req),
                            RPC_CM_REGISTER_CHILD_REPLICA,
                            /*never timeout*/ 0_ms,
                            /*partition hash*/ 0,
                            get_gpid().thread_hash());
+
     _replica->_primary_states.register_child_task =
         rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
             on_register_child_on_meta_reply(ec, rpc.request(), rpc.response());
@@ -1171,12 +1173,6 @@ void replica_split_manager::trigger_primary_parent_split(
                    enum_to_string(meta_split_status));
 
     _meta_split_status = meta_split_status;
-
-    if (meta_split_status == split_status::PAUSED) {
-        dwarn_replica("split has been paused, ignore it");
-        return;
-    }
-
     if (meta_split_status == split_status::SPLITTING) {
         if (!_replica->_primary_states.learners.empty() ||
             _replica->_primary_states.membership.secondaries.size() + 1 <
@@ -1205,6 +1201,11 @@ void replica_split_manager::trigger_primary_parent_split(
     if (meta_split_status == split_status::PAUSING ||
         meta_split_status == split_status::CANCELING) {
         parent_stop_split(meta_split_status);
+        return;
+    }
+
+    if (meta_split_status == split_status::PAUSED) {
+        dwarn_replica("split has been paused, ignore it");
         return;
     }
 
@@ -1250,64 +1251,6 @@ void replica_split_manager::trigger_secondary_parent_split(
     }
 }
 
-// ThreadPool: THREAD_POOL_REPLICATION
-void replica_split_manager::query_child_state() // on primary parent
-{
-    auto request = make_unique<query_child_state_request>();
-    request->app_name = _replica->_app_info.app_name;
-    request->pid = get_gpid();
-    request->partition_count = _replica->_app_info.partition_count;
-
-    rpc_address meta_address(_stub->_failure_detector->get_servers());
-    ddebug_replica("send query child partition state request to meta server({})",
-                   meta_address.to_string());
-    query_child_state_rpc rpc(
-        std::move(request), RPC_CM_QUERY_CHILD_STATE, 0_ms, 0, get_gpid().thread_hash());
-    _replica->_primary_states.query_child_task =
-        rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
-            on_query_child_state_reply(ec, rpc.request(), rpc.response());
-        });
-}
-
-// ThreadPool: THREAD_POOL_REPLICATION
-void replica_split_manager::on_query_child_state_reply(
-    error_code ec,
-    const query_child_state_request &request,
-    const query_child_state_response &response) // on primary parent
-{
-    _replica->_checker.only_one_thread_access();
-
-    if (ec != ERR_OK) {
-        dwarn_replica("query child partition state failed, error = {}, retry it later", ec);
-        _replica->_primary_states.query_child_task =
-            tasking::enqueue(LPC_PARTITION_SPLIT,
-                             tracker(),
-                             std::bind(&replica_split_manager::query_child_state, this),
-                             get_gpid().thread_hash(),
-                             std::chrono::seconds(1));
-        return;
-    }
-
-    if (response.err != ERR_OK) {
-        dwarn_replica("app({}) partition({}) split has been canceled, ignore it",
-                      request.app_name,
-                      request.pid);
-        return;
-    }
-
-    ddebug_replica("query child partition succeed, child partition[{}] has already been ready",
-                   response.child_config.pid);
-    _stub->split_replica_exec(LPC_PARTITION_SPLIT,
-                              response.child_config.pid,
-                              std::bind(&replica_split_manager::child_partition_active,
-                                        std::placeholders::_1,
-                                        response.child_config));
-    update_local_partition_count(response.partition_count);
-    _replica->_primary_states.cleanup_split_states();
-    parent_cleanup_split_context();
-    _replica->broadcast_group_check();
-}
-
 // TODO(heyuchen): refactor the code of sync and async write
 void replica_split_manager::copy_mutation(mutation_ptr &mu) // on parent
 {
@@ -1329,7 +1272,7 @@ void replica_split_manager::copy_mutation(mutation_ptr &mu) // on parent
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
-void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child
+void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child partition
 {
     if (status() != partition_status::PS_PARTITION_SPLIT) {
         derror_replica(
@@ -1574,6 +1517,64 @@ void replica_split_manager::parent_send_notify_stop_request(
             dwarn_replica("notify {} split failed, error = {}, wait for next round", type, err);
         }
     });
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::query_child_state() // on primary parent
+{
+    auto request = make_unique<query_child_state_request>();
+    request->app_name = _replica->_app_info.app_name;
+    request->pid = get_gpid();
+    request->partition_count = _replica->_app_info.partition_count;
+
+    rpc_address meta_address(_stub->_failure_detector->get_servers());
+    ddebug_replica("send query child partition state request to meta server({})",
+                   meta_address.to_string());
+    query_child_state_rpc rpc(
+        std::move(request), RPC_CM_QUERY_CHILD_STATE, 0_ms, 0, get_gpid().thread_hash());
+    _replica->_primary_states.query_child_task =
+        rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
+            on_query_child_state_reply(ec, rpc.request(), rpc.response());
+        });
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::on_query_child_state_reply(
+    error_code ec,
+    const query_child_state_request &request,
+    const query_child_state_response &response) // on primary parent
+{
+    _replica->_checker.only_one_thread_access();
+
+    if (ec != ERR_OK) {
+        dwarn_replica("query child partition state failed, error = {}, retry it later", ec);
+        _replica->_primary_states.query_child_task =
+            tasking::enqueue(LPC_PARTITION_SPLIT,
+                             tracker(),
+                             std::bind(&replica_split_manager::query_child_state, this),
+                             get_gpid().thread_hash(),
+                             std::chrono::seconds(1));
+        return;
+    }
+
+    if (response.err != ERR_OK) {
+        dwarn_replica("app({}) partition({}) split has been canceled, ignore it",
+                      request.app_name,
+                      request.pid);
+        return;
+    }
+
+    ddebug_replica("query child partition succeed, child partition[{}] has already been ready",
+                   response.child_config.pid);
+    _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                              response.child_config.pid,
+                              std::bind(&replica_split_manager::child_partition_active,
+                                        std::placeholders::_1,
+                                        response.child_config));
+    update_local_partition_count(response.partition_count);
+    _replica->_primary_states.cleanup_split_states();
+    parent_cleanup_split_context();
+    _replica->broadcast_group_check();
 }
 
 } // namespace replication

@@ -474,15 +474,12 @@ void meta_service::register_rpc_handlers()
     register_rpc_handler_with_rpc_holder(RPC_CM_CONTROL_PARTITION_SPLIT,
                                          "control_partition_split(pause/restart/cancel)",
                                          &meta_service::on_control_partition_split);
-    register_rpc_handler_with_rpc_holder(RPC_CM_REGISTER_CHILD_REPLICA,
-                                         "register_child_on_meta",
-                                         &meta_service::on_register_child_on_meta);
     register_rpc_handler_with_rpc_holder(RPC_CM_QUERY_PARTITION_SPLIT,
                                          "query_partition_split",
                                          &meta_service::on_query_partition_split);
-    register_rpc_handler_with_rpc_holder(RPC_CM_CONTROL_PARTITION_SPLIT,
-                                         "control_partition_split",
-                                         &meta_service::on_control_partition_split);
+    register_rpc_handler_with_rpc_holder(RPC_CM_REGISTER_CHILD_REPLICA,
+                                         "register_child_on_meta",
+                                         &meta_service::on_register_child_on_meta);
     register_rpc_handler_with_rpc_holder(
         RPC_CM_NOTIFY_STOP_SPLIT, "notify_stop_split", &meta_service::on_notify_stop_split);
     register_rpc_handler_with_rpc_holder(

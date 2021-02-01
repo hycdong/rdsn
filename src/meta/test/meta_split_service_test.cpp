@@ -2,10 +2,13 @@
 // This source code is licensed under the Apache License Version 2.0, which
 // can be found in the LICENSE file in the root directory of this source tree.
 
-#include "meta_test_base.h"
+#include <gtest/gtest.h>
+#include <dsn/service_api_c.h>
+
 #include "meta_service_test_app.h"
-#include "meta/meta_server_failure_detector.h"
+#include "meta_test_base.h"
 #include "meta/meta_split_service.h"
+#include "meta/meta_server_failure_detector.h"
 
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/utility/fail_point.h>
