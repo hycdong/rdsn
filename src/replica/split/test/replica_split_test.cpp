@@ -466,11 +466,6 @@ public:
 
     split_status::type parent_get_split_status() { return _parent_split_mgr->_split_status; }
 
-    int32_t parent_stopped_split_size()
-    {
-        return _parent_replica->_primary_states.split_stopped_secondary.size();
-    }
-
     void parent_set_split_status(split_status::type status)
     {
         _parent_split_mgr->_split_status = status;
@@ -483,6 +478,10 @@ public:
     bool parent_sync_send_write_request()
     {
         return _parent_replica->_primary_states.sync_send_write_request;
+    }
+    int32_t parent_stopped_split_size()
+    {
+        return _parent_replica->_primary_states.split_stopped_secondary.size();
     }
     bool is_parent_not_in_split()
     {
@@ -865,7 +864,7 @@ TEST_F(replica_split_test, trigger_primary_parent_split_test)
         bool lack_of_secondary;
         split_status::type meta_split_status;
         int32_t old_partition_version;
-        split_status::type local_split_status;
+        split_status::type old_split_status;
     } tests[]{{true, split_status::SPLITTING, OLD_PARTITION_COUNT - 1, split_status::NOT_SPLIT},
               {false, split_status::PAUSING, -1, split_status::NOT_SPLIT},
               {false, split_status::PAUSING, OLD_PARTITION_COUNT - 1, split_status::SPLITTING},
@@ -874,15 +873,16 @@ TEST_F(replica_split_test, trigger_primary_parent_split_test)
               {false, split_status::PAUSED, OLD_PARTITION_COUNT - 1, split_status::NOT_SPLIT}};
 
     for (auto test : tests) {
-        if (test.local_split_status == split_status::SPLITTING) {
+        mock_parent_primary_configuration(test.lack_of_secondary);
+        if (test.old_split_status == split_status::SPLITTING) {
             mock_child_split_context(true, true);
             mock_primary_parent_split_context(true);
         }
         test_trigger_primary_parent_split(
-            test.meta_split_status, test.local_split_status, test.old_partition_version);
+            test.meta_split_status, test.old_split_status, test.old_partition_version);
         ASSERT_EQ(_parent_split_mgr->get_partition_version(), OLD_PARTITION_COUNT - 1);
         ASSERT_FALSE(parent_sync_send_write_request());
-        if (test.local_split_status == split_status::SPLITTING) {
+        if (test.old_split_status == split_status::SPLITTING) {
             _child_replica->tracker()->wait_outstanding_tasks();
             ASSERT_EQ(_child_replica->status(), partition_status::PS_ERROR);
         }
@@ -895,9 +895,9 @@ TEST_F(replica_split_test, secondary_handle_split_test)
     generate_child();
 
     // Test cases:
+    // - secondary parent update partition_count
     // - meta splitting with local not_split(See parent_start_split_tests)
     // - meta splitting with local splitting(See parent_start_split_tests)
-    // - meta secondary update partition count
     // - meta pausing with local splitting
     // - meta canceling with local not_split
     // - meta canceling with local splitting

@@ -67,9 +67,6 @@ void primary_context::cleanup(bool clean_pending_mutations)
     // clean up checkpoint
     CLEANUP_TASK_ALWAYS(checkpoint_task)
 
-    // clean up register child task
-    CLEANUP_TASK_ALWAYS(register_child_task)
-
     // cleanup group bulk load
     for (auto &kv : group_bulk_load_pending_replies) {
         CLEANUP_TASK_ALWAYS(kv.second);
@@ -80,18 +77,7 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     cleanup_bulk_load_states();
 
-    cleanup_split_context();
-}
-
-void primary_context::cleanup_split_context()
-{
-    // clean up register child in split
-    CLEANUP_TASK_ALWAYS(register_child_task)
-    CLEANUP_TASK_ALWAYS(query_child_task)
-
-    caught_up_children.clear();
-    sync_send_write_request = false;
-    split_stopped_secondary.clear();
+    cleanup_split_states();
 }
 
 bool primary_context::is_cleaned()
@@ -178,6 +164,16 @@ void primary_context::cleanup_bulk_load_states()
     secondary_bulk_load_states.erase(secondary_bulk_load_states.begin(),
                                      secondary_bulk_load_states.end());
     ingestion_is_empty_prepare_sent = false;
+}
+
+void primary_context::cleanup_split_states()
+{
+    CLEANUP_TASK_ALWAYS(register_child_task)
+    CLEANUP_TASK_ALWAYS(query_child_task)
+
+    caught_up_children.clear();
+    sync_send_write_request = false;
+    split_stopped_secondary.clear();
 }
 
 bool secondary_context::cleanup(bool force)

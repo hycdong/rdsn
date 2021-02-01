@@ -102,7 +102,7 @@ public:
 
     void cleanup_bulk_load_states();
 
-    void cleanup_split_context();
+    void cleanup_split_states();
 
 public:
     // membership mgr, including learners
@@ -154,6 +154,10 @@ public:
     // primary parent register child on meta_server task
     dsn::task_ptr register_child_task;
 
+    // Used partition split
+    // secondary replica address who has paused or canceled split
+    std::unordered_set<rpc_address> split_stopped_secondary;
+
     // Used for bulk load
     // group bulk_load response tasks of RPC_GROUP_BULK_LOAD for each secondary replica
     node_tasks group_bulk_load_pending_replies;
@@ -167,10 +171,6 @@ public:
     // primary parent query child on meta_server task
     // Called by `check_partition_count`, see more in `replica_split.cpp`
     dsn::task_ptr query_child_task;
-
-    // Used partition split
-    // secondary replica address who has paused or canceled split
-    std::unordered_set<rpc_address> split_stopped_secondary;
 };
 
 class secondary_context
