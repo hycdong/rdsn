@@ -179,6 +179,11 @@ private:
     ballot get_ballot() const { return _replica->get_ballot(); }
     decree last_committed_decree() const { return _replica->last_committed_decree(); }
     task_tracker *tracker() { return _replica->tracker(); }
+    bool should_reject_request() const { return _partition_version == -1; }
+    int32_t get_index_by_partition_hash(uint64_t partition_hash) const
+    {
+        return get_partition_version() & partition_hash;
+    }
 
 private:
     replica *_replica;
