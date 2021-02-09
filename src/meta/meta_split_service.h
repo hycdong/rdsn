@@ -37,8 +37,10 @@ public:
 private:
     // client -> meta to start split
     void start_partition_split(start_split_rpc rpc);
-
     void do_start_partition_split(std::shared_ptr<app_state> app, start_split_rpc rpc);
+
+    // client -> meta to query split
+    void query_partition_split(query_split_rpc rpc) const;
 
     // client -> meta to pause/restart/cancel split
     void control_partition_split(control_split_rpc rpc);
@@ -48,9 +50,6 @@ private:
 
     // pause all splitting partitions or restart all paused partitions or cancel all partitions
     void do_control_all(std::shared_ptr<app_state> app, control_split_rpc rpc);
-
-    // client -> meta to query split
-    void query_partition_split(query_split_rpc rpc);
 
     // primary parent -> meta server to register child
     void register_child_on_meta(register_child_rpc rpc);

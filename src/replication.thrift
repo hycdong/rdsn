@@ -900,23 +900,6 @@ struct start_partition_split_response
     2:string            hint_msg
 }
 
-struct query_split_request
-{
-    1:string    app_name;
-}
-
-struct query_split_response
-{
-    // Possible errors:
-    // - ERR_APP_NOT_EXIST: app not exist
-    // - ERR_APP_DROPPED: app has been dropped
-    // - ERR_INVALID_STATE: app or partition is not splitting
-    1:dsn.error_code    err;
-    2:string            hint_msg;
-    3:i32               new_partition_count;
-    4:map<i32,split_status> status;
-}
-
 enum split_control_type
 {
     PAUSE,
@@ -948,6 +931,24 @@ struct control_split_response
     // - ERR_CHILD_REGISTERED: child partition has been registered, pause partition split or cancel split failed
     1:dsn.error_code    err;
     2:optional string   hint_msg;
+}
+
+// client->meta server to query partition split status
+struct query_split_request
+{
+    1:string    app_name;
+}
+
+struct query_split_response
+{
+    // Possible errors:
+    // - ERR_APP_NOT_EXIST: app not exist
+    // - ERR_APP_DROPPED: app has been dropped
+    // - ERR_INVALID_STATE: app is not splitting
+    1:dsn.error_code            err;
+    2:i32                       new_partition_count;
+    3:map<i32,split_status>     status;
+    4:optional string           hint_msg;
 }
 
 // child to primary parent, notifying that itself has caught up with parent

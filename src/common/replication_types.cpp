@@ -14652,291 +14652,6 @@ void start_partition_split_response::printTo(std::ostream &out) const
     out << ")";
 }
 
-query_split_request::~query_split_request() throw() {}
-
-void query_split_request::__set_app_name(const std::string &val) { this->app_name = val; }
-
-uint32_t query_split_request::read(::apache::thrift::protocol::TProtocol *iprot)
-{
-
-    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
-    uint32_t xfer = 0;
-    std::string fname;
-    ::apache::thrift::protocol::TType ftype;
-    int16_t fid;
-
-    xfer += iprot->readStructBegin(fname);
-
-    using ::apache::thrift::protocol::TProtocolException;
-
-    while (true) {
-        xfer += iprot->readFieldBegin(fname, ftype, fid);
-        if (ftype == ::apache::thrift::protocol::T_STOP) {
-            break;
-        }
-        switch (fid) {
-        case 1:
-            if (ftype == ::apache::thrift::protocol::T_STRING) {
-                xfer += iprot->readString(this->app_name);
-                this->__isset.app_name = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        default:
-            xfer += iprot->skip(ftype);
-            break;
-        }
-        xfer += iprot->readFieldEnd();
-    }
-
-    xfer += iprot->readStructEnd();
-
-    return xfer;
-}
-
-uint32_t query_split_request::write(::apache::thrift::protocol::TProtocol *oprot) const
-{
-    uint32_t xfer = 0;
-    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("query_split_request");
-
-    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
-    xfer += oprot->writeString(this->app_name);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldStop();
-    xfer += oprot->writeStructEnd();
-    return xfer;
-}
-
-void swap(query_split_request &a, query_split_request &b)
-{
-    using ::std::swap;
-    swap(a.app_name, b.app_name);
-    swap(a.__isset, b.__isset);
-}
-
-query_split_request::query_split_request(const query_split_request &other646)
-{
-    app_name = other646.app_name;
-    __isset = other646.__isset;
-}
-query_split_request::query_split_request(query_split_request &&other647)
-{
-    app_name = std::move(other647.app_name);
-    __isset = std::move(other647.__isset);
-}
-query_split_request &query_split_request::operator=(const query_split_request &other648)
-{
-    app_name = other648.app_name;
-    __isset = other648.__isset;
-    return *this;
-}
-query_split_request &query_split_request::operator=(query_split_request &&other649)
-{
-    app_name = std::move(other649.app_name);
-    __isset = std::move(other649.__isset);
-    return *this;
-}
-void query_split_request::printTo(std::ostream &out) const
-{
-    using ::apache::thrift::to_string;
-    out << "query_split_request(";
-    out << "app_name=" << to_string(app_name);
-    out << ")";
-}
-
-query_split_response::~query_split_response() throw() {}
-
-void query_split_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
-
-void query_split_response::__set_hint_msg(const std::string &val) { this->hint_msg = val; }
-
-void query_split_response::__set_new_partition_count(const int32_t val)
-{
-    this->new_partition_count = val;
-}
-
-void query_split_response::__set_status(const std::map<int32_t, split_status::type> &val)
-{
-    this->status = val;
-}
-
-uint32_t query_split_response::read(::apache::thrift::protocol::TProtocol *iprot)
-{
-
-    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
-    uint32_t xfer = 0;
-    std::string fname;
-    ::apache::thrift::protocol::TType ftype;
-    int16_t fid;
-
-    xfer += iprot->readStructBegin(fname);
-
-    using ::apache::thrift::protocol::TProtocolException;
-
-    while (true) {
-        xfer += iprot->readFieldBegin(fname, ftype, fid);
-        if (ftype == ::apache::thrift::protocol::T_STOP) {
-            break;
-        }
-        switch (fid) {
-        case 1:
-            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-                xfer += this->err.read(iprot);
-                this->__isset.err = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 2:
-            if (ftype == ::apache::thrift::protocol::T_STRING) {
-                xfer += iprot->readString(this->hint_msg);
-                this->__isset.hint_msg = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 3:
-            if (ftype == ::apache::thrift::protocol::T_I32) {
-                xfer += iprot->readI32(this->new_partition_count);
-                this->__isset.new_partition_count = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        case 4:
-            if (ftype == ::apache::thrift::protocol::T_MAP) {
-                {
-                    this->status.clear();
-                    uint32_t _size650;
-                    ::apache::thrift::protocol::TType _ktype651;
-                    ::apache::thrift::protocol::TType _vtype652;
-                    xfer += iprot->readMapBegin(_ktype651, _vtype652, _size650);
-                    uint32_t _i654;
-                    for (_i654 = 0; _i654 < _size650; ++_i654) {
-                        int32_t _key655;
-                        xfer += iprot->readI32(_key655);
-                        split_status::type &_val656 = this->status[_key655];
-                        int32_t ecast657;
-                        xfer += iprot->readI32(ecast657);
-                        _val656 = (split_status::type)ecast657;
-                    }
-                    xfer += iprot->readMapEnd();
-                }
-                this->__isset.status = true;
-            } else {
-                xfer += iprot->skip(ftype);
-            }
-            break;
-        default:
-            xfer += iprot->skip(ftype);
-            break;
-        }
-        xfer += iprot->readFieldEnd();
-    }
-
-    xfer += iprot->readStructEnd();
-
-    return xfer;
-}
-
-uint32_t query_split_response::write(::apache::thrift::protocol::TProtocol *oprot) const
-{
-    uint32_t xfer = 0;
-    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-    xfer += oprot->writeStructBegin("query_split_response");
-
-    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
-    xfer += this->err.write(oprot);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 2);
-    xfer += oprot->writeString(this->hint_msg);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("new_partition_count", ::apache::thrift::protocol::T_I32, 3);
-    xfer += oprot->writeI32(this->new_partition_count);
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldBegin("status", ::apache::thrift::protocol::T_MAP, 4);
-    {
-        xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_I32,
-                                     ::apache::thrift::protocol::T_I32,
-                                     static_cast<uint32_t>(this->status.size()));
-        std::map<int32_t, split_status::type>::const_iterator _iter658;
-        for (_iter658 = this->status.begin(); _iter658 != this->status.end(); ++_iter658) {
-            xfer += oprot->writeI32(_iter658->first);
-            xfer += oprot->writeI32((int32_t)_iter658->second);
-        }
-        xfer += oprot->writeMapEnd();
-    }
-    xfer += oprot->writeFieldEnd();
-
-    xfer += oprot->writeFieldStop();
-    xfer += oprot->writeStructEnd();
-    return xfer;
-}
-
-void swap(query_split_response &a, query_split_response &b)
-{
-    using ::std::swap;
-    swap(a.err, b.err);
-    swap(a.hint_msg, b.hint_msg);
-    swap(a.new_partition_count, b.new_partition_count);
-    swap(a.status, b.status);
-    swap(a.__isset, b.__isset);
-}
-
-query_split_response::query_split_response(const query_split_response &other659)
-{
-    err = other659.err;
-    hint_msg = other659.hint_msg;
-    new_partition_count = other659.new_partition_count;
-    status = other659.status;
-    __isset = other659.__isset;
-}
-query_split_response::query_split_response(query_split_response &&other660)
-{
-    err = std::move(other660.err);
-    hint_msg = std::move(other660.hint_msg);
-    new_partition_count = std::move(other660.new_partition_count);
-    status = std::move(other660.status);
-    __isset = std::move(other660.__isset);
-}
-query_split_response &query_split_response::operator=(const query_split_response &other661)
-{
-    err = other661.err;
-    hint_msg = other661.hint_msg;
-    new_partition_count = other661.new_partition_count;
-    status = other661.status;
-    __isset = other661.__isset;
-    return *this;
-}
-query_split_response &query_split_response::operator=(query_split_response &&other662)
-{
-    err = std::move(other662.err);
-    hint_msg = std::move(other662.hint_msg);
-    new_partition_count = std::move(other662.new_partition_count);
-    status = std::move(other662.status);
-    __isset = std::move(other662.__isset);
-    return *this;
-}
-void query_split_response::printTo(std::ostream &out) const
-{
-    using ::apache::thrift::to_string;
-    out << "query_split_response(";
-    out << "err=" << to_string(err);
-    out << ", "
-        << "hint_msg=" << to_string(hint_msg);
-    out << ", "
-        << "new_partition_count=" << to_string(new_partition_count);
-    out << ", "
-        << "status=" << to_string(status);
-    out << ")";
-}
-
 control_split_request::~control_split_request() throw() {}
 
 void control_split_request::__set_app_name(const std::string &val) { this->app_name = val; }
@@ -14983,9 +14698,9 @@ uint32_t control_split_request::read(::apache::thrift::protocol::TProtocol *ipro
             break;
         case 2:
             if (ftype == ::apache::thrift::protocol::T_I32) {
-                int32_t ecast663;
-                xfer += iprot->readI32(ecast663);
-                this->control_type = (split_control_type::type)ecast663;
+                int32_t ecast646;
+                xfer += iprot->readI32(ecast646);
+                this->control_type = (split_control_type::type)ecast646;
                 this->__isset.control_type = true;
             } else {
                 xfer += iprot->skip(ftype);
@@ -15057,38 +14772,38 @@ void swap(control_split_request &a, control_split_request &b)
     swap(a.__isset, b.__isset);
 }
 
-control_split_request::control_split_request(const control_split_request &other664)
+control_split_request::control_split_request(const control_split_request &other647)
 {
-    app_name = other664.app_name;
-    control_type = other664.control_type;
-    parent_pidx = other664.parent_pidx;
-    old_partition_count = other664.old_partition_count;
-    __isset = other664.__isset;
+    app_name = other647.app_name;
+    control_type = other647.control_type;
+    parent_pidx = other647.parent_pidx;
+    old_partition_count = other647.old_partition_count;
+    __isset = other647.__isset;
 }
-control_split_request::control_split_request(control_split_request &&other665)
+control_split_request::control_split_request(control_split_request &&other648)
 {
-    app_name = std::move(other665.app_name);
-    control_type = std::move(other665.control_type);
-    parent_pidx = std::move(other665.parent_pidx);
-    old_partition_count = std::move(other665.old_partition_count);
-    __isset = std::move(other665.__isset);
+    app_name = std::move(other648.app_name);
+    control_type = std::move(other648.control_type);
+    parent_pidx = std::move(other648.parent_pidx);
+    old_partition_count = std::move(other648.old_partition_count);
+    __isset = std::move(other648.__isset);
 }
-control_split_request &control_split_request::operator=(const control_split_request &other666)
+control_split_request &control_split_request::operator=(const control_split_request &other649)
 {
-    app_name = other666.app_name;
-    control_type = other666.control_type;
-    parent_pidx = other666.parent_pidx;
-    old_partition_count = other666.old_partition_count;
-    __isset = other666.__isset;
+    app_name = other649.app_name;
+    control_type = other649.control_type;
+    parent_pidx = other649.parent_pidx;
+    old_partition_count = other649.old_partition_count;
+    __isset = other649.__isset;
     return *this;
 }
-control_split_request &control_split_request::operator=(control_split_request &&other667)
+control_split_request &control_split_request::operator=(control_split_request &&other650)
 {
-    app_name = std::move(other667.app_name);
-    control_type = std::move(other667.control_type);
-    parent_pidx = std::move(other667.parent_pidx);
-    old_partition_count = std::move(other667.old_partition_count);
-    __isset = std::move(other667.__isset);
+    app_name = std::move(other650.app_name);
+    control_type = std::move(other650.control_type);
+    parent_pidx = std::move(other650.parent_pidx);
+    old_partition_count = std::move(other650.old_partition_count);
+    __isset = std::move(other650.__isset);
     return *this;
 }
 void control_split_request::printTo(std::ostream &out) const
@@ -15191,30 +14906,30 @@ void swap(control_split_response &a, control_split_response &b)
     swap(a.__isset, b.__isset);
 }
 
-control_split_response::control_split_response(const control_split_response &other668)
+control_split_response::control_split_response(const control_split_response &other651)
 {
-    err = other668.err;
-    hint_msg = other668.hint_msg;
-    __isset = other668.__isset;
+    err = other651.err;
+    hint_msg = other651.hint_msg;
+    __isset = other651.__isset;
 }
-control_split_response::control_split_response(control_split_response &&other669)
+control_split_response::control_split_response(control_split_response &&other652)
 {
-    err = std::move(other669.err);
-    hint_msg = std::move(other669.hint_msg);
-    __isset = std::move(other669.__isset);
+    err = std::move(other652.err);
+    hint_msg = std::move(other652.hint_msg);
+    __isset = std::move(other652.__isset);
 }
-control_split_response &control_split_response::operator=(const control_split_response &other670)
+control_split_response &control_split_response::operator=(const control_split_response &other653)
 {
-    err = other670.err;
-    hint_msg = other670.hint_msg;
-    __isset = other670.__isset;
+    err = other653.err;
+    hint_msg = other653.hint_msg;
+    __isset = other653.__isset;
     return *this;
 }
-control_split_response &control_split_response::operator=(control_split_response &&other671)
+control_split_response &control_split_response::operator=(control_split_response &&other654)
 {
-    err = std::move(other671.err);
-    hint_msg = std::move(other671.hint_msg);
-    __isset = std::move(other671.__isset);
+    err = std::move(other654.err);
+    hint_msg = std::move(other654.hint_msg);
+    __isset = std::move(other654.__isset);
     return *this;
 }
 void control_split_response::printTo(std::ostream &out) const
@@ -15222,6 +14937,297 @@ void control_split_response::printTo(std::ostream &out) const
     using ::apache::thrift::to_string;
     out << "control_split_response(";
     out << "err=" << to_string(err);
+    out << ", "
+        << "hint_msg=";
+    (__isset.hint_msg ? (out << to_string(hint_msg)) : (out << "<null>"));
+    out << ")";
+}
+
+query_split_request::~query_split_request() throw() {}
+
+void query_split_request::__set_app_name(const std::string &val) { this->app_name = val; }
+
+uint32_t query_split_request::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->app_name);
+                this->__isset.app_name = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t query_split_request::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("query_split_request");
+
+    xfer += oprot->writeFieldBegin("app_name", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeString(this->app_name);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(query_split_request &a, query_split_request &b)
+{
+    using ::std::swap;
+    swap(a.app_name, b.app_name);
+    swap(a.__isset, b.__isset);
+}
+
+query_split_request::query_split_request(const query_split_request &other655)
+{
+    app_name = other655.app_name;
+    __isset = other655.__isset;
+}
+query_split_request::query_split_request(query_split_request &&other656)
+{
+    app_name = std::move(other656.app_name);
+    __isset = std::move(other656.__isset);
+}
+query_split_request &query_split_request::operator=(const query_split_request &other657)
+{
+    app_name = other657.app_name;
+    __isset = other657.__isset;
+    return *this;
+}
+query_split_request &query_split_request::operator=(query_split_request &&other658)
+{
+    app_name = std::move(other658.app_name);
+    __isset = std::move(other658.__isset);
+    return *this;
+}
+void query_split_request::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "query_split_request(";
+    out << "app_name=" << to_string(app_name);
+    out << ")";
+}
+
+query_split_response::~query_split_response() throw() {}
+
+void query_split_response::__set_err(const ::dsn::error_code &val) { this->err = val; }
+
+void query_split_response::__set_new_partition_count(const int32_t val)
+{
+    this->new_partition_count = val;
+}
+
+void query_split_response::__set_status(const std::map<int32_t, split_status::type> &val)
+{
+    this->status = val;
+}
+
+void query_split_response::__set_hint_msg(const std::string &val)
+{
+    this->hint_msg = val;
+    __isset.hint_msg = true;
+}
+
+uint32_t query_split_response::read(::apache::thrift::protocol::TProtocol *iprot)
+{
+
+    apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+    uint32_t xfer = 0;
+    std::string fname;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+
+    xfer += iprot->readStructBegin(fname);
+
+    using ::apache::thrift::protocol::TProtocolException;
+
+    while (true) {
+        xfer += iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STOP) {
+            break;
+        }
+        switch (fid) {
+        case 1:
+            if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+                xfer += this->err.read(iprot);
+                this->__isset.err = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 2:
+            if (ftype == ::apache::thrift::protocol::T_I32) {
+                xfer += iprot->readI32(this->new_partition_count);
+                this->__isset.new_partition_count = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 3:
+            if (ftype == ::apache::thrift::protocol::T_MAP) {
+                {
+                    this->status.clear();
+                    uint32_t _size659;
+                    ::apache::thrift::protocol::TType _ktype660;
+                    ::apache::thrift::protocol::TType _vtype661;
+                    xfer += iprot->readMapBegin(_ktype660, _vtype661, _size659);
+                    uint32_t _i663;
+                    for (_i663 = 0; _i663 < _size659; ++_i663) {
+                        int32_t _key664;
+                        xfer += iprot->readI32(_key664);
+                        split_status::type &_val665 = this->status[_key664];
+                        int32_t ecast666;
+                        xfer += iprot->readI32(ecast666);
+                        _val665 = (split_status::type)ecast666;
+                    }
+                    xfer += iprot->readMapEnd();
+                }
+                this->__isset.status = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        case 4:
+            if (ftype == ::apache::thrift::protocol::T_STRING) {
+                xfer += iprot->readString(this->hint_msg);
+                this->__isset.hint_msg = true;
+            } else {
+                xfer += iprot->skip(ftype);
+            }
+            break;
+        default:
+            xfer += iprot->skip(ftype);
+            break;
+        }
+        xfer += iprot->readFieldEnd();
+    }
+
+    xfer += iprot->readStructEnd();
+
+    return xfer;
+}
+
+uint32_t query_split_response::write(::apache::thrift::protocol::TProtocol *oprot) const
+{
+    uint32_t xfer = 0;
+    apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+    xfer += oprot->writeStructBegin("query_split_response");
+
+    xfer += oprot->writeFieldBegin("err", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->err.write(oprot);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("new_partition_count", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeI32(this->new_partition_count);
+    xfer += oprot->writeFieldEnd();
+
+    xfer += oprot->writeFieldBegin("status", ::apache::thrift::protocol::T_MAP, 3);
+    {
+        xfer += oprot->writeMapBegin(::apache::thrift::protocol::T_I32,
+                                     ::apache::thrift::protocol::T_I32,
+                                     static_cast<uint32_t>(this->status.size()));
+        std::map<int32_t, split_status::type>::const_iterator _iter667;
+        for (_iter667 = this->status.begin(); _iter667 != this->status.end(); ++_iter667) {
+            xfer += oprot->writeI32(_iter667->first);
+            xfer += oprot->writeI32((int32_t)_iter667->second);
+        }
+        xfer += oprot->writeMapEnd();
+    }
+    xfer += oprot->writeFieldEnd();
+
+    if (this->__isset.hint_msg) {
+        xfer += oprot->writeFieldBegin("hint_msg", ::apache::thrift::protocol::T_STRING, 4);
+        xfer += oprot->writeString(this->hint_msg);
+        xfer += oprot->writeFieldEnd();
+    }
+    xfer += oprot->writeFieldStop();
+    xfer += oprot->writeStructEnd();
+    return xfer;
+}
+
+void swap(query_split_response &a, query_split_response &b)
+{
+    using ::std::swap;
+    swap(a.err, b.err);
+    swap(a.new_partition_count, b.new_partition_count);
+    swap(a.status, b.status);
+    swap(a.hint_msg, b.hint_msg);
+    swap(a.__isset, b.__isset);
+}
+
+query_split_response::query_split_response(const query_split_response &other668)
+{
+    err = other668.err;
+    new_partition_count = other668.new_partition_count;
+    status = other668.status;
+    hint_msg = other668.hint_msg;
+    __isset = other668.__isset;
+}
+query_split_response::query_split_response(query_split_response &&other669)
+{
+    err = std::move(other669.err);
+    new_partition_count = std::move(other669.new_partition_count);
+    status = std::move(other669.status);
+    hint_msg = std::move(other669.hint_msg);
+    __isset = std::move(other669.__isset);
+}
+query_split_response &query_split_response::operator=(const query_split_response &other670)
+{
+    err = other670.err;
+    new_partition_count = other670.new_partition_count;
+    status = other670.status;
+    hint_msg = other670.hint_msg;
+    __isset = other670.__isset;
+    return *this;
+}
+query_split_response &query_split_response::operator=(query_split_response &&other671)
+{
+    err = std::move(other671.err);
+    new_partition_count = std::move(other671.new_partition_count);
+    status = std::move(other671.status);
+    hint_msg = std::move(other671.hint_msg);
+    __isset = std::move(other671.__isset);
+    return *this;
+}
+void query_split_response::printTo(std::ostream &out) const
+{
+    using ::apache::thrift::to_string;
+    out << "query_split_response(";
+    out << "err=" << to_string(err);
+    out << ", "
+        << "new_partition_count=" << to_string(new_partition_count);
+    out << ", "
+        << "status=" << to_string(status);
     out << ", "
         << "hint_msg=";
     (__isset.hint_msg ? (out << to_string(hint_msg)) : (out << "<null>"));

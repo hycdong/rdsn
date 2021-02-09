@@ -77,25 +77,7 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
         return;
     }
 
-    // validate partition_hash
-    if (_validate_partition_hash) {
-        if (_split_mgr->should_reject_request()) {
-            derror_replica("current partition is not available because of partition split");
-            response_client_write(request, ERR_OBJECT_NOT_FOUND);
-            return;
-        }
-        auto partition_hash = ((dsn::message_ex *)request)->header->client.partition_hash;
-        auto target_pidx = _split_mgr->get_index_by_partition_hash(partition_hash);
-        if (target_pidx != get_gpid().get_partition_index()) {
-            derror_replica("receive request with wrong partition_hash({}), partition_version = {}, "
-                           "target_pidx = {}",
-                           partition_hash,
-                           _split_mgr->get_partition_version(),
-                           target_pidx);
-            response_client_write(request, ERR_PARENT_PARTITION_MISUSED);
-            return;
-        }
-    }
+    CHECK_REQUEST_IF_SPLITTING(write)
 
     if (partition_status::PS_PRIMARY != status()) {
         response_client_write(request, ERR_INVALID_STATE);

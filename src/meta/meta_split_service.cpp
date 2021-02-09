@@ -283,27 +283,26 @@ void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
     parent_context.stage = config_status::not_pending;
 }
 
-// ThreadPool: THREAD_POOL_META_STATE
-void meta_split_service::query_partition_split(query_split_rpc rpc)
+void meta_split_service::query_partition_split(query_split_rpc rpc) const
 {
     const std::string &app_name = rpc.request().app_name;
     auto &response = rpc.response();
     response.err = ERR_OK;
 
-    zauto_write_lock l(app_lock());
+    zauto_read_lock l(app_lock());
     std::shared_ptr<app_state> app = _state->get_app(app_name);
     if (app == nullptr || app->status != app_status::AS_AVAILABLE) {
-        derror_f("app({}) is not existed or not available", app_name);
         response.err = app == nullptr ? ERR_APP_NOT_EXIST : ERR_APP_DROPPED;
-        response.hint_msg =
-            fmt::format("app {}", response.err == ERR_APP_NOT_EXIST ? "not existed" : "dropped");
+        response.__set_hint_msg(fmt::format(
+            "app({}) {}", app_name, response.err == ERR_APP_NOT_EXIST ? "not existed" : "dropped"));
+        derror_f("query partition split failed, {}", response.hint_msg);
         return;
     }
 
     if (app->helpers->split_states.splitting_count <= 0) {
-        derror_f("query split for app({}) failed, current app is not splitting", app_name);
         response.err = ERR_INVALID_STATE;
-        response.hint_msg = "app is not splitting";
+        response.__set_hint_msg(fmt::format("app({}) is not splitting", app_name));
+        derror_f("query partition split failed, {}", response.hint_msg);
         return;
     }
 
@@ -455,7 +454,7 @@ void meta_split_service::notify_stop_split(notify_stop_split_rpc rpc)
 {
     const auto &request = rpc.request();
     auto &response = rpc.response();
-    zauto_write_lock(app_lock());
+    zauto_write_lock l(app_lock());
     std::shared_ptr<app_state> app = _state->get_app(request.app_name);
     dassert_f(app != nullptr, "app({}) is not existed", request.app_name);
     dassert_f(app->is_stateful, "app({}) is stateless currently", request.app_name);
