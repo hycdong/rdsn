@@ -107,7 +107,6 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
         _state->get_app_path(*app), std::move(value), on_write_storage_complete);
 }
 
-// TODO(heyuchen): refactor this function
 void meta_split_service::register_child_on_meta(register_child_rpc rpc)
 {
     const auto &request = rpc.request();

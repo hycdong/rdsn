@@ -358,6 +358,40 @@ TEST_F(meta_split_service_test, start_split_test)
     }
 }
 
+// query split unit tests
+TEST_F(meta_split_service_test, query_split_test)
+{
+    // Test case:
+    // - app not existed
+    // - app not splitting
+    // - query split succeed
+    struct query_test
+    {
+        std::string app_name;
+        bool mock_splitting;
+        error_code expected_err;
+    } tests[] = {
+        {"table_not_exist", false, ERR_APP_NOT_EXIST},
+        {NAME, false, ERR_INVALID_STATE},
+        {NAME, true, ERR_OK},
+    };
+
+    for (auto test : tests) {
+        if (test.mock_splitting) {
+            mock_app_partition_split_context();
+        }
+        auto resp = query_partition_split(test.app_name);
+        ASSERT_EQ(resp.err, test.expected_err);
+        if (resp.err == ERR_OK) {
+            ASSERT_EQ(resp.new_partition_count, NEW_PARTITION_COUNT);
+            ASSERT_EQ(resp.status.size(), PARTITION_COUNT);
+        }
+        if (test.mock_splitting) {
+            clear_app_partition_split_context();
+        }
+    }
+}
+
 // register child unit tests
 TEST_F(meta_split_service_test, register_child_test)
 {
@@ -399,38 +433,53 @@ TEST_F(meta_split_service_test, register_child_test)
     }
 }
 
-// query split unit tests
-TEST_F(meta_split_service_test, query_split_test)
+// config sync unit tests
+TEST_F(meta_split_service_test, on_config_sync_test)
 {
+    create_app("not_splitting_app");
+    auto not_splitting_app = find_app("not_splitting_app");
+    gpid pid1 = gpid(app->app_id, PARENT_INDEX);
+    gpid pid2 = gpid(not_splitting_app->app_id, 0);
+    // mock meta server node state
+    node_state node;
+    node.put_partition(pid1, true);
+    node.put_partition(pid2, true);
+    mock_node_state(NODE, node);
+    // mock request
+    replica_info info1, info2;
+    info1.pid = pid1;
+    info2.pid = pid2;
+    configuration_query_by_node_request req;
+    req.node = NODE;
+    req.__isset.stored_replicas = true;
+    req.stored_replicas.emplace_back(info1);
+    req.stored_replicas.emplace_back(info2);
+
     // Test case:
-    // - app not existed
-    // - app not splitting
-    // - query split succeed
-    struct query_test
+    // - partition is splitting
+    // - partition splitted
+    // - partition split is paused
+    struct config_sync_test
     {
-        std::string app_name;
-        bool mock_splitting;
-        error_code expected_err;
+        bool mock_child_registered;
+        bool mock_parent_paused;
+        int32_t expected_count;
     } tests[] = {
-        {"table_not_exist", false, ERR_APP_NOT_EXIST},
-        {NAME, false, ERR_INVALID_STATE},
-        {NAME, true, ERR_OK},
+        {false, false, 1}, {true, false, 0}, {false, true, 1},
     };
 
     for (auto test : tests) {
-        if (test.mock_splitting) {
-            mock_app_partition_split_context();
+        mock_app_partition_split_context();
+        if (test.mock_child_registered) {
+            mock_child_registered();
         }
-        auto resp = query_partition_split(test.app_name);
-        ASSERT_EQ(resp.err, test.expected_err);
-        if (resp.err == ERR_OK) {
-            ASSERT_EQ(resp.new_partition_count, NEW_PARTITION_COUNT);
-            ASSERT_EQ(resp.status.size(), PARTITION_COUNT);
+        if (test.mock_parent_paused) {
+            mock_split_states(split_status::PAUSED, PARENT_INDEX);
         }
-        if (test.mock_splitting) {
-            clear_app_partition_split_context();
-        }
+        ASSERT_EQ(on_config_sync(req), test.expected_count);
     }
+
+    drop_app("not_splitting_app");
 }
 
 /// control split unit tests
@@ -726,55 +775,6 @@ TEST_F(meta_split_service_test, query_child_state_test)
             clear_app_partition_split_context();
         }
     }
-}
-
-// config sync unit tests
-TEST_F(meta_split_service_test, on_config_sync_test)
-{
-    create_app("not_splitting_app");
-    auto not_splitting_app = find_app("not_splitting_app");
-    gpid pid1 = gpid(app->app_id, PARENT_INDEX);
-    gpid pid2 = gpid(not_splitting_app->app_id, 0);
-    // mock meta server node state
-    node_state node;
-    node.put_partition(pid1, true);
-    node.put_partition(pid2, true);
-    mock_node_state(NODE, node);
-    // mock request
-    replica_info info1, info2;
-    info1.pid = pid1;
-    info2.pid = pid2;
-    configuration_query_by_node_request req;
-    req.node = NODE;
-    req.__isset.stored_replicas = true;
-    req.stored_replicas.emplace_back(info1);
-    req.stored_replicas.emplace_back(info2);
-
-    // Test case:
-    // - partition is splitting
-    // - partition splitted
-    // - partition split is paused
-    struct config_sync_test
-    {
-        bool mock_child_registered;
-        bool mock_parent_paused;
-        int32_t expected_count;
-    } tests[] = {
-        {false, false, 1}, {true, false, 0}, {false, true, 1},
-    };
-
-    for (auto test : tests) {
-        mock_app_partition_split_context();
-        if (test.mock_child_registered) {
-            mock_child_registered();
-        }
-        if (test.mock_parent_paused) {
-            mock_split_states(split_status::PAUSED, PARENT_INDEX);
-        }
-        ASSERT_EQ(on_config_sync(req), test.expected_count);
-    }
-
-    drop_app("not_splitting_app");
 }
 
 class meta_split_service_failover_test : public meta_split_service_test
