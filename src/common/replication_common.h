@@ -41,8 +41,8 @@ typedef rpc_holder<control_bulk_load_request, control_bulk_load_response> contro
 typedef rpc_holder<query_bulk_load_request, query_bulk_load_response> query_bulk_load_rpc;
 
 typedef rpc_holder<start_partition_split_request, start_partition_split_response> start_split_rpc;
-typedef rpc_holder<query_split_request, query_split_response> query_split_rpc;
 typedef rpc_holder<control_split_request, control_split_response> control_split_rpc;
+typedef rpc_holder<query_split_request, query_split_response> query_split_rpc;
 typedef rpc_holder<register_child_request, register_child_response> register_child_rpc;
 typedef rpc_holder<notify_stop_split_request, notify_stop_split_response> notify_stop_split_rpc;
 typedef rpc_holder<query_child_state_request, query_child_state_response> query_child_state_rpc;

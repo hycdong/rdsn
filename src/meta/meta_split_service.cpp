@@ -70,10 +70,9 @@ void meta_split_service::do_start_partition_split(std::shared_ptr<app_state> app
                                                   start_split_rpc rpc)
 {
     auto on_write_storage_complete = [app, rpc, this]() {
-        ddebug_f("app({}): new partition_count = {}, app_env[{}]=true",
+        ddebug_f("app({}) update partition count on remote storage, new partition_count = {}",
                  app->app_name,
-                 app->partition_count * 2,
-                 replica_envs::SPLIT_VALIDATE_PARTITION_HASH);
+                 app->partition_count * 2);
 
         zauto_write_lock l(app_lock());
         app->helpers->split_states.splitting_count = app->partition_count;
@@ -222,7 +221,6 @@ dsn::task_ptr meta_split_service::add_child_on_remote_storage(register_child_rpc
     }
 }
 
-// ThreadPool: THREAD_POOL_META_STATE
 void meta_split_service::on_add_child_on_remote_storage_reply(error_code ec,
                                                               register_child_rpc rpc,
                                                               bool create_new)

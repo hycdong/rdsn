@@ -20,6 +20,8 @@ namespace replication {
 class meta_split_service_test : public meta_test_base
 {
 public:
+    meta_split_service_test() {}
+
     void SetUp()
     {
         meta_test_base::SetUp();
@@ -346,6 +348,7 @@ TEST_F(meta_split_service_test, start_split_test)
                  {NAME, PARTITION_COUNT, false, ERR_INVALID_PARAMETERS, PARTITION_COUNT},
                  {NAME, NEW_PARTITION_COUNT, true, ERR_BUSY, PARTITION_COUNT},
                  {NAME, NEW_PARTITION_COUNT, false, ERR_OK, NEW_PARTITION_COUNT}};
+
     for (auto test : tests) {
         auto app = find_app(NAME);
         app->helpers->split_states.splitting_count = test.need_mock_splitting ? PARTITION_COUNT : 0;
@@ -457,18 +460,16 @@ TEST_F(meta_split_service_test, on_config_sync_test)
 
     // Test case:
     // - partition is splitting
-    // - partition splitted
+    // - partition is not splitting
     // - partition split is paused
     struct config_sync_test
     {
         bool mock_child_registered;
         bool mock_parent_paused;
         int32_t expected_count;
-    } tests[] = {
-        {false, false, 1}, {true, false, 0}, {false, true, 1},
-    };
+    } tests[] = {{false, false, 1}, {true, false, 0}, {false, true, 1}};
 
-    for (auto test : tests) {
+    for (const auto &test : tests) {
         mock_app_partition_split_context();
         if (test.mock_child_registered) {
             mock_child_registered();
