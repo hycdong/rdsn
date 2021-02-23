@@ -89,7 +89,6 @@ TEST_F(replica_test, backup_request_qps)
     // create backup request
     struct dsn::message_header header;
     header.context.u.is_backup_request = true;
-    header.client.partition_hash = _mock_replica->get_gpid().get_partition_index();
     message_ptr backup_request = dsn::message_ex::create_request(task_code());
     backup_request->header = &header;
 

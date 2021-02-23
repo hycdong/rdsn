@@ -1165,17 +1165,15 @@ void server_state::drop_app(dsn::message_ex *msg)
     {
         zauto_write_lock l(_lock);
         app = get_app(request.app_name);
-        if (app->helpers->split_states.splitting_count > 0) {
-            response.err = ERR_SPLITTING;
-            _meta_svc->reply_data(msg, response);
-            msg->release_ref();
-        }
-
         if (nullptr == app) {
             response.err = request.options.success_if_not_exist ? ERR_OK : ERR_APP_NOT_EXIST;
         } else {
             switch (app->status) {
             case app_status::AS_AVAILABLE:
+                if (app->helpers->split_states.splitting_count > 0) {
+                    response.err = ERR_SPLITTING;
+                    break;
+                }
                 do_dropping = true;
                 app->status = app_status::AS_DROPPING;
                 app->drop_second = dsn_now_ms() / 1000;

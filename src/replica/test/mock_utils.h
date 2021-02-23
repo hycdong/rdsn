@@ -139,7 +139,6 @@ public:
         }
         return _max_gced_decree;
     }
-
     /// helper functions
     void set_replica_config(replica_configuration &config) { _config = config; }
     void set_partition_status(partition_status::type status) { _config.status = status; }
@@ -375,7 +374,6 @@ struct mock_mutation_duplicator : public mutation_duplicator
     static void mock(duplicate_function hook) { _func = std::move(hook); }
     static duplicate_function _func;
 };
-typedef dsn::ref_ptr<mock_mutation_log_shared> mock_mutation_log_shared_ptr;
 
 } // namespace replication
 } // namespace dsn

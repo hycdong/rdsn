@@ -897,7 +897,7 @@ struct start_partition_split_response
     // - ERR_INVALID_PARAMETERS: if the given new_partition_count != old_partition_count * 2
     // - ERR_BUSY - if app is already executing partition split
     1:dsn.error_code    err;
-    2:string            hint_msg
+    2:string            hint_msg;
 }
 
 enum split_control_type
