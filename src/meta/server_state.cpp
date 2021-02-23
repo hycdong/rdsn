@@ -1165,6 +1165,12 @@ void server_state::drop_app(dsn::message_ex *msg)
     {
         zauto_write_lock l(_lock);
         app = get_app(request.app_name);
+        if (app->helpers->split_states.splitting_count > 0) {
+            response.err = ERR_SPLITTING;
+            _meta_svc->reply_data(msg, response);
+            msg->release_ref();
+        }
+
         if (nullptr == app) {
             response.err = request.options.success_if_not_exist ? ERR_OK : ERR_APP_NOT_EXIST;
         } else {
@@ -1609,11 +1615,9 @@ void server_state::on_update_configuration_on_remote_reply(
                 }
             }
         }
-    } else if (ec == ERR_OBJECT_NOT_FOUND) { // child partition has not been registered, but drop
-                                             // app is called
-        dassert(config_request->type == config_type::CT_DROP_PARTITION,
-                "invalid type %s",
-                _config_type_VALUES_TO_NAMES.find(config_request->type)->second);
+    } else if (ec == ERR_OBJECT_NOT_FOUND &&
+               config_request->type == config_type::CT_DROP_PARTITION) {
+        // handle drop splitting app specially
         cc.pending_sync_task = nullptr;
         cc.pending_sync_request.reset();
         cc.stage = config_status::not_pending;
@@ -1650,6 +1654,12 @@ void server_state::recall_partition(std::shared_ptr<app_state> &app, int pidx)
     };
 
     partition_configuration &pc = app->partitions[pidx];
+    // handle recall splitting app specially
+    if (pc.ballot == invalid_ballot) {
+        ddebug_f("ignore recall app({}), child partition[{}.{}]", app->app_name, app->app_id, pidx);
+        process_one_partition(app);
+        return;
+    }
     dassert((pc.partition_flags & pc_flags::dropped), "");
 
     pc.partition_flags = 0;
