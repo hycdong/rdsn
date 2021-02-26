@@ -82,6 +82,8 @@ public:
     {
         return _left_potential_secondary_ack_count;
     }
+    bool is_child_acked() const { return !_wait_child; }
+    bool is_error_acked() const { return _is_error_acked; }
     ::dsn::task_ptr &log_task() { return _log_task; }
     node_tasks &remote_tasks() { return _prepare_or_commit_tasks; }
     bool is_prepare_close_to_timeout(int gap_ms, int timeout_ms)
@@ -91,8 +93,6 @@ public:
     uint64_t create_ts_ns() const { return _create_ts_ns; }
     ballot get_ballot() const { return data.header.ballot; }
     decree get_decree() const { return data.header.decree; }
-    bool is_split() const { return _is_split != 0; }
-    bool is_acked() const { return _is_ack != 0; }
 
     // state change
     void set_id(ballot b, decree c);
@@ -114,6 +114,9 @@ public:
     {
         _left_potential_secondary_ack_count = count;
     }
+    void wait_child() { _wait_child = true; }
+    void child_acked() { _wait_child = false; }
+    void set_error_acked() { _is_error_acked = true; }
     int clear_prepare_or_commit_tasks();
     void wait_log_task() const;
     uint64_t prepare_ts_ms() const { return _prepare_ts_ms; }
@@ -122,15 +125,6 @@ public:
     // >= 1 MB
     bool is_full() const { return _appro_data_bytes >= 1024 * 1024; }
     int appro_data_bytes() const { return _appro_data_bytes; }
-
-    // Used during partition split when parent send mutations to child synchronously
-    // _is_split = 1 when child start to prepare this mutation
-    // _is_split = 0 means child finish prepare or not during partition split
-    // _is_ack is used to ensure secondary send prepare ack to primary only once when prepare failed
-    void set_is_split() { _is_split = 1; }
-    void clear_split() { _is_split = 0; }
-    void set_is_acked() { _is_ack = 1; }
-    void clear_acked() { _is_ack = 0; }
 
     // read & write mutation data
     //
@@ -167,8 +161,14 @@ private:
             unsigned int _not_logged : 1;
             unsigned int _left_secondary_ack_count : 15;
             unsigned int _left_potential_secondary_ack_count : 14;
-            unsigned int _is_split : 1;
-            unsigned int _is_ack : 1;
+            // Used for partition split
+            // _wait_child = true : child prepare mutation synchronously, its parent should wait for
+            // child ack
+            bool _wait_child : 1;
+            // Used for partition split
+            // when prepare failed when child prepare mutation synchronously, secondary may try to
+            // ack to primary twice, we use _is_error_acked to restrict only ack once
+            bool _is_error_acked : 1;
         };
         uint32_t _private0;
     };

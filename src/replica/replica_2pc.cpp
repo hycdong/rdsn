@@ -164,13 +164,8 @@ void replica::init_prepare(mutation_ptr &mu, bool reconciliation, bool pop_all_c
          mu->name(),
          mu->tid());
 
-    // check whether mutation should send to its child replica
-    if (_primary_states.sync_send_write_request) {
-        // TODO(heyuchen): for debug, remove it
-        ddebug_replica(
-            "mutation({}) should sync to child({})", mu->name(), _split_mgr->get_child_gpid());
-        mu->set_is_sync_to_child(true);
-    }
+    // child should prepare mutation synchronously
+    mu->set_is_sync_to_child(_primary_states.sync_send_write_request);
 
     // check bounded staleness
     if (mu->data.header.decree > last_committed_decree() + _options->staleness_for_commit) {
@@ -307,7 +302,7 @@ void replica::send_prepare_message(::dsn::rpc_address addr,
     _primary_states.get_replica_config(status, rconfig, learn_signature);
     rconfig.__set_pop_all(pop_all_committed_mutations);
     if (status == partition_status::PS_SECONDARY && _primary_states.sync_send_write_request) {
-        rconfig.split_sync_to_child = true;
+        rconfig.__set_split_sync_to_child(true);
     }
 
     {
@@ -361,7 +356,6 @@ void replica::on_prepare(dsn::message_ex *request)
         unmarshall(reader, rconfig, DSF_THRIFT_BINARY);
         mu = mutation::read_from(reader, request);
         mu->set_is_sync_to_child(rconfig.split_sync_to_child);
-        // set split_sync_to_child to false immediately
         rconfig.split_sync_to_child = false;
     }
 
@@ -787,7 +781,7 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
     //        }
     //    }
     if (err == ERR_OK) {
-        if (!mu->is_split()) {
+        if (mu->is_child_acked()) {
             dinfo_replica("mutation {} ack_prepare_message, err = {}", mu->name(), err);
             for (auto &request : prepare_requests) {
                 reply(request, resp);
@@ -797,14 +791,14 @@ void replica::ack_prepare_message(error_code err, mutation_ptr &mu)
     }
 
     // only happened when prepare failed during partition split child copy mutation synchronously
-    if (mu->is_acked()) {
+    if (mu->is_error_acked()) {
         dwarn_replica("mutation {} has been ack_prepare_message, err = {}", mu->name(), err);
         return;
     }
 
     dwarn_replica("mutation {} ack_prepare_message, err = {}", mu->name(), err);
     if (mu->is_sync_to_child()) {
-        mu->set_is_acked();
+        mu->set_error_acked();
     }
     for (auto &request : prepare_requests) {
         reply(request, resp);

@@ -1256,8 +1256,8 @@ void replica_split_manager::copy_mutation(mutation_ptr &mu) // on parent
 {
     dassert_replica(_child_gpid.get_app_id() > 0, "child_gpid({}) is invalid", _child_gpid);
 
-    if (mu->is_sync_to_child() && !mu->is_split()) {
-        mu->set_is_split();
+    if (mu->is_sync_to_child()) {
+        mu->wait_child();
     }
 
     mutation_ptr new_mu = mutation::copy_no_reply(mu);
@@ -1346,14 +1346,11 @@ void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child parti
                                                        std::placeholders::_2),
                                              get_gpid().thread_hash());
     }
-    // _private_log->append(mu, LPC_WRITE_REPLICATION_LOG_COMMON, tracker(), nullptr);
 }
 
 void replica_split_manager::ack_parent(error_code ec, mutation_ptr &mu) // on child
 {
     dassert_replica(mu->is_sync_to_child(), "mutation({}) should be copied synchronously");
-    // TODO(heyuchen): update it into assert, test it onebox
-    // if (mu->is_sync_to_child()) {
     _stub->split_replica_exec(LPC_PARTITION_SPLIT,
                               _replica->_split_states.parent_gpid,
                               std::bind(&replica_split_manager::on_copy_mutation_reply,
@@ -1361,7 +1358,6 @@ void replica_split_manager::ack_parent(error_code ec, mutation_ptr &mu) // on ch
                                         ec,
                                         mu->data.header.ballot,
                                         mu->data.header.decree));
-    //}
 }
 
 void replica_split_manager::on_copy_mutation_reply(error_code ec, ballot b, decree d) // on parent
@@ -1388,7 +1384,7 @@ void replica_split_manager::on_copy_mutation_reply(error_code ec, ballot b, decr
                        enum_to_string(status()),
                        mu->name(),
                        ec);
-        mu->clear_split();
+        mu->child_acked();
     } else {
         derror_replica("child({}) copy mutation({}) failed, ballot={}, decree={}, error={}",
                        _child_gpid,
@@ -1418,7 +1414,7 @@ void replica_split_manager::on_copy_mutation_reply(error_code ec, ballot b, decr
         case partition_status::PS_ERROR:
             break;
         default:
-            dassert(false, "");
+            dassert_replica(false, "wrong status({})", enum_to_string(status()));
             break;
         }
     }
