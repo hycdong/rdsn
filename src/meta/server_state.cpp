@@ -1173,7 +1173,7 @@ void server_state::drop_app(dsn::message_ex *msg)
         } else {
             switch (app->status) {
             case app_status::AS_AVAILABLE:
-                if (app->helpers->split_states.splitting_count > 0) {
+                if (app->splitting()) {
                     response.err = ERR_SPLITTING;
                     break;
                 }
@@ -1619,6 +1619,9 @@ void server_state::on_update_configuration_on_remote_reply(
     } else if (ec == ERR_OBJECT_NOT_FOUND &&
                config_request->type == config_type::CT_DROP_PARTITION) {
         // handle drop splitting app specially
+        // if permit drop splitting app
+        // in functions like register_child: get_app(app-name) -> get_app(id)
+        // get_app(id) will get dropped app, get_app(name) won't
         cc.pending_sync_task = nullptr;
         cc.pending_sync_request.reset();
         cc.stage = config_status::not_pending;
