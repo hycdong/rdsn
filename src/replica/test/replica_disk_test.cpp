@@ -198,5 +198,11 @@ TEST_F(replica_disk_test, gc_disk_useless_dir)
     ASSERT_EQ(report.error_replica_count, 2);
 }
 
+TEST_F(replica_disk_test, disk_status_test)
+{
+    update_disk_status_test(disk_status::kNormal, disk_status::kInsufficientSpace);
+    update_disk_status_test(disk_status::kInsufficientSpace, disk_status::kNormal);
+}
+
 } // namespace replication
 } // namespace dsn

@@ -84,6 +84,12 @@ void replica::on_client_write(dsn::message_ex *request, bool ignore_throttling)
         return;
     }
 
+    // TODO(heyuchen): add comment
+    if (_is_disk_insufficient || _primary_states.has_secondary_disk_insufficient()) {
+        response_client_write(request, ERR_DISK_INSUFFICIENT);
+        return;
+    }
+
     if (_is_bulk_load_ingestion) {
         if (request->rpc_code() != dsn::apps::RPC_RRDB_RRDB_BULK_LOAD) {
             // reject write requests during ingestion

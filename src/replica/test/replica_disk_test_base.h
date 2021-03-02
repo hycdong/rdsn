@@ -95,6 +95,48 @@ public:
         }
     }
 
+    void update_disk_status_test(disk_status old_status, disk_status new_status)
+    {
+        auto node = get_dir_nodes()[0];
+        // mock old status
+        for (auto &kv : node->holding_replicas) {
+            for (auto &pid : kv.second) {
+                update_replica_disk_insufficient(pid, old_status);
+            }
+        }
+        // mock disk status changed
+        node->status = new_status;
+        stub->_fs_manager._status_updated_dir_nodes.emplace_back(node);
+        // check status changed
+        stub->update_disks_status();
+        for (auto &kv : node->holding_replicas) {
+            for (auto &pid : kv.second) {
+                bool flag;
+                ASSERT_TRUE(get_replica_disk_insufficient(pid, flag));
+                ASSERT_EQ(flag, new_status == disk_status::kInsufficientSpace);
+            }
+        }
+    }
+
+    void update_replica_disk_insufficient(const gpid &pid, const disk_status status)
+    {
+        replica_ptr replica = stub->get_replica(pid);
+        if (replica == nullptr) {
+            return;
+        }
+        replica->set_disk_insufficient_flag(status == disk_status::kInsufficientSpace);
+    }
+
+    bool get_replica_disk_insufficient(const gpid &pid, bool &flag)
+    {
+        replica_ptr replica = stub->get_replica(pid);
+        if (replica == nullptr) {
+            return false;
+        }
+        flag = replica->is_disk_insufficient();
+        return true;
+    }
+
 public:
     int empty_dir_nodes_count = 1;
     int dir_nodes_count = 5;

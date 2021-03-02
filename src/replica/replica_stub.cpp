@@ -1786,6 +1786,7 @@ void replica_stub::on_disk_stat()
     dsn::replication::disk_remove_useless_dirs(_options.data_dirs, report);
     _fs_manager.update_disk_stat();
     update_disk_holding_replicas();
+    update_disks_status();
 
     _counter_replicas_error_replica_dir_count->set(report.error_replica_count);
     _counter_replicas_garbage_replica_dir_count->set(report.garbage_replica_count);
@@ -2773,6 +2774,26 @@ void replica_stub::query_app_compact_status(
     for (auto it = _replicas.begin(); it != _replicas.end(); ++it) {
         if (it->first.get_app_id() == app_id) {
             status[it->first] = it->second->get_compact_status();
+        }
+    }
+}
+
+void replica_stub::update_disks_status()
+{
+    for (const auto &dir_node : _fs_manager._status_updated_dir_nodes) {
+        for (const auto &holding_replicas : dir_node->holding_replicas) {
+            const std::set<gpid> &pids = holding_replicas.second;
+            for (const auto &pid : pids) {
+                replica_ptr replica = get_replica(pid);
+                if (replica == nullptr) {
+                    continue;
+                }
+                // TODO(heyuchen): replica disk lack of space
+                replica->_is_disk_insufficient =
+                    dir_node->status == disk_status::kInsufficientSpace;
+                ddebug_f(
+                    "{} update is_space_lack({})", replica->name(), replica->_is_disk_insufficient);
+            }
         }
     }
 }

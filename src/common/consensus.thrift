@@ -208,5 +208,7 @@ struct group_check_response
     // Used for pause or cancel partition split
     // if secondary pause or cancel split succeed, is_split_stopped = true
     8:optional bool       is_split_stopped;
+    // TODO(heyuchen): add comment
+    9:optional bool       is_disk_insufficient = false;
 }
 

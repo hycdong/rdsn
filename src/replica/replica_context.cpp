@@ -78,6 +78,8 @@ void primary_context::cleanup(bool clean_pending_mutations)
     cleanup_bulk_load_states();
 
     cleanup_split_states();
+
+    secondary_disk_insufficient_flag.clear();
 }
 
 bool primary_context::is_cleaned()
@@ -172,6 +174,19 @@ void primary_context::cleanup_split_states()
     caught_up_children.clear();
     sync_send_write_request = false;
     split_stopped_secondary.clear();
+}
+
+bool primary_context::has_secondary_disk_insufficient() const
+{
+    for (const auto &kv : secondary_disk_insufficient_flag) {
+        if (kv.second) {
+            ddebug_f("partition[{}] secondary[{}] disk space is insufficient",
+                     membership.pid,
+                     kv.first.to_string());
+            return true;
+        }
+    }
+    return false;
 }
 
 bool secondary_context::cleanup(bool force)

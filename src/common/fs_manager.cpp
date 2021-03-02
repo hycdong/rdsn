@@ -42,6 +42,16 @@
 namespace dsn {
 namespace replication {
 
+DSN_DEFINE_bool("replication",
+                enable_disk_available_check,
+                true,
+                "check if disk available ratio below disk_min_available_ratio");
+DSN_DEFINE_int32(
+    "replication",
+    disk_min_available_ratio,
+    10,
+    "if disk available ratio is below this value, replica on this disk will reject client write");
+
 unsigned dir_node::replicas_count() const
 {
     unsigned sum = 0;
@@ -75,24 +85,40 @@ unsigned dir_node::remove(const gpid &pid)
     return iter->second.erase(pid);
 }
 
-void dir_node::update_disk_stat()
+bool dir_node::update_disk_stat()
 {
-    FAIL_POINT_INJECT_F("update_disk_stat", [](string_view) {});
+    FAIL_POINT_INJECT_F("update_disk_stat", [](string_view) { return false; });
+
     dsn::utils::filesystem::disk_space_info info;
-    if (dsn::utils::filesystem::get_disk_space_info(full_dir, info)) {
-        disk_capacity_mb = info.capacity / 1024 / 1024;
-        disk_available_mb = info.available / 1024 / 1024;
-        disk_available_ratio = static_cast<int>(
-            disk_capacity_mb == 0 ? 0 : std::round(disk_available_mb * 100.0 / disk_capacity_mb));
-        ddebug_f("update disk space succeed: dir = {}, capacity_mb = {}, available_mb = {}, "
-                 "available_ratio = {}%",
-                 full_dir,
-                 disk_capacity_mb,
-                 disk_available_mb,
-                 disk_available_ratio);
-    } else {
+    if (!dsn::utils::filesystem::get_disk_space_info(full_dir, info)) {
         derror_f("update disk space failed: dir = {}", full_dir);
+        return false;
     }
+    // update disk space
+    disk_capacity_mb = info.capacity / 1024 / 1024;
+    disk_available_mb = info.available / 1024 / 1024;
+    disk_available_ratio = static_cast<int>(
+        disk_capacity_mb == 0 ? 0 : std::round(disk_available_mb * 100.0 / disk_capacity_mb));
+    ddebug_f("update disk space succeed: dir = {}, capacity_mb = {}, available_mb = {}, "
+             "available_ratio = {}%",
+             full_dir,
+             disk_capacity_mb,
+             disk_available_mb,
+             disk_available_ratio);
+
+    if (FLAGS_enable_disk_available_check) {
+        // update disk status
+        auto old_status = status;
+        auto new_status = disk_available_ratio < FLAGS_disk_min_available_ratio
+                              ? disk_status::kNormal
+                              : disk_status::kInsufficientSpace;
+        if (old_status != new_status) {
+            status = new_status;
+            ddebug_f("disk({}) status update from({}) to({})", full_dir, old_status, new_status);
+        }
+        return old_status != new_status;
+    }
+    return false;
 }
 
 fs_manager::fs_manager(bool for_test)
@@ -284,7 +310,9 @@ void fs_manager::update_disk_stat()
 {
     reset_disk_stat();
     for (auto &dir_node : _dir_nodes) {
-        dir_node->update_disk_stat();
+        if (dir_node->update_disk_stat()) {
+            _status_updated_dir_nodes.emplace_back(dir_node);
+        }
         _total_capacity_mb += dir_node->disk_capacity_mb;
         _total_available_mb += dir_node->disk_available_mb;
         _min_available_ratio = std::min(dir_node->disk_available_ratio, _min_available_ratio);
