@@ -46,11 +46,13 @@ DSN_DEFINE_bool("replication",
                 enable_disk_available_check,
                 true,
                 "check if disk available ratio below disk_min_available_ratio");
+DSN_TAG_VARIABLE(enable_disk_available_check, FT_MUTABLE);
 DSN_DEFINE_int32(
     "replication",
     disk_min_available_ratio,
     10,
     "if disk available ratio is below this value, replica on this disk will reject client write");
+DSN_TAG_VARIABLE(disk_min_available_ratio, FT_MUTABLE);
 
 unsigned dir_node::replicas_count() const
 {
@@ -110,8 +112,8 @@ bool dir_node::update_disk_stat()
         // update disk status
         auto old_status = status;
         auto new_status = disk_available_ratio < FLAGS_disk_min_available_ratio
-                              ? disk_status::kNormal
-                              : disk_status::kInsufficientSpace;
+                              ? disk_status::kInsufficientSpace
+                              : disk_status::kNormal;
         if (old_status != new_status) {
             status = new_status;
             ddebug_f("disk({}) status update from({}) to({})", full_dir, old_status, new_status);
