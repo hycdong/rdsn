@@ -169,7 +169,7 @@ public:
     // ingestion request
     bool ingestion_is_empty_prepare_sent{false};
 
-    // secondary rpc_address -> secondary replica _is_disk_insufficient
+    // secondary rpc_address -> secondary `_is_disk_insufficient` flag
     std::unordered_map<rpc_address, bool> secondary_disk_insufficient_flag;
 };
 
