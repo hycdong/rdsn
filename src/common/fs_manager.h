@@ -111,6 +111,15 @@ public:
     bool for_each_dir_node(const std::function<bool(const dir_node &)> &func) const;
     void update_disk_stat();
 
+    void add_new_dir_node(const std::string &data_dir, const std::string &tag);
+    bool is_dir_node_available(const std::string &data_dir, const std::string &tag) const;
+
+    const std::vector<std::string> &get_available_data_dirs() const
+    {
+        zauto_read_lock l(_lock);
+        return _available_data_dirs;
+    }
+
 private:
     void reset_disk_stat()
     {
@@ -135,6 +144,7 @@ private:
     int _max_available_ratio = 0;
 
     std::vector<std::shared_ptr<dir_node>> _dir_nodes;
+    std::vector<std::string> _available_data_dirs;
     std::vector<std::shared_ptr<dir_node>> _status_updated_dir_nodes;
 
     perf_counter_wrapper _counter_total_capacity_mb;

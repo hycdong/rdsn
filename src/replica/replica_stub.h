@@ -62,6 +62,7 @@ typedef rpc_holder<update_child_group_partition_count_request,
     update_child_group_partition_count_rpc;
 typedef rpc_holder<group_bulk_load_request, group_bulk_load_response> group_bulk_load_rpc;
 typedef rpc_holder<detect_hotkey_request, detect_hotkey_response> detect_hotkey_rpc;
+typedef rpc_holder<add_new_disk_request, add_new_disk_response> add_new_disk_rpc;
 
 class mutation_log;
 namespace test {
@@ -96,6 +97,8 @@ public:
     //
     void initialize(const replication_options &opts, bool clear = false);
     void initialize(bool clear = false);
+    void initialize_fs_manager(std::vector<std::string> &data_dirs,
+                               std::vector<std::string> &data_dir_tags);
     void set_options(const replication_options &opts) { _options = opts; }
     void open_service();
     void close();
@@ -221,6 +224,8 @@ public:
     void
     query_app_compact_status(int32_t app_id,
                              /*out*/ std::unordered_map<gpid, manual_compaction_status> &status);
+
+    void on_add_new_disk(add_new_disk_rpc rpc);
 
 private:
     enum replica_node_state

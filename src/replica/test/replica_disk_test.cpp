@@ -34,19 +34,32 @@ public:
     query_disk_info_rpc fake_query_disk_rpc;
 
 public:
-    void SetUp() override { generate_fake_rpc(); }
+    void SetUp() override {}
 
-private:
     void generate_fake_rpc()
     {
         // create RPC_QUERY_DISK_INFO fake request
         auto query_request = dsn::make_unique<query_disk_info_request>();
         fake_query_disk_rpc = query_disk_info_rpc(std::move(query_request), RPC_QUERY_DISK_INFO);
     }
+
+    error_code send_add_new_disk_rpc(const std::string disk_str)
+    {
+        auto add_disk_request = dsn::make_unique<add_new_disk_request>();
+        add_disk_request->disk_str = disk_str;
+        auto rpc = add_new_disk_rpc(std::move(add_disk_request), RPC_QUERY_DISK_INFO);
+        stub->on_add_new_disk(rpc);
+        error_code err = rpc.response().err;
+        if (err != ERR_OK) {
+            ddebug_f("error msg: {}", rpc.response().err_hint);
+        }
+        return err;
+    }
 };
 
 TEST_F(replica_disk_test, on_query_disk_info_all_app)
 {
+    generate_fake_rpc();
     stub->on_query_disk_info(fake_query_disk_rpc);
 
     query_disk_info_response &disk_info_response = fake_query_disk_rpc.response();
@@ -121,6 +134,7 @@ TEST_F(replica_disk_test, on_query_disk_info_all_app)
 
 TEST_F(replica_disk_test, on_query_disk_info_app_not_existed)
 {
+    generate_fake_rpc();
     query_disk_info_request &request = *fake_query_disk_rpc.mutable_request();
     request.app_name = "not_existed_app";
     stub->on_query_disk_info(fake_query_disk_rpc);
@@ -129,6 +143,7 @@ TEST_F(replica_disk_test, on_query_disk_info_app_not_existed)
 
 TEST_F(replica_disk_test, on_query_disk_info_one_app)
 {
+    generate_fake_rpc();
     query_disk_info_request &request = *fake_query_disk_rpc.mutable_request();
 
     request.app_name = app_info_1.app_name;
@@ -200,8 +215,75 @@ TEST_F(replica_disk_test, gc_disk_useless_dir)
 
 TEST_F(replica_disk_test, disk_status_test)
 {
-    update_disk_status_test(disk_status::kNormal, disk_status::kInsufficientSpace);
-    update_disk_status_test(disk_status::kInsufficientSpace, disk_status::kNormal);
+    int32_t node_index = 0;
+    struct disk_status_test
+    {
+        disk_status old_status;
+        disk_status new_status;
+    } tests[]{{disk_status::kNormal, disk_status::kNormal},
+              {disk_status::kNormal, disk_status::kInsufficientSpace},
+              {disk_status::kInsufficientSpace, disk_status::kInsufficientSpace},
+              {disk_status::kInsufficientSpace, disk_status::kNormal}};
+    for (const auto &test : tests) {
+        auto node = get_dir_nodes()[node_index];
+        mock_node_status(node_index, test.old_status, test.new_status);
+        update_disks_status();
+        for (auto &kv : node->holding_replicas) {
+            for (auto &pid : kv.second) {
+                bool flag;
+                ASSERT_EQ(get_replica_disk_insufficient(pid, flag), ERR_OK);
+                ASSERT_EQ(flag, test.new_status == disk_status::kInsufficientSpace);
+            }
+        }
+    }
+    mock_node_status(node_index, disk_status::kNormal, disk_status::kNormal);
+}
+
+TEST_F(replica_disk_test, broken_disk_test)
+{
+    // Test cases:
+    // create: true, check_rw: true
+    // create: true, check_rw: false
+    // create: false
+    struct broken_disk_test
+    {
+        std::string create_dir;
+        std::string rw_flag;
+        int32_t data_dir_size;
+    } tests[]{{"true", "true", 3}, {"true", "false", 2}, {"false", "false", 2}};
+    for (const auto &test : tests) {
+        ASSERT_EQ(test.data_dir_size, ignore_broken_disk_test(test.create_dir, test.rw_flag));
+    }
+}
+
+TEST_F(replica_disk_test, add_new_disk_test)
+{
+    // Test case:
+    // - invalid params
+    // - dir is available dir
+    // - dir is not empty
+    // - create dir failed
+    // - dir can't read or write
+    // - succeed
+    struct add_disk_test
+    {
+        std::string disk_str;
+        std::string create_dir;
+        std::string rw_flag;
+        error_code expected_err;
+    } tests[]{{"", "true", "true", ERR_INVALID_PARAMETERS},
+              {"wrong_format", "true", "true", ERR_INVALID_PARAMETERS},
+              {"add_new_exist_tag:add_new_exist_disk0", "true", "true", ERR_NODE_ALREADY_EXIST},
+              {"add_new_exist_tag0:add_new_exist_disk", "true", "true", ERR_NODE_ALREADY_EXIST},
+              {"add_new_not_empty_tag:add_new_not_empty_disk", "true", "true", ERR_DIR_NOT_EMPTY},
+              {"new_tag1:new_disk1", "false", "true", ERR_FILE_OPERATION_FAILED},
+              {"new_tag1:new_disk1", "true", "false", ERR_FILE_OPERATION_FAILED},
+              {"new_tag:new_disk", "true", "true", ERR_OK}};
+    for (const auto &test : tests) {
+        prepare_before_add_new_disk_test(test.create_dir, test.rw_flag);
+        ASSERT_EQ(send_add_new_disk_rpc(test.disk_str), test.expected_err);
+        reset_after_add_new_disk_test();
+    }
 }
 
 } // namespace replication

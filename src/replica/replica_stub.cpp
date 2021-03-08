@@ -64,6 +64,11 @@
 namespace dsn {
 namespace replication {
 
+DSN_DEFINE_bool("replication",
+                ignore_broken_disk,
+                true,
+                "true means ignore broken data disk when initialize");
+
 bool replica_stub::s_not_exit_on_log_failure = false;
 
 replica_stub::replica_stub(replica_state_subscriber subscriber /*= nullptr*/,
@@ -450,33 +455,14 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
     }
 
     // init dirs
-    if (!dsn::utils::filesystem::create_directory(_options.slog_dir)) {
-        dassert(false, "Fail to create directory %s.", _options.slog_dir.c_str());
-    }
     std::string cdir;
-    if (!dsn::utils::filesystem::get_absolute_path(_options.slog_dir, cdir)) {
-        dassert(false, "Fail to get absolute path from %s.", _options.slog_dir.c_str());
+    std::string err_msg;
+    if (!dsn::utils::filesystem::create_directory(_options.slog_dir, cdir, err_msg)) {
+        dassert(false, "{}", err_msg);
     }
     _options.slog_dir = cdir;
-    int count = 0;
-    for (auto &dir : _options.data_dirs) {
-        if (!dsn::utils::filesystem::create_directory(dir)) {
-            dassert(false, "Fail to create directory %s.", dir.c_str());
-        }
-        std::string cdir;
-        if (!dsn::utils::filesystem::get_absolute_path(dir, cdir)) {
-            dassert(false, "Fail to get absolute path from %s.", dir.c_str());
-        }
-        dir = cdir;
-        ddebug("data_dirs[%d] = %s", count, dir.c_str());
-        count++;
-    }
 
-    {
-        dsn::error_code err;
-        err = _fs_manager.initialize(_options.data_dirs, _options.data_dir_tags, false);
-        dassert(err == dsn::ERR_OK, "initialize fs manager failed, err(%s)", err.to_string());
-    }
+    initialize_fs_manager(_options.data_dirs, _options.data_dir_tags);
 
     _log = new mutation_log_shared(_options.slog_dir,
                                    _options.log_shared_file_size_mb,
@@ -488,7 +474,7 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
     ddebug("start to load replicas");
 
     std::vector<std::string> dir_list;
-    for (auto &dir : _options.data_dirs) {
+    for (auto &dir : _fs_manager.get_available_data_dirs()) {
         std::vector<std::string> tmp_list;
         if (!dsn::utils::filesystem::get_subdirectories(dir, tmp_list, false)) {
             dassert(false, "Fail to get subdirectories in %s.", dir.c_str());
@@ -734,6 +720,40 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
     } else {
         initialize_start();
     }
+}
+
+void replica_stub::initialize_fs_manager(std::vector<std::string> &data_dirs,
+                                         std::vector<std::string> &data_dir_tags)
+{
+    std::string cdir;
+    std::string err_msg;
+    int count = 0;
+    std::vector<std::string> available_dirs;
+    std::vector<std::string> available_dir_tags;
+    for (int i = 0; i < data_dir_tags.size(); ++i) {
+        std::string &dir = data_dirs[i];
+        bool flag = dsn::utils::filesystem::create_directory(dir, cdir, err_msg);
+        if (flag) {
+            flag = dsn::utils::filesystem::check_dir_rw(dir, err_msg);
+        }
+        if (!flag) {
+            if (FLAGS_ignore_broken_disk) {
+                dwarn_f("data dir[{}] is broken, ignore it, error:{}", dir, err_msg);
+            } else {
+                dassert_f(false, "{}", err_msg);
+            }
+            continue;
+        }
+        ddebug_f("data_dirs[{}] = {}", count, cdir);
+        available_dirs.emplace_back(cdir);
+        available_dir_tags.emplace_back(data_dir_tags[i]);
+        count++;
+    }
+
+    dassert_f(available_dirs.size() > 0,
+              "initialize fs manager failed, no available data directory");
+    error_code err = _fs_manager.initialize(available_dirs, available_dir_tags, false);
+    dassert_f(err == dsn::ERR_OK, "initialize fs manager failed, err({})", err);
 }
 
 void replica_stub::initialize_start()
@@ -1062,6 +1082,53 @@ void replica_stub::on_query_app_info(query_app_info_rpc rpc)
                 visited_apps.insert(info.app_id);
             }
         }
+    }
+}
+
+// ThreadPool: THREAD_POOL_DEFAULT
+void replica_stub::on_add_new_disk(add_new_disk_rpc rpc)
+{
+    const auto &disk_str = rpc.request().disk_str;
+    auto &resp = rpc.response();
+    resp.err = ERR_OK;
+
+    std::vector<std::string> data_dirs;
+    std::vector<std::string> data_dir_tags;
+    std::string err_msg;
+    if (disk_str.empty() ||
+        !replication_options::get_data_dir_and_tag(
+            disk_str, "", "replica", data_dirs, data_dir_tags, err_msg)) {
+        resp.err = ERR_INVALID_PARAMETERS;
+        resp.__set_err_hint(fmt::format("invalid str({})", disk_str));
+        return;
+    }
+
+    for (int i = 0; i < data_dir_tags.size(); ++i) {
+        auto dir = data_dirs[i];
+        if (_fs_manager.is_dir_node_available(dir, data_dir_tags[i])) {
+            resp.err = ERR_NODE_ALREADY_EXIST;
+            resp.__set_err_hint(
+                fmt::format("data_dir({}) tag({}) already available", dir, data_dir_tags[i]));
+            return;
+        }
+
+        if (utils::filesystem::directory_exists(dir) &&
+            !utils::filesystem::is_directory_empty(dir).second) {
+            resp.err = ERR_DIR_NOT_EMPTY;
+            resp.__set_err_hint(fmt::format("Disk({}) directory is not empty", dir));
+            return;
+        }
+
+        std::string cdir;
+        if (!utils::filesystem::create_directory(dir, cdir, err_msg) ||
+            !utils::filesystem::check_dir_rw(dir, err_msg)) {
+            resp.err = ERR_FILE_OPERATION_FAILED;
+            resp.__set_err_hint(err_msg);
+            return;
+        }
+
+        ddebug_f("Add a new disk in fs_manager, data_dir={}, tag={}", cdir, data_dir_tags[i]);
+        _fs_manager.add_new_dir_node(cdir, data_dir_tags[i]);
     }
 }
 
@@ -1783,7 +1850,8 @@ void replica_stub::on_disk_stat()
     uint64_t start = dsn_now_ns();
     disk_cleaning_report report{};
 
-    dsn::replication::disk_remove_useless_dirs(_options.data_dirs, report);
+    dsn::replication::disk_remove_useless_dirs(_fs_manager.get_available_data_dirs(), report);
+
     _fs_manager.update_disk_stat();
     update_disk_holding_replicas();
     update_disks_status();
@@ -1873,6 +1941,7 @@ void replica_stub::open_replica(const app_info &app,
                                 std::shared_ptr<configuration_update_request> req2)
 {
     std::string dir = get_replica_dir(app.app_type.c_str(), id, false);
+
     replica_ptr rep = nullptr;
     if (!dir.empty()) {
         // NOTICE: if partition is DDD, and meta select one replica as primary, it will execute the
@@ -2095,6 +2164,8 @@ void replica_stub::open_service()
         RPC_GROUP_BULK_LOAD, "group_bulk_load", &replica_stub::on_group_bulk_load);
     register_rpc_handler_with_rpc_holder(
         RPC_DETECT_HOTKEY, "detect_hotkey", &replica_stub::on_detect_hotkey);
+    register_rpc_handler_with_rpc_holder(
+        RPC_ADD_NEW_DISK, "add_new_disk", &replica_stub::on_add_new_disk);
 
     register_ctrl_command();
 }
@@ -2474,7 +2545,7 @@ std::string replica_stub::get_replica_dir(const char *app_type, gpid id, bool cr
     std::string gpid_str = fmt::format("{}.{}", id, app_type);
     std::string replica_dir;
     bool is_dir_exist = false;
-    for (const std::string &data_dir : _options.data_dirs) {
+    for (const std::string &data_dir : _fs_manager.get_available_data_dirs()) {
         std::string dir = utils::filesystem::path_combine(data_dir, gpid_str);
         if (utils::filesystem::directory_exists(dir)) {
             if (is_dir_exist) {
@@ -2485,6 +2556,7 @@ std::string replica_stub::get_replica_dir(const char *app_type, gpid id, bool cr
             is_dir_exist = true;
         }
     }
+
     if (replica_dir.empty() && create_new) {
         _fs_manager.allocate_dir(id, app_type, replica_dir);
     }
@@ -2496,7 +2568,7 @@ replica_stub::get_child_dir(const char *app_type, gpid child_pid, const std::str
 {
     std::string gpid_str = fmt::format("{}.{}", child_pid.to_string(), app_type);
     std::string child_dir;
-    for (const std::string &data_dir : _options.data_dirs) {
+    for (const std::string &data_dir : _fs_manager.get_available_data_dirs()) {
         std::string dir = utils::filesystem::path_combine(data_dir, gpid_str);
         // <parent_dir> = <prefix>/<gpid>.<app_type>
         // check if <parent_dir>'s <prefix> is equal to <data_dir>
@@ -2788,7 +2860,6 @@ void replica_stub::update_disks_status()
                 if (replica == nullptr) {
                     continue;
                 }
-                // TODO(heyuchen): replica disk lack of space
                 replica->_is_disk_insufficient =
                     dir_node->status == disk_status::kInsufficientSpace;
                 ddebug_f(
