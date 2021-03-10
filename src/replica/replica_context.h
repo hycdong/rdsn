@@ -158,6 +158,11 @@ public:
     // secondary replica address who has paused or canceled split
     std::unordered_set<rpc_address> split_stopped_secondary;
 
+    // Used for partition split
+    // primary parent query child on meta_server task
+    // Called by `trigger_primary_parent_split`
+    dsn::task_ptr query_child_task;
+
     // Used for bulk load
     // group bulk_load response tasks of RPC_GROUP_BULK_LOAD for each secondary replica
     node_tasks group_bulk_load_pending_replies;
@@ -166,11 +171,6 @@ public:
     // if primary send an empty prepare after ingestion succeed to gurantee secondary commit its
     // ingestion request
     bool ingestion_is_empty_prepare_sent{false};
-
-    // Used for partition split
-    // primary parent query child on meta_server task
-    // Called by `check_partition_count`, see more in `replica_split.cpp`
-    dsn::task_ptr query_child_task;
 };
 
 class secondary_context
@@ -268,13 +268,12 @@ public:
     // mutation list should copy to child replica but prepare list is not ready
     std::vector<mutation_ptr> child_temp_mutation_list;
 
-    // heart beat beween parent and child, start when initialize child replica
-    // child replica send heart beat to parent per 5 seconds
-    // if parent state change, set child partition statu as PS_ERROR
-    ::dsn::task_ptr check_state_task;
-
     // child replica async learn parent states
-    dsn::task_ptr async_learn_task;
+    task_ptr async_learn_task;
+
+    // partition split states checker, start when initialize child replica
+    // see more in function `child_check_split_context` and `parent_check_states`
+    task_ptr check_state_task;
 };
 
 //---------------inline impl----------------------------------------------------------------

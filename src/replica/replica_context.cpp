@@ -245,13 +245,12 @@ bool potential_secondary_context::is_cleaned()
 
 bool partition_split_context::cleanup(bool force)
 {
+    CLEANUP_TASK(async_learn_task, force)
     if (!force) {
         CLEANUP_TASK_ALWAYS(check_state_task)
     } else {
         CLEANUP_TASK(check_state_task, force)
     }
-
-    CLEANUP_TASK(async_learn_task, true)
 
     splitting_start_ts_ns = 0;
     splitting_start_async_learn_ts_ns = 0;
@@ -269,7 +268,7 @@ bool partition_split_context::cleanup(bool force)
 
 bool partition_split_context::is_cleaned() const
 {
-    return check_state_task == nullptr && async_learn_task == nullptr;
+    return async_learn_task == nullptr && check_state_task == nullptr;
 }
 
 } // namespace replication

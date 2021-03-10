@@ -150,11 +150,11 @@ void replica_split_manager::child_check_split_context() // on child partition
     FAIL_POINT_INJECT_F("replica_child_check_split_context", [](dsn::string_view) {});
 
     if (status() != partition_status::PS_PARTITION_SPLIT) {
-        dwarn_replica("wrong status({})", enum_to_string(status()));
+        derror_replica("wrong status({})", enum_to_string(status()));
         _replica->_split_states.check_state_task = nullptr;
         return;
     }
-
+    // let parent partition check its status
     error_code ec = _stub->split_replica_exec(
         LPC_PARTITION_SPLIT,
         _replica->_split_states.parent_gpid,
@@ -163,6 +163,7 @@ void replica_split_manager::child_check_split_context() // on child partition
         child_handle_split_error("check_child_state failed because parent gpid is invalid");
         return;
     }
+
     _replica->_split_states.check_state_task =
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          tracker(),
@@ -1562,6 +1563,7 @@ void replica_split_manager::on_query_child_state_reply(
 
     ddebug_replica("query child partition succeed, child partition[{}] has already been ready",
                    response.child_config.pid);
+    // make child partition active
     _stub->split_replica_exec(LPC_PARTITION_SPLIT,
                               response.child_config.pid,
                               std::bind(&replica_split_manager::child_partition_active,
@@ -1570,6 +1572,7 @@ void replica_split_manager::on_query_child_state_reply(
     update_local_partition_count(response.partition_count);
     _replica->_primary_states.cleanup_split_states();
     parent_cleanup_split_context();
+    // update parent group partition_count
     _replica->broadcast_group_check();
 }
 

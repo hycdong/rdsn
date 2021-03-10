@@ -491,6 +491,8 @@ void meta_service::register_rpc_handlers()
     register_rpc_handler_with_rpc_holder(RPC_CM_QUERY_BULK_LOAD_STATUS,
                                          "query_bulk_load_status",
                                          &meta_service::on_query_bulk_load_status);
+    register_rpc_handler_with_rpc_holder(
+        RPC_CM_START_BACKUP_APP, "start_backup_app", &meta_service::on_start_backup_app);
 }
 
 int meta_service::check_leader(dsn::message_ex *req, dsn::rpc_address *forward_address)
@@ -1089,16 +1091,12 @@ void meta_service::on_query_child_state(query_child_state_rpc rpc)
     if (!check_status(rpc)) {
         return;
     }
-
     if (_split_svc == nullptr) {
         derror_f("meta doesn't support partition split");
         rpc.response().err = ERR_SERVICE_NOT_ACTIVE;
         return;
     }
-    tasking::enqueue(LPC_META_STATE_NORMAL,
-                     tracker(),
-                     [this, rpc]() { _split_svc->query_child_state(std::move(rpc)); },
-                     server_state::sStateHash);
+    _split_svc->query_child_state(std::move(rpc));
 }
 
 void meta_service::on_start_bulk_load(start_bulk_load_rpc rpc)
@@ -1144,6 +1142,19 @@ void meta_service::on_query_bulk_load_status(query_bulk_load_rpc rpc)
         return;
     }
     _bulk_load_svc->on_query_bulk_load_status(std::move(rpc));
+}
+
+void meta_service::on_start_backup_app(start_backup_app_rpc rpc)
+{
+    if (!check_status(rpc)) {
+        return;
+    }
+    if (_backup_handler == nullptr) {
+        derror_f("meta doesn't enable backup service");
+        rpc.response().err = ERR_SERVICE_NOT_ACTIVE;
+        return;
+    }
+    _backup_handler->start_backup_app(std::move(rpc));
 }
 
 } // namespace replication

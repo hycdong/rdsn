@@ -166,7 +166,7 @@ private:
                                           const std::shared_ptr<group_check_response> &resp);
     void parent_send_notify_stop_request(split_status::type meta_split_status);
 
-    // called by `check_partition_count`, query child state on meta server
+    // called by `trigger_primary_parent_split`, query child state on meta server
     void query_child_state();
     void on_query_child_state_reply(error_code ec,
                                     const query_child_state_request &request,
