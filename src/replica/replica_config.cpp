@@ -615,9 +615,12 @@ bool replica::update_configuration(const partition_configuration &config)
     // TODO(hyc): consider!!!
     if (rconfig.status == partition_status::PS_PRIMARY &&
         (rconfig.ballot > get_ballot() || status() != partition_status::PS_PRIMARY)) {
+        // ddebug_replica("hyc: node[{}], ballot(old {} vs new {}), cur_status({})",
+        // _stub->_primary_address.to_string(), get_ballot(), rconfig.ballot,
+        // enum_to_string(status()));
         _primary_states.reset_membership(config, config.primary != _stub->_primary_address);
-        _primary_states.caught_up_children.clear();
-        _split_mgr->parent_cleanup_split_context();
+        //        _primary_states.caught_up_children.clear();
+        //        _split_mgr->parent_cleanup_split_context();
         // parent_cleanup_split_context();
         //        _partition_version = -1;
         // query_child_state();
@@ -777,7 +780,8 @@ bool replica::update_local_configuration(const replica_configuration &config,
     _config = config;
     // we should durable the new ballot to prevent the inconsistent state
     if (_config.ballot > old_ballot) {
-        _primary_states.caught_up_children.clear();
+        // TODO(heyuchen): 0315 changed
+        // _primary_states.caught_up_children.clear();
         dsn::error_code result = _app->update_init_info_ballot_and_decree(this);
         if (result == dsn::ERR_OK) {
             ddebug("%s: update ballot to init file from %" PRId64 " to %" PRId64 " OK",
@@ -791,6 +795,8 @@ bool replica::update_local_configuration(const replica_configuration &config,
                   _config.ballot,
                   result.to_string());
         }
+        // TODO(heyuchen): 0315 changed
+        _split_mgr->parent_cleanup_split_context();
     }
     _last_config_change_time_ms = dsn_now_ms();
     dassert(max_prepared_decree() >= last_committed_decree(),
