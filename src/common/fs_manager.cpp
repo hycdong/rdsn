@@ -250,6 +250,12 @@ void fs_manager::allocate_dir(const gpid &pid, const std::string &type, /*out*/ 
                 pid.get_app_id(),
                 pid.get_partition_index(),
                 n->tag.c_str());
+        if (n->status == kInsufficientSpace) {
+            ddebug_f("dir_node({}) is lack of space, ignore it while allocate new partition({})",
+                     n->tag,
+                     pid);
+            continue;
+        }
         unsigned app_replicas = n->replicas_count(pid.get_app_id());
         unsigned total_replicas = n->replicas_count();
 
