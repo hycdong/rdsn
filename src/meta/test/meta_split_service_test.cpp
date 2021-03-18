@@ -4,16 +4,13 @@
 
 #include <gtest/gtest.h>
 #include <dsn/service_api_c.h>
+#include <dsn/dist/fmt_logging.h>
 #include <dsn/dist/replication/replica_envs.h>
 
 #include "meta_service_test_app.h"
 #include "meta_test_base.h"
 #include "meta/meta_split_service.h"
 #include "meta/meta_server_failure_detector.h"
-
-#include <dsn/dist/fmt_logging.h>
-#include <dsn/utility/fail_point.h>
-#include <gtest/gtest.h>
 
 namespace dsn {
 namespace replication {
@@ -281,7 +278,7 @@ public:
         ainfo.init_partition_count = PARTITION_COUNT;
         ainfo.status = app_status::AS_AVAILABLE;
 
-        blob value = dsn::json::json_forwarder<app_info>::encode(ainfo);
+        blob value = json::json_forwarder<app_info>::encode(ainfo);
         _ms->get_meta_storage()->create_node(
             app_root + "/" + boost::lexical_cast<std::string>(ainfo.app_id),
             std::move(value),
@@ -302,18 +299,18 @@ public:
     }
 
     void create_partition_configuration_on_remote_storage(const std::string &app_root,
-                                                          int32_t app_id,
-                                                          int32_t pidx)
+                                                          const int32_t app_id,
+                                                          const int32_t pidx)
     {
         partition_configuration config;
         config.max_replica_count = 3;
         config.pid = gpid(app_id, pidx);
         config.ballot = PARENT_BALLOT;
-        blob v = dsn::json::json_forwarder<partition_configuration>::encode(config);
+        blob value = json::json_forwarder<partition_configuration>::encode(config);
         _ms->get_meta_storage()->create_node(
             app_root + "/" + boost::lexical_cast<std::string>(app_id) + "/" +
                 boost::lexical_cast<std::string>(pidx),
-            std::move(v),
+            std::move(value),
             [app_id, pidx, this]() {
                 ddebug_f("create app({}), partition({}.{}) dir succeed", NAME, app_id, pidx);
             });

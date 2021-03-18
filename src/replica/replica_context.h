@@ -240,7 +240,6 @@ class partition_split_context
 public:
     bool cleanup(bool force);
     bool is_cleaned() const;
-
     uint64_t total_ms() const
     {
         return splitting_start_ts_ns > 0 ? (dsn_now_ns() - splitting_start_ts_ns) / 1000000 : 0;
@@ -259,12 +258,6 @@ public:
     // whether child has catched up with parent during async-learn
     bool is_caught_up{false};
 
-    uint64_t splitting_start_ts_ns{0};
-    uint64_t splitting_start_async_learn_ts_ns{0};
-    uint64_t splitting_copy_file_count{0};
-    uint64_t splitting_copy_file_size{0};
-    uint64_t splitting_copy_mutation_count{0};
-
     // mutation list should copy to child replica but prepare list is not ready
     std::vector<mutation_ptr> child_temp_mutation_list;
 
@@ -274,6 +267,13 @@ public:
     // partition split states checker, start when initialize child replica
     // see more in function `child_check_split_context` and `parent_check_states`
     task_ptr check_state_task;
+
+    // Used for split related perf-counter
+    uint64_t splitting_start_ts_ns{0};
+    uint64_t splitting_start_async_learn_ts_ns{0};
+    uint64_t splitting_copy_file_count{0};
+    uint64_t splitting_copy_file_size{0};
+    uint64_t splitting_copy_mutation_count{0};
 };
 
 //---------------inline impl----------------------------------------------------------------

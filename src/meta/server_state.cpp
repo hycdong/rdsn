@@ -587,9 +587,9 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                         }
                     }
                 } else if (ec == ERR_OBJECT_NOT_FOUND) {
-                    int init_partition_count = app->init_partition_count > 0
-                                                   ? app->init_partition_count
-                                                   : app->partition_count;
+                    auto init_partition_count = app->init_partition_count > 0
+                                                    ? app->init_partition_count
+                                                    : app->partition_count;
                     if (partition_id < init_partition_count) {
                         dwarn_f(
                             "partition node {} not exist on remote storage, may half create before",
@@ -607,6 +607,7 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                         app->partitions[partition_id].pid = gpid(app->app_id, partition_id);
                         process_one_partition(app);
                     }
+
                 } else {
                     derror("get partition node failed, reason(%s)", ec.to_string());
                     err = ec;
@@ -1111,6 +1112,7 @@ void server_state::create_app(dsn::message_ex *msg)
             info.status = app_status::AS_CREATING;
             info.init_partition_count = request.options.partition_count;
             info.create_second = dsn_now_ms() / 1000;
+            info.init_partition_count = request.options.partition_count;
 
             app = app_state::create(info);
             app->helpers->pending_response = msg;

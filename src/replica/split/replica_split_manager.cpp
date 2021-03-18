@@ -280,7 +280,6 @@ void replica_split_manager::child_copy_prepare_list(
 
     // learning parent states is time-consuming, should execute in THREAD_POOL_REPLICATION_LONG
     decree last_committed_decree = plist->last_committed_decree();
-    // start async learn task
     _replica->_split_states.splitting_start_async_learn_ts_ns = dsn_now_ns();
     _replica->_split_states.async_learn_task =
         tasking::enqueue(LPC_PARTITION_SPLIT_ASYNC_LEARN,
@@ -464,10 +463,8 @@ replica_split_manager::child_apply_private_logs(std::vector<std::string> plog_fi
         plist.prepare(mu, partition_status::PS_SECONDARY);
         ++count;
     }
-
     _replica->_split_states.splitting_copy_mutation_count += count;
     _stub->_counter_replicas_splitting_recent_copy_mutation_count->add(count);
-
     plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
     ddebug_replica(
         "apply in-memory mutations succeed, mutation count={}, app last_committed_decree={}",
@@ -1118,6 +1115,7 @@ void replica_split_manager::child_partition_active(
     _replica->_primary_states.last_prepare_decree_on_new_primary =
         _replica->_prepare_list->max_decree();
     _replica->update_configuration(config);
+    _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
     ddebug_replica("child partition is active, status={}", enum_to_string(status()));
 }
 
@@ -1136,13 +1134,12 @@ void replica_split_manager::child_handle_split_error(
     FAIL_POINT_INJECT_F("replica_child_handle_split_error", [](dsn::string_view) {});
 
     if (status() != partition_status::PS_ERROR) {
-        derror_replica("partition split failed because {}, parent={}, split_duration={}ms, "
-                       "async_learn_duration={}ms",
+        derror_replica("child partition split failed because {}, parent = {}, split_duration = "
+                       "{}ms, async_learn_duration = {}ms",
                        error_msg,
                        _replica->_split_states.parent_gpid,
                        _replica->_split_states.total_ms(),
                        _replica->_split_states.async_learn_ms());
-
         _stub->_counter_replicas_splitting_recent_split_fail_count->increment();
         _replica->update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
     }

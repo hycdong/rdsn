@@ -163,11 +163,10 @@ error_code replica::initialize_on_load()
 
     // TODO(hyc): test
     if (info.partition_count < pidx) {
-        dwarn("gpid(%d.%d), partition_count=%d this replica may be partition split garbage "
-              "replica, ignore",
-              app_id,
-              pidx,
-              info.partition_count);
+        derror_f("partition[{}], count={}, this replica may be partition split garbage partition, "
+                 "ignore it",
+                 pid,
+                 info.partition_count);
         return nullptr;
     }
 

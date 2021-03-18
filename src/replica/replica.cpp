@@ -321,10 +321,7 @@ void replica::execute_mutation(mutation_ptr &mu)
 
     case partition_status::PS_PARTITION_SPLIT:
         if (_split_states.is_caught_up) {
-            dassert(_app->last_committed_decree() + 1 == d,
-                    "%" PRId64 " VS %" PRId64 "",
-                    _app->last_committed_decree() + 1,
-                    d);
+            dcheck_eq(_app->last_committed_decree() + 1, d);
             err = _app->apply_mutation(mu);
         }
         break;
@@ -437,7 +434,7 @@ void replica::close()
         dassert(r, "potential secondary context is not cleared");
 
         r = _split_states.cleanup(true);
-        dassert(r, "partition split context is not cleared");
+        dassert_replica(r, "partition split context is not cleared");
     }
 
     if (_private_log != nullptr) {
