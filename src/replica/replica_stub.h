@@ -43,7 +43,6 @@
 #include "block_service/block_service_manager.h"
 #include "replica.h"
 
-class replica_stub_mock;
 namespace dsn {
 namespace replication {
 

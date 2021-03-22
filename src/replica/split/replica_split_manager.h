@@ -33,7 +33,6 @@ public:
     int32_t get_partition_version() const { return _partition_version.load(); }
     gpid get_child_gpid() const { return _child_gpid; }
     void set_child_gpid(gpid pid) { _child_gpid = pid; }
-
     bool is_splitting() const
     {
         return _child_gpid.get_app_id() > 0 && _child_init_ballot > 0 &&

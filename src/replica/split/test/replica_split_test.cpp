@@ -250,7 +250,7 @@ public:
         mock_child_async_learn_states(_child_replica, true, 0);
         _child_split_mgr->child_apply_private_logs(
             _private_log_files, _mutation_list, TOTAL_FILE_SIZE, DECREE);
-        _child_split_mgr->tracker()->wait_outstanding_tasks();
+        _child_replica->tracker()->wait_outstanding_tasks();
     }
 
     void test_child_catch_up_states(decree local_decree, decree goal_decree, decree min_decree)
@@ -264,7 +264,7 @@ public:
             _child_replica->prepare_list_commit_hard(goal_decree);
         }
         _child_split_mgr->child_catch_up_states();
-        _child_split_mgr->tracker()->wait_outstanding_tasks();
+        _child_replica->tracker()->wait_outstanding_tasks();
     }
 
     error_code test_parent_handle_child_catch_up(ballot child_ballot)
@@ -876,7 +876,6 @@ TEST_F(replica_split_test, trigger_primary_parent_split_test)
               {false, split_status::CANCELING, OLD_PARTITION_COUNT - 1, split_status::NOT_SPLIT},
               {false, split_status::CANCELING, -1, split_status::SPLITTING},
               {false, split_status::PAUSED, OLD_PARTITION_COUNT - 1, split_status::NOT_SPLIT}};
-
     for (const auto &test : tests) {
         mock_parent_primary_configuration(test.lack_of_secondary);
         if (test.old_split_status == split_status::SPLITTING) {

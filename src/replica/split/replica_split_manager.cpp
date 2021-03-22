@@ -1220,8 +1220,8 @@ void replica_split_manager::trigger_secondary_parent_split(
     }
 }
 
-// TODO(heyuchen): refactor the code of sync and async write
-void replica_split_manager::copy_mutation(mutation_ptr &mu) // on parent
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::copy_mutation(mutation_ptr &mu) // on parent partition
 {
     dassert_replica(_child_gpid.get_app_id() > 0, "child_gpid({}) is invalid", _child_gpid);
 
@@ -1295,7 +1295,6 @@ void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child parti
 
     mu->data.header.pid = get_gpid();
     _replica->_prepare_list->prepare(mu, partition_status::PS_SECONDARY);
-
     if (!mu->is_sync_to_child()) { // child copy mutation asynchronously
         if (!mu->is_logged()) {
             mu->set_logged();
@@ -1317,7 +1316,8 @@ void replica_split_manager::on_copy_mutation(mutation_ptr &mu) // on child parti
     }
 }
 
-void replica_split_manager::ack_parent(error_code ec, mutation_ptr &mu) // on child
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::ack_parent(error_code ec, mutation_ptr &mu) // on child partition
 {
     dassert_replica(mu->is_sync_to_child(), "mutation({}) should be copied synchronously");
     _stub->split_replica_exec(LPC_PARTITION_SPLIT,
@@ -1329,7 +1329,10 @@ void replica_split_manager::ack_parent(error_code ec, mutation_ptr &mu) // on ch
                                         mu->data.header.decree));
 }
 
-void replica_split_manager::on_copy_mutation_reply(error_code ec, ballot b, decree d) // on parent
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::on_copy_mutation_reply(error_code ec,
+                                                   ballot b,
+                                                   decree d) // on parent partition
 {
     _replica->_checker.only_one_thread_access();
 

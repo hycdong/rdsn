@@ -324,6 +324,7 @@ void replica_stub::install_perf_counters()
         "cold.backup.max.upload.file.size",
         COUNTER_TYPE_NUMBER,
         "current cold backup max upload file size");
+
     _counter_recent_read_fail_count.init_app_counter("eon.replica_stub",
                                                      "recent.read.fail.count",
                                                      COUNTER_TYPE_VOLATILE_NUMBER,
@@ -340,58 +341,6 @@ void replica_stub::install_perf_counters()
                                                       "recent.write.busy.count",
                                                       COUNTER_TYPE_VOLATILE_NUMBER,
                                                       "write busy count in the recent period");
-
-    _counter_replicas_splitting_count.init_app_counter("eon.replica_stub",
-                                                       "replicas.splitting.count",
-                                                       COUNTER_TYPE_NUMBER,
-                                                       "current partition splitting count");
-
-    _counter_replicas_splitting_max_duration_time_ms.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.max.duration.time(ms)",
-        COUNTER_TYPE_NUMBER,
-        "current partition splitting max duration time(ms)");
-    _counter_replicas_splitting_max_async_learn_time_ms.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.max.async.learn.time(ms)",
-        COUNTER_TYPE_NUMBER,
-        "current partition splitting max async learn time(ms)");
-    _counter_replicas_splitting_max_copy_file_size.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.max.copy.file.size",
-        COUNTER_TYPE_NUMBER,
-        "current splitting max copy file size");
-    _counter_replicas_splitting_recent_start_count.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.recent.start.count",
-        COUNTER_TYPE_VOLATILE_NUMBER,
-        "current splitting start count in the recent period");
-    _counter_replicas_splitting_recent_copy_file_count.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.recent.copy.file.count",
-        COUNTER_TYPE_VOLATILE_NUMBER,
-        "splitting copy file count in the recent period");
-    _counter_replicas_splitting_recent_copy_file_size.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.recent.copy.file.size",
-        COUNTER_TYPE_VOLATILE_NUMBER,
-        "splitting copy file size in the recent period");
-    _counter_replicas_splitting_recent_copy_mutation_count.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.recent.copy.mutation.count",
-        COUNTER_TYPE_VOLATILE_NUMBER,
-        "splitting copy mutation count in the recent period");
-    _counter_replicas_splitting_recent_split_succ_count.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.recent.split.succ.count",
-        COUNTER_TYPE_VOLATILE_NUMBER,
-        "splitting succeed count in the recent period");
-    _counter_replicas_splitting_recent_split_fail_count.init_app_counter(
-        "eon.replica_stub",
-        "replicas.splitting.recent.split.fail.count",
-        COUNTER_TYPE_VOLATILE_NUMBER,
-        "splitting fail count in the recent period");
-
     _counter_recent_write_size_exceed_threshold_count.init_app_counter(
         "eon.replica_stub",
         "recent_write_size_exceed_threshold_count",
@@ -2221,9 +2170,6 @@ void replica_stub::open_service()
     register_rpc_handler_with_rpc_holder(RPC_SPLIT_NOTIFY_CATCH_UP,
                                          "child_notify_catch_up",
                                          &replica_stub::on_notify_primary_split_catch_up);
-    register_rpc_handler_with_rpc_holder(RPC_SPLIT_UPDATE_CHILD_PARTITION_COUNT,
-                                         "update_child_group_partition_count",
-                                         &replica_stub::on_update_child_group_partition_count);
     register_rpc_handler_with_rpc_holder(RPC_BULK_LOAD, "bulk_load", &replica_stub::on_bulk_load);
     register_rpc_handler_with_rpc_holder(
         RPC_GROUP_BULK_LOAD, "group_bulk_load", &replica_stub::on_group_bulk_load);
@@ -2692,7 +2638,6 @@ void replica_stub::gc_tcmalloc_memory()
 
 //
 // partition split
-//
 //
 void replica_stub::create_child_replica(rpc_address primary_address,
                                         app_info app,

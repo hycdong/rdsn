@@ -794,6 +794,7 @@ void server_state::on_config_sync(configuration_query_by_node_rpc rpc)
                 std::shared_ptr<app_state> app = get_app(pid.get_app_id());
                 dassert(app != nullptr, "invalid app_id, app_id = %d", pid.get_app_id());
                 config_context &cc = app->helpers->contexts[pid.get_partition_index()];
+
                 // config sync need the newest data to keep the perfect FD,
                 // so if the syncing config is related to the node, we may need to reject this
                 // request
@@ -1110,7 +1111,6 @@ void server_state::create_app(dsn::message_ex *msg)
             info.max_replica_count = request.options.replica_count;
             info.partition_count = request.options.partition_count;
             info.status = app_status::AS_CREATING;
-            info.init_partition_count = request.options.partition_count;
             info.create_second = dsn_now_ms() / 1000;
             info.init_partition_count = request.options.partition_count;
 
