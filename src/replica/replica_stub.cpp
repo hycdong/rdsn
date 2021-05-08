@@ -410,6 +410,59 @@ void replica_stub::install_perf_counters()
                                                            COUNTER_TYPE_NUMBER,
                                                            "current tcmalloc release memory size");
 #endif
+
+    // <- Partition split Metrics ->
+
+    _counter_replicas_splitting_count.init_app_counter("eon.replica_stub",
+                                                       "replicas.splitting.count",
+                                                       COUNTER_TYPE_NUMBER,
+                                                       "current partition splitting count");
+
+    _counter_replicas_splitting_max_duration_time_ms.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.max.duration.time(ms)",
+        COUNTER_TYPE_NUMBER,
+        "current partition splitting max duration time(ms)");
+    _counter_replicas_splitting_max_async_learn_time_ms.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.max.async.learn.time(ms)",
+        COUNTER_TYPE_NUMBER,
+        "current partition splitting max async learn time(ms)");
+    _counter_replicas_splitting_max_copy_file_size.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.max.copy.file.size",
+        COUNTER_TYPE_NUMBER,
+        "current splitting max copy file size");
+    _counter_replicas_splitting_recent_start_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.start.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "current splitting start count in the recent period");
+    _counter_replicas_splitting_recent_copy_file_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.copy.file.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting copy file count in the recent period");
+    _counter_replicas_splitting_recent_copy_file_size.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.copy.file.size",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting copy file size in the recent period");
+    _counter_replicas_splitting_recent_copy_mutation_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.copy.mutation.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting copy mutation count in the recent period");
+    _counter_replicas_splitting_recent_split_succ_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.split.succ.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting succeed count in the recent period");
+    _counter_replicas_splitting_recent_split_fail_count.init_app_counter(
+        "eon.replica_stub",
+        "replicas.splitting.recent.split.fail.count",
+        COUNTER_TYPE_VOLATILE_NUMBER,
+        "splitting fail count in the recent period");
 }
 
 void replica_stub::initialize(bool clear /* = false*/)
@@ -1288,6 +1341,11 @@ void replica_stub::get_local_replicas(std::vector<replica_info> &replicas)
 
     for (auto &pairs : _replicas) {
         replica_ptr &rep = pairs.second;
+        // child partition should not sync config from meta server
+        // because it is not ready in meta view
+        if (rep->status() == partition_status::PS_PARTITION_SPLIT) {
+            continue;
+        }
         replica_info info;
         get_replica_info(info, rep);
         replicas.push_back(std::move(info));
@@ -1493,7 +1551,8 @@ void replica_stub::on_node_query_reply_scatter(replica_stub_ptr this_,
 void replica_stub::on_node_query_reply_scatter2(replica_stub_ptr this_, gpid id)
 {
     replica_ptr replica = get_replica(id);
-    if (replica != nullptr && replica->status() != partition_status::PS_POTENTIAL_SECONDARY) {
+    if (replica != nullptr && replica->status() != partition_status::PS_POTENTIAL_SECONDARY &&
+        replica->status() != partition_status::PS_PARTITION_SPLIT) {
         if (replica->status() == partition_status::PS_INACTIVE &&
             dsn_now_ms() - replica->create_time_milliseconds() <
                 _options.gc_memory_replica_interval_ms) {
@@ -1803,6 +1862,10 @@ void replica_stub::on_gc()
     uint64_t bulk_load_running_count = 0;
     uint64_t bulk_load_max_ingestion_time_ms = 0;
     uint64_t bulk_load_max_duration_time_ms = 0;
+    uint64_t splitting_count = 0;
+    uint64_t splitting_max_duration_time_ms = 0;
+    uint64_t splitting_max_async_learn_time_ms = 0;
+    uint64_t splitting_max_copy_file_size = 0;
     for (auto &kv : rs) {
         replica_ptr &rep = kv.second.rep;
         if (rep->status() == partition_status::PS_POTENTIAL_SECONDARY) {
@@ -1829,6 +1892,16 @@ void replica_stub::on_gc()
                     std::max(bulk_load_max_duration_time_ms, rep->get_bulk_loader()->duration_ms());
             }
         }
+        // splitting_max_copy_file_size, rep->_split_states.copy_file_size
+        if (rep->status() == partition_status::PS_PARTITION_SPLIT) {
+            splitting_count++;
+            splitting_max_duration_time_ms =
+                std::max(splitting_max_duration_time_ms, rep->_split_states.total_ms());
+            splitting_max_async_learn_time_ms =
+                std::max(splitting_max_async_learn_time_ms, rep->_split_states.async_learn_ms());
+            splitting_max_copy_file_size =
+                std::max(splitting_max_copy_file_size, rep->_split_states.splitting_copy_file_size);
+        }
     }
 
     _counter_replicas_learning_count->set(learning_count);
@@ -1840,6 +1913,10 @@ void replica_stub::on_gc()
     _counter_bulk_load_running_count->set(bulk_load_running_count);
     _counter_bulk_load_max_ingestion_time_ms->set(bulk_load_max_ingestion_time_ms);
     _counter_bulk_load_max_duration_time_ms->set(bulk_load_max_duration_time_ms);
+    _counter_replicas_splitting_count->set(splitting_count);
+    _counter_replicas_splitting_max_duration_time_ms->set(splitting_max_duration_time_ms);
+    _counter_replicas_splitting_max_async_learn_time_ms->set(splitting_max_async_learn_time_ms);
+    _counter_replicas_splitting_max_copy_file_size->set(splitting_max_copy_file_size);
 
     ddebug("finish to garbage collection, time_used_ns = %" PRIu64, dsn_now_ns() - start);
 }
@@ -2156,6 +2233,9 @@ void replica_stub::open_service()
         RPC_REPLICA_DISK_MIGRATE, "disk_migrate_replica", &replica_stub::on_disk_migrate);
     register_rpc_handler_with_rpc_holder(
         RPC_QUERY_APP_INFO, "query_app_info", &replica_stub::on_query_app_info);
+    register_rpc_handler_with_rpc_holder(RPC_SPLIT_UPDATE_CHILD_PARTITION_COUNT,
+                                         "update_child_group_partition_count",
+                                         &replica_stub::on_update_child_group_partition_count);
     register_rpc_handler_with_rpc_holder(RPC_SPLIT_NOTIFY_CATCH_UP,
                                          "child_notify_catch_up",
                                          &replica_stub::on_notify_primary_split_catch_up);
@@ -2181,8 +2261,8 @@ void replica_stub::register_ctrl_command()
     std::call_once(flag, [&]() {
         _kill_partition_command = ::dsn::command_manager::instance().register_command(
             {"replica.kill_partition"},
-            "kill_partition [app_id [partition_index]]",
-            "kill_partition: kill partitions by (all, one app, one partition)",
+            "replica.kill_partition [app_id [partition_index]]",
+            "replica.kill_partition: kill partitions by (all, one app, one partition)",
             [this](const std::vector<std::string> &args) {
                 dsn::gpid pid;
                 if (args.size() == 0) {
@@ -2203,17 +2283,17 @@ void replica_stub::register_ctrl_command()
 
         _deny_client_command = ::dsn::command_manager::instance().register_command(
             {"replica.deny-client"},
-            "deny-client <true|false>",
-            "deny-client - control if deny client read & write request",
+            "replica.deny-client <true|false>",
+            "replica.deny-client - control if deny client read & write request",
             [this](const std::vector<std::string> &args) {
                 return remote_command_set_bool_flag(_deny_client, "deny-client", args);
             });
 
         _verbose_client_log_command = ::dsn::command_manager::instance().register_command(
             {"replica.verbose-client-log"},
-            "verbose-client-log <true|false>",
-            "verbose-client-log - control if print verbose error log when reply read & write "
-            "request",
+            "replica.verbose-client-log <true|false>",
+            "replica.verbose-client-log - control if print verbose error log when reply read & "
+            "write request",
             [this](const std::vector<std::string> &args) {
                 return remote_command_set_bool_flag(
                     _verbose_client_log, "verbose-client-log", args);
@@ -2221,8 +2301,8 @@ void replica_stub::register_ctrl_command()
 
         _verbose_commit_log_command = ::dsn::command_manager::instance().register_command(
             {"replica.verbose-commit-log"},
-            "verbose-commit-log <true|false>",
-            "verbose-commit-log - control if print verbose log when commit mutation",
+            "replica.verbose-commit-log <true|false>",
+            "replica.verbose-commit-log - control if print verbose log when commit mutation",
             [this](const std::vector<std::string> &args) {
                 return remote_command_set_bool_flag(
                     _verbose_commit_log, "verbose-commit-log", args);
@@ -2230,8 +2310,9 @@ void replica_stub::register_ctrl_command()
 
         _trigger_chkpt_command = ::dsn::command_manager::instance().register_command(
             {"replica.trigger-checkpoint"},
-            "trigger-checkpoint [id1,id2,...] (where id is 'app_id' or 'app_id.partition_id')",
-            "trigger-checkpoint - trigger replicas to do checkpoint",
+            "replica.trigger-checkpoint [id1,id2,...] (where id is 'app_id' or "
+            "'app_id.partition_id')",
+            "replica.trigger-checkpoint - trigger replicas to do checkpoint",
             [this](const std::vector<std::string> &args) {
                 return exec_command_on_replica(args, true, [this](const replica_ptr &rep) {
                     tasking::enqueue(LPC_PER_REPLICA_CHECKPOINT_TIMER,
@@ -2244,17 +2325,18 @@ void replica_stub::register_ctrl_command()
 
         _query_compact_command = ::dsn::command_manager::instance().register_command(
             {"replica.query-compact"},
-            "query-compact [id1,id2,...] (where id is 'app_id' or 'app_id.partition_id')",
-            "query-compact - query full compact status on the underlying storage engine",
+            "replica.query-compact [id1,id2,...] (where id is 'app_id' or 'app_id.partition_id')",
+            "replica.query-compact - query full compact status on the underlying storage engine",
             [this](const std::vector<std::string> &args) {
-                return exec_command_on_replica(
-                    args, true, [](const replica_ptr &rep) { return rep->query_compact_state(); });
+                return exec_command_on_replica(args, true, [](const replica_ptr &rep) {
+                    return rep->query_manual_compact_state();
+                });
             });
 
         _query_app_envs_command = ::dsn::command_manager::instance().register_command(
             {"replica.query-app-envs"},
-            "query-app-envs [id1,id2,...] (where id is 'app_id' or 'app_id.partition_id')",
-            "query-app-envs - query app envs on the underlying storage engine",
+            "replica.query-app-envs [id1,id2,...] (where id is 'app_id' or 'app_id.partition_id')",
+            "replica.query-app-envs - query app envs on the underlying storage engine",
             [this](const std::vector<std::string> &args) {
                 return exec_command_on_replica(args, true, [](const replica_ptr &rep) {
                     std::map<std::string, std::string> kv_map;
@@ -2266,8 +2348,8 @@ void replica_stub::register_ctrl_command()
 #ifdef DSN_ENABLE_GPERF
         _release_tcmalloc_memory_command = ::dsn::command_manager::instance().register_command(
             {"replica.release-tcmalloc-memory"},
-            "release-tcmalloc-memory <true|false>",
-            "release-tcmalloc-memory - control if try to release tcmalloc memory",
+            "replica.release-tcmalloc-memory <true|false>",
+            "replica.release-tcmalloc-memory - control if try to release tcmalloc memory",
             [this](const std::vector<std::string> &args) {
                 return remote_command_set_bool_flag(
                     _release_tcmalloc_memory, "release-tcmalloc-memory", args);
@@ -2275,7 +2357,7 @@ void replica_stub::register_ctrl_command()
 
         _max_reserved_memory_percentage_command = dsn::command_manager::instance().register_command(
             {"replica.mem-release-max-reserved-percentage"},
-            "mem-release-max-reserved-percentage [num | DEFAULT]",
+            "replica.mem-release-max-reserved-percentage [num | DEFAULT]",
             "control tcmalloc max reserved but not-used memory percentage",
             [this](const std::vector<std::string> &args) {
                 std::string result("OK");
@@ -2303,7 +2385,7 @@ void replica_stub::register_ctrl_command()
         _max_concurrent_bulk_load_downloading_count_command =
             dsn::command_manager::instance().register_command(
                 {"replica.max-concurrent-bulk-load-downloading-count"},
-                "max-concurrent-bulk-load-downloading-count [num | DEFAULT]",
+                "replica.max-concurrent-bulk-load-downloading-count [num | DEFAULT]",
                 "control stub max_concurrent_bulk_load_downloading_count",
                 [this](const std::vector<std::string> &args) {
                     std::string result("OK");
@@ -2640,7 +2722,7 @@ void replica_stub::create_child_replica(rpc_address primary_address,
 {
     replica_ptr child_replica = create_child_replica_if_not_found(child_gpid, &app, parent_dir);
     if (child_replica != nullptr) {
-        ddebug_f("create child replica ({}) succeed", child_gpid);
+        ddebug_f("app({}), create child replica ({}) succeed", app.app_name, child_gpid);
         tasking::enqueue(LPC_PARTITION_SPLIT,
                          child_replica->tracker(),
                          std::bind(&replica_split_manager::child_init_replica,
@@ -2839,13 +2921,13 @@ void replica_stub::query_app_data_version(
     }
 }
 
-void replica_stub::query_app_compact_status(
+void replica_stub::query_app_manual_compact_status(
     int32_t app_id, std::unordered_map<gpid, manual_compaction_status> &status)
 {
     zauto_read_lock l(_replicas_lock);
     for (auto it = _replicas.begin(); it != _replicas.end(); ++it) {
         if (it->first.get_app_id() == app_id) {
-            status[it->first] = it->second->get_compact_status();
+            status[it->first] = it->second->get_manual_compact_status();
         }
     }
 }

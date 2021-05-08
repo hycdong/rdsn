@@ -35,6 +35,7 @@
 
 #include <dsn/tool/simulator.h>
 #include "scheduler.h"
+#include "service_engine.h"
 
 #include "env.sim.h"
 #include "runtime/task/task_engine.sim.h"
@@ -63,10 +64,6 @@ void simulator::install(service_spec &spec)
         "dsn::tools::sim_rwlock_nr_provider");
 
     scheduler::instance();
-
-    if (0 == strlen(FLAGS_aio_factory_name)) {
-        FLAGS_aio_factory_name = "dsn::tools::sim_aio_provider";
-    }
 
     if (spec.env_factory_name == "")
         spec.env_factory_name = ("dsn::tools::sim_env_provider");
@@ -118,6 +115,8 @@ void simulator::install(service_spec &spec)
 
     // the new sim_clock is taken over by unique_ptr in clock instance
     utils::clock::instance()->mock(new sim_clock());
+
+    service_engine::instance().set_simulator();
 }
 
 void simulator::on_system_exit(sys_exit_type st)

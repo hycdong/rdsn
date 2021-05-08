@@ -129,6 +129,13 @@ void policy_context::start_backup_app_meta_unlocked(int32_t app_id)
                            remote_file->file_name().c_str());
                     start_backup_app_partitions_unlocked(app_id);
                 }
+            } else if (resp.err == ERR_FS_INTERNAL) {
+                zauto_lock l(_lock);
+                _is_backup_failed = true;
+                derror_f("write {} failed, err = {}, don't try again when got this error.",
+                         remote_file->file_name(),
+                         resp.err.to_string());
+                return;
             } else {
                 dwarn("write %s failed, reason(%s), try it later",
                       remote_file->file_name().c_str(),
@@ -238,6 +245,13 @@ void policy_context::write_backup_app_finish_flag_unlocked(int32_t app_id,
                 if (write_callback != nullptr) {
                     write_callback->enqueue();
                 }
+            } else if (resp.err == ERR_FS_INTERNAL) {
+                zauto_lock l(_lock);
+                _is_backup_failed = true;
+                derror_f("write {} failed, err = {}, don't try again when got this error.",
+                         remote_file->file_name(),
+                         resp.err.to_string());
+                return;
             } else {
                 dwarn("write %s failed, reason(%s), try it later",
                       remote_file->file_name().c_str(),
@@ -328,31 +342,38 @@ void policy_context::write_backup_info_unlocked(const backup_info &b_info,
 
     blob buf = dsn::json::json_forwarder<backup_info>::encode(b_info);
 
-    remote_file->write(dist::block_service::write_request{buf},
-                       LPC_DEFAULT_CALLBACK,
-                       [this, b_info, write_callback, remote_file](
-                           const dist::block_service::write_response &resp) {
-                           if (resp.err == ERR_OK) {
-                               ddebug("policy(%s) write backup_info to cold backup media succeed",
-                                      _policy.policy_name.c_str());
-                               if (write_callback != nullptr) {
-                                   write_callback->enqueue();
-                               }
-                           } else {
-                               dwarn("write %s failed, reason(%s), try it later",
-                                     remote_file->file_name().c_str(),
-                                     resp.err.to_string());
-                               tasking::enqueue(
-                                   LPC_DEFAULT_CALLBACK,
-                                   &_tracker,
-                                   [this, b_info, write_callback]() {
-                                       zauto_lock l(_lock);
-                                       write_backup_info_unlocked(b_info, write_callback);
-                                   },
-                                   0,
-                                   _backup_service->backup_option().block_retry_delay_ms);
-                           }
-                       });
+    remote_file->write(
+        dist::block_service::write_request{buf},
+        LPC_DEFAULT_CALLBACK,
+        [this, b_info, write_callback, remote_file](
+            const dist::block_service::write_response &resp) {
+            if (resp.err == ERR_OK) {
+                ddebug("policy(%s) write backup_info to cold backup media succeed",
+                       _policy.policy_name.c_str());
+                if (write_callback != nullptr) {
+                    write_callback->enqueue();
+                }
+            } else if (resp.err == ERR_FS_INTERNAL) {
+                zauto_lock l(_lock);
+                _is_backup_failed = true;
+                derror_f("write {} failed, err = {}, don't try again when got this error.",
+                         remote_file->file_name(),
+                         resp.err.to_string());
+                return;
+            } else {
+                dwarn("write %s failed, reason(%s), try it later",
+                      remote_file->file_name().c_str(),
+                      resp.err.to_string());
+                tasking::enqueue(LPC_DEFAULT_CALLBACK,
+                                 &_tracker,
+                                 [this, b_info, write_callback]() {
+                                     zauto_lock l(_lock);
+                                     write_backup_info_unlocked(b_info, write_callback);
+                                 },
+                                 0,
+                                 _backup_service->backup_option().block_retry_delay_ms);
+            }
+        });
 }
 
 bool policy_context::update_partition_progress_unlocked(gpid pid,
@@ -510,6 +531,16 @@ void policy_context::on_backup_reply(error_code err,
                 return;
             }
         }
+    } else if (response.err == dsn::ERR_LOCAL_APP_FAILURE) {
+        zauto_lock l(_lock);
+        _is_backup_failed = true;
+        derror_f("{}: backup got error {} for partition {} from {}, don't try again when got "
+                 "this error.",
+                 _backup_sig.c_str(),
+                 response.err.to_string(),
+                 pid.to_string(),
+                 primary.to_string());
+        return;
     } else {
         dwarn_f("{}: backup got error for partition {} from {}, rpc error {}, response error {}",
                 _backup_sig.c_str(),
@@ -571,6 +602,7 @@ void policy_context::prepare_current_backup_on_new_unlocked()
     _cur_backup.backup_id = _cur_backup.start_time_ms = static_cast<int64_t>(dsn_now_ms());
     _cur_backup.app_ids = _policy.app_ids;
     _cur_backup.app_names = _policy.app_names;
+    _is_backup_failed = false;
 
     initialize_backup_progress_unlocked();
     _backup_sig =
@@ -838,7 +870,7 @@ std::vector<backup_info> policy_context::get_backup_infos(int cnt)
 bool policy_context::is_under_backuping()
 {
     zauto_lock l(_lock);
-    if (_cur_backup.start_time_ms > 0 && _cur_backup.end_time_ms <= 0) {
+    if (!_is_backup_failed && _cur_backup.start_time_ms > 0 && _cur_backup.end_time_ms <= 0) {
         return true;
     }
     return false;
@@ -1569,5 +1601,99 @@ std::string backup_service::get_backup_path(const std::string &policy_name, int6
     ss << _policy_meta_root << "/" << policy_name << "/" << backup_id;
     return ss.str();
 }
+
+void backup_service::start_backup_app(start_backup_app_rpc rpc)
+{
+    const start_backup_app_request &request = rpc.request();
+    start_backup_app_response &response = rpc.response();
+
+    int32_t app_id = request.app_id;
+    std::shared_ptr<backup_engine> engine = std::make_shared<backup_engine>(this);
+    error_code err = engine->init_backup(app_id);
+    if (err != ERR_OK) {
+        response.err = err;
+        response.hint_message = fmt::format("Backup failed: invalid app id {}.", app_id);
+        return;
+    }
+
+    err = engine->set_block_service(request.backup_provider_type);
+    if (err != ERR_OK) {
+        response.err = err;
+        response.hint_message = fmt::format("Backup failed: invalid backup_provider_type {}.",
+                                            request.backup_provider_type);
+        return;
+    }
+
+    if (request.__isset.backup_path) {
+        err = engine->set_backup_path(request.backup_path);
+        if (err != ERR_OK) {
+            response.err = err;
+            response.hint_message = "Backup failed: the default backup path has already configured "
+                                    "in `hdfs_service`, please modify the configuration if you "
+                                    "want to use a specific backup path.";
+            return;
+        }
+    }
+
+    {
+        zauto_lock l(_lock);
+        for (const auto &backup : _backup_states) {
+            if (app_id == backup->get_backup_app_id() && backup->is_in_progress()) {
+                response.err = ERR_INVALID_STATE;
+                response.hint_message =
+                    fmt::format("Backup failed: app {} is actively being backed up.", app_id);
+                return;
+            }
+        }
+    }
+
+    err = engine->start();
+    if (err == ERR_OK) {
+        int64_t backup_id = engine->get_current_backup_id();
+        {
+            zauto_lock l(_lock);
+            _backup_states.emplace_back(std::move(engine));
+        }
+        response.__isset.backup_id = true;
+        response.backup_id = backup_id;
+        response.hint_message =
+            fmt::format("Backup succeed: metadata of app {} has been successfully backed up "
+                        "and backup request has been sent to replica servers.",
+                        app_id);
+    } else {
+        response.hint_message =
+            fmt::format("Backup failed: could not backup metadata for app {}.", app_id);
+    }
+    response.err = err;
+}
+
+void backup_service::query_backup_status(query_backup_status_rpc rpc)
+{
+    const query_backup_status_request &request = rpc.request();
+    query_backup_status_response &response = rpc.response();
+
+    int32_t app_id = request.app_id;
+    {
+        zauto_lock l(_lock);
+        for (const auto &backup : _backup_states) {
+            if (app_id == backup->get_backup_app_id() &&
+                (!request.__isset.backup_id ||
+                 request.backup_id == backup->get_current_backup_id())) {
+                response.backup_items.emplace_back(backup->get_backup_item());
+            }
+        }
+    }
+
+    if (response.backup_items.empty()) {
+        response.err = ERR_INVALID_PARAMETERS;
+        response.hint_message = "Backup not found, please check app_id or backup_id.";
+        return;
+    }
+    response.__isset.backup_items = true;
+    response.hint_message = fmt::format(
+        "There are {} available backups for app {}.", response.backup_items.size(), app_id);
+    response.err = ERR_OK;
+}
+
 } // namespace replication
 } // namespace dsn

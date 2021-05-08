@@ -185,6 +185,8 @@ public:
     void wait_all_task() { _tracker.wait_outstanding_tasks(); }
 
 private:
+    FRIEND_TEST(backup_service_test, test_invalid_backup_request);
+
     //-1 means waiting forever
     bool spin_wait_staging(int timeout_seconds = -1);
     bool can_run_balancer();
@@ -298,12 +300,15 @@ private:
     friend class meta_duplication_service_test;
     friend class meta_load_balance_test;
     friend class meta_split_service;
+    friend class meta_split_service_test;
     friend class meta_service_test_app;
     friend class meta_test_base;
     friend class test::test_checker;
+    friend class server_state_restore_test;
 
     FRIEND_TEST(meta_backup_service_test, test_add_backup_policy);
     FRIEND_TEST(policy_context_test, test_app_dropped_during_backup);
+    FRIEND_TEST(policy_context_test, test_backup_failed);
 
     dsn::task_tracker _tracker;
 

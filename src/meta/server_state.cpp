@@ -81,8 +81,8 @@ void server_state::register_cli_commands()
 {
     _cli_dump_handle = dsn::command_manager::instance().register_command(
         {"meta.dump"},
-        "dump: dump app_states of meta server to local file",
-        "dump -t|--target target_file",
+        "meta.dump - dump app_states of meta server to local file",
+        "meta.dump -t|--target target_file",
         [this](const std::vector<std::string> &args) {
             dsn::error_code err;
             if (args.size() != 2) {
@@ -106,7 +106,7 @@ void server_state::register_cli_commands()
 
     _ctrl_add_secondary_enable_flow_control = dsn::command_manager::instance().register_command(
         {"meta.lb.add_secondary_enable_flow_control"},
-        "lb.add_secondary_enable_flow_control <true|false>",
+        "meta.lb.add_secondary_enable_flow_control <true|false>",
         "control whether enable add secondary flow control",
         [this](const std::vector<std::string> &args) {
             return remote_command_set_bool_flag(
@@ -116,7 +116,7 @@ void server_state::register_cli_commands()
 
     _ctrl_add_secondary_max_count_for_one_node = dsn::command_manager::instance().register_command(
         {"meta.lb.add_secondary_max_count_for_one_node"},
-        "lb.add_secondary_max_count_for_one_node [num | DEFAULT]",
+        "meta.lb.add_secondary_max_count_for_one_node [num | DEFAULT]",
         "control the max count to add secondary for one node",
         [this](const std::vector<std::string> &args) {
             std::string result("OK");
@@ -587,9 +587,27 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                         }
                     }
                 } else if (ec == ERR_OBJECT_NOT_FOUND) {
-                    dwarn("partition node %s not exist on remote storage, may half create before",
-                          partition_path.c_str());
-                    init_app_partition_node(app, partition_id, nullptr);
+                    auto init_partition_count = app->init_partition_count > 0
+                                                    ? app->init_partition_count
+                                                    : app->partition_count;
+                    if (partition_id < init_partition_count) {
+                        dwarn_f(
+                            "partition node {} not exist on remote storage, may half create before",
+                            partition_path);
+                        init_app_partition_node(app, partition_id, nullptr);
+                    } else if (partition_id >= app->partition_count / 2) {
+                        dwarn_f(
+                            "partition node {} not exist on remote storage, may half split before",
+                            partition_path);
+                        zauto_write_lock l(_lock);
+                        app->helpers->split_states.status[partition_id - app->partition_count / 2] =
+                            split_status::SPLITTING;
+                        app->helpers->split_states.splitting_count++;
+                        app->partitions[partition_id].ballot = invalid_ballot;
+                        app->partitions[partition_id].pid = gpid(app->app_id, partition_id);
+                        process_one_partition(app);
+                    }
+
                 } else {
                     derror("get partition node failed, reason(%s)", ec.to_string());
                     err = ec;
@@ -623,7 +641,7 @@ dsn::error_code server_state::sync_apps_from_remote_storage()
                                     app->get_logname());
                         }
                     }
-
+                    app->helpers->split_states.splitting_count = 0;
                     for (int i = 0; i < app->partition_count; i++) {
                         std::string partition_path =
                             app_path + "/" + boost::lexical_cast<std::string>(i);
@@ -1010,7 +1028,6 @@ void server_state::init_app_partition_node(std::shared_ptr<app_state> &app,
 void server_state::do_app_create(std::shared_ptr<app_state> &app)
 {
     auto on_create_app_root = [this, app](error_code ec) mutable {
-        configuration_create_app_response resp;
         if (ERR_OK == ec || ERR_NODE_ALREADY_EXIST == ec) {
             dinfo("create app(%s) on storage service ok", app->get_logname());
             for (unsigned int i = 0; i != app->partition_count; ++i) {
@@ -1094,6 +1111,7 @@ void server_state::create_app(dsn::message_ex *msg)
             info.partition_count = request.options.partition_count;
             info.status = app_status::AS_CREATING;
             info.create_second = dsn_now_ms() / 1000;
+            info.init_partition_count = request.options.partition_count;
 
             app = app_state::create(info);
             app->helpers->pending_response = msg;
@@ -1156,6 +1174,11 @@ void server_state::drop_app(dsn::message_ex *msg)
         } else {
             switch (app->status) {
             case app_status::AS_AVAILABLE:
+                if (app->splitting()) {
+                    // not drop splitting app
+                    response.err = ERR_SPLITTING;
+                    break;
+                }
                 do_dropping = true;
                 app->status = app_status::AS_DROPPING;
                 app->drop_second = dsn_now_ms() / 1000;
@@ -2359,8 +2382,8 @@ bool server_state::check_all_partitions()
         for (unsigned int i = 0; i != app->partition_count; ++i) {
             partition_configuration &pc = app->partitions[i];
             config_context &cc = app->helpers->contexts[i];
-
-            if (cc.stage != config_status::pending_remote_sync) {
+            // partition is under re-configuration or is child partition
+            if (cc.stage != config_status::pending_remote_sync && pc.ballot != invalid_ballot) {
                 configuration_proposal_action action;
                 pc_status s =
                     _meta_svc->get_balancer()->cure({&_all_apps, &_nodes}, pc.pid, action);

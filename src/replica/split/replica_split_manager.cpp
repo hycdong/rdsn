@@ -121,7 +121,14 @@ void replica_split_manager::child_init_replica(gpid parent_gpid,
     _replica->_split_states.parent_gpid = parent_gpid;
     _replica->_split_states.is_prepare_list_copied = false;
     _replica->_split_states.is_caught_up = false;
-    // TODO(heyuchen): add other states
+    _replica->_split_states.check_state_task =
+        tasking::enqueue(LPC_PARTITION_SPLIT,
+                         tracker(),
+                         std::bind(&replica_split_manager::child_check_split_context, this),
+                         get_gpid().thread_hash(),
+                         std::chrono::seconds(3));
+    _replica->_split_states.splitting_start_ts_ns = dsn_now_ns();
+    _stub->_counter_replicas_splitting_recent_start_count->increment();
 
     ddebug_replica(
         "child initialize succeed, init_ballot={}, parent_gpid={}", init_ballot, parent_gpid);
@@ -135,6 +142,34 @@ void replica_split_manager::child_init_replica(gpid parent_gpid,
     if (ec != ERR_OK) {
         child_handle_split_error("parent not exist when execute parent_prepare_states");
     }
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::child_check_split_context() // on child partition
+{
+    FAIL_POINT_INJECT_F("replica_child_check_split_context", [](dsn::string_view) {});
+
+    if (status() != partition_status::PS_PARTITION_SPLIT) {
+        derror_replica("wrong status({})", enum_to_string(status()));
+        _replica->_split_states.check_state_task = nullptr;
+        return;
+    }
+    // let parent partition check its status
+    error_code ec = _stub->split_replica_exec(
+        LPC_PARTITION_SPLIT,
+        _replica->_split_states.parent_gpid,
+        std::bind(&replica_split_manager::parent_check_states, std::placeholders::_1));
+    if (ec != ERR_OK) {
+        child_handle_split_error("check_child_state failed because parent gpid is invalid");
+        return;
+    }
+
+    _replica->_split_states.check_state_task =
+        tasking::enqueue(LPC_PARTITION_SPLIT,
+                         tracker(),
+                         std::bind(&replica_split_manager::child_check_split_context, this),
+                         get_gpid().thread_hash(),
+                         std::chrono::seconds(3));
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -154,12 +189,7 @@ bool replica_split_manager::parent_check_states() // on parent partition
                       _child_init_ballot,
                       get_ballot(),
                       _child_gpid);
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "wrong parent states when execute parent_check_states"));
-        parent_cleanup_split_context();
+        parent_handle_split_error("wrong parent states when execute parent_check_states", false);
         return false;
     }
     return true;
@@ -245,6 +275,7 @@ void replica_split_manager::child_copy_prepare_list(
 
     // learning parent states is time-consuming, should execute in THREAD_POOL_REPLICATION_LONG
     decree last_committed_decree = plist->last_committed_decree();
+    _replica->_split_states.splitting_start_async_learn_ts_ns = dsn_now_ns();
     _replica->_split_states.async_learn_task =
         tasking::enqueue(LPC_PARTITION_SPLIT_ASYNC_LEARN,
                          tracker(),
@@ -401,6 +432,11 @@ replica_split_manager::child_apply_private_logs(std::vector<std::string> plog_fi
         return ec;
     }
 
+    _replica->_split_states.splitting_copy_file_count += plog_files.size();
+    _replica->_split_states.splitting_copy_file_size += total_file_size;
+    _stub->_counter_replicas_splitting_recent_copy_file_count->add(plog_files.size());
+    _stub->_counter_replicas_splitting_recent_copy_file_size->add(total_file_size);
+
     ddebug_replica("replay private_log files succeed, file count={}, app last_committed_decree={}",
                    plog_files.size(),
                    _replica->_app->last_committed_decree());
@@ -422,6 +458,8 @@ replica_split_manager::child_apply_private_logs(std::vector<std::string> plog_fi
         plist.prepare(mu, partition_status::PS_SECONDARY);
         ++count;
     }
+    _replica->_split_states.splitting_copy_mutation_count += count;
+    _stub->_counter_replicas_splitting_recent_copy_mutation_count->add(count);
     plist.commit(last_committed_decree, COMMIT_TO_DECREE_HARD);
     ddebug_replica(
         "apply in-memory mutations succeed, mutation count={}, app last_committed_decree={}",
@@ -620,12 +658,7 @@ void replica_split_manager::parent_check_sync_point_commit(decree sync_point) //
     FAIL_POINT_INJECT_F("replica_parent_check_sync_point_commit", [](dsn::string_view) {});
     if (status() != partition_status::PS_PRIMARY) {
         derror_replica("wrong status({})", enum_to_string(status()));
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "check_sync_point_commit failed, primary changed"));
-        parent_cleanup_split_context();
+        parent_handle_split_error("check_sync_point_commit failed, primary changed", false);
         return;
     }
 
@@ -654,14 +687,9 @@ void replica_split_manager::update_child_group_partition_count(
             "wrong partition status or wrong split status, partition_status={}, split_status={}",
             enum_to_string(status()),
             enum_to_string(_split_status));
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "update_child_group_partition_count failed, "
-                      "wrong partition status or split status"));
-        _replica->_primary_states.sync_send_write_request = false;
-        parent_cleanup_split_context();
+        parent_handle_split_error(
+            "update_child_group_partition_count failed, wrong partition status or split status",
+            true);
         return;
     }
 
@@ -671,14 +699,8 @@ void replica_split_manager::update_child_group_partition_count(
         derror_replica("there are {} learners or not have enough secondaries(count is {})",
                        _replica->_primary_states.learners.size(),
                        _replica->_primary_states.membership.secondaries.size());
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(
-                &replica_split_manager::child_handle_split_error,
-                std::placeholders::_1,
-                "update_child_group_partition_count failed, have learner or lack of secondary"));
-        _replica->_primary_states.sync_send_write_request = false;
-        parent_cleanup_split_context();
+        parent_handle_split_error(
+            "update_child_group_partition_count failed, have learner or lack of secondary", true);
         return;
     }
 
@@ -800,28 +822,17 @@ void replica_split_manager::on_update_child_group_partition_count_reply(
             "wrong partition status or wrong split status, partition_status={}, split_status={}",
             enum_to_string(status()),
             enum_to_string(_split_status));
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "on_update_child_group_partition_count_reply "
-                      "failed, wrong partition status or split "
-                      "status"));
-        _replica->_primary_states.sync_send_write_request = false;
-        parent_cleanup_split_context();
+        parent_handle_split_error("on_update_child_group_partition_count_reply failed, wrong "
+                                  "partition status or split status",
+                                  true);
         return;
     }
 
     if (request.ballot != get_ballot()) {
         derror_replica(
             "ballot changed, request ballot = {}, local ballot = {}", request.ballot, get_ballot());
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "on_update_child_group_partition_count_reply failed, ballot changed"));
-        _replica->_primary_states.sync_send_write_request = false;
-        parent_cleanup_split_context();
+        parent_handle_split_error(
+            "on_update_child_group_partition_count_reply failed, ballot changed", true);
         return;
     }
 
@@ -848,13 +859,7 @@ void replica_split_manager::on_update_child_group_partition_count_reply(
                        request.target_address.to_string(),
                        request.new_partition_count,
                        error);
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "on_update_child_group_partition_count_reply error"));
-        _replica->_primary_states.sync_send_write_request = false;
-        parent_cleanup_split_context();
+        parent_handle_split_error("on_update_child_group_partition_count_reply error", true);
         return;
     }
 
@@ -886,13 +891,8 @@ void replica_split_manager::register_child_on_meta(ballot b) // on primary paren
             "wrong partition status or wrong split status, partition_status={}, split_status={}",
             enum_to_string(status()),
             enum_to_string(_split_status));
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "register child failed, wrong partition status or split status"));
-        _replica->_primary_states.sync_send_write_request = false;
-        parent_cleanup_split_context();
+        parent_handle_split_error("register child failed, wrong partition status or split status",
+                                  true);
         return;
     }
 
@@ -1068,9 +1068,11 @@ void replica_split_manager::child_partition_active(
         return;
     }
 
+    _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
     _replica->_primary_states.last_prepare_decree_on_new_primary =
         _replica->_prepare_list->max_decree();
     _replica->update_configuration(config);
+    _stub->_counter_replicas_splitting_recent_split_succ_count->increment();
     ddebug_replica("child partition is active, status={}", enum_to_string(status()));
 }
 
@@ -1087,10 +1089,13 @@ void replica_split_manager::child_handle_split_error(
     const std::string &error_msg) // on child partition
 {
     if (status() != partition_status::PS_ERROR) {
-        derror_replica("child partition split failed because {}, parent = {}",
+        derror_replica("child partition split failed because {}, parent = {}, split_duration = "
+                       "{}ms, async_learn_duration = {}ms",
                        error_msg,
-                       _replica->_split_states.parent_gpid);
-        // TODO(heyuchen): add perf-counter (split_failed_count)
+                       _replica->_split_states.parent_gpid,
+                       _replica->_split_states.total_ms(),
+                       _replica->_split_states.async_learn_ms());
+        _stub->_counter_replicas_splitting_recent_split_fail_count->increment();
         _replica->update_local_configuration_with_no_ballot_change(partition_status::PS_ERROR);
     }
 }
@@ -1103,6 +1108,20 @@ void replica_split_manager::child_handle_async_learn_error() // on child partiti
         std::bind(&replica_split_manager::parent_cleanup_split_context, std::placeholders::_1));
     child_handle_split_error("meet error when execute child_learn_states");
     _replica->_split_states.async_learn_task = nullptr;
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::parent_handle_split_error(const std::string &child_err_msg,
+                                                      bool parent_clear_sync)
+{
+    _stub->split_replica_error_handler(_child_gpid,
+                                       std::bind(&replica_split_manager::child_handle_split_error,
+                                                 std::placeholders::_1,
+                                                 child_err_msg));
+    if (parent_clear_sync) {
+        _replica->_primary_states.sync_send_write_request = false;
+    }
+    parent_cleanup_split_context();
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -1157,7 +1176,17 @@ void replica_split_manager::trigger_primary_parent_split(
         return;
     }
 
-    // TODO(heyuchen): add other split_status check
+    // meta_split_status == split_status::NOT_SPLIT
+    // meta partition_count = replica paritition_count * 2
+    // There will be two cases:
+    // - case1. when primary replica register child succeed, but replica server crashed.
+    //   meta server will consider this parent partition not splitting, but parent group
+    //   partition_count is not updated
+    //   in this case, child has been registered on meta server
+    // - case2. when this parent partition is canceled, but other partitions is still canceling.
+    //   in this case, child partition ballot is invalid_ballot
+    // As a result, primary should send query_child_state rpc to meta server
+    query_child_state();
 }
 
 // ThreadPool: THREAD_POOL_REPLICATION
@@ -1354,12 +1383,7 @@ void replica_split_manager::parent_stop_split(
 
     auto old_status = _split_status;
     if (_split_status == split_status::SPLITTING) {
-        _stub->split_replica_error_handler(
-            _child_gpid,
-            std::bind(&replica_split_manager::child_handle_split_error,
-                      std::placeholders::_1,
-                      "stop partition split"));
-        parent_cleanup_split_context();
+        parent_handle_split_error("stop partition split", false);
     }
     _partition_version.store(_replica->_app_info.partition_count - 1);
 
@@ -1432,6 +1456,66 @@ void replica_split_manager::parent_send_notify_stop_request(
             dwarn_replica("notify {} split failed, error = {}, wait for next round", type, err);
         }
     });
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::query_child_state() // on primary parent
+{
+    auto request = make_unique<query_child_state_request>();
+    request->app_name = _replica->_app_info.app_name;
+    request->pid = get_gpid();
+    request->partition_count = _replica->_app_info.partition_count;
+
+    rpc_address meta_address(_stub->_failure_detector->get_servers());
+    ddebug_replica("send query child partition state request to meta server({})",
+                   meta_address.to_string());
+    query_child_state_rpc rpc(
+        std::move(request), RPC_CM_QUERY_CHILD_STATE, 0_ms, 0, get_gpid().thread_hash());
+    _replica->_primary_states.query_child_task =
+        rpc.call(meta_address, tracker(), [this, rpc](error_code ec) mutable {
+            on_query_child_state_reply(ec, rpc.request(), rpc.response());
+        });
+}
+
+// ThreadPool: THREAD_POOL_REPLICATION
+void replica_split_manager::on_query_child_state_reply(
+    error_code ec,
+    const query_child_state_request &request,
+    const query_child_state_response &response) // on primary parent
+{
+    _replica->_checker.only_one_thread_access();
+
+    if (ec != ERR_OK) {
+        dwarn_replica("query child partition state failed, error = {}, retry it later", ec);
+        _replica->_primary_states.query_child_task =
+            tasking::enqueue(LPC_PARTITION_SPLIT,
+                             tracker(),
+                             std::bind(&replica_split_manager::query_child_state, this),
+                             get_gpid().thread_hash(),
+                             std::chrono::seconds(1));
+        return;
+    }
+
+    if (response.err != ERR_OK) {
+        dwarn_replica("app({}) partition({}) split has been canceled, ignore it",
+                      request.app_name,
+                      request.pid);
+        return;
+    }
+
+    ddebug_replica("query child partition succeed, child partition[{}] has already been ready",
+                   response.child_config.pid);
+    // make child partition active
+    _stub->split_replica_exec(LPC_PARTITION_SPLIT,
+                              response.child_config.pid,
+                              std::bind(&replica_split_manager::child_partition_active,
+                                        std::placeholders::_1,
+                                        response.child_config));
+    update_local_partition_count(response.partition_count);
+    _replica->_primary_states.cleanup_split_states();
+    parent_cleanup_split_context();
+    // update parent group partition_count
+    _replica->broadcast_group_check();
 }
 
 } // namespace replication

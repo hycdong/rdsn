@@ -174,6 +174,7 @@ void replica::on_client_read(dsn::message_ex *request, bool ignore_throttling)
 {
     if (!_access_controller->allowed(request)) {
         response_client_read(request, ERR_ACL_DENY);
+        return;
     }
 
     CHECK_REQUEST_IF_SPLITTING(read)
@@ -317,6 +318,12 @@ void replica::execute_mutation(mutation_ptr &mu)
             dassert(_private_log != nullptr, "");
         }
         break;
+    case partition_status::PS_PARTITION_SPLIT:
+        if (_split_states.is_caught_up) {
+            dcheck_eq(_app->last_committed_decree() + 1, d);
+            err = _app->apply_mutation(mu);
+        }
+        break;
     case partition_status::PS_ERROR:
         break;
     default:
@@ -424,6 +431,9 @@ void replica::close()
 
         r = _potential_secondary_states.cleanup(true);
         dassert(r, "potential secondary context is not cleared");
+
+        r = _split_states.cleanup(true);
+        dassert_replica(r, "partition split context is not cleared");
     }
 
     if (_private_log != nullptr) {
@@ -461,7 +471,7 @@ void replica::close()
     ddebug("%s: replica closed, time_used = %" PRIu64 "ms", name(), dsn_now_ms() - start_time);
 }
 
-std::string replica::query_compact_state() const
+std::string replica::query_manual_compact_state() const
 {
     dassert_replica(_app != nullptr, "");
     return _app->query_compact_state();
@@ -470,22 +480,24 @@ std::string replica::query_compact_state() const
 const char *manual_compaction_status_to_string(manual_compaction_status status)
 {
     switch (status) {
-    case kFinish:
-        return "CompactionFinish";
+    case kIdle:
+        return "idle";
+    case kQueuing:
+        return "queuing";
     case kRunning:
-        return "CompactionRunning";
-    case kQueue:
-        return "CompactionQueue";
+        return "running";
+    case kFinished:
+        return "finished";
     default:
         dassert(false, "invalid status({})", status);
         __builtin_unreachable();
     }
 }
 
-manual_compaction_status replica::get_compact_status() const
+manual_compaction_status replica::get_manual_compact_status() const
 {
-    std::string compact_state = query_compact_state();
-    // query_compact_state will return a message like:
+    std::string compact_state = query_manual_compact_state();
+    // query_manual_compact_state will return a message like:
     // Case1. last finish at [-]
     // - partition is not manual compaction
     // Case2. last finish at [timestamp], last used {time_used} ms
@@ -497,9 +509,11 @@ manual_compaction_status replica::get_compact_status() const
     if (compact_state.find("recent start at") != std::string::npos) {
         return kRunning;
     } else if (compact_state.find("recent enqueue at") != std::string::npos) {
-        return kQueue;
+        return kQueuing;
+    } else if (compact_state.find("last used") != std::string::npos) {
+        return kFinished;
     } else {
-        return kFinish;
+        return kIdle;
     }
 }
 

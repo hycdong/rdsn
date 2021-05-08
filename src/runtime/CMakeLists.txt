@@ -12,14 +12,11 @@ add_library(dsn_runtime STATIC
         core_main.cpp
         dsn.layer2_types.cpp
         env.sim.cpp
-        explorer.cpp
         fault_injector.cpp
         global_config.cpp
         message_utils.cpp
         nativerun.cpp
         profiler.cpp
-        profiler_command.cpp
-        profiler_output.cpp
         providers.common.cpp
         scheduler.cpp
         service_api_c.cpp
@@ -30,5 +27,5 @@ add_library(dsn_runtime STATIC
         tracer.cpp
         zlocks.cpp
         )
-target_link_libraries(dsn_runtime PRIVATE dsn_utils sasl2 gssapi_krb5 krb5 dsn_aio)
+target_link_libraries(dsn_runtime PRIVATE dsn_utils sasl2 gssapi_krb5 krb5)
 install(TARGETS dsn_runtime DESTINATION "lib")

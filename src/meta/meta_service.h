@@ -165,6 +165,10 @@ private:
     // meta control
     void on_control_meta_level(configuration_meta_control_rpc rpc);
     void on_start_recovery(configuration_recovery_rpc rpc);
+
+    // backup/restore
+    void on_start_backup_app(start_backup_app_rpc rpc);
+    void on_query_backup_status(query_backup_status_rpc rpc);
     void on_start_restore(dsn::message_ex *req);
     void on_add_backup_policy(dsn::message_ex *req);
     void on_query_backup_policy(query_backup_policy_rpc policy_rpc);
@@ -187,6 +191,7 @@ private:
     void on_query_partition_split(query_split_rpc rpc);
     void on_register_child_on_meta(register_child_rpc rpc);
     void on_notify_stop_split(notify_stop_split_rpc rpc);
+    void on_query_child_state(query_child_state_rpc rpc);
 
     // bulk load
     void on_start_bulk_load(start_bulk_load_rpc rpc);
@@ -214,6 +219,8 @@ private:
     bool check_freeze() const;
 
 private:
+    friend class backup_engine_test;
+    friend class backup_service_test;
     friend class bulk_load_service_test;
     friend class meta_backup_service_test;
     friend class meta_backup_test_base;
@@ -223,8 +230,10 @@ private:
     friend class meta_load_balance_test;
     friend class meta_service_test;
     friend class meta_service_test_app;
+    friend class meta_split_service_test;
     friend class meta_test_base;
     friend class policy_context_test;
+    friend class server_state_restore_test;
     friend class test::test_checker;
 
     replication_options _opts;

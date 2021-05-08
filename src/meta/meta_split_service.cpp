@@ -1,28 +1,19 @@
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2015 Microsoft Corporation
- *
- * -=- Robust Distributed System Nucleus (rDSN) -=-
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #include <dsn/dist/fmt_logging.h>
 #include <dsn/dist/replication/replica_envs.h>
@@ -549,6 +540,41 @@ void meta_split_service::do_cancel_partition_split(std::shared_ptr<app_state> ap
     blob value = dsn::json::json_forwarder<app_info>::encode(copy);
     _meta_svc->get_meta_storage()->set_data(
         _state->get_app_path(*app), std::move(value), on_write_storage_complete);
+}
+
+void meta_split_service::query_child_state(query_child_state_rpc rpc)
+{
+    const auto &request = rpc.request();
+    const auto &app_name = request.app_name;
+    const auto &parent_pid = request.pid;
+    auto &response = rpc.response();
+
+    zauto_read_lock l(app_lock());
+    std::shared_ptr<app_state> app = _state->get_app(app_name);
+    dassert_f(app != nullptr, "app({}) is not existed", app_name);
+    dassert_f(app->is_stateful, "app({}) is stateless currently", app_name);
+
+    if (app->partition_count == request.partition_count) {
+        response.err = ERR_INVALID_STATE;
+        derror_f("app({}) is not executing partition split", app_name);
+        return;
+    }
+
+    dassert_f(app->partition_count == request.partition_count * 2,
+              "app({}) has invalid partition_count",
+              app_name);
+
+    auto child_pidx = parent_pid.get_partition_index() + request.partition_count;
+    if (app->partitions[child_pidx].ballot == invalid_ballot) {
+        response.err = ERR_INVALID_STATE;
+        derror_f("app({}) parent partition({}) split has been canceled", app_name, parent_pid);
+        return;
+    }
+    ddebug_f(
+        "app({}) child partition({}.{}) is ready", app_name, parent_pid.get_app_id(), child_pidx);
+    response.err = ERR_OK;
+    response.__set_partition_count(app->partition_count);
+    response.__set_child_config(app->partitions[child_pidx]);
 }
 
 } // namespace replication

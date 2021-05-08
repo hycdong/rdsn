@@ -123,6 +123,8 @@ private:
 
     // return true if parent status is valid
     bool parent_check_states();
+    // check if child status is valid
+    void child_check_split_context();
 
     // parent reset child information when partition split failed
     void parent_cleanup_split_context();
@@ -130,6 +132,8 @@ private:
     void child_handle_split_error(const std::string &error_msg);
     // child handle error while async learn parent states
     void child_handle_async_learn_error();
+    // parent reset its split context and let child handle error
+    void parent_handle_split_error(const std::string &child_err_msg, bool parent_clear_sync);
 
     // called by `on_config_sync` in `replica_config.cpp`
     // primary parent start or stop split according to meta_split_status
@@ -162,6 +166,12 @@ private:
     void primary_parent_handle_stop_split(const std::shared_ptr<group_check_request> &req,
                                           const std::shared_ptr<group_check_response> &resp);
     void parent_send_notify_stop_request(split_status::type meta_split_status);
+
+    // called by `trigger_primary_parent_split`, query child state on meta server
+    void query_child_state();
+    void on_query_child_state_reply(error_code ec,
+                                    const query_child_state_request &request,
+                                    const query_child_state_response &response);
 
     //
     // helper functions

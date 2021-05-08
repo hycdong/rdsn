@@ -160,6 +160,11 @@ public:
     // secondary replica address who has paused or canceled split
     std::unordered_set<rpc_address> split_stopped_secondary;
 
+    // Used for partition split
+    // primary parent query child on meta_server task
+    // Called by `trigger_primary_parent_split`
+    dsn::task_ptr query_child_task;
+
     // Used for bulk load
     // group bulk_load response tasks of RPC_GROUP_BULK_LOAD for each secondary replica
     node_tasks group_bulk_load_pending_replies;
@@ -240,6 +245,16 @@ class partition_split_context
 public:
     bool cleanup(bool force);
     bool is_cleaned() const;
+    uint64_t total_ms() const
+    {
+        return splitting_start_ts_ns > 0 ? (dsn_now_ns() - splitting_start_ts_ns) / 1000000 : 0;
+    }
+    uint64_t async_learn_ms() const
+    {
+        return splitting_start_async_learn_ts_ns > 0
+                   ? (dsn_now_ns() - splitting_start_async_learn_ts_ns) / 1000000
+                   : 0;
+    }
 
 public:
     gpid parent_gpid;
@@ -249,7 +264,18 @@ public:
     bool is_caught_up{false};
 
     // child replica async learn parent states
-    dsn::task_ptr async_learn_task;
+    task_ptr async_learn_task;
+
+    // partition split states checker, start when initialize child replica
+    // see more in function `child_check_split_context` and `parent_check_states`
+    task_ptr check_state_task;
+
+    // Used for split related perf-counter
+    uint64_t splitting_start_ts_ns{0};
+    uint64_t splitting_start_async_learn_ts_ns{0};
+    uint64_t splitting_copy_file_count{0};
+    uint64_t splitting_copy_file_size{0};
+    uint64_t splitting_copy_mutation_count{0};
 };
 
 //---------------inline impl----------------------------------------------------------------

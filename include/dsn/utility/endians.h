@@ -1,6 +1,19 @@
-// Copyright (c) 2017, Xiaomi, Inc.  All rights reserved.
-// This source code is licensed under the Apache License Version 2.0, which
-// can be found in the LICENSE file in the root directory of this source tree.
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #pragma once
 
@@ -13,11 +26,15 @@ namespace dsn {
 
 namespace endian {
 
+inline uint8_t hton(uint8_t v) { return v; }
+
 inline uint16_t hton(uint16_t v) { return htobe16(v); }
 
 inline uint32_t hton(uint32_t v) { return htobe32(v); }
 
 inline uint64_t hton(uint64_t v) { return htobe64(v); }
+
+inline uint8_t ntoh(uint8_t v) { return v; }
 
 inline uint16_t ntoh(uint16_t v) { return be16toh(v); }
 
@@ -34,6 +51,8 @@ public:
     data_output(char *p, size_t size) : _ptr(p), _end(p + size) {}
 
     explicit data_output(std::string &s) : data_output(&s[0], s.length()) {}
+
+    data_output &write_u8(uint8_t val) { return write_unsigned(val); }
 
     data_output &write_u16(uint16_t val) { return write_unsigned(val); }
 
@@ -70,6 +89,8 @@ class data_input
 {
 public:
     explicit data_input(string_view s) : _p(s.data()), _size(s.size()) {}
+
+    uint8_t read_u8() { return read_unsigned<uint8_t>(); }
 
     uint16_t read_u16() { return read_unsigned<uint16_t>(); }
 
