@@ -136,21 +136,14 @@ void replication_options::initialize()
     }
     slog_dir = utils::filesystem::path_combine(slog_dir, "slog");
 
+    // get config_data_dirs and config_data_dir_tags from config
     const std::string &dirs_str =
         dsn_config_get_value_string("replication", "data_dirs", "", "replica directory list");
     std::vector<std::string> config_data_dirs;
     std::vector<std::string> config_data_dir_tags;
-    std::string error_msg = "";
-    // data_dirs
-    // - if config[data_dirs] is empty: "app_dir/reps"
-    // - else:
-    //       config[data_dirs] = "tag1:dir1,tag2:dir2:tag3:dir3"
-    //       data_dir = "config[data_dirs]/app_name/reps"
-    bool flag = get_data_dir_and_tag(
-        dirs_str, app_dir, app_name, config_data_dirs, config_data_dir_tags, error_msg);
-    dassert_f(flag, error_msg);
+    get_data_dir_and_tag(dirs_str, app_dir, app_name, config_data_dirs, config_data_dir_tags);
 
-    // check if data dir in black list
+    // check if data_dir in black list, data_dirs doesn't contain dir in black list
     std::string black_list_file =
         dsn_config_get_value_string("replication",
                                     "data_dirs_black_list_file",
@@ -164,6 +157,10 @@ void replication_options::initialize()
         }
         data_dirs.emplace_back(config_data_dirs[i]);
         data_dir_tags.emplace_back(config_data_dir_tags[i]);
+    }
+
+    if (data_dirs.empty()) {
+        dassert_f(false, "no replica data dir found, maybe not set or excluded by black list");
     }
 
     deny_client_on_start = dsn_config_get_value_bool("replication",
@@ -498,14 +495,23 @@ void replication_options::sanity_check()
     dassert(servers.size() > 0, "no meta server specified in config [%s].%s", section, key);
 }
 
-/*static*/ bool
+/*static*/ void
 replication_options::get_data_dir_and_tag(const std::string &config_dirs_str,
                                           const std::string &default_dir,
                                           const std::string &app_name,
                                           /*out*/ std::vector<std::string> &data_dirs,
-                                          /*out*/ std::vector<std::string> &data_dir_tags,
-                                          /*out*/ std::string &err_msg)
+                                          /*out*/ std::vector<std::string> &data_dir_tags)
 {
+    // - if {config_dirs_str} is empty (return true):
+    //   - dir = {default_dir}
+    //   - dir_tag/data_dir_tag = "default"
+    //   - data_dir = {default_dir}/"reps"
+    // - else if {config_dirs_str} = "tag1:dir1,tag2:dir2:tag3:dir3" (return true):
+    //   - dir1 = "dir1"/{app_name}
+    //   - dir_tag1/data_dir_tag1 = "tag1"
+    //   - data_dir1 = "dir1"/{app_name}/"reps"
+    // - else (return false):
+    //   - invalid format and set {err_msg}
     std::vector<std::string> dirs;
     std::vector<std::string> dir_tags;
     utils::split_args(config_dirs_str.c_str(), dirs, ',');
@@ -517,56 +523,45 @@ replication_options::get_data_dir_and_tag(const std::string &config_dirs_str,
             std::vector<std::string> tag_and_dir;
             utils::split_args(dir.c_str(), tag_and_dir, ':');
             if (tag_and_dir.size() != 2) {
-                err_msg = fmt::format("invalid data_dir item({}) in config", dir);
-                return false;
+                dassert_f("invalid data_dir item({}) in config", dir);
             }
             if (tag_and_dir[0].empty() || tag_and_dir[1].empty()) {
-                err_msg = fmt::format("invalid data_dir item({}) in config", dir);
-                return false;
+                dassert_f("invalid data_dir item({}) in config", dir);
             }
             dir = utils::filesystem::path_combine(tag_and_dir[1], app_name);
             for (unsigned i = 0; i < dir_tags.size(); ++i) {
                 if (dirs[i] == dir) {
-                    err_msg = fmt::format("dir({}) and dir({}) conflict", dirs[i], dir);
-                    return false;
+                    dassert_f("dir({}) and dir({}) conflict", dirs[i], dir);
                 }
             }
             for (unsigned i = 0; i < dir_tags.size(); ++i) {
                 if (dir_tags[i] == tag_and_dir[0]) {
-                    err_msg = fmt::format(
+                    dassert_f(
                         "dir({}) and dir({}) have same tag({})", dirs[i], dir, tag_and_dir[0]);
-                    return false;
                 }
             }
             dir_tags.push_back(tag_and_dir[0]);
         }
     }
 
-    int dir_count = 0;
     for (unsigned i = 0; i < dirs.size(); ++i) {
-        std::string &dir = dirs[i];
-        ddebug_f("data_dirs[{}] = {}, tag = {}", dir_count++, dir, dir_tags[i]);
+        const std::string &dir = dirs[i];
+        ddebug_f("data_dirs[{}] = {}, tag = {}", i + 1, dir, dir_tags[i]);
         data_dirs.push_back(utils::filesystem::path_combine(dir, "reps"));
         data_dir_tags.push_back(dir_tags[i]);
     }
-
-    if (data_dirs.empty()) {
-        err_msg = fmt::format("no replica data dir found, maybe not set");
-        return false;
-    }
-    return true;
 }
 
 /*static*/ void
 replication_options::get_data_dirs_in_black_list(const std::string &fname,
                                                  /*out*/ std::vector<std::string> &dirs)
 {
-    if (fname.empty() || (!fname.empty() && !utils::filesystem::file_exists(fname))) {
+    if (fname.empty() || !utils::filesystem::file_exists(fname)) {
         ddebug_f("data_dirs_black_list_file[{}] not found, ignore it", fname);
         return;
     }
 
-    ddebug_f("data_dirs_black_list_file[{}] found, apply it", fname.c_str());
+    ddebug_f("data_dirs_black_list_file[{}] found, apply it", fname);
     std::ifstream file(fname);
     if (!file) {
         dassert_f(false, "open data_dirs_black_list_file failed: {}", fname);
@@ -575,15 +570,16 @@ replication_options::get_data_dirs_in_black_list(const std::string &fname,
     std::string str;
     int count = 0;
     while (std::getline(file, str)) {
-        std::string str2 = utils::trim_string((char *)str.c_str());
-        if (str2.empty())
+        std::string str2 = utils::trim_string(const_cast<char *>(str.c_str()));
+        if (str2.empty()) {
             continue;
-        if (str2.back() != '/')
+        }
+        if (str2.back() != '/') {
             str2.append("/");
+        }
         dirs.push_back(str2);
         count++;
         ddebug_f("black_list[{}] = [{}]", count, str2);
-        str.clear();
     }
 }
 
@@ -591,19 +587,18 @@ replication_options::get_data_dirs_in_black_list(const std::string &fname,
 replication_options::check_if_in_black_list(const std::vector<std::string> &black_list_dir,
                                             const std::string &dir)
 {
-    bool in_black_list = false;
     std::string dir_str = dir;
     if (!black_list_dir.empty()) {
-        if (dir_str.back() != '/')
+        if (dir_str.back() != '/') {
             dir_str.append("/");
+        }
         for (const std::string &black : black_list_dir) {
             if (dir_str.find(black) == 0) {
-                in_black_list = true;
-                break;
+                return true;
             }
         }
     }
-    return in_black_list;
+    return false;
 }
 
 const std::string backup_restore_constant::FORCE_RESTORE("restore.force_restore");

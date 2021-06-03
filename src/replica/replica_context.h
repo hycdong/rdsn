@@ -104,7 +104,7 @@ public:
 
     void cleanup_split_states();
 
-    bool has_secondary_disk_insufficient() const;
+    bool secondary_disk_space_insufficient() const;
 
 public:
     // membership mgr, including learners
@@ -174,8 +174,8 @@ public:
     // ingestion request
     bool ingestion_is_empty_prepare_sent{false};
 
-    // secondary rpc_address -> secondary `_is_disk_insufficient` flag
-    std::unordered_map<rpc_address, bool> secondary_disk_insufficient_flag;
+    // secondary rpc_address -> secondary disk_status
+    std::unordered_map<rpc_address, disk_status::type> secondary_disk_status;
 };
 
 class secondary_context

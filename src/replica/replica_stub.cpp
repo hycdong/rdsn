@@ -94,6 +94,7 @@ replica_stub::replica_stub(replica_state_subscriber subscriber /*= nullptr*/,
 {
 #ifdef DSN_ENABLE_GPERF
     _release_tcmalloc_memory_command = nullptr;
+    _get_tcmalloc_status_command = nullptr;
     _max_reserved_memory_percentage_command = nullptr;
 #endif
     _replica_state_subscriber = subscriber;
@@ -2355,6 +2356,16 @@ void replica_stub::register_ctrl_command()
                     _release_tcmalloc_memory, "release-tcmalloc-memory", args);
             });
 
+        _get_tcmalloc_status_command = ::dsn::command_manager::instance().register_command(
+            {"replica.get-tcmalloc-status"},
+            "replica.get-tcmalloc-status",
+            "replica.get-tcmalloc-status - get status of tcmalloc",
+            [](const std::vector<std::string> &args) {
+                char buf[4096];
+                MallocExtension::instance()->GetStats(buf, 4096);
+                return std::string(buf);
+            });
+
         _max_reserved_memory_percentage_command = dsn::command_manager::instance().register_command(
             {"replica.mem-release-max-reserved-percentage"},
             "replica.mem-release-max-reserved-percentage [num | DEFAULT]",
@@ -2536,6 +2547,7 @@ void replica_stub::close()
     UNREGISTER_VALID_HANDLER(_query_app_envs_command);
 #ifdef DSN_ENABLE_GPERF
     UNREGISTER_VALID_HANDLER(_release_tcmalloc_memory_command);
+    UNREGISTER_VALID_HANDLER(_get_tcmalloc_status_command);
     UNREGISTER_VALID_HANDLER(_max_reserved_memory_percentage_command);
 #endif
     UNREGISTER_VALID_HANDLER(_max_concurrent_bulk_load_downloading_count_command);
@@ -2549,6 +2561,7 @@ void replica_stub::close()
     _query_app_envs_command = nullptr;
 #ifdef DSN_ENABLE_GPERF
     _release_tcmalloc_memory_command = nullptr;
+    _get_tcmalloc_status_command = nullptr;
     _max_reserved_memory_percentage_command = nullptr;
 #endif
     _max_concurrent_bulk_load_downloading_count_command = nullptr;
@@ -2942,10 +2955,10 @@ void replica_stub::update_disks_status()
                 if (replica == nullptr) {
                     continue;
                 }
-                replica->_is_disk_insufficient =
-                    dir_node->status == disk_status::kInsufficientSpace;
-                ddebug_f(
-                    "{} update is_space_lack({})", replica->name(), replica->_is_disk_insufficient);
+                replica->set_disk_status(dir_node->status);
+                ddebug_f("{} update disk_status to {}",
+                         replica->name(),
+                         enum_to_string(replica->get_disk_status()));
             }
         }
     }

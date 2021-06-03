@@ -19,9 +19,9 @@
 
 #include <memory>
 
+#include <dsn/perf_counter/perf_counter_wrapper.h>
 #include <dsn/service_api_cpp.h>
 #include <dsn/tool-api/zlocks.h>
-#include <dsn/perf_counter/perf_counter_wrapper.h>
 #include <dsn/utility/flags.h>
 
 #include "replication_common.h"
@@ -37,6 +37,9 @@ enum disk_status
     kInsufficientSpace
 };
 
+DSN_DECLARE_bool(enable_disk_available_space_check);
+DSN_DECLARE_int32(disk_min_available_space_ratio);
+
 struct dir_node
 {
 public:
@@ -45,7 +48,7 @@ public:
     int64_t disk_capacity_mb;
     int64_t disk_available_mb;
     int disk_available_ratio;
-    disk_status status;
+    disk_status::type status;
     std::map<app_id, std::set<gpid>> holding_replicas;
     std::map<app_id, std::set<gpid>> holding_primary_replicas;
     std::map<app_id, std::set<gpid>> holding_secondary_replicas;
@@ -56,7 +59,7 @@ public:
              int64_t disk_capacity_mb_ = 0,
              int64_t disk_available_mb_ = 0,
              int disk_available_ratio_ = 0,
-             disk_status status_ = disk_status::kNormal)
+             disk_status::type status_ = disk_status::NORMAL)
         : tag(tag_),
           full_dir(dir_),
           disk_capacity_mb(disk_capacity_mb_),
@@ -70,7 +73,7 @@ public:
     unsigned replicas_count() const;
     bool has(const dsn::gpid &pid) const;
     unsigned remove(const dsn::gpid &pid);
-    bool update_disk_stat();
+    void update_disk_stat(bool &status_changed);
 };
 
 class fs_manager
@@ -128,6 +131,10 @@ private:
 
     std::vector<std::shared_ptr<dir_node>> _dir_nodes;
     std::vector<std::string> _available_data_dirs;
+
+    // Used for disk available space check
+    // disk status will be updated periodically, this vector record nodes whose disk_status changed
+    // in this round
     std::vector<std::shared_ptr<dir_node>> _status_updated_dir_nodes;
 
     perf_counter_wrapper _counter_total_capacity_mb;

@@ -79,7 +79,7 @@ void primary_context::cleanup(bool clean_pending_mutations)
 
     cleanup_split_states();
 
-    secondary_disk_insufficient_flag.clear();
+    secondary_disk_status.clear();
 }
 
 bool primary_context::is_cleaned()
@@ -178,10 +178,10 @@ void primary_context::cleanup_split_states()
     split_stopped_secondary.clear();
 }
 
-bool primary_context::has_secondary_disk_insufficient() const
+bool primary_context::secondary_disk_space_insufficient() const
 {
-    for (const auto &kv : secondary_disk_insufficient_flag) {
-        if (kv.second) {
+    for (const auto &kv : secondary_disk_status) {
+        if (kv.second == disk_status::SPACE_INSUFFICIENT) {
             ddebug_f("partition[{}] secondary[{}] disk space is insufficient",
                      membership.pid,
                      kv.first.to_string());

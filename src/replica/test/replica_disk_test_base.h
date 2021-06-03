@@ -98,12 +98,13 @@ public:
         }
     }
 
-    void mock_node_status(int32_t node_index, disk_status old_status, disk_status new_status)
+    void
+    mock_node_status(int32_t node_index, disk_status::type old_status, disk_status::type new_status)
     {
         auto node = get_dir_nodes()[node_index];
-        for (auto &kv : node->holding_replicas) {
-            for (auto &pid : kv.second) {
-                update_replica_disk_insufficient(pid, old_status);
+        for (const auto &kv : node->holding_replicas) {
+            for (const auto &pid : kv.second) {
+                update_replica_disk_status(pid, old_status);
             }
         }
         stub->_fs_manager._status_updated_dir_nodes.clear();
@@ -113,13 +114,13 @@ public:
         }
     }
 
-    error_code get_replica_disk_insufficient(const gpid &pid, bool &flag)
+    error_code replica_disk_space_insufficient(const gpid &pid, bool &flag)
     {
         replica_ptr replica = stub->get_replica(pid);
         if (replica == nullptr) {
             return ERR_OBJECT_NOT_FOUND;
         }
-        flag = replica->is_disk_insufficient();
+        flag = replica->disk_space_insufficient();
         return ERR_OK;
     }
 
@@ -249,6 +250,15 @@ private:
             return;
         }
         replica->set_disk_insufficient_flag(status == disk_status::kInsufficientSpace);
+    }
+
+    void update_replica_disk_status(const gpid &pid, const disk_status::type status)
+    {
+        replica_ptr replica = stub->get_replica(pid);
+        if (replica == nullptr) {
+            return;
+        }
+        replica->set_disk_status(status);
     }
 };
 
