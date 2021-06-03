@@ -28,15 +28,6 @@
 
 namespace dsn {
 namespace replication {
-DSN_DECLARE_bool(enable_disk_available_check);
-DSN_DECLARE_int32(disk_min_available_ratio);
-
-enum disk_status
-{
-    kNormal = 0,
-    kInsufficientSpace
-};
-
 DSN_DECLARE_bool(enable_disk_available_space_check);
 DSN_DECLARE_int32(disk_min_available_space_ratio);
 

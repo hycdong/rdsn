@@ -92,7 +92,6 @@ unsigned dir_node::remove(const gpid &pid)
 void dir_node::update_disk_stat(bool &status_changed)
 {
     FAIL_POINT_INJECT_F("update_disk_stat", [](string_view) {});
-
     dsn::utils::filesystem::disk_space_info info;
     if (!dsn::utils::filesystem::get_disk_space_info(full_dir, info)) {
         derror_f("update disk space failed: dir = {}", full_dir);
@@ -124,33 +123,7 @@ void dir_node::update_disk_stat(bool &status_changed)
                      enum_to_string(new_status));
         }
         status_changed = (old_status != new_status);
->>>>>>> pegasus
     }
-    // update disk space
-    disk_capacity_mb = info.capacity / 1024 / 1024;
-    disk_available_mb = info.available / 1024 / 1024;
-    disk_available_ratio = static_cast<int>(
-        disk_capacity_mb == 0 ? 0 : std::round(disk_available_mb * 100.0 / disk_capacity_mb));
-    ddebug_f("update disk space succeed: dir = {}, capacity_mb = {}, available_mb = {}, "
-             "available_ratio = {}%",
-             full_dir,
-             disk_capacity_mb,
-             disk_available_mb,
-             disk_available_ratio);
-
-    if (FLAGS_enable_disk_available_check) {
-        // update disk status
-        auto old_status = status;
-        auto new_status = disk_available_ratio < FLAGS_disk_min_available_ratio
-                              ? disk_status::kInsufficientSpace
-                              : disk_status::kNormal;
-        if (old_status != new_status) {
-            status = new_status;
-            ddebug_f("disk({}) status update from({}) to({})", full_dir, old_status, new_status);
-        }
-        return old_status != new_status;
-    }
-    return false;
 }
 
 fs_manager::fs_manager(bool for_test)
@@ -280,7 +253,7 @@ void fs_manager::allocate_dir(const gpid &pid, const std::string &type, /*out*/ 
                 pid.get_app_id(),
                 pid.get_partition_index(),
                 n->tag.c_str());
-        if (n->status == kInsufficientSpace) {
+        if (n->status == disk_status::SPACE_INSUFFICIENT) {
             ddebug_f("dir_node({}) is lack of space, ignore it while allocate new partition({})",
                      n->tag,
                      pid);

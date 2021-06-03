@@ -243,15 +243,6 @@ private:
         }
     }
 
-    void update_replica_disk_insufficient(const gpid &pid, const disk_status status)
-    {
-        replica_ptr replica = stub->get_replica(pid);
-        if (replica == nullptr) {
-            return;
-        }
-        replica->set_disk_insufficient_flag(status == disk_status::kInsufficientSpace);
-    }
-
     void update_replica_disk_status(const gpid &pid, const disk_status::type status)
     {
         replica_ptr replica = stub->get_replica(pid);
