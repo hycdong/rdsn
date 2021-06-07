@@ -247,12 +247,13 @@ TEST_F(replica_disk_test, broken_disk_test)
     // create: false
     struct broken_disk_test
     {
-        std::string create_dir;
-        std::string rw_flag;
+        std::string mock_create_dir;
+        std::string mock_rw_flag;
         int32_t data_dir_size;
     } tests[]{{"true", "true", 3}, {"true", "false", 2}, {"false", "false", 2}};
     for (const auto &test : tests) {
-        ASSERT_EQ(test.data_dir_size, ignore_broken_disk_test(test.create_dir, test.rw_flag));
+        ASSERT_EQ(test.data_dir_size,
+                  ignore_broken_disk_test(test.mock_create_dir, test.mock_rw_flag));
     }
 }
 

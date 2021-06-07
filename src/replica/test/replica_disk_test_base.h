@@ -124,14 +124,14 @@ public:
         return ERR_OK;
     }
 
-    int32_t ignore_broken_disk_test(const std::string &create_directory,
-                                    const std::string &check_rw)
+    int32_t ignore_broken_disk_test(const std::string &mock_create_directory,
+                                    const std::string &mock_check_rw)
     {
         std::vector<std::string> data_dirs = {"disk1", "disk2", "disk3"};
         std::vector<std::string> data_dir_tags = {"tag1", "tag2", "tag3"};
         auto test_stub = make_unique<mock_replica_stub>();
-        fail::cfg("filesystem_create_directory", "return(" + create_directory + ")");
-        fail::cfg("filesystem_check_dir_rw", "return(" + check_rw + ")");
+        fail::cfg("filesystem_create_directory", "return(" + mock_create_directory + ")");
+        fail::cfg("filesystem_check_dir_rw", "return(" + mock_check_rw + ")");
         fail::cfg("update_disk_stat", "return()");
         test_stub->initialize_fs_manager(data_dirs, data_dir_tags);
         int32_t dir_size = test_stub->_fs_manager.get_available_data_dirs().size();

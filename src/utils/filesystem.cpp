@@ -37,6 +37,8 @@
 
 #include <dsn/c/api_utilities.h>
 #include <dsn/dist/fmt_logging.h>
+#include <dsn/utility/defer.h>
+#include <dsn/utility/fail_point.h>
 #include <dsn/utility/filesystem.h>
 #include <dsn/utility/utils.h>
 #include <dsn/utility/safe_strerror_posix.h>
@@ -879,6 +881,7 @@ bool check_dir_rw(const std::string &path, std::string &err_msg)
         return false;
     }
 
+    auto cleanup = defer([&fpath]() { remove_path(fpath); });
     std::string value = "test_value";
     if (!write_file(fpath, value)) {
         err_msg = fmt::format("Fail to write file {}.", fpath);
@@ -886,13 +889,8 @@ bool check_dir_rw(const std::string &path, std::string &err_msg)
     }
 
     std::string buf;
-    if (read_file(fpath, buf) != ERR_OK) {
-        err_msg = fmt::format("Fail to read file {}.", fpath);
-        return false;
-    }
-
-    if (!remove_path(fpath)) {
-        err_msg = fmt::format("Fail to remove test file {}.", fpath);
+    if (read_file(fpath, buf) != ERR_OK || buf != value) {
+        err_msg = fmt::format("Fail to read file {} or get wrong value({}).", fpath, buf);
         return false;
     }
 

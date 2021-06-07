@@ -90,7 +90,6 @@ public:
 
     void add_new_dir_node(const std::string &data_dir, const std::string &tag);
     bool is_dir_node_available(const std::string &data_dir, const std::string &tag) const;
-
     const std::vector<std::string> &get_available_data_dirs() const
     {
         zauto_read_lock l(_lock);

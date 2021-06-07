@@ -68,6 +68,7 @@ DSN_DEFINE_bool("replication",
                 ignore_broken_disk,
                 true,
                 "true means ignore broken data disk when initialize");
+DSN_TAG_VARIABLE(ignore_broken_disk, FT_MUTABLE);
 
 bool replica_stub::s_not_exit_on_log_failure = false;
 
@@ -515,7 +516,6 @@ void replica_stub::initialize(const replication_options &opts, bool clear /* = f
         dassert(false, "{}", err_msg);
     }
     _options.slog_dir = cdir;
-
     initialize_fs_manager(_options.data_dirs, _options.data_dir_tags);
 
     _log = new mutation_log_shared(_options.slog_dir,
@@ -784,13 +784,10 @@ void replica_stub::initialize_fs_manager(std::vector<std::string> &data_dirs,
     int count = 0;
     std::vector<std::string> available_dirs;
     std::vector<std::string> available_dir_tags;
-    for (int i = 0; i < data_dir_tags.size(); ++i) {
+    for (auto i = 0; i < data_dir_tags.size(); ++i) {
         std::string &dir = data_dirs[i];
-        bool flag = dsn::utils::filesystem::create_directory(dir, cdir, err_msg);
-        if (flag) {
-            flag = dsn::utils::filesystem::check_dir_rw(dir, err_msg);
-        }
-        if (!flag) {
+        if (dsn_unlikely(!utils::filesystem::create_directory(dir, cdir, err_msg) ||
+                         !utils::filesystem::check_dir_rw(dir, err_msg))) {
             if (FLAGS_ignore_broken_disk) {
                 dwarn_f("data dir[{}] is broken, ignore it, error:{}", dir, err_msg);
             } else {
@@ -1929,7 +1926,6 @@ void replica_stub::on_disk_stat()
     disk_cleaning_report report{};
 
     dsn::replication::disk_remove_useless_dirs(_fs_manager.get_available_data_dirs(), report);
-
     _fs_manager.update_disk_stat();
     update_disk_holding_replicas();
     update_disks_status();
